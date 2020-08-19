@@ -3,10 +3,12 @@
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/ScopeExit.h>
 
+#include <Frontend/Common/Expected.hpp>
+
 #include <functional>
 #include <unordered_map>
 
-#include "ConstantEvaluator.hpp"
+#include "ConstValue.hpp"
 #include "Message.hpp"
 #include "Semantics.hpp"
 #include "Syntax.hpp"
@@ -27,8 +29,8 @@ class SemanticAnalysis final
     struct DeclarationInScope
     {
         Lexer::CTokenIterator identifier;
-        using Variant =
-            std::variant<const Declaration * CLD_NON_NULL, const FunctionDefinition * CLD_NON_NULL, Type, ConstRetType>;
+        using Variant = std::variant<const Declaration * CLD_NON_NULL, const FunctionDefinition * CLD_NON_NULL, Type,
+                                     std::pair<ConstValue, Type>>;
         Variant declared;
     };
 
@@ -171,14 +173,40 @@ class SemanticAnalysis final
     Expression doLogicOperators(Expression&& lhs, BinaryOperator::Kind kind, Lexer::CTokenIterator token,
                                 Expression&& rhs);
 
-    ConstRetType evaluate(const Expression& expression, ConstantEvaluator::Mode mode,
-                          llvm::function_ref<void(const Message&)> logger) const;
-
 public:
-    explicit SemanticAnalysis(const SourceInterface& sourceInterface, llvm::raw_ostream* reporter = &llvm::errs(),
-                              std::function<bool(std::string_view)> definedCallback = {})
-        : m_sourceInterface(sourceInterface), m_reporter(reporter), m_definedCallback(std::move(definedCallback))
+    enum Mode
     {
+        Integer,
+        Arithmetic,
+        Initialization
+    };
+
+private:
+    ConstValue evaluate(const Expression& expression, Mode mode, llvm::function_ref<void(const Message&)> logger) const;
+
+    template <class T>
+    [[nodiscard]] const T* CLD_NULLABLE lookupType(std::string_view name) const
+    {
+        return lookupType<T>(name, m_currentScope);
+    }
+
+    template <class T>
+    [[nodiscard]] const T* CLD_NULLABLE lookupType(std::string_view name, std::int64_t scope) const
+    {
+        auto curr = scope;
+        while (curr >= 0)
+        {
+            auto result = m_scopes[curr].types.find(name);
+            if (result != m_scopes[curr].types.end())
+            {
+                if (auto* ptr = std::get_if<T>(&result->second.tagType))
+                {
+                    return ptr;
+                }
+            }
+            curr = m_scopes[curr].previousScope;
+        }
+        return nullptr;
     }
 
     template <class T>
@@ -210,43 +238,24 @@ public:
         return declaratorsToTypeImpl(std::move(temp), &declarator, declarations, inFunctionDefinition);
     }
 
-    [[nodiscard]] bool isCompleteType(const Type& type) const;
-
     [[nodiscard]] bool isVariablyModified(const Type& type) const;
 
-    Expected<ConstRetType, std::vector<Message>>
-        evaluateConstantExpression(const Expression& constantExpression,
-                                   ConstantEvaluator::Mode mode = ConstantEvaluator::Integer);
+public:
+    explicit SemanticAnalysis(const SourceInterface& sourceInterface, llvm::raw_ostream* reporter = &llvm::errs(),
+                              std::function<bool(std::string_view)> definedCallback = {})
+        : m_sourceInterface(sourceInterface), m_reporter(reporter), m_definedCallback(std::move(definedCallback))
+    {
+    }
+
+    Expected<ConstValue, std::vector<Message>> evaluateConstantExpression(const Expression& constantExpression,
+                                                                          Mode mode = Integer);
 
     [[nodiscard]] const LanguageOptions& getLanguageOptions() const
     {
         return m_sourceInterface.getLanguageOptions();
     }
 
-    template <class T>
-    [[nodiscard]] const T* CLD_NULLABLE lookupType(std::string_view name) const
-    {
-        return lookupType<T>(name, m_currentScope);
-    }
-
-    template <class T>
-    [[nodiscard]] const T* CLD_NULLABLE lookupType(std::string_view name, std::int64_t scope) const
-    {
-        auto curr = scope;
-        while (curr >= 0)
-        {
-            auto result = m_scopes[curr].types.find(name);
-            if (result != m_scopes[curr].types.end())
-            {
-                if (auto* ptr = std::get_if<T>(&result->second.tagType))
-                {
-                    return ptr;
-                }
-            }
-            curr = m_scopes[curr].previousScope;
-        }
-        return nullptr;
-    }
+    [[nodiscard]] bool isCompleteType(const Type& type) const;
 
     StructDefinition* CLD_NULLABLE getStructDefinition(std::string_view name, std::uint64_t scopeOrId,
                                                        std::uint64_t* idOut = nullptr);

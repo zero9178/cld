@@ -141,7 +141,7 @@ CREATE_ERROR(ARRAY_ELEMENT_TYPE_MUST_BE_A_COMPLETE_TYPE, "Array element type mus
 CREATE_ERROR(ARRAY_ELEMENT_TYPE_MUST_NOT_CONTAIN_A_FLEXIBLE_ARRAY_MEMBER,
              "Array element type must not contain a flexible array member", Underline<0>);
 
-CREATE_ERROR(ARRAY_SIZE_MUST_BE_AN_INTEGER_TYPE, "Array size must be an integer type", Annotate<0, 1>);
+CREATE_ERROR(ARRAY_SIZE_MUST_BE_AN_INTEGER_TYPE, "Array size must be an integer type", AnnotateExpr<0>);
 
 CREATE_ERROR(ARRAY_SIZE_MUST_BE_GREATER_THAN_ZERO, "Array size must be greater than 0", Annotate<0, 1>);
 

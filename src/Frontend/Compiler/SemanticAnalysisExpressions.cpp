@@ -176,7 +176,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                             log(Errors::Semantics::EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_NULL_2.args(
                                 rhsValue, m_sourceInterface, *token, rhsValue));
                         }
-                        else if (!isInteger(constant->getType()) || constant->toUInt() != 0)
+                        else if (constant->toUInt() != 0)
                         {
                             log(Errors::Semantics::EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_NULL.args(
                                 rhsValue, m_sourceInterface, *token, rhsValue, *constant));
@@ -438,15 +438,19 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                                                             *node.getIdentifier()));
         return Expression(node);
     }
-    if (std::holds_alternative<ConstRetType>(*result))
+    if (std::holds_alternative<std::pair<ConstValue, Type>>(*result))
     {
-        auto& value = cld::get<ConstRetType>(*result);
-        if (value.isUndefined())
+        auto& value = cld::get<std::pair<ConstValue, Type>>(*result);
+        if (value.second.isUndefined())
         {
             return Expression(node);
         }
-        return Expression(value.getType(), ValueCategory::Rvalue,
-                          Constant(cld::match(value.getValue(),
+        if (value.first.isUndefined())
+        {
+            return Expression(value.second, ValueCategory::Rvalue, {});
+        }
+        return Expression(value.second, ValueCategory::Rvalue,
+                          Constant(cld::match(value.first.getValue(),
                                               [](auto&& value) -> Constant::Variant {
                                                   using T = std::decay_t<decltype(value)>;
                                                   if constexpr (std::is_constructible_v<Constant::Variant, T>)
@@ -828,7 +832,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                         }
                         else
                         {
-                            if (!isInteger(constant->getType()) || constant->toUInt() != 0)
+                            if (constant->toUInt() != 0)
                             {
                                 log(Errors::Semantics::EXPECTED_ARGUMENT_N_TO_BE_NULL.args(
                                     expression, m_sourceInterface, i + 1, expression, *constant));
@@ -1599,10 +1603,10 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         }
         else if (isArithmetic(value.getType()))
         {
-            if (std::holds_alternative<PointerType>(rhsValue.getType().get()))
+            if (std::holds_alternative<PointerType>(rhsValue.getType().get()) && isInteger(value.getType()))
             {
                 auto constant = evaluateConstantExpression(value);
-                if (!constant || !isInteger(constant->getType()) || constant->toUInt() != 0)
+                if (!constant || constant->toUInt() != 0)
                 {
                     log(Errors::Semantics::EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_ARITHMETIC_TYPE.args(
                         rhsValue, m_sourceInterface, *token, rhsValue));
@@ -1626,7 +1630,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                 }
                 else
                 {
-                    if (!isInteger(constant->getType()) || constant->toUInt() != 0)
+                    if (constant->toUInt() != 0)
                     {
                         log(Errors::Semantics::EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_NULL.args(
                             rhsValue, m_sourceInterface, *token, rhsValue, *constant));
@@ -1805,10 +1809,10 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
     Type resultType;
     if (isArithmetic(second.getType()))
     {
-        if (std::holds_alternative<PointerType>(third.getType().get()))
+        if (std::holds_alternative<PointerType>(third.getType().get()) && isInteger(second.getType()))
         {
             auto constant = evaluateConstantExpression(second);
-            if (!constant || !isInteger(constant->getType()) || constant->toUInt() != 0)
+            if (!constant || constant->toUInt() != 0)
             {
                 log(Errors::Semantics::EXPECTED_THIRD_OPERAND_OF_CONDITIONAL_EXPRESSION_TO_BE_AN_ARITHMETIC_TYPE.args(
                     third, m_sourceInterface, third, *node.getOptionalQuestionMark(), *node.getOptionalColon()));
@@ -1840,7 +1844,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                 log(Errors::Semantics::EXPECTED_THIRD_OPERAND_OF_CONDITIONAL_EXPRESSION_TO_BE_NULL_2.args(
                     third, m_sourceInterface, third, *node.getOptionalQuestionMark(), *node.getOptionalColon()));
             }
-            else if (!isInteger(constant->getType()) || constant->toUInt() != 0)
+            else if (constant->toUInt() != 0)
             {
                 log(Errors::Semantics::EXPECTED_THIRD_OPERAND_OF_CONDITIONAL_EXPRESSION_TO_BE_NULL.args(
                     third, m_sourceInterface, third, *constant, *node.getOptionalQuestionMark(),

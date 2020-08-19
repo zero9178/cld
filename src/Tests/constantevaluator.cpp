@@ -1,6 +1,5 @@
 #include "catch.hpp"
 
-#include <Frontend/Compiler/ConstantEvaluator.hpp>
 #include <Frontend/Compiler/ErrorMessages.hpp>
 #include <Frontend/Compiler/Parser.hpp>
 #include <Frontend/Compiler/SemanticAnalysis.hpp>
@@ -14,9 +13,10 @@ using namespace cld::Warnings::Semantics;
 
 namespace
 {
-std::pair<cld::Semantics::ConstRetType, std::string> evaluateConstantExpression(
-    const std::string& expression, const cld::LanguageOptions& options = cld::LanguageOptions::native(),
-    cld::Semantics::ConstantEvaluator::Mode mode = cld::Semantics::ConstantEvaluator::Integer)
+std::pair<cld::Semantics::ConstValue, std::string>
+    evaluateConstantExpression(const std::string& expression,
+                               const cld::LanguageOptions& options = cld::LanguageOptions::native(),
+                               cld::Semantics::SemanticAnalysis::Mode mode = cld::Semantics::SemanticAnalysis::Integer)
 {
     std::string storage;
     llvm::raw_string_ostream ss(storage);
@@ -41,7 +41,7 @@ std::pair<cld::Semantics::ConstRetType, std::string> evaluateConstantExpression(
             ss << iter;
             llvm::errs() << iter;
         }
-        ret = cld::Semantics::ConstRetType{};
+        ret = cld::Semantics::ConstValue{};
     }
     return {*ret, ss.str()};
 }
@@ -65,8 +65,6 @@ TEST_CASE("Const eval Primary expression", "[constEval]")
         CHECK(result == 0);
         CHECK(result.isSigned());
         CHECK(result.getBitWidth() == sizeof(int) * 8);
-        CHECK(value.getType()
-              == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
     }
     SECTION("unsigned int")
     {
@@ -78,8 +76,6 @@ TEST_CASE("Const eval Primary expression", "[constEval]")
         CHECK(result == 0);
         CHECK(result.isUnsigned());
         CHECK(result.getBitWidth() == sizeof(unsigned int) * 8);
-        CHECK(value.getType()
-              == cld::Semantics::PrimitiveType::createUnsignedInt(false, false, cld::LanguageOptions::native()));
     }
     SECTION("long")
     {
@@ -91,7 +87,6 @@ TEST_CASE("Const eval Primary expression", "[constEval]")
         CHECK(result == 0);
         CHECK(result.isSigned());
         CHECK(result.getBitWidth() == 32);
-        CHECK(value.getType() == cld::Semantics::PrimitiveType::createLong(false, false, cld::Tests::x86linux));
     }
     SECTION("unsigned long")
     {
@@ -103,7 +98,6 @@ TEST_CASE("Const eval Primary expression", "[constEval]")
         CHECK(result == 0);
         CHECK(result.isUnsigned());
         CHECK(result.getBitWidth() == 32);
-        CHECK(value.getType() == cld::Semantics::PrimitiveType::createUnsignedLong(false, false, cld::Tests::x86linux));
     }
     SECTION("long long")
     {
@@ -115,7 +109,6 @@ TEST_CASE("Const eval Primary expression", "[constEval]")
         CHECK(result == 0);
         CHECK(result.isSigned());
         CHECK(result.getBitWidth() == 64);
-        CHECK(value.getType() == cld::Semantics::PrimitiveType::createLongLong(false, false));
     }
     SECTION("unsigned long long")
     {
@@ -127,59 +120,52 @@ TEST_CASE("Const eval Primary expression", "[constEval]")
         CHECK(result == 0);
         CHECK(result.isUnsigned());
         CHECK(result.getBitWidth() == 64);
-        CHECK(value.getType() == cld::Semantics::PrimitiveType::createUnsignedLongLong(false, false));
     }
     SECTION("float")
     {
         auto [value, error] = evaluateConstantExpression(".0f", cld::LanguageOptions::native(),
-                                                         cld::Semantics::ConstantEvaluator::Arithmetic);
+                                                         cld::Semantics::SemanticAnalysis::Arithmetic);
         REQUIRE_THAT(error, ProducesNoErrors());
         REQUIRE(!value.isUndefined());
         REQUIRE(std::holds_alternative<llvm::APFloat>(value.getValue()));
         auto result = std::get<llvm::APFloat>(value.getValue());
         CHECK(result.convertToFloat() == 0.f);
         CHECK(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_IEEEsingle);
-        CHECK(value.getType() == cld::Semantics::PrimitiveType::createFloat(false, false));
     }
     SECTION("double")
     {
         auto [value, error] = evaluateConstantExpression(".0", cld::LanguageOptions::native(),
-                                                         cld::Semantics::ConstantEvaluator::Arithmetic);
+                                                         cld::Semantics::SemanticAnalysis::Arithmetic);
         REQUIRE_THAT(error, ProducesNoErrors());
         REQUIRE(!value.isUndefined());
         REQUIRE(std::holds_alternative<llvm::APFloat>(value.getValue()));
         auto result = std::get<llvm::APFloat>(value.getValue());
         CHECK(result.convertToDouble() == 0.0);
         CHECK(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_IEEEdouble);
-        CHECK(value.getType() == cld::Semantics::PrimitiveType::createDouble(false, false));
     }
     SECTION("long double")
     {
         SECTION("Msvc")
         {
             auto [value, error] = evaluateConstantExpression(".0l", cld::Tests::x64windowsMsvc,
-                                                             cld::Semantics::ConstantEvaluator::Arithmetic);
+                                                             cld::Semantics::SemanticAnalysis::Arithmetic);
             REQUIRE_THAT(error, ProducesNoErrors());
             REQUIRE(!value.isUndefined());
             REQUIRE(std::holds_alternative<llvm::APFloat>(value.getValue()));
             auto result = std::get<llvm::APFloat>(value.getValue());
             CHECK(result.convertToDouble() == 0.0);
             CHECK(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_IEEEdouble);
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createLongDouble(false, false, cld::Tests::x64windowsMsvc));
         }
         SECTION("Gnu")
         {
             auto [value, error] = evaluateConstantExpression(".0l", cld::Tests::x64windowsGnu,
-                                                             cld::Semantics::ConstantEvaluator::Arithmetic);
+                                                             cld::Semantics::SemanticAnalysis::Arithmetic);
             REQUIRE_THAT(error, ProducesNoErrors());
             REQUIRE(!value.isUndefined());
             REQUIRE(std::holds_alternative<llvm::APFloat>(value.getValue()));
             auto result = std::get<llvm::APFloat>(value.getValue());
             REQUIRE(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_x87DoubleExtended);
             CHECK(result.compare(llvm::APFloat(llvm::APFloat::x87DoubleExtended(), "0.0")));
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createLongDouble(false, false, cld::Tests::x64windowsGnu));
         }
     }
     SECTION("String literal")
@@ -195,7 +181,7 @@ TEST_CASE("Const eval postfix expression", "[constEval]")
     SECTION("Function call")
     {
         auto [value, error] = evaluateConstantExpression("((void(*)(void))5)()", cld::LanguageOptions::native(),
-                                                         cld::Semantics::ConstantEvaluator::Arithmetic);
+                                                         cld::Semantics::SemanticAnalysis::Arithmetic);
         CHECK(value.isUndefined());
         CHECK_THAT(error, ProducesError(FUNCTION_CALL_NOT_ALLOWED_IN_CONSTANT_EXPRESSION));
     }
@@ -223,8 +209,6 @@ TEST_CASE("Const eval unary expression", "[constEval]")
                 CHECK(result == 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType()
-                      == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             }
             {
                 auto [value, error] = evaluateConstantExpression("+(signed char)0");
@@ -235,8 +219,6 @@ TEST_CASE("Const eval unary expression", "[constEval]")
                 CHECK(result == 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType()
-                      == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             }
             {
                 auto [value, error] = evaluateConstantExpression("+(unsigned char)0");
@@ -247,8 +229,6 @@ TEST_CASE("Const eval unary expression", "[constEval]")
                 CHECK(result == 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType()
-                      == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             }
         }
         SECTION("Floating point")
@@ -256,14 +236,13 @@ TEST_CASE("Const eval unary expression", "[constEval]")
             SECTION("Arithmetic constant expression")
             {
                 auto [value, error] = evaluateConstantExpression("+.0", cld::LanguageOptions::native(),
-                                                                 cld::Semantics::ConstantEvaluator::Arithmetic);
+                                                                 cld::Semantics::SemanticAnalysis::Arithmetic);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<llvm::APFloat>(value.getValue()));
                 auto result = std::get<llvm::APFloat>(value.getValue());
                 CHECK(result.convertToDouble() == 0.0);
                 CHECK(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_IEEEdouble);
-                CHECK(value.getType() == cld::Semantics::PrimitiveType::createDouble(false, false));
             }
             INT_EVAL_PRODUCES("+.0", ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
         }
@@ -280,22 +259,19 @@ TEST_CASE("Const eval unary expression", "[constEval]")
             CHECK(result == -1);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
         SECTION("Floating point")
         {
             SECTION("Arithmetic constant expression")
             {
                 auto [value, error] = evaluateConstantExpression("-.1", cld::LanguageOptions::native(),
-                                                                 cld::Semantics::ConstantEvaluator::Arithmetic);
+                                                                 cld::Semantics::SemanticAnalysis::Arithmetic);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<llvm::APFloat>(value.getValue()));
                 auto result = std::get<llvm::APFloat>(value.getValue());
                 CHECK(result.convertToDouble() == -.1);
                 CHECK(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_IEEEdouble);
-                CHECK(value.getType() == cld::Semantics::PrimitiveType::createDouble(false, false));
             }
             INT_EVAL_PRODUCES("-.1", ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
         }
@@ -312,8 +288,6 @@ TEST_CASE("Const eval unary expression", "[constEval]")
             CHECK(result == ~1u);
             CHECK(result.isUnsigned());
             CHECK(result.getBitWidth() == sizeof(unsigned int) * 8);
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createUnsignedInt(false, false, cld::LanguageOptions::native()));
         }
     }
     SECTION("Logical not")
@@ -328,15 +302,13 @@ TEST_CASE("Const eval unary expression", "[constEval]")
             CHECK(result == 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
         SECTION("Floating point")
         {
             SECTION("Arithmetic constant expression")
             {
                 auto [value, error] = evaluateConstantExpression("!.1", cld::LanguageOptions::native(),
-                                                                 cld::Semantics::ConstantEvaluator::Arithmetic);
+                                                                 cld::Semantics::SemanticAnalysis::Arithmetic);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -344,8 +316,6 @@ TEST_CASE("Const eval unary expression", "[constEval]")
                 CHECK(result == 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType()
-                      == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             }
             INT_EVAL_PRODUCES("!.1", ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
         }
@@ -353,7 +323,7 @@ TEST_CASE("Const eval unary expression", "[constEval]")
         {
             {
                 auto [value, error] = evaluateConstantExpression("!(void*)0", cld::LanguageOptions::native(),
-                                                                 cld::Semantics::ConstantEvaluator::Initialization);
+                                                                 cld::Semantics::SemanticAnalysis::Initialization);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -361,12 +331,10 @@ TEST_CASE("Const eval unary expression", "[constEval]")
                 CHECK(result != 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType()
-                      == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             }
             {
                 auto [value, error] = evaluateConstantExpression("!(void*)5", cld::LanguageOptions::native(),
-                                                                 cld::Semantics::ConstantEvaluator::Initialization);
+                                                                 cld::Semantics::SemanticAnalysis::Initialization);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -374,8 +342,6 @@ TEST_CASE("Const eval unary expression", "[constEval]")
                 CHECK(result == 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType()
-                      == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             }
         }
     }
@@ -455,7 +421,6 @@ TEST_CASE("Const eval unary expression", "[constEval]")
                         CHECK(result == size);
                         CHECK(result.isUnsigned());
                         CHECK(result.getBitWidth() == sizeof(unsigned long long) * 8);
-                        CHECK(value.getType() == cld::Semantics::getSizeT(cld::LanguageOptions::native()));
                     }
                 }
             }
@@ -476,7 +441,6 @@ TEST_CASE("Const eval cast expression", "[constEval]")
             CHECK(result == 0);
             CHECK(result.isUnsigned());
             CHECK(result.getBitWidth() == sizeof(unsigned long long) * 8);
-            CHECK(value.getType() == cld::Semantics::PrimitiveType::createUnsignedLongLong(false, false));
         }
         {
             auto [value, error] = evaluateConstantExpression("(unsigned long long)0.5");
@@ -487,7 +451,6 @@ TEST_CASE("Const eval cast expression", "[constEval]")
             CHECK(result == 0);
             CHECK(result.isUnsigned());
             CHECK(result.getBitWidth() == sizeof(unsigned long long) * 8);
-            CHECK(value.getType() == cld::Semantics::PrimitiveType::createUnsignedLongLong(false, false));
         }
     }
     SECTION("Float")
@@ -503,40 +466,37 @@ TEST_CASE("Const eval cast expression", "[constEval]")
             SECTION("From int")
             {
                 auto [value, error] = evaluateConstantExpression("(float)0", cld::LanguageOptions::native(),
-                                                                 cld::Semantics::ConstantEvaluator::Arithmetic);
+                                                                 cld::Semantics::SemanticAnalysis::Arithmetic);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<llvm::APFloat>(value.getValue()));
                 auto result = std::get<llvm::APFloat>(value.getValue());
                 CHECK(result.convertToFloat() == 0.f);
                 CHECK(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_IEEEsingle);
-                CHECK(value.getType() == cld::Semantics::PrimitiveType::createFloat(false, false));
             }
             SECTION("From float")
             {
                 auto [value, error] = evaluateConstantExpression("(float)5.3", cld::LanguageOptions::native(),
-                                                                 cld::Semantics::ConstantEvaluator::Arithmetic);
+                                                                 cld::Semantics::SemanticAnalysis::Arithmetic);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<llvm::APFloat>(value.getValue()));
                 auto result = std::get<llvm::APFloat>(value.getValue());
                 CHECK(result.convertToFloat() == 5.3f);
                 CHECK(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_IEEEsingle);
-                CHECK(value.getType() == cld::Semantics::PrimitiveType::createFloat(false, false));
             }
         }
         SECTION("To Infinity")
         {
             auto [value, error] = evaluateConstantExpression(
                 "(float)" + std::to_string(std::numeric_limits<double>::max()), cld::LanguageOptions::native(),
-                cld::Semantics::ConstantEvaluator::Arithmetic);
+                cld::Semantics::SemanticAnalysis::Arithmetic);
             REQUIRE_THAT(error, ProducesNoErrors());
             REQUIRE(!value.isUndefined());
             REQUIRE(std::holds_alternative<llvm::APFloat>(value.getValue()));
             auto result = std::get<llvm::APFloat>(value.getValue());
             CHECK(result.convertToFloat() == std::numeric_limits<float>::infinity());
             CHECK(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_IEEEsingle);
-            CHECK(value.getType() == cld::Semantics::PrimitiveType::createFloat(false, false));
         }
         SECTION("Warnings")
         {
@@ -544,7 +504,7 @@ TEST_CASE("Const eval cast expression", "[constEval]")
             {
                 auto [value, error] =
                     evaluateConstantExpression("(long long)3.40282347E+38f", cld::LanguageOptions::native(),
-                                               cld::Semantics::ConstantEvaluator::Arithmetic);
+                                               cld::Semantics::SemanticAnalysis::Arithmetic);
                 CHECK_THAT(error, ProducesWarning(VALUE_OF_N_IS_TO_LARGE_FOR_INTEGER_TYPE_N, "'3.40282347E+38'",
                                                   "'long long'"));
             }
@@ -561,7 +521,7 @@ TEST_CASE("Const eval cast expression", "[constEval]")
         SECTION("Arithmetic constant expressions")
         {
             auto [value, error] = evaluateConstantExpression("(void*)0", cld::LanguageOptions::native(),
-                                                             cld::Semantics::ConstantEvaluator::Arithmetic);
+                                                             cld::Semantics::SemanticAnalysis::Arithmetic);
             CHECK(value.isUndefined());
             CHECK_THAT(error, ProducesError(CANNOT_CAST_TO_NON_ARITHMETIC_TYPE_IN_ARITHMETIC_CONSTANT_EXPRESSION));
         }
@@ -569,25 +529,19 @@ TEST_CASE("Const eval cast expression", "[constEval]")
         {
             {
                 auto [value, error] = evaluateConstantExpression("(void*)0", cld::LanguageOptions::native(),
-                                                                 cld::Semantics::ConstantEvaluator::Initialization);
+                                                                 cld::Semantics::SemanticAnalysis::Initialization);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<cld::Semantics::VoidStar>(value.getValue()));
                 CHECK(std::get<cld::Semantics::VoidStar>(value.getValue()).address == 0);
-                CHECK(value.getType()
-                      == cld::Semantics::PointerType::create(false, false, false,
-                                                             cld::Semantics::PrimitiveType::createVoid(false, false)));
             }
             {
                 auto [value, error] = evaluateConstantExpression("(float*)(void*)0", cld::LanguageOptions::native(),
-                                                                 cld::Semantics::ConstantEvaluator::Initialization);
+                                                                 cld::Semantics::SemanticAnalysis::Initialization);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<cld::Semantics::VoidStar>(value.getValue()));
                 CHECK(std::get<cld::Semantics::VoidStar>(value.getValue()).address == 0);
-                CHECK(value.getType()
-                      == cld::Semantics::PointerType::create(false, false, false,
-                                                             cld::Semantics::PrimitiveType::createFloat(false, false)));
             }
         }
     }
@@ -607,8 +561,6 @@ TEST_CASE("Const eval term", "[constEval]")
             CHECK(result == 20);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
         SECTION("Divide")
         {
@@ -620,8 +572,6 @@ TEST_CASE("Const eval term", "[constEval]")
             CHECK(result == 1);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
         SECTION("Modulo")
         {
@@ -633,8 +583,6 @@ TEST_CASE("Const eval term", "[constEval]")
             CHECK(result == 1);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
     }
     SECTION("Float")
@@ -643,39 +591,37 @@ TEST_CASE("Const eval term", "[constEval]")
         {
             {
                 auto [value, error] = evaluateConstantExpression("3 * .55", cld::LanguageOptions::native(),
-                                                                 cld::Semantics::ConstantEvaluator::Arithmetic);
+                                                                 cld::Semantics::SemanticAnalysis::Arithmetic);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<llvm::APFloat>(value.getValue()));
                 auto result = std::get<llvm::APFloat>(value.getValue());
                 CHECK(result.convertToDouble() == 3 * .55);
                 CHECK(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_IEEEdouble);
-                CHECK(value.getType() == cld::Semantics::PrimitiveType::createDouble(false, false));
             }
             {
                 auto [value, error] = evaluateConstantExpression("3.0f * .55", cld::LanguageOptions::native(),
-                                                                 cld::Semantics::ConstantEvaluator::Arithmetic);
+                                                                 cld::Semantics::SemanticAnalysis::Arithmetic);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<llvm::APFloat>(value.getValue()));
                 auto result = std::get<llvm::APFloat>(value.getValue());
                 CHECK(result.convertToDouble() == 3 * .55);
                 CHECK(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_IEEEdouble);
-                CHECK(value.getType() == cld::Semantics::PrimitiveType::createDouble(false, false));
             }
             INT_EVAL_PRODUCES("3.0f * .55", ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
         }
         SECTION("Divide")
         {
             auto [value, error] = evaluateConstantExpression("3 / .55", cld::LanguageOptions::native(),
-                                                             cld::Semantics::ConstantEvaluator::Arithmetic);
+                                                             cld::Semantics::SemanticAnalysis::Arithmetic);
             REQUIRE_THAT(error, ProducesNoErrors());
             REQUIRE(!value.isUndefined());
             REQUIRE(std::holds_alternative<llvm::APFloat>(value.getValue()));
             auto result = std::get<llvm::APFloat>(value.getValue());
             CHECK(result.convertToDouble() == 3 / .55);
             CHECK(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_IEEEdouble);
-            CHECK(value.getType() == cld::Semantics::PrimitiveType::createDouble(false, false));
+
             INT_EVAL_PRODUCES("3.0f / .55", ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
         }
     }
@@ -696,8 +642,6 @@ TEST_CASE("Const eval additive", "[constEval]")
             CHECK(result == 9);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
         SECTION("Minus")
         {
@@ -710,8 +654,6 @@ TEST_CASE("Const eval additive", "[constEval]")
             CHECK(result == 3);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
     }
     SECTION("Float")
@@ -719,7 +661,7 @@ TEST_CASE("Const eval additive", "[constEval]")
         SECTION("Plus")
         {
             auto [value, error] = evaluateConstantExpression("3 + .55", cld::LanguageOptions::native(),
-                                                             cld::Semantics::ConstantEvaluator::Arithmetic);
+                                                             cld::Semantics::SemanticAnalysis::Arithmetic);
             UNSCOPED_INFO(error);
             REQUIRE_THAT(error, ProducesNoErrors());
             REQUIRE(!value.isUndefined());
@@ -727,12 +669,11 @@ TEST_CASE("Const eval additive", "[constEval]")
             auto result = std::get<llvm::APFloat>(value.getValue());
             CHECK(result.convertToDouble() == 3.55);
             CHECK(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_IEEEdouble);
-            CHECK(value.getType() == cld::Semantics::PrimitiveType::createDouble(false, false));
         }
         SECTION("Minus")
         {
             auto [value, error] = evaluateConstantExpression("3 - .55", cld::LanguageOptions::native(),
-                                                             cld::Semantics::ConstantEvaluator::Arithmetic);
+                                                             cld::Semantics::SemanticAnalysis::Arithmetic);
             UNSCOPED_INFO(error);
             REQUIRE_THAT(error, ProducesNoErrors());
             REQUIRE(!value.isUndefined());
@@ -740,7 +681,6 @@ TEST_CASE("Const eval additive", "[constEval]")
             auto result = std::get<llvm::APFloat>(value.getValue());
             CHECK(result.convertToDouble() == 3 - .55);
             CHECK(llvm::APFloat::SemanticsToEnum(result.getSemantics()) == llvm::APFloat::S_IEEEdouble);
-            CHECK(value.getType() == cld::Semantics::PrimitiveType::createDouble(false, false));
         }
     }
     SECTION("Pointer")
@@ -749,29 +689,21 @@ TEST_CASE("Const eval additive", "[constEval]")
         {
             {
                 auto [value, error] = evaluateConstantExpression("3 + (int*)5", cld::Tests::x64linux,
-                                                                 cld::Semantics::ConstantEvaluator::Initialization);
+                                                                 cld::Semantics::SemanticAnalysis::Initialization);
                 UNSCOPED_INFO(error);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<cld::Semantics::VoidStar>(value.getValue()));
                 CHECK(std::get<cld::Semantics::VoidStar>(value.getValue()).address == 17);
-                CHECK(value.getType()
-                      == cld::Semantics::PointerType::create(
-                          false, false, false,
-                          cld::Semantics::PrimitiveType::createInt(false, false, cld::Tests::x64linux)));
             }
             {
                 auto [value, error] = evaluateConstantExpression("(int*)5 + 3", cld::Tests::x64linux,
-                                                                 cld::Semantics::ConstantEvaluator::Initialization);
+                                                                 cld::Semantics::SemanticAnalysis::Initialization);
                 UNSCOPED_INFO(error);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<cld::Semantics::VoidStar>(value.getValue()));
                 CHECK(std::get<cld::Semantics::VoidStar>(value.getValue()).address == 17);
-                CHECK(value.getType()
-                      == cld::Semantics::PointerType::create(
-                          false, false, false,
-                          cld::Semantics::PrimitiveType::createInt(false, false, cld::Tests::x64linux)));
             }
         }
         SECTION("Minus")
@@ -779,7 +711,7 @@ TEST_CASE("Const eval additive", "[constEval]")
             SECTION("64 bit")
             {
                 auto [value, error] = evaluateConstantExpression("(int*)20 - (int*)4", cld::Tests::x64linux,
-                                                                 cld::Semantics::ConstantEvaluator::Initialization);
+                                                                 cld::Semantics::SemanticAnalysis::Initialization);
                 UNSCOPED_INFO(error);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
@@ -788,12 +720,11 @@ TEST_CASE("Const eval additive", "[constEval]")
                 CHECK(result == 4);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == 64);
-                CHECK(value.getType() == cld::Semantics::PrimitiveType::createLong(false, false, cld::Tests::x64linux));
             }
             SECTION("32 bit")
             {
                 auto [value, error] = evaluateConstantExpression("(int*)20 - (int*)4", cld::Tests::x86linux,
-                                                                 cld::Semantics::ConstantEvaluator::Initialization);
+                                                                 cld::Semantics::SemanticAnalysis::Initialization);
                 UNSCOPED_INFO(error);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
@@ -802,20 +733,15 @@ TEST_CASE("Const eval additive", "[constEval]")
                 CHECK(result == 4);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == 32);
-                CHECK(value.getType() == cld::Semantics::PrimitiveType::createInt(false, false, cld::Tests::x86linux));
             }
             {
                 auto [value, error] = evaluateConstantExpression("(int*)5 - 3", cld::Tests::x64linux,
-                                                                 cld::Semantics::ConstantEvaluator::Initialization);
+                                                                 cld::Semantics::SemanticAnalysis::Initialization);
                 UNSCOPED_INFO(error);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<cld::Semantics::VoidStar>(value.getValue()));
                 CHECK(std::get<cld::Semantics::VoidStar>(value.getValue()).address == std::uint64_t(-7));
-                CHECK(value.getType()
-                      == cld::Semantics::PointerType::create(
-                          false, false, false,
-                          cld::Semantics::PrimitiveType::createInt(false, false, cld::Tests::x64linux)));
             }
         }
     }
@@ -833,8 +759,6 @@ TEST_CASE("Const eval shift", "[constEval]")
         CHECK(result == 5 << 4);
         CHECK(result.isSigned());
         CHECK(result.getBitWidth() == sizeof(int) * 8);
-        CHECK(value.getType()
-              == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
     }
     SECTION("Right")
     {
@@ -846,8 +770,6 @@ TEST_CASE("Const eval shift", "[constEval]")
         CHECK(result == 5 >> 2);
         CHECK(result.isSigned());
         CHECK(result.getBitWidth() == sizeof(int) * 8);
-        CHECK(value.getType()
-              == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
     }
 }
 
@@ -861,7 +783,6 @@ TEST_CASE("Const eval bitand", "[constEval]")
     CHECK(result == (5 & 4));
     CHECK(result.isSigned());
     CHECK(result.getBitWidth() == sizeof(int) * 8);
-    CHECK(value.getType() == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
 }
 
 TEST_CASE("Const eval bitxor", "[constEval]")
@@ -874,7 +795,6 @@ TEST_CASE("Const eval bitxor", "[constEval]")
     CHECK(result == (5 ^ 4));
     CHECK(result.isSigned());
     CHECK(result.getBitWidth() == sizeof(int) * 8);
-    CHECK(value.getType() == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
 }
 
 TEST_CASE("Const eval bitor", "[constEval]")
@@ -887,7 +807,6 @@ TEST_CASE("Const eval bitor", "[constEval]")
     CHECK(result == (5 | 4));
     CHECK(result.isSigned());
     CHECK(result.getBitWidth() == sizeof(int) * 8);
-    CHECK(value.getType() == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
 }
 
 TEST_CASE("Const eval and", "[constEval]")
@@ -903,8 +822,6 @@ TEST_CASE("Const eval and", "[constEval]")
             CHECK(result != 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
         {
             auto [value, error] = evaluateConstantExpression("5 && 0");
@@ -915,15 +832,13 @@ TEST_CASE("Const eval and", "[constEval]")
             CHECK(result == 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
     }
     SECTION("Float")
     {
         {
             auto [value, error] = evaluateConstantExpression("3 && .55", cld::LanguageOptions::native(),
-                                                             cld::Semantics::ConstantEvaluator::Arithmetic);
+                                                             cld::Semantics::SemanticAnalysis::Arithmetic);
             REQUIRE_THAT(error, ProducesNoErrors());
             REQUIRE(!value.isUndefined());
             REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -931,12 +846,10 @@ TEST_CASE("Const eval and", "[constEval]")
             CHECK(result != 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
         {
             auto [value, error] = evaluateConstantExpression("0 && .55", cld::LanguageOptions::native(),
-                                                             cld::Semantics::ConstantEvaluator::Arithmetic);
+                                                             cld::Semantics::SemanticAnalysis::Arithmetic);
             REQUIRE_THAT(error, ProducesNoErrors());
             REQUIRE(!value.isUndefined());
             REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -944,8 +857,6 @@ TEST_CASE("Const eval and", "[constEval]")
             CHECK(result == 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
         INT_EVAL_PRODUCES("3 && .55", ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
         INT_EVAL_PRODUCES("0 && .55", ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
@@ -954,7 +865,7 @@ TEST_CASE("Const eval and", "[constEval]")
     {
         {
             auto [value, error] = evaluateConstantExpression("3 && (int*)5", cld::LanguageOptions::native(),
-                                                             cld::Semantics::ConstantEvaluator::Initialization);
+                                                             cld::Semantics::SemanticAnalysis::Initialization);
             REQUIRE_THAT(error, ProducesNoErrors());
             REQUIRE(!value.isUndefined());
             REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -962,12 +873,10 @@ TEST_CASE("Const eval and", "[constEval]")
             CHECK(result == 1);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
         {
             auto [value, error] = evaluateConstantExpression("0 && (int*)5", cld::LanguageOptions::native(),
-                                                             cld::Semantics::ConstantEvaluator::Initialization);
+                                                             cld::Semantics::SemanticAnalysis::Initialization);
             REQUIRE_THAT(error, ProducesNoErrors());
             REQUIRE(!value.isUndefined());
             REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -975,8 +884,6 @@ TEST_CASE("Const eval and", "[constEval]")
             CHECK(result == 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
     }
 }
@@ -994,8 +901,6 @@ TEST_CASE("Const eval or", "[constEval]")
             CHECK(result != 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
         {
             auto [value, error] = evaluateConstantExpression("0 || 0");
@@ -1006,15 +911,13 @@ TEST_CASE("Const eval or", "[constEval]")
             CHECK(result == 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
     }
     SECTION("Float")
     {
         {
             auto [value, error] = evaluateConstantExpression("3 || .55", cld::LanguageOptions::native(),
-                                                             cld::Semantics::ConstantEvaluator::Arithmetic);
+                                                             cld::Semantics::SemanticAnalysis::Arithmetic);
             REQUIRE_THAT(error, ProducesNoErrors());
             REQUIRE(!value.isUndefined());
             REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -1022,12 +925,10 @@ TEST_CASE("Const eval or", "[constEval]")
             CHECK(result != 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
         {
             auto [value, error] = evaluateConstantExpression("0 || .0", cld::LanguageOptions::native(),
-                                                             cld::Semantics::ConstantEvaluator::Arithmetic);
+                                                             cld::Semantics::SemanticAnalysis::Arithmetic);
             REQUIRE_THAT(error, ProducesNoErrors());
             REQUIRE(!value.isUndefined());
             REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -1035,8 +936,6 @@ TEST_CASE("Const eval or", "[constEval]")
             CHECK(result == 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
         INT_EVAL_PRODUCES("1 || .55", ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
     }
@@ -1044,7 +943,7 @@ TEST_CASE("Const eval or", "[constEval]")
     {
         {
             auto [value, error] = evaluateConstantExpression("3 || (void*)5", cld::LanguageOptions::native(),
-                                                             cld::Semantics::ConstantEvaluator::Initialization);
+                                                             cld::Semantics::SemanticAnalysis::Initialization);
             REQUIRE_THAT(error, ProducesNoErrors());
             REQUIRE(!value.isUndefined());
             REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -1052,12 +951,10 @@ TEST_CASE("Const eval or", "[constEval]")
             CHECK(result != 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
         {
             auto [value, error] = evaluateConstantExpression("0 || (void*)0", cld::LanguageOptions::native(),
-                                                             cld::Semantics::ConstantEvaluator::Initialization);
+                                                             cld::Semantics::SemanticAnalysis::Initialization);
             REQUIRE_THAT(error, ProducesNoErrors());
             REQUIRE(!value.isUndefined());
             REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -1065,8 +962,6 @@ TEST_CASE("Const eval or", "[constEval]")
             CHECK(result == 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
     }
 }
@@ -1085,8 +980,6 @@ TEST_CASE("Const eval comparison", "[constEval]")
             CHECK(result == 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
         SECTION("Greater than")
         {
@@ -1098,8 +991,6 @@ TEST_CASE("Const eval comparison", "[constEval]")
             CHECK(result != 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
         SECTION("Less than or equal")
         {
@@ -1111,8 +1002,6 @@ TEST_CASE("Const eval comparison", "[constEval]")
             CHECK(result == 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
         SECTION("Greater than or equal")
         {
@@ -1124,8 +1013,6 @@ TEST_CASE("Const eval comparison", "[constEval]")
             CHECK(result != 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
     }
     SECTION("Float")
@@ -1133,7 +1020,7 @@ TEST_CASE("Const eval comparison", "[constEval]")
         SECTION("Less than")
         {
             auto [value, error] = evaluateConstantExpression("3 < .55", cld::LanguageOptions::native(),
-                                                             cld::Semantics::ConstantEvaluator::Arithmetic);
+                                                             cld::Semantics::SemanticAnalysis::Arithmetic);
             REQUIRE_THAT(error, ProducesNoErrors());
             REQUIRE(!value.isUndefined());
             REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -1141,13 +1028,11 @@ TEST_CASE("Const eval comparison", "[constEval]")
             CHECK(result == 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
         SECTION("Greater than")
         {
             auto [value, error] = evaluateConstantExpression("3 > .55", cld::LanguageOptions::native(),
-                                                             cld::Semantics::ConstantEvaluator::Arithmetic);
+                                                             cld::Semantics::SemanticAnalysis::Arithmetic);
             REQUIRE_THAT(error, ProducesNoErrors());
             REQUIRE(!value.isUndefined());
             REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -1155,13 +1040,11 @@ TEST_CASE("Const eval comparison", "[constEval]")
             CHECK(result != 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
         SECTION("Less than or equal")
         {
             auto [value, error] = evaluateConstantExpression("3 <= .55", cld::LanguageOptions::native(),
-                                                             cld::Semantics::ConstantEvaluator::Arithmetic);
+                                                             cld::Semantics::SemanticAnalysis::Arithmetic);
             REQUIRE_THAT(error, ProducesNoErrors());
             REQUIRE(!value.isUndefined());
             REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -1169,13 +1052,11 @@ TEST_CASE("Const eval comparison", "[constEval]")
             CHECK(result == 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
         SECTION("Greater than or equal")
         {
             auto [value, error] = evaluateConstantExpression("3 >= .55", cld::LanguageOptions::native(),
-                                                             cld::Semantics::ConstantEvaluator::Arithmetic);
+                                                             cld::Semantics::SemanticAnalysis::Arithmetic);
             REQUIRE_THAT(error, ProducesNoErrors());
             REQUIRE(!value.isUndefined());
             REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -1183,8 +1064,6 @@ TEST_CASE("Const eval comparison", "[constEval]")
             CHECK(result != 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
     }
     SECTION("Pointers")
@@ -1192,7 +1071,7 @@ TEST_CASE("Const eval comparison", "[constEval]")
         SECTION("Less than")
         {
             auto [value, error] = evaluateConstantExpression("(void*)3 < (void*)55", cld::LanguageOptions::native(),
-                                                             cld::Semantics::ConstantEvaluator::Initialization);
+                                                             cld::Semantics::SemanticAnalysis::Initialization);
             REQUIRE_THAT(error, ProducesNoErrors());
             REQUIRE(!value.isUndefined());
             REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -1200,14 +1079,12 @@ TEST_CASE("Const eval comparison", "[constEval]")
             CHECK(result == 1);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
         SECTION("Greater than")
         {
             auto [value, error] =
                 evaluateConstantExpression("(int* const)3 > (const int*)55", cld::LanguageOptions::native(),
-                                           cld::Semantics::ConstantEvaluator::Initialization);
+                                           cld::Semantics::SemanticAnalysis::Initialization);
             REQUIRE_THAT(error, ProducesNoErrors());
             REQUIRE(!value.isUndefined());
             REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -1215,14 +1092,12 @@ TEST_CASE("Const eval comparison", "[constEval]")
             CHECK(result == 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
         SECTION("Less than or equal")
         {
             auto [value, error] =
                 evaluateConstantExpression("(struct i*)3 <= (struct i*)55", cld::LanguageOptions::native(),
-                                           cld::Semantics::ConstantEvaluator::Initialization);
+                                           cld::Semantics::SemanticAnalysis::Initialization);
             REQUIRE_THAT(error, ProducesNoErrors());
             REQUIRE(!value.isUndefined());
             REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -1230,13 +1105,11 @@ TEST_CASE("Const eval comparison", "[constEval]")
             CHECK(result != 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
         SECTION("Greater than or equal")
         {
             auto [value, error] = evaluateConstantExpression("(float*)3 >= (float*)55", cld::LanguageOptions::native(),
-                                                             cld::Semantics::ConstantEvaluator::Initialization);
+                                                             cld::Semantics::SemanticAnalysis::Initialization);
             REQUIRE_THAT(error, ProducesNoErrors());
             REQUIRE(!value.isUndefined());
             REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -1244,8 +1117,6 @@ TEST_CASE("Const eval comparison", "[constEval]")
             CHECK(result == 0);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
-            CHECK(value.getType()
-                  == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
     }
 }
@@ -1265,8 +1136,6 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result == 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType()
-                      == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             }
             {
                 auto [value, error] = evaluateConstantExpression("4 == 4");
@@ -1277,8 +1146,6 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result != 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType()
-                      == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             }
         }
         SECTION("Not equal")
@@ -1292,8 +1159,6 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result != 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType()
-                      == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             }
             {
                 auto [value, error] = evaluateConstantExpression("4 != 4");
@@ -1304,8 +1169,6 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result == 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType()
-                      == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             }
         }
     }
@@ -1315,7 +1178,7 @@ TEST_CASE("Const eval equal", "[constEval]")
         {
             {
                 auto [value, error] = evaluateConstantExpression("3 == .55", cld::LanguageOptions::native(),
-                                                                 cld::Semantics::ConstantEvaluator::Arithmetic);
+                                                                 cld::Semantics::SemanticAnalysis::Arithmetic);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -1323,12 +1186,10 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result == 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType()
-                      == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             }
             {
                 auto [value, error] = evaluateConstantExpression(".55 == .55", cld::LanguageOptions::native(),
-                                                                 cld::Semantics::ConstantEvaluator::Arithmetic);
+                                                                 cld::Semantics::SemanticAnalysis::Arithmetic);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -1336,15 +1197,13 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result != 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType()
-                      == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             }
         }
         SECTION("Not equal")
         {
             {
                 auto [value, error] = evaluateConstantExpression("3 != .55", cld::LanguageOptions::native(),
-                                                                 cld::Semantics::ConstantEvaluator::Arithmetic);
+                                                                 cld::Semantics::SemanticAnalysis::Arithmetic);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -1352,12 +1211,10 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result != 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType()
-                      == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             }
             {
                 auto [value, error] = evaluateConstantExpression(".55 != .55", cld::LanguageOptions::native(),
-                                                                 cld::Semantics::ConstantEvaluator::Arithmetic);
+                                                                 cld::Semantics::SemanticAnalysis::Arithmetic);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -1365,8 +1222,6 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result == 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType()
-                      == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             }
         }
     }
@@ -1377,7 +1232,7 @@ TEST_CASE("Const eval equal", "[constEval]")
             {
                 auto [value, error] =
                     evaluateConstantExpression("(int* const)5 == (const int*)4", cld::LanguageOptions::native(),
-                                               cld::Semantics::ConstantEvaluator::Initialization);
+                                               cld::Semantics::SemanticAnalysis::Initialization);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -1385,13 +1240,11 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result == 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType()
-                      == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             }
             {
                 auto [value, error] =
                     evaluateConstantExpression("(int* const)4 == (const int*)4", cld::LanguageOptions::native(),
-                                               cld::Semantics::ConstantEvaluator::Initialization);
+                                               cld::Semantics::SemanticAnalysis::Initialization);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -1399,13 +1252,11 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result != 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType()
-                      == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             }
             {
                 auto [value, error] =
                     evaluateConstantExpression("(struct i*)5 == (struct i*)4", cld::LanguageOptions::native(),
-                                               cld::Semantics::ConstantEvaluator::Initialization);
+                                               cld::Semantics::SemanticAnalysis::Initialization);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -1413,13 +1264,11 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result == 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType()
-                      == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             }
             {
                 auto [value, error] =
                     evaluateConstantExpression("(int* const)5 == (void*)4", cld::LanguageOptions::native(),
-                                               cld::Semantics::ConstantEvaluator::Initialization);
+                                               cld::Semantics::SemanticAnalysis::Initialization);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -1427,13 +1276,11 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result == 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType()
-                      == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             }
             {
                 auto [value, error] =
                     evaluateConstantExpression("(void*)5 == (const int*)4", cld::LanguageOptions::native(),
-                                               cld::Semantics::ConstantEvaluator::Initialization);
+                                               cld::Semantics::SemanticAnalysis::Initialization);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -1441,12 +1288,10 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result == 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType()
-                      == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             }
             {
                 auto [value, error] = evaluateConstantExpression("0 == (const int*)4", cld::LanguageOptions::native(),
-                                                                 cld::Semantics::ConstantEvaluator::Initialization);
+                                                                 cld::Semantics::SemanticAnalysis::Initialization);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -1454,12 +1299,10 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result == 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType()
-                      == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             }
             {
                 auto [value, error] = evaluateConstantExpression("(void*)5 == 0", cld::LanguageOptions::native(),
-                                                                 cld::Semantics::ConstantEvaluator::Initialization);
+                                                                 cld::Semantics::SemanticAnalysis::Initialization);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -1467,8 +1310,6 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result == 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType()
-                      == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             }
         }
         SECTION("Not equal")
@@ -1476,7 +1317,7 @@ TEST_CASE("Const eval equal", "[constEval]")
             {
                 auto [value, error] =
                     evaluateConstantExpression("(int* const)5 != (const int*)4", cld::LanguageOptions::native(),
-                                               cld::Semantics::ConstantEvaluator::Initialization);
+                                               cld::Semantics::SemanticAnalysis::Initialization);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -1484,13 +1325,11 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result != 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType()
-                      == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             }
             {
                 auto [value, error] =
                     evaluateConstantExpression("(int* const)4 != (const int*)4", cld::LanguageOptions::native(),
-                                               cld::Semantics::ConstantEvaluator::Initialization);
+                                               cld::Semantics::SemanticAnalysis::Initialization);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -1498,13 +1337,11 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result == 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType()
-                      == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             }
             {
                 auto [value, error] =
                     evaluateConstantExpression("(struct i*)5 != (struct i*)4", cld::LanguageOptions::native(),
-                                               cld::Semantics::ConstantEvaluator::Initialization);
+                                               cld::Semantics::SemanticAnalysis::Initialization);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -1512,13 +1349,11 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result != 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType()
-                      == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             }
             {
                 auto [value, error] =
                     evaluateConstantExpression("(int* const)5 != (void*)4", cld::LanguageOptions::native(),
-                                               cld::Semantics::ConstantEvaluator::Initialization);
+                                               cld::Semantics::SemanticAnalysis::Initialization);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -1526,13 +1361,11 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result != 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType()
-                      == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             }
             {
                 auto [value, error] =
                     evaluateConstantExpression("(void*)5 != (const int*)4", cld::LanguageOptions::native(),
-                                               cld::Semantics::ConstantEvaluator::Initialization);
+                                               cld::Semantics::SemanticAnalysis::Initialization);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -1540,12 +1373,10 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result != 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType()
-                      == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             }
             {
                 auto [value, error] = evaluateConstantExpression("0 != (const int*)4", cld::LanguageOptions::native(),
-                                                                 cld::Semantics::ConstantEvaluator::Initialization);
+                                                                 cld::Semantics::SemanticAnalysis::Initialization);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -1553,12 +1384,10 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result != 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType()
-                      == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             }
             {
                 auto [value, error] = evaluateConstantExpression("(void*)5 != 0", cld::LanguageOptions::native(),
-                                                                 cld::Semantics::ConstantEvaluator::Initialization);
+                                                                 cld::Semantics::SemanticAnalysis::Initialization);
                 REQUIRE_THAT(error, ProducesNoErrors());
                 REQUIRE(!value.isUndefined());
                 REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
@@ -1566,8 +1395,6 @@ TEST_CASE("Const eval equal", "[constEval]")
                 CHECK(result != 0);
                 CHECK(result.isSigned());
                 CHECK(result.getBitWidth() == sizeof(int) * 8);
-                CHECK(value.getType()
-                      == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             }
         }
     }
