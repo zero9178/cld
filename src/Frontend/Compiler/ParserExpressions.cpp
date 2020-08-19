@@ -13,28 +13,29 @@ cld::Syntax::Expression cld::Parser::parseExpression(Lexer::CTokenIterator& begi
                                                      Context& context)
 {
     const auto* start = begin;
-    std::vector<AssignmentExpression> expressions;
     auto assignment = parseAssignmentExpression(
         begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Comma)));
-    if (assignment)
-    {
-        expressions.push_back(std::move(*assignment));
-    }
 
+    std::vector<std::pair<Lexer::CTokenIterator, AssignmentExpression>> expressions;
     if (begin != end)
     {
         while (begin < end && begin->getTokenType() == Lexer::TokenType::Comma)
         {
-            begin++;
-            assignment = parseAssignmentExpression(
+            const auto* token = begin++;
+            auto otherAssignment = parseAssignmentExpression(
                 begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Comma)));
-            if (assignment)
+            if (otherAssignment)
             {
-                expressions.push_back(std::move(*assignment));
+                expressions.emplace_back(token, std::move(*otherAssignment));
             }
         }
     }
-    return Expression(start, begin, std::move(expressions));
+    if (!assignment)
+    {
+        return Expression(start, begin, {}, std::move(expressions));
+    }
+    return Expression(start, begin, std::make_unique<AssignmentExpression>(std::move(*assignment)),
+                      std::move(expressions));
 }
 
 std::optional<cld::Syntax::AssignmentExpression>
@@ -708,7 +709,7 @@ void parsePostFixExpressionSuffix(cld::Lexer::CTokenIterator start, cld::Lexer::
                 }
             }
 
-            auto closeParentheses = begin;
+            const auto* closeParentheses = begin;
             if (!expect(cld::Lexer::TokenType::CloseParentheses, begin, end, context, [&] {
                     return cld::Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos);
                 }))

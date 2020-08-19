@@ -10,6 +10,12 @@
 
 #include "Util.hpp"
 
+namespace llvm
+{
+class APSInt;
+class APFloat;
+} // namespace llvm
+
 namespace cld
 {
 bool isWhitespace(std::uint32_t c) noexcept;
@@ -123,5 +129,9 @@ std::string to_string(T value)
 {
     return std::to_string(value);
 }
+
+std::string to_string(const llvm::APSInt& apsInt);
+
+std::string to_string(const llvm::APFloat& apFloat);
 
 } // namespace cld

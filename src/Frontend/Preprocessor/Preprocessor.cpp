@@ -5,9 +5,9 @@
 #include <llvm/Support/Path.h>
 
 #include <Frontend/Common/Text.hpp>
-#include <Frontend/Compiler/ConstantEvaluator.hpp>
 #include <Frontend/Compiler/ErrorMessages.hpp>
 #include <Frontend/Compiler/Parser.hpp>
+#include <Frontend/Compiler/SemanticAnalysis.hpp>
 
 #include <ctime>
 #include <stack>
@@ -991,30 +991,20 @@ class Preprocessor final : private cld::PPSourceInterface
             m_errorsOccurred = true;
             return {};
         }
-        cld::Semantics::ConstantEvaluator evaluator(
-            *this,
-            [&](std::string_view macro) -> cld::Semantics::ConstRetType {
-                if (macro == "__FILE__" || macro == "__LINE__" || m_defines.count(macro) != 0)
-                {
-                    return {llvm::APSInt(llvm::APInt(64, 1), false),
-                            cld::Semantics::PrimitiveType::createLongLong(false, false)};
-                }
-                return {llvm::APSInt(64, false), cld::Semantics::PrimitiveType::createLongLong(false, false)};
-            },
-            nullptr,
-            [&](const cld::Message& message) {
-                if (message.getSeverity() == cld::Severity::Error)
-                {
-                    errorsOccurred = true;
-                }
-                log(message);
-            });
-        auto value = evaluator.visit(*tree);
-        if (errorsOccurred)
+        cld::Semantics::SemanticAnalysis analysis(*this, m_reporter, [this](std::string_view macro) {
+            return macro == "__FILE__" || macro == "__LINE__" || m_defines.count(macro) != 0;
+        });
+        auto exp = analysis.visit(*tree);
+        auto value = analysis.evaluateConstantExpression(exp);
+        if (!value)
         {
+            for (auto& iter : value.error())
+            {
+                log(iter);
+            }
             return {};
         }
-        return static_cast<bool>(value);
+        return static_cast<bool>(*value);
     }
 
     std::uint64_t getLineNumber(std::uint32_t fileID, std::uint64_t offset) const noexcept override

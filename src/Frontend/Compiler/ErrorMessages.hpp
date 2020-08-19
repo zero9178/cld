@@ -337,6 +337,12 @@ CREATE_ERROR(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_ARITHMETIC_OR_POINTER
 CREATE_ERROR(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_A_POINTER_TYPE,
              "Expected right operand of operator %0 to be a pointer type", PointAt<0>, AnnotateExpr<1>);
 
+CREATE_ERROR(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_NULL, "Expected right operand of operator %0 to be null",
+             PointAt<0>, Annotate<1, 2>);
+
+CREATE_ERROR(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_NULL_2, "Expected right operand of operator %0 to be null",
+             PointAt<0>, Underline<1>);
+
 CREATE_ERROR(EXPECTED_OTHER_OPERAND_OF_OPERATOR_N_TO_BE_OF_INTEGER_TYPE,
              "Expected other operand of operator %0 to be of integer type", PointAt<0>, AnnotateExpr<1>);
 
@@ -356,6 +362,12 @@ CREATE_ERROR(FIRST_OPERAND_OF_CONDITIONAL_EXPRESSION_MUST_BE_AN_ARITHMETIC_OR_PO
 CREATE_ERROR(EXPECTED_THIRD_OPERAND_OF_CONDITIONAL_EXPRESSION_TO_BE_AN_ARITHMETIC_TYPE,
              "Expected third operand of conditional expression to be an arithmetic type", AnnotateExpr<0>, PointAt<1>,
              PointAt<2>);
+
+CREATE_ERROR(EXPECTED_THIRD_OPERAND_OF_CONDITIONAL_EXPRESSION_TO_BE_NULL,
+             "Expected third operand of conditional expression to be null", Annotate<0, 1>, PointAt<2>, PointAt<3>);
+
+CREATE_ERROR(EXPECTED_THIRD_OPERAND_OF_CONDITIONAL_EXPRESSION_TO_BE_NULL_2,
+             "Expected third operand of conditional expression to be null", Underline<0>, PointAt<1>, PointAt<2>);
 
 CREATE_ERROR(EXPECTED_THIRD_OPERAND_OF_CONDITIONAL_EXPRESSION_TO_BE_VOID,
              "Expected third operand of conditional expression to be void", AnnotateExpr<0>, PointAt<1>, PointAt<2>);
@@ -410,7 +422,11 @@ CREATE_ERROR(EXPECTED_ARGUMENT_N_TO_BE_AN_ARITHMETIC_TYPE, "Expected argument %0
 CREATE_ERROR(EXPECTED_ARGUMENT_N_TO_BE_AN_ARITHMETIC_OR_POINTER_TYPE,
              "Expected argument %0  to be an arithmetic or pointer type", AnnotateExpr<1>);
 
-CREATE_ERROR(EXPECTED_ARGUMENT_N_TO_BE_A_POINTER_TYPE, "Expected argument %0  to be a pointer type", AnnotateExpr<1>);
+CREATE_ERROR(EXPECTED_ARGUMENT_N_TO_BE_A_POINTER_TYPE, "Expected argument %0 to be a pointer type", AnnotateExpr<1>);
+
+CREATE_ERROR(EXPECTED_ARGUMENT_N_TO_BE_NULL, "Expected argument %0 to be null", Annotate<1, 2>);
+
+CREATE_ERROR(EXPECTED_ARGUMENT_N_TO_BE_NULL_2, "Expected argument %0 to be null", Underline<1>);
 
 CREATE_ERROR(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_ARGUMENT_N_OF_TYPE_N,
              "Cannot pass incompatible type to argument %0 of type %full1", AnnotateExpr<2>);
@@ -433,11 +449,14 @@ CREATE_ERROR(TYPE_IN_CAST_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE, "Type in cast m
 CREATE_ERROR(EXPRESSION_IN_CAST_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE,
              "Expression in cast must be an arithmetic or pointer type", AnnotateExpr<0>);
 
+CREATE_ERROR(CANNOT_CAST_NON_INTEGER_AND_POINTER_TYPE_N_TO_POINTER_TYPE,
+             "Cannot cast non integer and pointer type %fullType0 to pointer type", AnnotateExpr<0>);
+
+CREATE_ERROR(CANNOT_CAST_POINTER_TYPE_TO_NON_INTEGER_AND_POINTER_TYPE,
+             "Cannot cast pointer type to non integer and pointer type", Underline<0>, AnnotateExpr<1>);
+
 CREATE_ERROR(INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC, "Incomplete type %full0 used in pointer arithmetic",
              Annotate<1, 2>);
-
-CREATE_ERROR(INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC_2, "Incomplete type %full0 used in pointer arithmetic",
-             Annotate<1, 2>, Annotate<3, 4>);
 
 CREATE_ERROR(FORWARD_DECLARING_AN_ENUM_IS_NOT_ALLOWED, "Forward declaring an enum is not allowed", Underline<0>);
 
@@ -476,20 +495,13 @@ CREATE_ERROR(INITIALIZER_NOT_ALLOWED_IN_CONSTANT_EXPRESSION, "Initializer not al
              Underline<0>);
 
 CREATE_ERROR(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
-             "Only integers allowed in integer constant expressions", Annotate<0, 1>);
+             "Only integers allowed in integer constant expressions", Underline<0>);
 
-CREATE_ERROR(CANNOT_APPLY_UNARY_OPERATOR_N_TO_VALUE_OF_TYPE_N,
-             "Cannot apply unary operator %tokenType0 to value of type %full1", PointAt<0>, Annotate<2, 1>);
+CREATE_ERROR(CANNOT_CAST_TO_NON_INTEGER_TYPE_IN_INTEGER_CONSTANT_EXPRESSION,
+             "Cannot cast to non integer type in integer constant expression", Underline<0>);
 
-CREATE_ERROR(CAN_ONLY_CAST_TO_INTEGERS_IN_INTEGER_CONSTANT_EXPRESSION,
-             "Can only cast to integers in integer constant expression", Underline<0>);
-
-CREATE_ERROR(CANNOT_APPLY_BINARY_OPERATOR_N_TO_VALUES_OF_TYPE_N_AND_N,
-             "Cannot apply binary operator %tokenType0 to values of type %full1 and %full2", PointAt<0>, Annotate<3, 1>,
-             Annotate<4, 2>);
-
-CREATE_ERROR(INVALID_CAST_FROM_TYPE_N_TO_TYPE_N, "Invalid cast from type %full0 to type %full1", Underline<2>,
-             Annotate<3, 0>);
+CREATE_ERROR(CANNOT_CAST_TO_NON_ARITHMETIC_TYPE_IN_ARITHMETIC_CONSTANT_EXPRESSION,
+             "Cannot cast to non arithmetic type in arithmetic constant expression", Underline<0>);
 
 CREATE_ERROR(INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARABLE_WITH_POINTER,
              "Integer must evaluate to null to be comparable with pointer", Underline<0>);
@@ -637,7 +649,7 @@ namespace Warnings
 namespace Semantics
 {
 CREATE_WARNING(VALUE_OF_N_IS_TO_LARGE_FOR_INTEGER_TYPE_N, "overflow",
-               "Value of '%0' is too large for integer type %full1", Underline<2>);
+               "Value of %0 is too large for integer type %full1", Underline<2>);
 } // namespace Semantics
 namespace Lexer
 {

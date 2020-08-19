@@ -4,15 +4,25 @@
 
 #include <algorithm>
 
-cld::Syntax::Expression::Expression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                                    std::vector<cld::Syntax::AssignmentExpression> assignmentExpressions)
-    : Node(begin, end), m_assignmentExpressions(std::move(assignmentExpressions))
+cld::Syntax::Expression::Expression(
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
+    std::unique_ptr<AssignmentExpression>&& assignmentExpression,
+    std::vector<std::pair<Lexer::CTokenIterator, cld::Syntax::AssignmentExpression>> optionalAssignmentExpressions)
+    : Node(begin, end),
+      m_assignmentExpression(std::move(assignmentExpression)),
+      m_optionalAssignmentExpressions(std::move(optionalAssignmentExpressions))
 {
 }
 
-const std::vector<cld::Syntax::AssignmentExpression>& cld::Syntax::Expression::getAssignmentExpressions() const
+const cld::Syntax::AssignmentExpression& cld::Syntax::Expression::getAssignmentExpression() const
 {
-    return m_assignmentExpressions;
+    return *m_assignmentExpression;
+}
+
+const std::vector<std::pair<cld::Lexer::CTokenIterator, cld::Syntax::AssignmentExpression>>&
+    cld::Syntax::Expression::getOptionalAssignmentExpressions() const
+{
+    return m_optionalAssignmentExpressions;
 }
 
 cld::Syntax::PrimaryExpressionIdentifier::PrimaryExpressionIdentifier(Lexer::CTokenIterator begin,

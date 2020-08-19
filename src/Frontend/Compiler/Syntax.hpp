@@ -181,13 +181,18 @@ public:
  */
 class Expression final : public Node
 {
-    std::vector<AssignmentExpression> m_assignmentExpressions;
+    std::unique_ptr<AssignmentExpression> m_assignmentExpression;
+    std::vector<std::pair<Lexer::CTokenIterator, AssignmentExpression>> m_optionalAssignmentExpressions;
 
 public:
     Expression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-               std::vector<AssignmentExpression> assignmentExpressions);
+               std::unique_ptr<AssignmentExpression>&& assignmentExpression,
+               std::vector<std::pair<Lexer::CTokenIterator, AssignmentExpression>> optionalAssignmentExpressions);
 
-    [[nodiscard]] const std::vector<AssignmentExpression>& getAssignmentExpressions() const;
+    [[nodiscard]] const AssignmentExpression& getAssignmentExpression() const;
+
+    [[nodiscard]] const std::vector<std::pair<Lexer::CTokenIterator, AssignmentExpression>>&
+        getOptionalAssignmentExpressions() const;
 };
 
 /**

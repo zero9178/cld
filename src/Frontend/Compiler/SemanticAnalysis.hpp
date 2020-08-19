@@ -3,6 +3,7 @@
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/ScopeExit.h>
 
+#include <functional>
 #include <unordered_map>
 
 #include "ConstantEvaluator.hpp"
@@ -45,6 +46,7 @@ class SemanticAnalysis final
     };
     const SourceInterface& m_sourceInterface;
     llvm::raw_ostream* m_reporter;
+    std::function<bool(std::string_view)> m_definedCallback;
     struct Scope
     {
         std::int64_t previousScope;
@@ -65,41 +67,6 @@ class SemanticAnalysis final
         m_scopes.push_back({m_currentScope, {}, {}});
         m_currentScope = m_scopes.size() - 1;
         return llvm::make_scope_exit([this, scope = m_scopes.back().previousScope] { m_currentScope = scope; });
-    }
-
-    template <class Expression>
-    Expected<ConstRetType, std::vector<Message>> evaluateConstantExpression(Expression& constantExpression,
-                                                                            ConstantEvaluator::Mode mode)
-    {
-        std::vector<Message> messages;
-        ConstantEvaluator evaluator(
-            m_sourceInterface,
-            [this](std::string_view name) -> std::optional<ConstRetType> {
-                const auto* result = lookupDecl(name);
-                if (!result || !std::holds_alternative<ConstRetType>(*result))
-                {
-                    return {};
-                }
-                return cld::get<ConstRetType>(*result);
-            },
-            this,
-            [&](const Message& message) {
-                if (message.getSeverity() == Severity::Error)
-                {
-                    messages.push_back(message);
-                }
-                else
-                {
-                    log(message);
-                }
-            },
-            mode);
-        auto result = evaluator.visit(constantExpression);
-        if (messages.empty())
-        {
-            return {std::move(result)};
-        }
-        return {std::move(messages)};
     }
 
     template <class T>
@@ -204,9 +171,13 @@ class SemanticAnalysis final
     Expression doLogicOperators(Expression&& lhs, BinaryOperator::Kind kind, Lexer::CTokenIterator token,
                                 Expression&& rhs);
 
+    ConstRetType evaluate(const Expression& expression, ConstantEvaluator::Mode mode,
+                          llvm::function_ref<void(const Message&)> logger) const;
+
 public:
-    explicit SemanticAnalysis(const SourceInterface& sourceInterface, llvm::raw_ostream* reporter = &llvm::errs())
-        : m_sourceInterface(sourceInterface), m_reporter(reporter)
+    explicit SemanticAnalysis(const SourceInterface& sourceInterface, llvm::raw_ostream* reporter = &llvm::errs(),
+                              std::function<bool(std::string_view)> definedCallback = {})
+        : m_sourceInterface(sourceInterface), m_reporter(reporter), m_definedCallback(std::move(definedCallback))
     {
     }
 
@@ -242,6 +213,10 @@ public:
     [[nodiscard]] bool isCompleteType(const Type& type) const;
 
     [[nodiscard]] bool isVariablyModified(const Type& type) const;
+
+    Expected<ConstRetType, std::vector<Message>>
+        evaluateConstantExpression(const Expression& constantExpression,
+                                   ConstantEvaluator::Mode mode = ConstantEvaluator::Integer);
 
     [[nodiscard]] const LanguageOptions& getLanguageOptions() const
     {

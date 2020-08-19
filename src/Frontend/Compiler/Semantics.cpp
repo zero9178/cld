@@ -35,7 +35,7 @@ cld::Semantics::Type cld::Semantics::getSizeT(const LanguageOptions& options)
 
 cld::Semantics::ArrayType::ArrayType(bool isRestricted, bool isStatic, std::shared_ptr<cld::Semantics::Type>&& type,
                                      std::size_t size)
-    : m_restricted(isRestricted), m_static(isStatic), m_type(std::move(type)), m_size(size)
+    : m_type(std::move(type)), m_size(size), m_restricted(isRestricted), m_static(isStatic)
 {
 }
 
@@ -126,7 +126,7 @@ std::size_t cld::Semantics::Type::getAlignOf(const SemanticAnalysis& analysis) c
 }
 
 cld::Semantics::PointerType::PointerType(bool isRestricted, std::shared_ptr<cld::Semantics::Type>&& elementType)
-    : m_restricted(isRestricted), m_elementType(std::move(elementType))
+    : m_elementType(std::move(elementType)), m_restricted(isRestricted)
 {
 }
 
@@ -183,7 +183,7 @@ std::size_t cld::Semantics::EnumType::getAlignOf(const SemanticAnalysis& analysi
 }
 
 cld::Semantics::PrimitiveType::PrimitiveType(bool isFloatingPoint, bool isSigned, std::uint8_t bitCount, Kind kind)
-    : m_isFloatingPoint(isFloatingPoint), m_isSigned(isSigned), m_bitCount(bitCount), m_kind(kind)
+    : m_bitCount(bitCount), m_isFloatingPoint(isFloatingPoint), m_isSigned(isSigned), m_kind(kind)
 {
 }
 
@@ -313,7 +313,7 @@ cld::Semantics::Type cld::Semantics::PrimitiveType::createVoid(bool isConst, boo
 
 cld::Semantics::ValArrayType::ValArrayType(bool isRestricted, bool isStatic,
                                            std::shared_ptr<cld::Semantics::Type>&& type)
-    : m_restricted(isRestricted), m_static(isStatic), m_type(std::move(type))
+    : m_type(std::move(type)), m_restricted(isRestricted), m_static(isStatic)
 {
 }
 
@@ -363,7 +363,7 @@ bool cld::Semantics::FunctionType::operator!=(const cld::Semantics::FunctionType
 }
 
 cld::Semantics::AbstractArrayType::AbstractArrayType(bool isRestricted, std::shared_ptr<cld::Semantics::Type>&& type)
-    : m_restricted(isRestricted), m_type(std::move(type))
+    : m_type(std::move(type)), m_restricted(isRestricted)
 {
 }
 
@@ -534,8 +534,8 @@ bool cld::Semantics::AnonymousStructType::operator!=(const cld::Semantics::Anony
 }
 
 cld::Semantics::Type cld::Semantics::AnonymousStructType::create(bool isConst, bool isVolatile, std::uint64_t id,
-                                                                 std::vector<Field> fields, std::uint64_t sizeOf,
-                                                                 std::uint64_t alignOf)
+                                                                 std::vector<Field> fields, std::uint32_t sizeOf,
+                                                                 std::uint32_t alignOf)
 {
     return cld::Semantics::Type(isConst, isVolatile, AnonymousStructType(id, std::move(fields), sizeOf, alignOf));
 }
@@ -584,7 +584,7 @@ std::size_t cld::Semantics::AnonymousUnionType::getAlignOf(const SemanticAnalysi
 }
 
 cld::Semantics::AnonymousEnumType::AnonymousEnumType(std::uint64_t id, std::shared_ptr<const Type> type)
-    : m_id(id), m_type(std::move(type))
+    : m_type(std::move(type)), m_id(id)
 {
 }
 
@@ -986,7 +986,7 @@ cld::Semantics::Expression::Expression(const cld::Syntax::Node& node) : Expressi
 
 cld::Lexer::CTokenIterator cld::Semantics::CommaExpression::begin() const
 {
-    return m_commaExpressions[0].begin();
+    return m_commaExpressions[0].first.begin();
 }
 
 cld::Lexer::CTokenIterator cld::Semantics::CommaExpression::end() const

@@ -1306,7 +1306,12 @@ cld::Semantics::Type
                             }
                         }
                     }
-                    auto result = evaluateConstantExpression(*size, ConstantEvaluator::Integer);
+                    auto expr = visit(*size);
+                    if (expr.isUndefined())
+                    {
+                        continue;
+                    }
+                    auto result = evaluateConstantExpression(expr, ConstantEvaluator::Integer);
                     if (!result)
                     {
                         for (auto& message : result.error())
@@ -1500,7 +1505,8 @@ cld::Semantics::Type
         bool validValue = true;
         if (maybeExpression)
         {
-            auto result = evaluateConstantExpression(*maybeExpression, ConstantEvaluator::Integer);
+            auto expr = visit(*maybeExpression);
+            auto result = evaluateConstantExpression(expr, ConstantEvaluator::Integer);
             if (!result)
             {
                 validValue = false;
@@ -1517,9 +1523,8 @@ cld::Semantics::Type
                 if (apInt.ugt(llvm::APSInt::getMaxValue(m_sourceInterface.getLanguageOptions().sizeOfInt * 8, true)
                                   .extOrTrunc(apInt.getBitWidth())))
                 {
-                    auto number = apInt.toString(10);
                     log(Errors::Semantics::VALUE_OF_ENUMERATION_CONSTANT_MUST_FIT_IN_TYPE_INT.args(
-                        *loc, m_sourceInterface, *loc, *maybeExpression, number));
+                        *loc, m_sourceInterface, *loc, *maybeExpression, apInt));
                 }
                 value = result->castTo(PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions()),
                                        m_sourceInterface.getLanguageOptions());
@@ -2216,7 +2221,8 @@ void cld::Semantics::SemanticAnalysis::handleArray(cld::Semantics::Type& type,
         type = AbstractArrayType::create(isConst, isVolatile, restricted, std::move(type));
         return;
     }
-    auto result = evaluateConstantExpression(*assignmentExpression, ConstantEvaluator::Arithmetic);
+    auto expr = visit(*assignmentExpression);
+    auto result = evaluateConstantExpression(expr, ConstantEvaluator::Arithmetic);
     if (!result)
     {
         type = ValArrayType::create(isConst, isVolatile, restricted, isStatic, std::move(type));
@@ -2227,7 +2233,7 @@ void cld::Semantics::SemanticAnalysis::handleArray(cld::Semantics::Type& type,
         type = Type{};
         return;
     }
-    if (!result->isInteger())
+    if (!isInteger(result->getType()))
     {
         log(Errors::Semantics::ARRAY_SIZE_MUST_BE_AN_INTEGER_TYPE.args(*assignmentExpression, m_sourceInterface,
                                                                        *assignmentExpression, result->getType()));
@@ -2238,9 +2244,8 @@ void cld::Semantics::SemanticAnalysis::handleArray(cld::Semantics::Type& type,
     {
         if (result->toInt() <= 0)
         {
-            log(Errors::Semantics::ARRAY_SIZE_MUST_BE_GREATER_THAN_ZERO.args(
-                *assignmentExpression, m_sourceInterface, *assignmentExpression,
-                cld::get<llvm::APSInt>(result->getValue()).toString(10)));
+            log(Errors::Semantics::ARRAY_SIZE_MUST_BE_GREATER_THAN_ZERO.args(*assignmentExpression, m_sourceInterface,
+                                                                             *assignmentExpression, *result));
             type = Type{};
             return;
         }
@@ -2399,4 +2404,298 @@ const cld::Semantics::UnionDefinition* cld::Semantics::SemanticAnalysis::getUnio
         *idOut = static_cast<std::uint64_t>(*type);
     }
     return &m_unionDefinitions[static_cast<std::uint64_t>(*type)];
+}
+
+cld::Expected<cld::Semantics::ConstRetType, std::vector<cld::Message>>
+    cld::Semantics::SemanticAnalysis::evaluateConstantExpression(const Expression& constantExpression,
+                                                                 ConstantEvaluator::Mode mode)
+{
+    std::vector<Message> messages;
+    bool errors = false;
+    auto value = evaluate(constantExpression, mode, [&](const Message& message) {
+        if (message.getSeverity() == Severity::Error)
+        {
+            errors = true;
+        }
+        messages.push_back(message);
+    });
+    if (errors)
+    {
+        return {std::move(messages)};
+    }
+    for (auto& iter : messages)
+    {
+        log(iter);
+    }
+    return value;
+}
+
+cld::Semantics::ConstRetType
+    cld::Semantics::SemanticAnalysis::evaluate(const Expression& expression, ConstantEvaluator::Mode mode,
+                                               llvm::function_ref<void(const Message&)> logger) const
+{
+    auto typeCheck = [=](auto&& exp, const ConstRetType& value) {
+        if (!isInteger(value.getType()) && mode == ConstantEvaluator::Integer)
+        {
+            logger(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS.args(exp, m_sourceInterface,
+                                                                                                 exp));
+            return false;
+        }
+        return !value.isUndefined();
+    };
+    return cld::match(
+        expression.get(), [](const std::pair<Lexer::CTokenIterator, Lexer::CTokenIterator>&) { return ConstRetType{}; },
+        [&](const Constant& constant) -> ConstRetType {
+            if (std::holds_alternative<std::string>(constant.getValue())
+                || std::holds_alternative<Lexer::NonCharString>(constant.getValue()))
+            {
+                logger(Errors::Semantics::STRING_LITERALS_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
+                    constant, m_sourceInterface, constant));
+                return {};
+            }
+            if (std::holds_alternative<llvm::APSInt>(constant.getValue()))
+            {
+                return {cld::get<llvm::APSInt>(constant.getValue()), expression.getType()};
+            }
+            if (std::holds_alternative<llvm::APFloat>(constant.getValue()))
+            {
+                return {cld::get<llvm::APFloat>(constant.getValue()), expression.getType()};
+            }
+            CLD_UNREACHABLE;
+        },
+        [&](const CommaExpression& commaExpression) -> ConstRetType {
+            for (auto& [exp, comma] : commaExpression.getCommaExpressions())
+            {
+                (void)exp;
+                logger(Errors::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(*comma, m_sourceInterface, *comma));
+            }
+            return evaluate(commaExpression.getLastExpression(), mode, logger);
+        },
+        [&](const DeclarationRead& declarationRead) -> ConstRetType {
+            logger(Errors::Semantics::VARIABLE_ACCESS_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
+                declarationRead, m_sourceInterface, declarationRead));
+            return {};
+        },
+        [&](const Conversion& conversion) -> ConstRetType {
+            auto exp = evaluate(conversion.getExpression(), mode, logger);
+            if (exp.isUndefined())
+            {
+                return exp;
+            }
+            return exp.castTo(conversion.getNewType(), m_sourceInterface.getLanguageOptions());
+        },
+        [&](const BinaryOperator& binaryOperator) -> ConstRetType {
+            auto lhs = evaluate(binaryOperator.getLeftExpression(), mode, logger);
+            bool integer = typeCheck(binaryOperator.getLeftExpression(), lhs);
+            auto rhs = evaluate(binaryOperator.getRightExpression(), mode, logger);
+            if (!integer || !typeCheck(binaryOperator.getRightExpression(), rhs))
+            {
+                return {};
+            }
+            switch (binaryOperator.getKind())
+            {
+                case BinaryOperator::Addition:
+                {
+                    ConstRetType::Issue issue = ConstRetType::NoIssue;
+                    auto result = lhs.plus(rhs, m_sourceInterface.getLanguageOptions(), this, &issue);
+                    if (issue == ConstRetType::NotRepresentable)
+                    {
+                        logger(Warnings::Semantics::VALUE_OF_N_IS_TO_LARGE_FOR_INTEGER_TYPE_N.args(
+                            binaryOperator, m_sourceInterface, result, result.getType(), binaryOperator));
+                    }
+                    return result;
+                }
+                case BinaryOperator::Subtraction:
+                {
+                    ConstRetType::Issue issue = ConstRetType::NoIssue;
+                    auto result = lhs.minus(rhs, m_sourceInterface.getLanguageOptions(), this, &issue);
+                    if (issue == ConstRetType::NotRepresentable)
+                    {
+                        logger(Warnings::Semantics::VALUE_OF_N_IS_TO_LARGE_FOR_INTEGER_TYPE_N.args(
+                            binaryOperator, m_sourceInterface, result, result.getType(), binaryOperator));
+                    }
+                    return result;
+                }
+                case BinaryOperator::Multiply:
+                {
+                    ConstRetType::Issue issue = ConstRetType::NoIssue;
+                    auto result = lhs.multiply(rhs, m_sourceInterface.getLanguageOptions(), &issue);
+                    if (issue == ConstRetType::NotRepresentable)
+                    {
+                        logger(Warnings::Semantics::VALUE_OF_N_IS_TO_LARGE_FOR_INTEGER_TYPE_N.args(
+                            binaryOperator, m_sourceInterface, result, result.getType(), binaryOperator));
+                    }
+                    return result;
+                }
+                case BinaryOperator::Divide:
+                {
+                    ConstRetType::Issue issue = ConstRetType::NoIssue;
+                    auto result = lhs.divide(rhs, m_sourceInterface.getLanguageOptions(), &issue);
+                    if (issue == ConstRetType::NotRepresentable)
+                    {
+                        // TODO:
+                    }
+                    return result;
+                }
+                case BinaryOperator::Modulo: return lhs.modulo(rhs, m_sourceInterface.getLanguageOptions());
+                case BinaryOperator::LeftShift:
+                {
+                    ConstRetType::Issue issue = ConstRetType::NoIssue;
+                    auto result = lhs.shiftLeft(rhs, m_sourceInterface.getLanguageOptions(), &issue);
+                    if (issue == ConstRetType::NotRepresentable)
+                    {
+                        logger(Warnings::Semantics::VALUE_OF_N_IS_TO_LARGE_FOR_INTEGER_TYPE_N.args(
+                            binaryOperator, m_sourceInterface, result, result.getType(), binaryOperator));
+                    }
+                    return result;
+                }
+                case BinaryOperator::RightShift:
+                {
+                    ConstRetType::Issue issue = ConstRetType::NoIssue;
+                    auto result = lhs.shiftRight(rhs, m_sourceInterface.getLanguageOptions(), &issue);
+                    if (issue == ConstRetType::NotRepresentable)
+                    {
+                        // TODO:
+                    }
+                    return result;
+                }
+                case BinaryOperator::LessThan: return lhs.lessThan(rhs, m_sourceInterface.getLanguageOptions());
+                case BinaryOperator::GreaterThan: return lhs.greaterThan(rhs, m_sourceInterface.getLanguageOptions());
+                case BinaryOperator::LessOrEqual: return lhs.lessOrEqual(rhs, m_sourceInterface.getLanguageOptions());
+                case BinaryOperator::GreaterOrEqual:
+                    return lhs.greaterOrEqual(rhs, m_sourceInterface.getLanguageOptions());
+                case BinaryOperator::Equal: return lhs.equal(rhs, m_sourceInterface.getLanguageOptions());
+                case BinaryOperator::NotEqual: return lhs.notEqual(rhs, m_sourceInterface.getLanguageOptions());
+                case BinaryOperator::BitOr: return lhs.bitOr(rhs, m_sourceInterface.getLanguageOptions());
+                case BinaryOperator::BitAnd: return lhs.bitAnd(rhs, m_sourceInterface.getLanguageOptions());
+                case BinaryOperator::BitXor: return lhs.bitXor(rhs, m_sourceInterface.getLanguageOptions());
+                case BinaryOperator::LogicAnd:
+                    if (lhs && rhs)
+                    {
+                        return ConstRetType{
+                            llvm::APSInt(llvm::APInt(m_sourceInterface.getLanguageOptions().sizeOfInt * 8, 1), false),
+                            PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions())};
+                    }
+                    else
+                    {
+                        return ConstRetType{
+                            llvm::APSInt(m_sourceInterface.getLanguageOptions().sizeOfInt * 8, false),
+                            PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions())};
+                    }
+                case BinaryOperator::LogicOr:
+                    if (lhs || rhs)
+                    {
+                        return ConstRetType{
+                            llvm::APSInt(llvm::APInt(m_sourceInterface.getLanguageOptions().sizeOfInt * 8, 1), false),
+                            PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions())};
+                    }
+                    else
+                    {
+                        return ConstRetType{
+                            llvm::APSInt(m_sourceInterface.getLanguageOptions().sizeOfInt * 8, false),
+                            PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions())};
+                    }
+            }
+            CLD_UNREACHABLE;
+        },
+        [&](const Cast& cast) -> ConstRetType {
+            if (mode == ConstantEvaluator::Integer && !isInteger(cast.getNewType()))
+            {
+                logger(Errors::Semantics::CANNOT_CAST_TO_NON_INTEGER_TYPE_IN_INTEGER_CONSTANT_EXPRESSION.args(
+                    std::forward_as_tuple(*(cast.getOpenParentheses() + 1), *(cast.getCloseParentheses() - 1)),
+                    m_sourceInterface,
+                    std::forward_as_tuple(*(cast.getOpenParentheses() + 1), *(cast.getCloseParentheses() - 1))));
+                return {};
+            }
+            if (mode == ConstantEvaluator::Arithmetic && !isArithmetic(cast.getNewType()))
+            {
+                logger(Errors::Semantics::CANNOT_CAST_TO_NON_ARITHMETIC_TYPE_IN_ARITHMETIC_CONSTANT_EXPRESSION.args(
+                    std::forward_as_tuple(*(cast.getOpenParentheses() + 1), *(cast.getCloseParentheses() - 1)),
+                    m_sourceInterface,
+                    std::forward_as_tuple(*(cast.getOpenParentheses() + 1), *(cast.getCloseParentheses() - 1))));
+                return {};
+            }
+            ConstRetType::Issue issue;
+            auto original = evaluate(cast.getExpression(), mode, logger);
+            auto ret = original.castTo(cast.getNewType(), m_sourceInterface.getLanguageOptions(), &issue);
+            if (issue == ConstRetType::NotRepresentable)
+            {
+                logger(Warnings::Semantics::VALUE_OF_N_IS_TO_LARGE_FOR_INTEGER_TYPE_N.args(
+                    cast.getExpression(), m_sourceInterface, original, cast.getNewType(), cast.getExpression()));
+            }
+            return ret;
+        },
+        [&](const UnaryOperator& unaryOperator) -> ConstRetType {
+            auto op = evaluate(unaryOperator.getOperand(), mode, logger);
+            if (!typeCheck(unaryOperator.getOperand(), op))
+            {
+                return {};
+            }
+            switch (unaryOperator.getKind())
+            {
+                case UnaryOperator::AddressOf:
+                    // TODO:
+                    break;
+                case UnaryOperator::Dereference:
+                    // TODO:
+                    break;
+                case UnaryOperator::PostDecrement:
+                case UnaryOperator::PreIncrement:
+                case UnaryOperator::PreDecrement:
+                case UnaryOperator::PostIncrement:
+                    logger(Errors::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
+                        *unaryOperator.getOperatorToken(), m_sourceInterface, *unaryOperator.getOperatorToken()));
+                    return {};
+                case UnaryOperator::Plus: return op.unaryPlus(m_sourceInterface.getLanguageOptions());
+                case UnaryOperator::Minus: return op.negate(m_sourceInterface.getLanguageOptions());
+                case UnaryOperator::BooleanNegate: return op.logicalNegate(m_sourceInterface.getLanguageOptions());
+                case UnaryOperator::BitwiseNegate: return op.bitwiseNegate(m_sourceInterface.getLanguageOptions());
+            }
+            CLD_UNREACHABLE;
+        },
+        [&](const SizeofOperator& sizeofOperator) -> ConstRetType {
+            if (sizeofOperator.getSize())
+            {
+                auto type = getSizeT(m_sourceInterface.getLanguageOptions());
+                return ConstRetType{llvm::APSInt(llvm::APInt(cld::get<PrimitiveType>(type.get()).getBitCount(),
+                                                             *sizeofOperator.getSize())),
+                                    type};
+            }
+            // TODO:
+            CLD_UNREACHABLE;
+        },
+        [&](const SubscriptOperator& subscriptOperator) -> ConstRetType {
+            // TODO:
+            CLD_UNREACHABLE;
+        },
+        [&](const Conditional& conditional) -> ConstRetType {
+            auto boolean = evaluate(conditional.getBoolExpression(), mode, logger);
+            if (!typeCheck(conditional.getBoolExpression(), boolean))
+            {
+                evaluate(conditional.getTrueExpression(), mode, logger);
+                evaluate(conditional.getFalseExpression(), mode, logger);
+                return {};
+            }
+            if (boolean)
+            {
+                return evaluate(conditional.getTrueExpression(), mode, logger)
+                    .castTo(expression.getType(), m_sourceInterface.getLanguageOptions());
+            }
+            else
+            {
+                return evaluate(conditional.getFalseExpression(), mode, logger)
+                    .castTo(expression.getType(), m_sourceInterface.getLanguageOptions());
+            }
+        },
+        [&](const Assignment& assignment) -> ConstRetType {
+            logger(Errors::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
+                *assignment.getOperatorToken(), m_sourceInterface, *assignment.getOperatorToken()));
+            return {};
+        },
+        [&](const CallExpression& call) -> ConstRetType {
+            logger(Errors::Semantics::FUNCTION_CALL_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(call, m_sourceInterface,
+                                                                                            call));
+            return {};
+        },
+        [](const auto&) -> ConstRetType { return {}; });
 }

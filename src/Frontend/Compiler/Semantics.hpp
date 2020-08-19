@@ -64,12 +64,12 @@ class FunctionDefinition;
 
 class PrimitiveType final
 {
-    bool m_isFloatingPoint;
-    bool m_isSigned;
     std::uint8_t m_bitCount;
+    bool m_isFloatingPoint : 1;
+    bool m_isSigned : 1;
 
 public:
-    enum class Kind
+    enum Kind : std::uint8_t
     {
         Char,
         SignedChar,
@@ -173,10 +173,10 @@ Type getPtrdiffT(const LanguageOptions& options);
 
 class ArrayType final
 {
-    bool m_restricted;
-    bool m_static;
     std::shared_ptr<const Type> m_type;
     std::size_t m_size;
+    bool m_restricted : 1;
+    bool m_static : 1;
 
     ArrayType(bool isRestricted, bool isStatic, std::shared_ptr<Type>&& type, std::size_t size);
 
@@ -215,8 +215,8 @@ public:
 
 class AbstractArrayType final
 {
-    bool m_restricted;
     std::shared_ptr<const Type> m_type;
+    bool m_restricted;
 
     AbstractArrayType(bool isRestricted, std::shared_ptr<Type>&& type);
 
@@ -247,9 +247,9 @@ public:
 
 class ValArrayType final
 {
-    bool m_restricted;
-    bool m_static;
     std::shared_ptr<const Type> m_type;
+    bool m_restricted : 1;
+    bool m_static : 1;
 
     ValArrayType(bool isRestricted, bool isStatic, std::shared_ptr<cld::Semantics::Type>&& type);
 
@@ -287,8 +287,8 @@ class FunctionType final
 {
     std::shared_ptr<const Type> m_returnType;
     std::vector<std::pair<Type, std::string_view>> m_arguments;
-    bool m_lastIsVararg;
-    bool m_isKandR;
+    bool m_lastIsVararg : 1;
+    bool m_isKandR : 1;
 
     FunctionType(std::shared_ptr<const Type>&& returnType, std::vector<std::pair<Type, std::string_view>> arguments,
                  bool lastIsVararg, bool isKandR)
@@ -424,17 +424,17 @@ class AnonymousStructType final
 {
     std::uint64_t m_id;
     std::vector<Field> m_fields;
-    std::uint64_t m_sizeOf;
-    std::uint64_t m_alignOf;
+    std::uint32_t m_sizeOf;
+    std::uint32_t m_alignOf;
 
-    AnonymousStructType(std::uint64_t id, std::vector<Field>&& fields, std::uint64_t sizeOf, std::uint64_t alignOf)
+    AnonymousStructType(std::uint64_t id, std::vector<Field>&& fields, std::uint32_t sizeOf, std::uint32_t alignOf)
         : m_id(id), m_fields(std::move(fields)), m_sizeOf(sizeOf), m_alignOf(alignOf)
     {
     }
 
 public:
-    static Type create(bool isConst, bool isVolatile, std::uint64_t id, std::vector<Field> fields, std::uint64_t sizeOf,
-                       std::uint64_t alignOf);
+    static Type create(bool isConst, bool isVolatile, std::uint64_t id, std::vector<Field> fields, std::uint32_t sizeOf,
+                       std::uint32_t alignOf);
 
     [[nodiscard]] std::uint64_t getId() const
     {
@@ -524,8 +524,8 @@ public:
 
 class AnonymousEnumType
 {
-    std::uint64_t m_id;
     std::shared_ptr<const Type> m_type;
+    std::uint64_t m_id;
 
     AnonymousEnumType(std::uint64_t id, std::shared_ptr<const Type> type);
 
@@ -553,8 +553,8 @@ public:
 
 class PointerType final
 {
-    bool m_restricted;
     std::shared_ptr<const Type> m_elementType;
+    bool m_restricted;
 
     PointerType(bool isRestricted, std::shared_ptr<Type>&& elementType);
 
@@ -582,10 +582,6 @@ public:
 
 class Type final
 {
-    bool m_isConst;
-    bool m_isVolatile;
-    std::string m_name;
-
 public:
     using Variant = std::variant<std::monostate, PrimitiveType, ArrayType, AbstractArrayType, ValArrayType,
                                  FunctionType, StructType, UnionType, EnumType, PointerType, AnonymousEnumType,
@@ -593,10 +589,13 @@ public:
 
 private:
     Variant m_type;
+    std::string m_name;
+    bool m_isConst : 1;
+    bool m_isVolatile : 1;
 
 public:
     explicit Type(bool isConst = false, bool isVolatile = false, Variant type = std::monostate{})
-        : m_isConst(isConst), m_isVolatile(isVolatile), m_type(std::move(type))
+        : m_type(std::move(type)), m_isConst(isConst), m_isVolatile(isVolatile)
     {
     }
 
@@ -983,6 +982,11 @@ public:
         return m_kind;
     }
 
+    [[nodiscard]] Lexer::CTokenIterator getOperatorToken() const
+    {
+        return m_operatorToken;
+    }
+
     [[nodiscard]] const Expression& getOperand() const
     {
         return *m_operand;
@@ -1146,17 +1150,18 @@ public:
 
 class CommaExpression final
 {
-    std::vector<Expression> m_commaExpressions;
+    std::vector<std::pair<Expression, Lexer::CTokenIterator>> m_commaExpressions;
     std::unique_ptr<Expression> m_lastExpression;
 
 public:
-    CommaExpression(std::vector<Expression>&& commaExpressions, std::unique_ptr<Expression>&& lastExpression)
+    CommaExpression(std::vector<std::pair<Expression, Lexer::CTokenIterator>>&& commaExpressions,
+                    std::unique_ptr<Expression>&& lastExpression)
         : m_commaExpressions(std::move(commaExpressions)), m_lastExpression(std::move(lastExpression))
     {
         CLD_ASSERT(m_commaExpressions.size() >= 1);
     }
 
-    [[nodiscard]] const std::vector<Expression>& getCommaExpressions() const
+    [[nodiscard]] const std::vector<std::pair<Expression, Lexer::CTokenIterator>>& getCommaExpressions() const
     {
         return m_commaExpressions;
     }
@@ -1213,7 +1218,7 @@ public:
     [[nodiscard]] Lexer::CTokenIterator end() const;
 };
 
-enum class ValueCategory
+enum class ValueCategory : std::uint8_t
 {
     Lvalue,
     Rvalue

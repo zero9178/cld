@@ -980,7 +980,7 @@ TEST_CASE("Semantics enums", "[semantics]")
                   "};\n"
                   "\n"
                   "int a_[a];\n",
-                  ProducesError(CAN_ONLY_CAST_TO_INTEGERS_IN_INTEGER_CONSTANT_EXPRESSION)
+                  ProducesError(CANNOT_CAST_TO_NON_INTEGER_TYPE_IN_INTEGER_CONSTANT_EXPRESSION)
                       && !ProducesError(VARIABLE_LENGTH_ARRAY_NOT_ALLOWED_AT_FILE_SCOPE));
 }
 
@@ -2585,9 +2585,17 @@ TEST_CASE("Semantics equal expressions", "[semantics]")
                       "}",
                       ProducesError(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_ARITHMETIC_TYPE, "'=='"));
         SEMA_PRODUCES("void foo(int* r) {\n"
-                      " r == 5;\n"
+                      " r == 5.0;\n"
                       "}",
                       ProducesError(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_A_POINTER_TYPE, "'=='"));
+        SEMA_PRODUCES("void foo(int* r) {\n"
+                      " r == 5;\n"
+                      "}",
+                      ProducesError(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_NULL, "'=='"));
+        SEMA_PRODUCES("void foo(int* r) {\n"
+                      " r == 0;\n"
+                      "}",
+                      ProducesNoErrors());
         SEMA_PRODUCES("void foo(int *r,float *f) {\n"
                       " f == r;\n"
                       "}",
@@ -2631,9 +2639,17 @@ TEST_CASE("Semantics equal expressions", "[semantics]")
                       "}",
                       ProducesError(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_ARITHMETIC_TYPE, "'!='"));
         SEMA_PRODUCES("void foo(int* r) {\n"
-                      " r != 5;\n"
+                      " r != 5.0;\n"
                       "}",
                       ProducesError(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_A_POINTER_TYPE, "'!='"));
+        SEMA_PRODUCES("void foo(int* r) {\n"
+                      " r != 5;\n"
+                      "}",
+                      ProducesError(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_NULL, "'!='"));
+        SEMA_PRODUCES("void foo(int* r) {\n"
+                      " r != 0;\n"
+                      "}",
+                      ProducesNoErrors());
         SEMA_PRODUCES("void foo(int *r,float *f) {\n"
                       " f != r;\n"
                       "}",
@@ -2823,9 +2839,17 @@ TEST_CASE("Semantics conditional expression", "[semantics]")
                   "}",
                   ProducesError(EXPECTED_THIRD_OPERAND_OF_CONDITIONAL_EXPRESSION_TO_BE_VOID));
     SEMA_PRODUCES("void foo(_Bool r) {\n"
-                  " r ? (int*)5 : 3;\n"
+                  " r ? (int*)5 : 3.0;\n"
                   "}",
                   ProducesError(EXPECTED_THIRD_OPERAND_OF_CONDITIONAL_EXPRESSION_TO_BE_A_POINTER_TYPE));
+    SEMA_PRODUCES("void foo(_Bool r) {\n"
+                  " r ? (int*)5 : 3;\n"
+                  "}",
+                  ProducesError(EXPECTED_THIRD_OPERAND_OF_CONDITIONAL_EXPRESSION_TO_BE_NULL));
+    SEMA_PRODUCES("void foo(_Bool r) {\n"
+                  " r ? (int*)5 : 0;\n"
+                  "}",
+                  ProducesNoErrors());
     SEMA_PRODUCES("void foo(_Bool r) {\n"
                   " r ? (int*)5 : (float*)3;\n"
                   "}",
@@ -2896,9 +2920,13 @@ TEST_CASE("Semantics assignment expression", "[semantics]")
                       "}",
                       ProducesError(CANNOT_ASSIGN_INCOMPATIBLE_TYPES));
         SEMA_PRODUCES("void foo(int* i) {\n"
-                      "i = 3;\n"
+                      "i = 3.0;\n"
                       "}",
                       ProducesError(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_A_POINTER_TYPE, "'='"));
+        SEMA_PRODUCES("void foo(int* i) {\n"
+                      "i = 3;\n"
+                      "}",
+                      ProducesError(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_NULL, "'='"));
         SEMA_PRODUCES("void foo(int* i) {\n"
                       "i = (void*)3;\n"
                       "}",
@@ -3248,9 +3276,21 @@ TEST_CASE("Semantics function call expression", "[semantics]")
     SEMA_PRODUCES("void bar(int *);\n"
                   "\n"
                   "void foo(void) {\n"
-                  " bar(5);\n"
+                  " bar(5.0);\n"
                   "}",
                   ProducesError(EXPECTED_ARGUMENT_N_TO_BE_A_POINTER_TYPE, 1));
+    SEMA_PRODUCES("void bar(int *);\n"
+                  "\n"
+                  "void foo(void) {\n"
+                  " bar(5);\n"
+                  "}",
+                  ProducesError(EXPECTED_ARGUMENT_N_TO_BE_NULL, 1));
+    SEMA_PRODUCES("void bar(int *);\n"
+                  "\n"
+                  "void foo(void) {\n"
+                  " bar(0);\n"
+                  "}",
+                  ProducesNoErrors());
     SEMA_PRODUCES("void bar(int*);\n"
                   "\n"
                   "void foo(float* f) {\n"

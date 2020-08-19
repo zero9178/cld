@@ -1,5 +1,8 @@
 #include "Text.hpp"
 
+#include <llvm/ADT/APFloat.h>
+#include <llvm/ADT/APSInt.h>
+#include <llvm/ADT/SmallString.h>
 #include <llvm/Support/UnicodeCharRanges.h>
 
 bool cld::isWhitespace(std::uint32_t c) noexcept
@@ -120,4 +123,16 @@ unsigned cld::unsafeColumnWidth(std::string_view text)
         columnWidth += Width;
     }
     return columnWidth;
+}
+
+std::string cld::to_string(const llvm::APSInt& apsInt)
+{
+    return apsInt.toString(10);
+}
+
+std::string cld::to_string(const llvm::APFloat& apFloat)
+{
+    llvm::SmallString<25> number;
+    apFloat.toString(number, 0, 3, false);
+    return number.str();
 }
