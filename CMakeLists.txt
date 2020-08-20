@@ -43,6 +43,7 @@ if (WIN32)
     else ()
         set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /STACK:8000000")
     endif ()
+    add_compile_definitions(WIN32_LEAN_AND_MEAN NOMINMAX)
 endif ()
 
 

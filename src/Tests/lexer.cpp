@@ -169,7 +169,7 @@ TEST_CASE("Lexing Identifiers", "[lexer]")
                                TokenType::SwitchKeyword,   TokenType::DoubleKeyword,   TokenType::LongKeyword,
                                TokenType::TypedefKeyword,  TokenType::ElseKeyword,     TokenType::RegisterKeyword,
                                TokenType::UnionKeyword,    TokenType::UnderlineBool};
-        std::vector<TokenType> tokens;
+        std::vector<cld::Lexer::TokenType> tokens;
         tokens.reserve(result.data().size());
         std::transform(result.data().begin(), result.data().end(), std::back_inserter(tokens),
                        [](const CToken& token) { return token.getTokenType(); });

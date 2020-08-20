@@ -1,9 +1,8 @@
 #include "Preprocessor.hpp"
 
 #include <llvm/ADT/ScopeExit.h>
-#include <llvm/Support/FileSystem.h>
-#include <llvm/Support/Path.h>
 
+#include <Frontend/Common/Filesystem.hpp>
 #include <Frontend/Common/Text.hpp>
 #include <Frontend/Compiler/ErrorMessages.hpp>
 #include <Frontend/Compiler/Parser.hpp>
@@ -1311,10 +1310,9 @@ public:
             }
         }
 
-        llvm::SmallString<50> result;
-
+        cld::fs::path result;
         std::vector<std::string> candidates;
-        if (llvm::sys::path::is_absolute(path))
+        if (cld::fs::path(path).is_absolute())
         {
             result = path;
         }
@@ -1322,19 +1320,17 @@ public:
         {
             if (isQuoted)
             {
-                llvm::SmallString<50> dir(m_files[m_currentFile].path);
-                llvm::sys::path::remove_filename(dir);
-                if (llvm::sys::fs::exists(dir))
+                cld::fs::path dir = m_files[m_currentFile].path;
+                dir.remove_filename();
+                if (cld::fs::exists(dir))
                 {
-                    candidates.push_back(std::string(dir.begin(), dir.end()));
+                    candidates.push_back(dir.string());
                 }
                 else
                 {
                     // If we are not in a current file it's probably due to it being stdin or similar.
                     // For those cases add the current working directory to the include candidates
-                    llvm::SmallString<50> cwd;
-                    llvm::sys::fs::current_path(cwd);
-                    candidates.emplace_back(cwd.begin(), cwd.end());
+                    candidates.emplace_back(cld::fs::current_path().string());
                 }
                 candidates.insert(candidates.end(), m_options.includeQuoteDirectories.begin(),
                                   m_options.includeQuoteDirectories.end());
@@ -1343,22 +1339,11 @@ public:
                               m_options.includeDirectories.end());
             for (const auto& candidate : candidates)
             {
-                llvm::SmallString<50> filename;
-                if (candidate.back() == '/'
-#if _WIN32
-                    || candidate.back() == '\\'
-#endif
-                )
+                cld::fs::path filename = candidate;
+                filename /= path;
+                if (cld::fs::exists(filename))
                 {
-                    filename = candidate + path;
-                }
-                else
-                {
-                    filename = candidate + '/' + path;
-                }
-                if (llvm::sys::fs::exists(filename))
-                {
-                    result = filename;
+                    result = std::move(filename);
                     break;
                 }
             }
@@ -1371,38 +1356,29 @@ public:
             return;
         }
 
-        std::uint64_t size;
-        auto error = llvm::sys::fs::file_size(result, size);
-        if (!error)
+        cld::fs::ifstream file(result, std::ios_base::in | std::ios_base::binary | std::ios_base::ate);
+        if (!file.is_open())
         {
-            auto handle = llvm::sys::fs::openNativeFileForRead(result);
-            if (handle)
-            {
-                auto scopeExit = llvm::make_scope_exit([&] { llvm::sys::fs::closeFile(*handle); });
-                llvm::sys::fs::mapped_file_region mapping(*handle, llvm::sys::fs::mapped_file_region::readonly, size, 0,
-                                                          error);
-                if (!error)
-                {
-                    std::string_view view(mapping.const_data(), mapping.size());
-                    llvm::sys::path::remove_dots(result, true);
-                    bool errors = false;
-                    auto newFile =
-                        cld::Lexer::tokenize(view, m_options, m_reporter, &errors, {result.data(), result.size()});
-                    if (errors)
-                    {
-                        m_errorsOccurred = true;
-                        return;
-                    }
-                    llvm::sys::fs::closeFile(*handle);
-                    scopeExit.release();
-                    include(std::move(newFile), std::pair{m_currentFile, includeTag.includeToken->getOffset()});
-                    return;
-                }
-            }
+            log(cld::Errors::PP::COULD_NOT_OPEN_FILE.args(
+                includeTag.tokens.front(), *this, path,
+                std::forward_as_tuple(includeTag.tokens.front(), includeTag.tokens.back())));
+            return;
         }
-        log(cld::Errors::PP::COULD_NOT_OPEN_FILE.args(
-            includeTag.tokens.front(), *this, path,
-            std::forward_as_tuple(includeTag.tokens.front(), includeTag.tokens.back())));
+        std::size_t end = file.tellg();
+        file.seekg(0);
+        std::string text(end, '\0');
+        file.read(text.data(), text.size());
+        file.close();
+        result = cld::fs::canonical(result);
+
+        bool errors = false;
+        auto newFile = cld::Lexer::tokenize(text, m_options, m_reporter, &errors, result.string());
+        if (errors)
+        {
+            m_errorsOccurred = true;
+            return;
+        }
+        include(std::move(newFile), std::pair{m_currentFile, includeTag.includeToken->getOffset()});
     }
 
     void visit(const cld::PP::ControlLine::LineTag& lineTag)

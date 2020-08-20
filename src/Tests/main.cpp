@@ -9,7 +9,9 @@ int main(int argc, char* argv[])
     _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
     _CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
 #endif
-
+#ifdef _WIN32
+    setlocale(LC_ALL, ".UTF8");
+#endif
     // writing to session.configData() here sets defaults
     // this is the preferred way to set them
 

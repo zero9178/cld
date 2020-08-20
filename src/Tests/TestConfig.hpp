@@ -5,6 +5,7 @@
 #include <llvm/ADT/APInt.h>
 #include <llvm/ADT/APSInt.h>
 
+#include <Frontend/Common/Filesystem.hpp>
 #include <Frontend/Common/Text.hpp>
 #include <Frontend/Compiler/Diagnostic.hpp>
 #include <Frontend/Compiler/LanguageOptions.hpp>
@@ -310,10 +311,10 @@ private:
 
 struct FileScope
 {
-    std::string m_path;
+    cld::fs::path m_path;
 
 public:
-    FileScope(std::string_view path) : m_path(cld::to_string(path)) {}
+    FileScope(cld::fs::path path) : m_path(std::move(path)) {}
 
     ~FileScope();
 

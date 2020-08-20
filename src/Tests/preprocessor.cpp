@@ -1,9 +1,8 @@
 #include "catch.hpp"
 
 #include <llvm/ADT/ScopeExit.h>
-#include <llvm/Support/FileSystem.h>
-#include <llvm/Support/Path.h>
 
+#include <Frontend/Common/Filesystem.hpp>
 #include <Frontend/Common/Text.hpp>
 #include <Frontend/Compiler/ErrorMessages.hpp>
 #include <Frontend/Compiler/SourceObject.hpp>
@@ -461,8 +460,7 @@ TEST_CASE("PP Builtin macros", "[PP]")
         }
         SECTION("#line directive")
         {
-            llvm::SmallString<50> cwd;
-            REQUIRE_FALSE(llvm::sys::fs::current_path(cwd));
+            auto cwd = cld::fs::current_path();
             auto scope = createInclude("A.h", "__FILE__");
             auto ret = preprocessResult("#line 5 \"main.c\"\n"
                                         "__FILE__\n"
@@ -471,7 +469,7 @@ TEST_CASE("PP Builtin macros", "[PP]")
             CHECK(ret.data()[0].getTokenType() == cld::Lexer::TokenType::StringLiteral);
             CHECK(ret.data()[1].getTokenType() == cld::Lexer::TokenType::StringLiteral);
             CHECK(ret.data()[0].getValue() == "main.c");
-            CHECK(llvm::sys::fs::equivalent(ret.data()[1].getValue().data(), cwd + "/A.h"));
+            CHECK(cld::fs::equivalent(ret.data()[1].getValue().data(), cwd / "A.h"));
         }
     }
     SECTION("__LINE__")
@@ -1060,15 +1058,20 @@ TEST_CASE("PP C Preprocessor tricks", "[PP]")
 
 TEST_CASE("PP includes", "[PP]")
 {
+    SECTION("UTF-8")
+    {
+        auto scope = createInclude("貓🍌.h", "#define MACRO 1\n");
+        auto ret = preprocessResult("#include \"貓🍌.h\"\n"
+                                    "MACRO");
+        CHECK_THAT(ret, ProducesPP("1"));
+    }
     SECTION("Absolute path")
     {
         auto scope = createInclude("Resources/TestInclude.h", "#define MACRO 1\n");
-        llvm::SmallString<50> cwd;
-        REQUIRE_FALSE(llvm::sys::fs::current_path(cwd));
-        auto ret = preprocessResult(("#include \"" + cwd
-                                     + "/Resources/TestInclude.h\"\n"
-                                       "MACRO\n")
-                                        .str());
+        auto cwd = cld::fs::current_path();
+        auto ret = preprocessResult("#include \"" + cwd.string()
+                                    + "/Resources/TestInclude.h\"\n"
+                                      "MACRO\n");
         CHECK_THAT(ret, ProducesPP("1"));
     }
     SECTION("Relative path")
@@ -1081,13 +1084,12 @@ TEST_CASE("PP includes", "[PP]")
     }
     SECTION("Quoted before non quoted")
     {
-        llvm::SmallString<50> cwd;
-        REQUIRE_FALSE(llvm::sys::fs::current_path(cwd));
+        auto cwd = cld::fs::current_path();
         auto file1 = createInclude("Quoted/A.h", "#define MACRO 1\n");
         auto file2 = createInclude("Unquoted/A.h", "#define MACRO 0\n");
         auto options = cld::LanguageOptions::native();
-        options.includeQuoteDirectories.push_back((cwd + "/Quoted").str());
-        options.includeDirectories.push_back((cwd + "/Unquoted").str());
+        options.includeQuoteDirectories.push_back((cwd / "Quoted").string());
+        options.includeDirectories.push_back((cwd / "Unquoted").string());
         auto ret = preprocessResultWith("#include \"A.h\"\n"
                                         "MACRO",
                                         options);
@@ -1095,11 +1097,10 @@ TEST_CASE("PP includes", "[PP]")
     }
     SECTION("Quoted also looks in non quoted")
     {
-        llvm::SmallString<50> cwd;
-        REQUIRE_FALSE(llvm::sys::fs::current_path(cwd));
+        auto cwd = cld::fs::current_path();
         auto file2 = createInclude("Unquoted/A.h", "#define MACRO 1\n");
         auto options = cld::LanguageOptions::native();
-        options.includeDirectories.push_back((cwd + "/Unquoted").str());
+        options.includeDirectories.push_back((cwd / "Unquoted").string());
         auto ret = preprocessResultWith("#include \"A.h\"\n"
                                         "MACRO",
                                         options);
@@ -1107,12 +1108,11 @@ TEST_CASE("PP includes", "[PP]")
     }
     SECTION("Relative before quoted")
     {
-        llvm::SmallString<50> cwd;
-        REQUIRE_FALSE(llvm::sys::fs::current_path(cwd));
+        auto cwd = cld::fs::current_path();
         auto file2 = createInclude("A.h", "#define MACRO 1\n");
         auto file1 = createInclude("Quoted/A.h", "#define MACRO 0\n");
         auto options = cld::LanguageOptions::native();
-        options.includeQuoteDirectories.push_back((cwd + "/Quoted").str());
+        options.includeQuoteDirectories.push_back((cwd / "Quoted").string());
         auto ret = preprocessResultWith("#include \"A.h\"\n"
                                         "MACRO",
                                         options);
@@ -1120,11 +1120,10 @@ TEST_CASE("PP includes", "[PP]")
     }
     SECTION("Non quoted")
     {
-        llvm::SmallString<50> cwd;
-        REQUIRE_FALSE(llvm::sys::fs::current_path(cwd));
+        auto cwd = cld::fs::current_path();
         auto file2 = createInclude("Quoted/A.h", "#define MACRO 1\n");
         auto options = cld::LanguageOptions::native();
-        options.includeDirectories.push_back((cwd + "/Quoted").str());
+        options.includeDirectories.push_back((cwd / "Quoted").string());
         auto ret = preprocessResultWith("#include <A.h>\n"
                                         "MACRO",
                                         options);
@@ -1132,17 +1131,15 @@ TEST_CASE("PP includes", "[PP]")
     }
     SECTION("Non quoted doesn't look in quoted")
     {
-        llvm::SmallString<50> cwd;
-        REQUIRE_FALSE(llvm::sys::fs::current_path(cwd));
+        auto cwd = cld::fs::current_path();
         auto file2 = createInclude("Quoted/A.h", "#define MACRO 1\n");
         auto options = cld::LanguageOptions::native();
-        options.includeQuoteDirectories.push_back((cwd + "/Quoted").str());
+        options.includeQuoteDirectories.push_back((cwd / "Quoted").string());
         PP_OUTPUTS_WITH("#include <A.h>\n", ProducesError(FILE_NOT_FOUND, "A.h"));
     }
     SECTION("Changed __FILE__")
     {
-        llvm::SmallString<50> cwd;
-        REQUIRE_FALSE(llvm::sys::fs::current_path(cwd));
+        auto cwd = cld::fs::current_path();
         auto file1 = createInclude("A.h", "#include \"B.h\"\n"
                                           "__FILE__");
         auto file2 = createInclude("B.h", "__FILE__");
@@ -1152,8 +1149,8 @@ TEST_CASE("PP includes", "[PP]")
         CHECK(ret.data()[0].getTokenType() == cld::Lexer::TokenType::StringLiteral);
         CHECK(ret.data()[1].getTokenType() == cld::Lexer::TokenType::StringLiteral);
         CHECK(ret.data()[2].getTokenType() == cld::Lexer::TokenType::StringLiteral);
-        CHECK(llvm::sys::fs::equivalent(ret.data()[0].getValue().data(), cwd + "/B.h"));
-        CHECK(llvm::sys::fs::equivalent(ret.data()[1].getValue().data(), cwd + "/A.h"));
+        CHECK(cld::fs::equivalent(ret.data()[0].getValue().data(), cwd / "B.h"));
+        CHECK(cld::fs::equivalent(ret.data()[1].getValue().data(), cwd / "A.h"));
         CHECK(ret.data()[2].getValue() == "<stdin>");
     }
     SECTION("File not found")
@@ -1162,10 +1159,9 @@ TEST_CASE("PP includes", "[PP]")
     }
     SECTION("Could not open file")
     {
-        llvm::SmallString<50> cwd;
-        REQUIRE_FALSE(llvm::sys::fs::current_path(cwd));
-        PP_OUTPUTS_WITH(("#include \"" + cwd + "/FileThatDoesNotExist\"\n").str(),
-                        ProducesError(COULD_NOT_OPEN_FILE, (cwd + "/FileThatDoesNotExist").str()));
+        auto cwd = cld::fs::current_path();
+        PP_OUTPUTS_WITH("#include \"" + cwd.string() + "/FileThatDoesNotExist\"\n",
+                        ProducesError(COULD_NOT_OPEN_FILE, cwd.string() + "/FileThatDoesNotExist"));
     }
     SECTION("Empty")
     {
@@ -1183,11 +1179,10 @@ TEST_CASE("PP includes", "[PP]")
         }
         SECTION("Non quoted")
         {
-            llvm::SmallString<50> cwd;
-            REQUIRE_FALSE(llvm::sys::fs::current_path(cwd));
+            auto cwd = cld::fs::current_path();
             auto file1 = createInclude("A.h", "#define MACRO 1\n");
             auto options = cld::LanguageOptions::native();
-            options.includeDirectories.emplace_back(cwd.begin(), cwd.end());
+            options.includeDirectories.emplace_back(cwd.string());
             auto ret = preprocessResultWith("#define PATH <A.h>\n"
                                             "#include PATH\n"
                                             "MACRO",
