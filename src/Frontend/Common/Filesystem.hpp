@@ -3,6 +3,7 @@
 #include <ciso646>
 
 #if defined(_WIN32) && defined(__clang__) && defined(_LIBCPP_VERSION)
+    #define GHC_FILESYSTEM_FWD
     #define GHC_WIN_WSTRING_STRING_TYPE
     #include <ghc/filesystem.hpp>
 namespace cld::fs

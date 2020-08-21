@@ -113,8 +113,16 @@ public:
     ~SourceObject() = default;
     SourceObject(const SourceObject&) = delete;
     SourceObject& operator=(const SourceObject&) = delete;
-    SourceObject(SourceObject&&) noexcept = default;
-    SourceObject& operator=(SourceObject&&) noexcept = default;
+    SourceObject(SourceObject&&)
+#if !defined(_MSC_VER) || defined(__clang__)
+        noexcept
+#endif
+        = default;
+    SourceObject& operator=(SourceObject&&)
+#if !defined(_MSC_VER) || defined(__clang__)
+        noexcept
+#endif
+        = default;
 
     [[nodiscard]] std::uint64_t getLineNumber(std::uint32_t fileID, std::uint64_t offset) const noexcept override
     {

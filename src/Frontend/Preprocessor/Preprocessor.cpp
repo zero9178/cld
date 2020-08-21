@@ -1310,17 +1310,19 @@ public:
             }
         }
 
-        cld::fs::path result;
+        cld::fs::ifstream result;
+        cld::fs::path resultPath;
         std::vector<std::string> candidates;
-        if (cld::fs::path(path).is_absolute())
+        if (cld::fs::u8path(path).is_absolute())
         {
-            result = path;
+            result.open(cld::fs::u8path(path), std::ios_base::in | std::ios_base::binary | std::ios_base::ate);
+            resultPath = cld::fs::u8path(path);
         }
         else
         {
             if (isQuoted)
             {
-                cld::fs::path dir = m_files[m_currentFile].path;
+                auto dir = cld::fs::u8path(m_files[m_currentFile].path);
                 dir.remove_filename();
                 if (cld::fs::exists(dir))
                 {
@@ -1339,16 +1341,17 @@ public:
                               m_options.includeDirectories.end());
             for (const auto& candidate : candidates)
             {
-                cld::fs::path filename = candidate;
-                filename /= path;
-                if (cld::fs::exists(filename))
+                auto filename = cld::fs::u8path(candidate);
+                filename /= cld::fs::u8path(path);
+                result.open(filename, std::ios_base::in | std::ios_base::binary | std::ios_base::ate);
+                if (result.is_open())
                 {
-                    result = std::move(filename);
+                    resultPath = std::move(filename);
                     break;
                 }
             }
         }
-        if (result.empty())
+        if (!result.is_open())
         {
             log(cld::Errors::PP::FILE_NOT_FOUND.args(
                 includeTag.tokens.front(), *this, path,
@@ -1356,23 +1359,15 @@ public:
             return;
         }
 
-        cld::fs::ifstream file(result, std::ios_base::in | std::ios_base::binary | std::ios_base::ate);
-        if (!file.is_open())
-        {
-            log(cld::Errors::PP::COULD_NOT_OPEN_FILE.args(
-                includeTag.tokens.front(), *this, path,
-                std::forward_as_tuple(includeTag.tokens.front(), includeTag.tokens.back())));
-            return;
-        }
-        std::size_t end = file.tellg();
-        file.seekg(0);
+        std::size_t end = result.tellg();
+        result.seekg(0);
         std::string text(end, '\0');
-        file.read(text.data(), text.size());
-        file.close();
-        result = cld::fs::canonical(result);
+        result.read(text.data(), text.size());
+        result.close();
+        resultPath = cld::fs::canonical(resultPath);
 
         bool errors = false;
-        auto newFile = cld::Lexer::tokenize(text, m_options, m_reporter, &errors, result.string());
+        auto newFile = cld::Lexer::tokenize(text, m_options, m_reporter, &errors, resultPath.u8string());
         if (errors)
         {
             m_errorsOccurred = true;

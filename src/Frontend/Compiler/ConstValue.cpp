@@ -309,7 +309,8 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::minus(const cld::Semantic
             if (std::holds_alternative<VoidStar>(rhs.getValue()))
             {
                 return {llvm::APSInt(
-                    llvm::APInt(cld::get<PrimitiveType>(getPtrdiffT(options).get()).getBitCount(),
+                    llvm::APInt(cld::get<PrimitiveType>(PrimitiveType::createPtrdiffT(false, false, options).get())
+                                    .getBitCount(),
                                 (address.address - cld::get<VoidStar>(rhs.getValue()).address) / address.elementSize,
                                 true),
                     false)};

@@ -988,6 +988,9 @@ TEST_CASE("Semantics function definitions")
 {
     SECTION("Identifier list")
     {
+        SEMA_PRODUCES("void foo(voi)\n"
+                      "{}",
+                      ProducesError(PARAMETER_N_IN_IDENTIFIER_LIST_DOES_NOT_HAVE_A_MATCHING_DECLARATION, "'voi'"));
         SEMA_PRODUCES("int foo(a) int a = 5;{}",
                       ProducesError(DECLARATION_OF_IDENTIFIER_LIST_NOT_ALLOWED_TO_HAVE_AN_INITIALIZER));
         SEMA_PRODUCES("int foo(a) int a;float;{}",
@@ -2072,7 +2075,7 @@ TEST_CASE("Semantics unary expressions", "[semantics]")
                                        "sizeof(int);\n"
                                        "}");
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-        CHECK(exp.getType() == getSizeT(cld::LanguageOptions::native()));
+        CHECK(exp.getType() == PrimitiveType::createSizeT(false, false, cld::LanguageOptions::native()));
         REQUIRE(std::holds_alternative<SizeofOperator>(exp.get()));
         SEMA_PRODUCES("void foo(struct r* i) {\n"
                       " sizeof *i;\n"
@@ -2318,7 +2321,7 @@ TEST_CASE("Semantics additive expression", "[semantics]")
                                                "i - i;\n"
                                                "}");
                 CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-                CHECK(exp.getType() == getPtrdiffT(cld::LanguageOptions::native()));
+                CHECK(exp.getType() == PrimitiveType::createPtrdiffT(false, false, cld::LanguageOptions::native()));
                 REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
                 auto& binOp = cld::get<BinaryOperator>(exp.get());
                 CHECK(binOp.getKind() == BinaryOperator::Subtraction);
@@ -3268,11 +3271,10 @@ TEST_CASE("Semantics function call expression", "[semantics]")
                   "\n"
                   "void bar(struct R);\n"
                   "\n"
-                  "void foo(voi) {\n"
-                  " struct { int i; } r;\n"
-                  " bar(r);\n"
+                  "void foo(void) {\n"
+                  " bar(5);\n"
                   "}",
-                  ProducesError(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_ARGUMENT_N_OF_TYPE_N, 1, "'struct R'"));
+                  ProducesError(CANNOT_PASS_ARGUMENT_TO_INCOMPLETE_TYPE_N_OF_PARAMETER_N, "'struct R'", 1));
     SEMA_PRODUCES("void bar(int *);\n"
                   "\n"
                   "void foo(void) {\n"
@@ -3296,31 +3298,31 @@ TEST_CASE("Semantics function call expression", "[semantics]")
                   "void foo(float* f) {\n"
                   " bar(f);\n"
                   "}",
-                  ProducesError(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_ARGUMENT_N_OF_TYPE_N, 1, "'int*'"));
+                  ProducesError(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_N, 1, "'int*'"));
     SEMA_PRODUCES("void bar(int*);\n"
                   "\n"
                   "void foo(const int* f) {\n"
                   " bar(f);\n"
                   "}",
-                  ProducesError(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_ARGUMENT_N_OF_TYPE_N, 1, "'int*'"));
+                  ProducesError(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_N, 1, "'int*'"));
     SEMA_PRODUCES("void bar(void*);\n"
                   "\n"
                   "void foo(const float* f) {\n"
                   " bar(f);\n"
                   "}",
-                  ProducesError(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_ARGUMENT_N_OF_TYPE_N, 1, "'void*'"));
+                  ProducesError(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_N, 1, "'void*'"));
     SEMA_PRODUCES("void bar(void*);\n"
                   "\n"
                   "void foo(void (*f)(int)) {\n"
                   " bar(f);\n"
                   "}",
-                  ProducesError(CANNOT_PASS_FUNCTION_POINTER_TO_VOID_POINTER_ARGUMENT));
+                  ProducesError(CANNOT_PASS_FUNCTION_POINTER_TO_VOID_POINTER_PARAMETER));
     SEMA_PRODUCES("void bar(void (*)(int));\n"
                   "\n"
                   "void foo(void *f) {\n"
                   " bar(f);\n"
                   "}",
-                  ProducesError(CANNOT_PASS_VOID_POINTER_TO_FUNCTION_POINTER_ARGUMENT));
+                  ProducesError(CANNOT_PASS_VOID_POINTER_TO_FUNCTION_POINTER_PARAMETER));
     SEMA_PRODUCES("void bar();\n"
                   "\n"
                   "void foo(void) {\n"
@@ -3333,4 +3335,102 @@ TEST_CASE("Semantics function call expression", "[semantics]")
                   "bar(5,3,43,4,3,4);\n"
                   "}",
                   ProducesNoErrors());
+}
+
+TEST_CASE("Semantics simple initializer", "[semantics]")
+{
+    SECTION("String literal")
+    {
+        SEMA_PRODUCES("char foo[6] = \"string\";", ProducesNoErrors());
+        SEMA_PRODUCES("unsigned char foo[6] = \"string\";", ProducesNoErrors());
+        SEMA_PRODUCES("signed char foo[6] = \"string\";", ProducesNoErrors());
+        SEMA_PRODUCES("char foo[6] = L\"string\";",
+                      ProducesError(CANNOT_INITIALIZE_CHAR_ARRAY_WITH_WIDE_STRING_LITERAL));
+        SEMA_PRODUCES("unsigned short foo[6] = \"string\";",
+                      ProducesError(CANNOT_INITIALIZE_WCHART_ARRAY_WITH_STRING_LITERAL));
+    }
+    SECTION("Size deduction")
+    {
+        SECTION("Normal string")
+        {
+            auto [translationUnit, errors] = generateSemantics("char foo[] = \"string\";");
+            REQUIRE_THAT(errors, ProducesNoErrors());
+            REQUIRE(translationUnit.getGlobals().size() == 1);
+            auto& global = translationUnit.getGlobals()[0];
+            REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(global));
+            auto& declaration = *cld::get<std::unique_ptr<Declaration>>(global);
+            REQUIRE(std::holds_alternative<ArrayType>(declaration.getType().get()));
+            CHECK(cld::get<ArrayType>(declaration.getType().get()).getSize() == 7);
+        }
+        SECTION("Wide string")
+        {
+            SECTION("Windows")
+            {
+                auto [translationUnit, errors] =
+                    generateSemantics("unsigned short foo[] = L\"string\";", x64windowsGnu);
+                REQUIRE_THAT(errors, ProducesNoErrors());
+                REQUIRE(translationUnit.getGlobals().size() == 1);
+                auto& global = translationUnit.getGlobals()[0];
+                REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(global));
+                auto& declaration = *cld::get<std::unique_ptr<Declaration>>(global);
+                REQUIRE(std::holds_alternative<ArrayType>(declaration.getType().get()));
+                CHECK(cld::get<ArrayType>(declaration.getType().get()).getSize() == 7);
+            }
+            SECTION("Posix")
+            {
+                auto [translationUnit, errors] = generateSemantics("int foo[] = L\"string\";", x64linux);
+                REQUIRE_THAT(errors, ProducesNoErrors());
+                REQUIRE(translationUnit.getGlobals().size() == 1);
+                auto& global = translationUnit.getGlobals()[0];
+                REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(global));
+                auto& declaration = *cld::get<std::unique_ptr<Declaration>>(global);
+                REQUIRE(std::holds_alternative<ArrayType>(declaration.getType().get()));
+                CHECK(cld::get<ArrayType>(declaration.getType().get()).getSize() == 7);
+            }
+        }
+    }
+    SEMA_PRODUCES("float i[5] = 5.0;", ProducesError(ARRAY_MUST_BE_INITIALIZED_WITH_INITIALIZER_LIST));
+    SEMA_PRODUCES("char i[5] = 5.0;", ProducesError(ARRAY_MUST_BE_INITIALIZED_WITH_STRING_OR_INITIALIZER_LIST));
+    SEMA_PRODUCES("unsigned char i[5] = 5.0;",
+                  ProducesError(ARRAY_MUST_BE_INITIALIZED_WITH_STRING_OR_INITIALIZER_LIST));
+    SEMA_PRODUCES("signed char i[5] = 5.0;", ProducesError(ARRAY_MUST_BE_INITIALIZED_WITH_STRING_OR_INITIALIZER_LIST));
+    CHECK_THAT(generateSemantics("int i[5] = 5.0;", x64linux).second,
+               ProducesError(ARRAY_MUST_BE_INITIALIZED_WITH_WIDE_STRING_OR_INITIALIZER_LIST));
+    CHECK_THAT(generateSemantics("unsigned short i[5] = 5.0;", x64windowsGnu).second,
+               ProducesError(ARRAY_MUST_BE_INITIALIZED_WITH_WIDE_STRING_OR_INITIALIZER_LIST));
+    SEMA_PRODUCES("extern int f;\n"
+                  "int i = f;",
+                  ProducesError(VARIABLE_ACCESS_NOT_ALLOWED_IN_CONSTANT_EXPRESSION));
+    SEMA_PRODUCES("extern int f;\n"
+                  "int* i = &f;",
+                  ProducesNoErrors());
+    SEMA_PRODUCES("void foo(void) {\n"
+                  "extern int f;\n"
+                  "int i = f;\n"
+                  "}",
+                  ProducesNoErrors());
+    SEMA_PRODUCES("void foo(void) {\n"
+                  "extern int f;\n"
+                  "static int i = f;\n"
+                  "}",
+                  ProducesError(VARIABLE_ACCESS_NOT_ALLOWED_IN_CONSTANT_EXPRESSION));
+    SEMA_PRODUCES("int i = (void*)5;", ProducesError(EXPECTED_INITIALIZER_TO_BE_AN_ARITHMETIC_TYPE));
+    SEMA_PRODUCES("struct R { int i; };\n"
+                  "struct R getR(void);\n"
+                  "\n"
+                  "void foo(void) {\n"
+                  "_Bool i = getR();\n"
+                  "}",
+                  ProducesError(EXPECTED_INITIALIZER_TO_BE_AN_ARITHMETIC_OR_POINTER_TYPE));
+    SEMA_PRODUCES(
+        "int* i = (const int*)5;",
+        ProducesError(CANNOT_INITIALIZE_VARIABLE_OF_TYPE_N_WITH_INCOMPATIBLE_TYPE_N, "'int*'", "'const int*'"));
+    SEMA_PRODUCES("const int* i = 5.0;", ProducesError(EXPECTED_INITIALIZER_TO_BE_A_POINTER_TYPE));
+    SEMA_PRODUCES("const int* i = 3;", ProducesError(EXPECTED_INITIALIZER_TO_BE_NULL));
+    SEMA_PRODUCES("void foo(void);\n"
+                  "void* i = foo;",
+                  ProducesError(CANNOT_INITIALIZE_VOID_POINTER_WITH_FUNCTION_POINTER));
+    SEMA_PRODUCES("extern void* foo;\n"
+                  "void (*i)(void) = foo;",
+                  ProducesError(CANNOT_INITIALIZE_FUNCTION_POINTER_WITH_VOID_POINTER_PARAMETER));
 }

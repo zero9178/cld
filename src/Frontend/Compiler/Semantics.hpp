@@ -130,6 +130,12 @@ public:
 
     [[nodiscard]] static Type createVoid(bool isConst, bool isVolatile);
 
+    [[nodiscard]] static Type createPtrdiffT(bool isConst, bool isVolatile, const LanguageOptions& options);
+
+    [[nodiscard]] static Type createSizeT(bool isConst, bool isVolatile, const LanguageOptions& options);
+
+    [[nodiscard]] static Type createWcharT(bool isConst, bool isVolatile, const LanguageOptions& options);
+
     [[nodiscard]] bool isFloatingPoint() const
     {
         return m_isFloatingPoint;
@@ -167,10 +173,6 @@ public:
     [[nodiscard]] bool operator!=(const PrimitiveType& rhs) const;
 };
 
-Type getSizeT(const LanguageOptions& options);
-
-Type getPtrdiffT(const LanguageOptions& options);
-
 class ArrayType final
 {
     std::shared_ptr<const Type> m_type;
@@ -181,7 +183,7 @@ class ArrayType final
     ArrayType(bool isRestricted, bool isStatic, std::shared_ptr<Type>&& type, std::size_t size);
 
 public:
-    [[nodiscard]] static Type create(bool isConst, bool isVolatile, bool isRestricted, bool isStatic, Type&& type,
+    [[nodiscard]] static Type create(bool isConst, bool isVolatile, bool isRestricted, bool isStatic, Type type,
                                      std::size_t size);
 
     [[nodiscard]] const Type& getType() const
@@ -221,7 +223,7 @@ class AbstractArrayType final
     AbstractArrayType(bool isRestricted, std::shared_ptr<Type>&& type);
 
 public:
-    [[nodiscard]] static Type create(bool isConst, bool isVolatile, bool isRestricted, Type&& type);
+    [[nodiscard]] static Type create(bool isConst, bool isVolatile, bool isRestricted, Type type);
 
     [[nodiscard]] const Type& getType() const
     {
@@ -254,7 +256,7 @@ class ValArrayType final
     ValArrayType(bool isRestricted, bool isStatic, std::shared_ptr<cld::Semantics::Type>&& type);
 
 public:
-    [[nodiscard]] static Type create(bool isConst, bool isVolatile, bool isRestricted, bool isStatic, Type&& type);
+    [[nodiscard]] static Type create(bool isConst, bool isVolatile, bool isRestricted, bool isStatic, Type type);
 
     [[nodiscard]] const Type& getType() const
     {
@@ -300,7 +302,7 @@ class FunctionType final
     }
 
 public:
-    [[nodiscard]] static Type create(cld::Semantics::Type&& returnType,
+    [[nodiscard]] static Type create(cld::Semantics::Type returnType,
                                      std::vector<std::pair<Type, std::string_view>>&& arguments, bool lastIsVararg,
                                      bool isKandR);
 
@@ -530,7 +532,7 @@ class AnonymousEnumType
     AnonymousEnumType(std::uint64_t id, std::shared_ptr<const Type> type);
 
 public:
-    static Type create(bool isConst, bool isVolatile, std::uint64_t id, Type&& type);
+    static Type create(bool isConst, bool isVolatile, std::uint64_t id, Type type);
 
     [[nodiscard]] std::uint64_t getId() const
     {
@@ -1291,14 +1293,20 @@ public:
     }
 };
 
-enum class Linkage
+class InitializerList final
+{
+};
+
+using Initializer = std::variant<InitializerList, Expression>;
+
+enum class Linkage : std::uint8_t
 {
     Internal,
     External,
     None
 };
 
-enum class Lifetime
+enum class Lifetime : std::uint8_t
 {
     Automatic,
     Static,
@@ -1612,6 +1620,8 @@ bool isScalar(const Type& type);
 bool isRecord(const Type& type);
 
 bool isBool(const Type& type);
+
+bool isCharType(const Type& type);
 } // namespace cld::Semantics
 
 namespace cld::diag

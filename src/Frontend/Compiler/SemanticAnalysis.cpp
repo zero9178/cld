@@ -361,10 +361,6 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
                                                                                   *funcSpec));
                 }
             }
-            if (std::holds_alternative<AbstractArrayType>(result.get()) && initializer)
-            {
-                // TODO: size deduction
-            }
             bool errors = false;
             Linkage linkage = m_currentScope == 0 ? Linkage::External : Linkage::None;
             Lifetime lifetime = m_currentScope == 0 ? Lifetime::Static : Lifetime::Automatic;
@@ -382,7 +378,8 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
                 linkage = Linkage::External;
                 lifetime = Lifetime::Static;
             }
-            if (linkage == Linkage::None && !isCompleteType(result))
+            if (linkage == Linkage::None && !isCompleteType(result)
+                && !(std::holds_alternative<AbstractArrayType>(result.get()) && initializer))
             {
                 log(Errors::Semantics::DECLARATION_MUST_HAVE_A_COMPLETE_TYPE.args(*loc, m_sourceInterface, *loc,
                                                                                   result));
@@ -513,9 +510,31 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
                     log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
                                                              *prev->second.identifier));
                 }
+                else
+                {
+                    auto& otherType = cld::get<const Declaration*>(prev->second.declared)->getType();
+                    auto composite = compositeType(otherType, declaration->getType());
+                    declaration = std::make_unique<Declaration>(std::move(composite), linkage, lifetime, loc);
+                    prev->second.declared = declaration.get();
+                }
             }
             else
             {
+                if (initializer)
+                {
+                    std::size_t size = 0;
+                    visit(*initializer, declaration->getType(), declaration->getLifetime() == Lifetime::Static, &size);
+                    if (std::holds_alternative<AbstractArrayType>(declaration->getType().get()))
+                    {
+                        auto& prevType = declaration->getType();
+                        declaration = std::make_unique<Declaration>(
+                            ArrayType::create(prevType.isConst(), prevType.isVolatile(),
+                                              cld::get<AbstractArrayType>(prevType.get()).isRestricted(), false,
+                                              cld::get<AbstractArrayType>(prevType.get()).getType(), size),
+                            linkage, lifetime, loc);
+                        prev->second.declared = declaration.get();
+                    }
+                }
                 decls.push_back(std::move(declaration));
             }
         }
@@ -814,6 +833,12 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                     isFunctionPrototype = true;
                 },
                 [&](const Syntax::DirectDeclaratorParenthesesParameters&) { isFunctionPrototype = true; },
+                [&](const Syntax::DirectDeclaratorParentheses& parentheses) {
+                    if (!parentheses.getDeclarator().getPointers().empty())
+                    {
+                        isFunctionPrototype = false;
+                    }
+                },
                 [](const Syntax::DirectDeclaratorIdentifier&) {}, [&](const auto&) { isFunctionPrototype = false; });
         }
         isFunctionPrototype = isFunctionPrototype && !inFunctionDefinition;
@@ -890,7 +915,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                     type = FunctionType::create(std::move(type), {}, false, true);
                     return;
                 }
-                if (declarations.empty() || declarationsOwner != &identifiers)
+                if (!inFunctionDefinition || declarationsOwner != &identifiers)
                 {
                     log(Errors::Semantics::IDENTIFIER_LIST_ONLY_ALLOWED_AS_PART_OF_A_FUNCTION_DEFINITION.args(
                         identifiers.getIdentifiers(), m_sourceInterface, identifiers.getIdentifiers()));
@@ -2453,9 +2478,13 @@ cld::Semantics::ConstValue
             if (std::holds_alternative<std::string>(constant.getValue())
                 || std::holds_alternative<Lexer::NonCharString>(constant.getValue()))
             {
-                logger(Errors::Semantics::STRING_LITERALS_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
-                    constant, m_sourceInterface, constant));
-                return {};
+                if (mode != Initialization)
+                {
+                    logger(Errors::Semantics::STRING_LITERALS_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
+                        constant, m_sourceInterface, constant));
+                    return {};
+                }
+                return {AddressConstant{}};
             }
             if (std::holds_alternative<llvm::APSInt>(constant.getValue()))
             {
@@ -2701,7 +2730,7 @@ cld::Semantics::ConstValue
         [&](const SizeofOperator& sizeofOperator) -> ConstValue {
             if (sizeofOperator.getSize())
             {
-                auto type = getSizeT(m_sourceInterface.getLanguageOptions());
+                auto type = PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions());
                 return {llvm::APSInt(
                     llvm::APInt(cld::get<PrimitiveType>(type.get()).getBitCount(), *sizeofOperator.getSize()))};
             }

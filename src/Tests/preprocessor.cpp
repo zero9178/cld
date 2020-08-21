@@ -18,11 +18,10 @@
         auto tokens = cld::Lexer::tokenize(str, cld::LanguageOptions::native(), &ss, &errorsOccurred); \
         UNSCOPED_INFO(ss.str());                                                                       \
         REQUIRE_FALSE(errorsOccurred);                                                                 \
-        auto exit = llvm::make_scope_exit([&] {                                                        \
-            UNSCOPED_INFO(ss.str());                                                                   \
-            REQUIRE_FALSE(errorsOccurred);                                                             \
-        });                                                                                            \
-        return cld::PP::preprocess(std::move(tokens), &ss, &errorsOccurred);                           \
+        auto result = cld::PP::preprocess(std::move(tokens), &ss, &errorsOccurred);                    \
+        UNSCOPED_INFO(ss.str());                                                                       \
+        REQUIRE_FALSE(errorsOccurred);                                                                 \
+        return result;                                                                                 \
     }(source)
 
 #define preprocessResultWith(source, option)                           \
@@ -32,11 +31,10 @@
         auto tokens = cld::Lexer::tokenize(str, languageOptions, &ss); \
         UNSCOPED_INFO(ss.str());                                       \
         REQUIRE_THAT(ss.str(), ProducesNoErrors());                    \
-        auto exit = llvm::make_scope_exit([&] {                        \
-            UNSCOPED_INFO(ss.str());                                   \
-            REQUIRE_THAT(ss.str(), ProducesNoErrors());                \
-        });                                                            \
-        return cld::PP::preprocess(std::move(tokens), &ss);            \
+        auto result = cld::PP::preprocess(std::move(tokens), &ss);     \
+        UNSCOPED_INFO(ss.str());                                       \
+        REQUIRE_THAT(ss.str(), ProducesNoErrors());                    \
+        return result;                                                 \
     }(source, option)
 
 #define preprocessReconstructsTo(source, resultSource)                                                  \
@@ -1056,15 +1054,17 @@ TEST_CASE("PP C Preprocessor tricks", "[PP]")
     }
 }
 
+TEST_CASE("PP includes UTF8", "[PP]")
+{
+    auto scope = createInclude("貓🍌.h", "#define MACRO 1\n");
+    CHECK(cld::fs::exists(cld::fs::u8path("貓🍌.h")));
+    auto ret = preprocessResult("#include \"貓🍌.h\"\n"
+                                "MACRO");
+    CHECK_THAT(ret, ProducesPP("1"));
+}
+
 TEST_CASE("PP includes", "[PP]")
 {
-    SECTION("UTF-8")
-    {
-        auto scope = createInclude("貓🍌.h", "#define MACRO 1\n");
-        auto ret = preprocessResult("#include \"貓🍌.h\"\n"
-                                    "MACRO");
-        CHECK_THAT(ret, ProducesPP("1"));
-    }
     SECTION("Absolute path")
     {
         auto scope = createInclude("Resources/TestInclude.h", "#define MACRO 1\n");
@@ -1161,7 +1161,7 @@ TEST_CASE("PP includes", "[PP]")
     {
         auto cwd = cld::fs::current_path();
         PP_OUTPUTS_WITH("#include \"" + cwd.string() + "/FileThatDoesNotExist\"\n",
-                        ProducesError(COULD_NOT_OPEN_FILE, cwd.string() + "/FileThatDoesNotExist"));
+                        ProducesError(FILE_NOT_FOUND, cwd.string() + "/FileThatDoesNotExist"));
     }
     SECTION("Empty")
     {

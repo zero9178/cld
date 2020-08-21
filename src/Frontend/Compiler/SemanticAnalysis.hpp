@@ -240,6 +240,15 @@ private:
 
     [[nodiscard]] bool isVariablyModified(const Type& type) const;
 
+    bool doAssignmentLikeConstraints(const Type& lhsTyp, const Expression& rhsValue,
+                                     llvm::function_ref<void()> mustBeArithmetic,
+                                     llvm::function_ref<void()> mustBeArithmeticOrPointer,
+                                     llvm::function_ref<void()> incompleteType,
+                                     llvm::function_ref<void()> incompatibleTypes, llvm::function_ref<void()> notICE,
+                                     llvm::function_ref<void(const ConstValue&)> notNull,
+                                     llvm::function_ref<void()> mustBePointer,
+                                     llvm::function_ref<void()> voidFunctionPointers);
+
 public:
     explicit SemanticAnalysis(const SourceInterface& sourceInterface, llvm::raw_ostream* reporter = &llvm::errs(),
                               std::function<bool(std::string_view)> definedCallback = {})
@@ -350,5 +359,11 @@ public:
     Expression visit(const Syntax::LogicalOrExpression& node);
 
     Expression visit(const Syntax::ConditionalExpression& node);
+
+    Initializer visit(const Syntax::Initializer& node, const Type& type, bool staticLifetime,
+                      std::size_t* size = nullptr);
+
+    InitializerList visit(const Syntax::InitializerList& node, const Type& type, bool staticLifetime,
+                          std::size_t* size = nullptr);
 };
 } // namespace cld::Semantics

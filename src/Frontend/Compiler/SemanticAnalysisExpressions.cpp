@@ -113,6 +113,114 @@ bool cld::Semantics::SemanticAnalysis::isConst(const Type& type) const
     return false;
 }
 
+bool cld::Semantics::SemanticAnalysis::doAssignmentLikeConstraints(
+    const Type& lhsType, const Expression& rhsValue, llvm::function_ref<void()> mustBeArithmetic,
+    llvm::function_ref<void()> mustBeArithmeticOrPointer, llvm::function_ref<void()> incompleteType,
+    llvm::function_ref<void()> incompatibleTypes, llvm::function_ref<void()> notICE,
+    llvm::function_ref<void(const ConstValue&)> notNull, llvm::function_ref<void()> mustBePointer,
+    llvm::function_ref<void()> voidFunctionPointers)
+{
+    if (isArithmetic(lhsType))
+    {
+        if (!isBool(lhsType))
+        {
+            if (!rhsValue.isUndefined() && !isArithmetic(rhsValue.getType()))
+            {
+                mustBeArithmetic();
+                return false;
+            }
+        }
+        else if (!rhsValue.isUndefined() && !isScalar(rhsValue.getType()))
+        {
+            mustBeArithmeticOrPointer();
+            return false;
+        }
+        return true;
+    }
+
+    if (isRecord(lhsType))
+    {
+        if (!isCompleteType(lhsType))
+        {
+            incompleteType();
+            return false;
+        }
+
+        if (!rhsValue.isUndefined()
+            && !typesAreCompatible(removeQualifiers(lhsType), removeQualifiers(rhsValue.getType())))
+        {
+            incompatibleTypes();
+            return false;
+        }
+        return true;
+    }
+
+    if (!std::holds_alternative<PointerType>(lhsType.get()))
+    {
+        return true;
+    }
+
+    if (isInteger(rhsValue.getType()))
+    {
+        auto constant = evaluateConstantExpression(rhsValue);
+        if (!constant)
+        {
+            notICE();
+            return false;
+        }
+        else if (constant->toUInt() != 0)
+        {
+            notNull(*constant);
+            return false;
+        }
+        return true;
+    }
+
+    if (!rhsValue.isUndefined() && !std::holds_alternative<PointerType>(rhsValue.getType().get()))
+    {
+        mustBePointer();
+        return false;
+    }
+
+    if (rhsValue.isUndefined())
+    {
+        return true;
+    }
+
+    auto& lhsElementType = cld::get<PointerType>(lhsType.get()).getElementType();
+    auto& rhsElementType = cld::get<PointerType>(rhsValue.getType().get()).getElementType();
+    if (isVoid(removeQualifiers(lhsElementType)) != isVoid(removeQualifiers(rhsElementType)))
+    {
+        bool leftIsVoid = isVoid(removeQualifiers(lhsElementType));
+        auto& nonVoidType = leftIsVoid ? rhsElementType : lhsElementType;
+        if (std::holds_alternative<FunctionType>(nonVoidType.get()))
+        {
+            voidFunctionPointers();
+            return false;
+        }
+        if ((!lhsElementType.isConst() && rhsElementType.isConst())
+            || (!lhsElementType.isVolatile() && rhsElementType.isVolatile()))
+        {
+            incompatibleTypes();
+            return false;
+        }
+        return true;
+    }
+
+    if (!typesAreCompatible(removeQualifiers(lhsElementType), removeQualifiers(rhsElementType)))
+    {
+        incompatibleTypes();
+        return false;
+    }
+    if ((!lhsElementType.isConst() && rhsElementType.isConst())
+        || (!lhsElementType.isVolatile() && rhsElementType.isVolatile()))
+    {
+        incompatibleTypes();
+        return false;
+    }
+    return true;
+}
+
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::AssignmentExpression& node)
 {
     if (node.getOptionalConditionalExpressions().empty())
@@ -135,101 +243,48 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         {
             case Syntax::AssignmentExpression::NoOperator:
             {
-                if (isArithmetic(lhsValue.getType()))
-                {
-                    if (!isBool(lhsValue.getType()))
-                    {
-                        if (!rhsValue.isUndefined() && !isArithmetic(rhsValue.getType()))
-                        {
-                            log(Errors::Semantics::EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_ARITHMETIC_TYPE.args(
-                                rhsValue, m_sourceInterface, *token, rhsValue));
-                        }
-                    }
-                    else if (!rhsValue.isUndefined() && !isScalar(rhsValue.getType()))
-                    {
+                doAssignmentLikeConstraints(
+                    lhsValue.getType(), rhsValue,
+                    [&, token = token] {
+                        log(Errors::Semantics::EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_ARITHMETIC_TYPE.args(
+                            rhsValue, m_sourceInterface, *token, rhsValue));
+                    },
+                    [&, token = token] {
                         log(Errors::Semantics::EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_ARITHMETIC_OR_POINTER_TYPE
                                 .args(rhsValue, m_sourceInterface, *token, rhsValue));
-                    }
-                }
-                else if (isRecord(lhsValue.getType()))
-                {
-                    if (!isCompleteType(lhsValue.getType()))
-                    {
+                    },
+                    [&, token = token] {
                         log(Errors::Semantics::CANNOT_ASSIGN_TO_INCOMPLETE_TYPE_N.args(lhsValue, m_sourceInterface,
                                                                                        lhsValue, *token));
-                    }
-                    else if (!rhsValue.isUndefined()
-                             && !typesAreCompatible(removeQualifiers(lhsValue.getType()),
-                                                    removeQualifiers(rhsValue.getType())))
-                    {
+                    },
+                    [&, token = token] {
                         log(Errors::Semantics::CANNOT_ASSIGN_INCOMPATIBLE_TYPES.args(lhsValue, m_sourceInterface,
                                                                                      lhsValue, *token, rhsValue));
-                    }
-                }
-                else if (std::holds_alternative<PointerType>(lhsValue.getType().get()))
-                {
-                    if (isInteger(rhsValue.getType()))
-                    {
-                        auto constant = evaluateConstantExpression(rhsValue);
-                        if (!constant)
-                        {
-                            log(Errors::Semantics::EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_NULL_2.args(
-                                rhsValue, m_sourceInterface, *token, rhsValue));
-                        }
-                        else if (constant->toUInt() != 0)
-                        {
-                            log(Errors::Semantics::EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_NULL.args(
-                                rhsValue, m_sourceInterface, *token, rhsValue, *constant));
-                        }
-                    }
-                    else if (!rhsValue.isUndefined() && !std::holds_alternative<PointerType>(rhsValue.getType().get()))
-                    {
+                    },
+                    [&, token = token] {
+                        log(Errors::Semantics::EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_NULL_2.args(
+                            rhsValue, m_sourceInterface, *token, rhsValue));
+                    },
+                    [&, token = token](const ConstValue& constant) {
+                        log(Errors::Semantics::EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_NULL.args(
+                            rhsValue, m_sourceInterface, *token, rhsValue, constant));
+                    },
+                    [&, token = token] {
                         log(Errors::Semantics::EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_A_POINTER_TYPE.args(
                             rhsValue, m_sourceInterface, *token, rhsValue));
-                    }
-                    else if (!rhsValue.isUndefined())
-                    {
-                        auto& lhsElementType = cld::get<PointerType>(lhsValue.getType().get()).getElementType();
-                        auto& rhsElementType = cld::get<PointerType>(rhsValue.getType().get()).getElementType();
-                        if (isVoid(removeQualifiers(lhsElementType)) != isVoid(removeQualifiers(rhsElementType)))
+                    },
+                    [&, token = token] {
+                        if (isVoid(removeQualifiers(cld::get<PointerType>(lhsValue.getType().get()).getElementType())))
                         {
-                            auto& voidExpr = isVoid(removeQualifiers(lhsElementType)) ? lhsValue : rhsValue;
-                            auto& otherExpr = &voidExpr == &lhsValue ? rhsValue : lhsValue;
-                            auto& elementType = cld::get<PointerType>(otherExpr.getType().get()).getElementType();
-                            if (std::holds_alternative<FunctionType>(elementType.get()))
-                            {
-                                if (&voidExpr == &lhsValue)
-                                {
-                                    log(Errors::Semantics::CANNOT_ASSIGN_FUNCTION_POINTER_TO_VOID_POINTER.args(
-                                        lhsValue, m_sourceInterface, lhsValue, *token, rhsValue));
-                                }
-                                else
-                                {
-                                    log(Errors::Semantics::CANNOT_ASSIGN_VOID_POINTER_TO_FUNCTION_POINTER.args(
-                                        lhsValue, m_sourceInterface, lhsValue, *token, rhsValue));
-                                }
-                            }
-                            if ((!lhsElementType.isConst() && rhsElementType.isConst())
-                                || (!lhsElementType.isVolatile() && rhsElementType.isVolatile()))
-                            {
-                                log(Errors::Semantics::CANNOT_ASSIGN_INCOMPATIBLE_TYPES.args(
-                                    lhsValue, m_sourceInterface, lhsValue, *token, rhsValue));
-                            }
+                            log(Errors::Semantics::CANNOT_ASSIGN_FUNCTION_POINTER_TO_VOID_POINTER.args(
+                                lhsValue, m_sourceInterface, lhsValue, *token, rhsValue));
                         }
-                        else if (!typesAreCompatible(removeQualifiers(lhsElementType),
-                                                     removeQualifiers(rhsElementType)))
+                        else
                         {
-                            log(Errors::Semantics::CANNOT_ASSIGN_INCOMPATIBLE_TYPES.args(lhsValue, m_sourceInterface,
-                                                                                         lhsValue, *token, rhsValue));
+                            log(Errors::Semantics::CANNOT_ASSIGN_VOID_POINTER_TO_FUNCTION_POINTER.args(
+                                lhsValue, m_sourceInterface, lhsValue, *token, rhsValue));
                         }
-                        else if ((!lhsElementType.isConst() && rhsElementType.isConst())
-                                 || (!lhsElementType.isVolatile() && rhsElementType.isVolatile()))
-                        {
-                            log(Errors::Semantics::CANNOT_ASSIGN_INCOMPATIBLE_TYPES.args(lhsValue, m_sourceInterface,
-                                                                                         lhsValue, *token, rhsValue));
-                        }
-                    }
-                }
+                    });
                 break;
             }
             case Syntax::AssignmentExpression::PlusAssign:
@@ -793,99 +848,48 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                     arguments.push_back(std::move(expression));
                     continue;
                 }
-                if (isArithmetic(paramType))
-                {
-                    if (!isBool(paramType))
-                    {
-                        if (!isArithmetic(expression.getType()))
-                        {
-                            log(Errors::Semantics::EXPECTED_ARGUMENT_N_TO_BE_AN_ARITHMETIC_TYPE.args(
-                                expression, m_sourceInterface, i + 1, expression));
-                        }
-                    }
-                    else
-                    {
-                        if (!isScalar(expression.getType()))
-                        {
-                            log(Errors::Semantics::EXPECTED_ARGUMENT_N_TO_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
-                                expression, m_sourceInterface, i + 1, expression));
-                        }
-                    }
-                }
-                else if (isRecord(paramType))
-                {
-                    if (!typesAreCompatible(paramType, expression.getType()))
-                    {
-                        log(Errors::Semantics::CANNOT_PASS_INCOMPATIBLE_TYPE_TO_ARGUMENT_N_OF_TYPE_N.args(
+                doAssignmentLikeConstraints(
+                    paramType, expression,
+                    [&] {
+                        log(Errors::Semantics::EXPECTED_ARGUMENT_N_TO_BE_AN_ARITHMETIC_TYPE.args(
+                            expression, m_sourceInterface, i + 1, expression));
+                    },
+                    [&] {
+                        log(Errors::Semantics::EXPECTED_ARGUMENT_N_TO_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
+                            expression, m_sourceInterface, i + 1, expression));
+                    },
+                    [&] {
+                        log(Errors::Semantics::CANNOT_PASS_ARGUMENT_TO_INCOMPLETE_TYPE_N_OF_PARAMETER_N.args(
+                            expression, m_sourceInterface, paramType, i + 1, expression));
+                    },
+                    [&] {
+                        log(Errors::Semantics::CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_N.args(
                             expression, m_sourceInterface, i + 1, paramType, expression));
-                    }
-                }
-                else if (std::holds_alternative<PointerType>(paramType.get()))
-                {
-                    if (isInteger(expression.getType()))
-                    {
-                        auto constant = evaluateConstantExpression(expression);
-                        if (!constant)
+                    },
+                    [&] {
+                        log(Errors::Semantics::EXPECTED_ARGUMENT_N_TO_BE_NULL_2.args(expression, m_sourceInterface,
+                                                                                     i + 1, expression));
+                    },
+                    [&](const ConstValue& constant) {
+                        log(Errors::Semantics::EXPECTED_ARGUMENT_N_TO_BE_NULL.args(expression, m_sourceInterface, i + 1,
+                                                                                   expression, constant));
+                    },
+                    [&] {
+                        log(Errors::Semantics::EXPECTED_ARGUMENT_N_TO_BE_A_POINTER_TYPE.args(
+                            expression, m_sourceInterface, i + 1, expression));
+                    },
+                    [&] {
+                        if (isVoid(removeQualifiers(cld::get<PointerType>(paramType.get()).getElementType())))
                         {
-                            log(Errors::Semantics::EXPECTED_ARGUMENT_N_TO_BE_NULL_2.args(expression, m_sourceInterface,
-                                                                                         i + 1, expression));
+                            log(Errors::Semantics::CANNOT_PASS_FUNCTION_POINTER_TO_VOID_POINTER_PARAMETER.args(
+                                expression, m_sourceInterface, expression));
                         }
                         else
                         {
-                            if (constant->toUInt() != 0)
-                            {
-                                log(Errors::Semantics::EXPECTED_ARGUMENT_N_TO_BE_NULL.args(
-                                    expression, m_sourceInterface, i + 1, expression, *constant));
-                            }
+                            log(Errors::Semantics::CANNOT_PASS_VOID_POINTER_TO_FUNCTION_POINTER_PARAMETER.args(
+                                expression, m_sourceInterface, expression));
                         }
-                    }
-                    else if (!std::holds_alternative<PointerType>(expression.getType().get()))
-                    {
-                        log(Errors::Semantics::EXPECTED_ARGUMENT_N_TO_BE_A_POINTER_TYPE.args(
-                            expression, m_sourceInterface, i + 1, expression));
-                    }
-                    else
-                    {
-                        auto& paramElementType = cld::get<PointerType>(paramType.get()).getElementType();
-                        auto& expElementType = cld::get<PointerType>(expression.getType().get()).getElementType();
-                        if (isVoid(removeQualifiers(paramElementType)) != isVoid(removeQualifiers(expElementType)))
-                        {
-                            bool paramIsVoid = isVoid(removeQualifiers(paramElementType));
-                            auto& nonVoidType = paramIsVoid ? expElementType : paramElementType;
-                            if (std::holds_alternative<FunctionType>(nonVoidType.get()))
-                            {
-                                if (paramIsVoid)
-                                {
-                                    log(Errors::Semantics::CANNOT_PASS_FUNCTION_POINTER_TO_VOID_POINTER_ARGUMENT.args(
-                                        expression, m_sourceInterface, expression));
-                                }
-                                else
-                                {
-                                    log(Errors::Semantics::CANNOT_PASS_VOID_POINTER_TO_FUNCTION_POINTER_ARGUMENT.args(
-                                        expression, m_sourceInterface, expression));
-                                }
-                            }
-                            if ((!paramElementType.isConst() && expElementType.isConst())
-                                || (!paramElementType.isVolatile() && expElementType.isVolatile()))
-                            {
-                                log(Errors::Semantics::CANNOT_PASS_INCOMPATIBLE_TYPE_TO_ARGUMENT_N_OF_TYPE_N.args(
-                                    expression, m_sourceInterface, i + 1, paramType, expression));
-                            }
-                        }
-                        else if (!typesAreCompatible(removeQualifiers(paramElementType),
-                                                     removeQualifiers(expElementType)))
-                        {
-                            log(Errors::Semantics::CANNOT_PASS_INCOMPATIBLE_TYPE_TO_ARGUMENT_N_OF_TYPE_N.args(
-                                expression, m_sourceInterface, i + 1, paramType, expression));
-                        }
-                        else if ((!paramElementType.isConst() && expElementType.isConst())
-                                 || (!paramElementType.isVolatile() && expElementType.isVolatile()))
-                        {
-                            log(Errors::Semantics::CANNOT_PASS_INCOMPATIBLE_TYPE_TO_ARGUMENT_N_OF_TYPE_N.args(
-                                expression, m_sourceInterface, i + 1, paramType, expression));
-                        }
-                    }
-                }
+                    });
                 arguments.push_back(std::move(expression));
             }
             for (; i < node.getOptionalAssignmentExpressions().size(); i++)
@@ -1106,7 +1110,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
             }
             auto size = exp.getType().getSizeOf(*this);
             return Expression(
-                getSizeT(m_sourceInterface.getLanguageOptions()), ValueCategory::Rvalue,
+                PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()), ValueCategory::Rvalue,
                 SizeofOperator(node.getSizeOfToken(), size, std::make_unique<Expression>(std::move(exp))));
         },
         [&](const std::unique_ptr<Syntax::TypeName>& typeName) -> Expression {
@@ -1128,7 +1132,8 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                 return Expression(node);
             }
             auto size = type.getSizeOf(*this);
-            return Expression(getSizeT(m_sourceInterface.getLanguageOptions()), ValueCategory::Rvalue,
+            return Expression(PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()),
+                              ValueCategory::Rvalue,
                               SizeofOperator(node.getSizeOfToken(), size,
                                              SizeofOperator::TypeVariant{node.getSizeOfToken() + 1, std::move(type),
                                                                          node.end() - 1}));
@@ -1377,10 +1382,11 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                         log(Errors::Semantics::CANNOT_SUBTRACT_POINTERS_OF_INCOMPATIBLE_TYPES.args(
                             value, m_sourceInterface, value, *token, rhsValue));
                     }
-                    value = Expression(getPtrdiffT(m_sourceInterface.getLanguageOptions()), ValueCategory::Rvalue,
-                                       BinaryOperator(std::make_unique<Expression>(std::move(value)),
-                                                      BinaryOperator::Subtraction, token,
-                                                      std::make_unique<Expression>(std::move(rhsValue))));
+                    value = Expression(
+                        PrimitiveType::createPtrdiffT(false, false, m_sourceInterface.getLanguageOptions()),
+                        ValueCategory::Rvalue,
+                        BinaryOperator(std::make_unique<Expression>(std::move(value)), BinaryOperator::Subtraction,
+                                       token, std::make_unique<Expression>(std::move(rhsValue))));
                 }
                 else
                 {
@@ -2085,4 +2091,159 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(Type& lhs, Expressio
     lhs = type;
     rhs = Expression(std::move(type), ValueCategory::Rvalue,
                      Conversion(Conversion::ArithmeticConversion, std::make_unique<Expression>(std::move(rhs))));
+}
+
+cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const Syntax::Initializer& node, const Type& type,
+                                                                    bool staticLifetime, std::size_t* size)
+{
+    return cld::match(
+        node.getVariant(),
+        [&](const Syntax::AssignmentExpression& assignmentExpression) -> Initializer {
+            auto value = visit(assignmentExpression);
+            if (type.isUndefined() || value.isUndefined())
+            {
+                return Expression(assignmentExpression);
+            }
+            if (!std::holds_alternative<Constant>(value.get())
+                || (!std::holds_alternative<std::string>(cld::get<Constant>(value.get()).getValue())
+                    && !std::holds_alternative<Lexer::NonCharString>(cld::get<Constant>(value.get()).getValue())))
+            {
+                value = lvalueConversion(std::move(value));
+            }
+
+            if (isArray(type))
+            {
+                auto& elementType = cld::match(
+                    type.get(), [](const auto&) -> const Type& { CLD_UNREACHABLE; },
+                    [](const ArrayType& arrayType) -> const Type& { return arrayType.getType(); },
+                    [](const AbstractArrayType& abstractArrayType) -> const Type& {
+                        return abstractArrayType.getType();
+                    });
+                if (!isCharType(elementType)
+                    && removeQualifiers(elementType)
+                           != PrimitiveType::createWcharT(false, false, m_sourceInterface.getLanguageOptions()))
+                {
+                    log(Errors::Semantics::ARRAY_MUST_BE_INITIALIZED_WITH_INITIALIZER_LIST.args(
+                        value, m_sourceInterface, value));
+                    return Expression(assignmentExpression);
+                }
+                if (!std::holds_alternative<Constant>(value.get())
+                    || (!std::holds_alternative<std::string>(cld::get<Constant>(value.get()).getValue())
+                        && !std::holds_alternative<Lexer::NonCharString>(cld::get<Constant>(value.get()).getValue())))
+                {
+                    if (isCharType(elementType))
+                    {
+                        log(Errors::Semantics::ARRAY_MUST_BE_INITIALIZED_WITH_STRING_OR_INITIALIZER_LIST.args(
+                            value, m_sourceInterface, value));
+                    }
+                    else
+                    {
+                        log(Errors::Semantics::ARRAY_MUST_BE_INITIALIZED_WITH_WIDE_STRING_OR_INITIALIZER_LIST.args(
+                            value, m_sourceInterface, value));
+                    }
+                    return Expression(assignmentExpression);
+                }
+                auto& str = cld::get<Constant>(value.get()).getValue();
+                if (std::holds_alternative<std::string>(str) && !isCharType(elementType))
+                {
+                    log(Errors::Semantics::CANNOT_INITIALIZE_WCHART_ARRAY_WITH_STRING_LITERAL.args(
+                        value, m_sourceInterface, value));
+                    return Expression(assignmentExpression);
+                }
+                else if (isCharType(elementType) && std::holds_alternative<Lexer::NonCharString>(str))
+                {
+                    log(Errors::Semantics::CANNOT_INITIALIZE_CHAR_ARRAY_WITH_WIDE_STRING_LITERAL.args(
+                        value, m_sourceInterface, value));
+                    return Expression(assignmentExpression);
+                }
+            }
+
+            if (staticLifetime)
+            {
+                auto result = evaluateConstantExpression(value, Mode::Initialization);
+                if (!result)
+                {
+                    for (auto& iter : result.error())
+                    {
+                        log(iter);
+                    }
+                }
+            }
+
+            doAssignmentLikeConstraints(
+                type, value,
+                [&] {
+                    log(Errors::Semantics::EXPECTED_INITIALIZER_TO_BE_AN_ARITHMETIC_TYPE.args(value, m_sourceInterface,
+                                                                                              value));
+                },
+                [&] {
+                    log(Errors::Semantics::EXPECTED_INITIALIZER_TO_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
+                        value, m_sourceInterface, value));
+                },
+                [&] { CLD_UNREACHABLE; },
+                [&] {
+                    log(Errors::Semantics::CANNOT_INITIALIZE_VARIABLE_OF_TYPE_N_WITH_INCOMPATIBLE_TYPE_N.args(
+                        value, m_sourceInterface, type, value));
+                },
+                [&] {
+                    log(Errors::Semantics::EXPECTED_INITIALIZER_TO_BE_NULL_2.args(value, m_sourceInterface, value));
+                },
+                [&](const ConstValue& constant) {
+                    log(Errors::Semantics::EXPECTED_INITIALIZER_TO_BE_NULL.args(value, m_sourceInterface, value,
+                                                                                constant));
+                },
+                [&] {
+                    log(Errors::Semantics::EXPECTED_INITIALIZER_TO_BE_A_POINTER_TYPE.args(value, m_sourceInterface,
+                                                                                          value));
+                },
+                [&] {
+                    if (isVoid(removeQualifiers(cld::get<PointerType>(type.get()).getElementType())))
+                    {
+                        log(Errors::Semantics::CANNOT_INITIALIZE_VOID_POINTER_WITH_FUNCTION_POINTER.args(
+                            value, m_sourceInterface, value));
+                    }
+                    else
+                    {
+                        log(Errors::Semantics::CANNOT_INITIALIZE_FUNCTION_POINTER_WITH_VOID_POINTER_PARAMETER.args(
+                            value, m_sourceInterface, value));
+                    }
+                });
+
+            if (std::holds_alternative<AbstractArrayType>(type.get()) && size)
+            {
+                auto& elementType = cld::get<AbstractArrayType>(type.get()).getType();
+                if (isCharType(elementType))
+                {
+                    if (std::holds_alternative<Constant>(value.get())
+                        && std::holds_alternative<std::string>(cld::get<Constant>(value.get()).getValue()))
+                    {
+                        *size = cld::get<std::string>(cld::get<Constant>(value.get()).getValue()).size() + 1;
+                    }
+                }
+                else if (std::holds_alternative<PrimitiveType>(elementType.get())
+                         && removeQualifiers(elementType)
+                                == PrimitiveType::createWcharT(false, false, m_sourceInterface.getLanguageOptions()))
+                {
+                    if (std::holds_alternative<Constant>(value.get())
+                        && std::holds_alternative<Lexer::NonCharString>(cld::get<Constant>(value.get()).getValue()))
+                    {
+                        *size =
+                            cld::get<Lexer::NonCharString>(cld::get<Constant>(value.get()).getValue()).characters.size()
+                            + 1;
+                    }
+                }
+            }
+
+            return value;
+        },
+        [&](const Syntax::InitializerList& initializerList) -> Initializer {
+            return visit(initializerList, type, staticLifetime, size);
+        });
+}
+
+cld::Semantics::InitializerList cld::Semantics::SemanticAnalysis::visit(const cld::Syntax::InitializerList& node,
+                                                                        const cld::Semantics::Type& type,
+                                                                        bool staticLifetime, std::size_t* size)
+{
+    return cld::Semantics::InitializerList();
 }

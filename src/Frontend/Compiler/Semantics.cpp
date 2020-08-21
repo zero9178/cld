@@ -11,24 +11,41 @@
 #include "SemanticUtil.hpp"
 #include "Syntax.hpp"
 
-cld::Semantics::Type cld::Semantics::getPtrdiffT(const LanguageOptions& options)
+cld::Semantics::Type cld::Semantics::PrimitiveType::createPtrdiffT(bool isConst, bool isVolatile,
+                                                                   const LanguageOptions& options)
 {
     switch (options.ptrdiffType)
     {
-        case LanguageOptions::PtrdiffType ::Int: return PrimitiveType::createInt(false, false, options);
-        case LanguageOptions::PtrdiffType ::Long: return PrimitiveType::createLong(false, false, options);
-        case LanguageOptions::PtrdiffType ::LongLong: return PrimitiveType::createLongLong(false, false);
+        case LanguageOptions::PtrdiffType ::Int: return PrimitiveType::createInt(isConst, isVolatile, options);
+        case LanguageOptions::PtrdiffType ::Long: return PrimitiveType::createLong(isConst, isVolatile, options);
+        case LanguageOptions::PtrdiffType ::LongLong: return PrimitiveType::createLongLong(isConst, isVolatile);
     }
     CLD_UNREACHABLE;
 }
 
-cld::Semantics::Type cld::Semantics::getSizeT(const LanguageOptions& options)
+cld::Semantics::Type cld::Semantics::PrimitiveType::createWcharT(bool isConst, bool isVolatile,
+                                                                 const LanguageOptions& options)
+{
+    switch (options.wcharUnderlyingType)
+    {
+        case LanguageOptions::WideCharType ::Int: return PrimitiveType::createInt(isConst, isVolatile, options);
+        case LanguageOptions::WideCharType ::UnsignedShort:
+            return PrimitiveType::createUnsignedShort(isConst, isVolatile, options);
+    }
+    CLD_UNREACHABLE;
+}
+
+cld::Semantics::Type cld::Semantics::PrimitiveType::createSizeT(bool isConst, bool isVolatile,
+                                                                const LanguageOptions& options)
 {
     switch (options.sizeTType)
     {
-        case LanguageOptions::SizeTType ::UnsignedInt: return PrimitiveType::createUnsignedInt(false, false, options);
-        case LanguageOptions::SizeTType ::UnsignedLong: return PrimitiveType::createUnsignedLong(false, false, options);
-        case LanguageOptions::SizeTType ::UnsignedLongLong: return PrimitiveType::createUnsignedLongLong(false, false);
+        case LanguageOptions::SizeTType ::UnsignedInt:
+            return PrimitiveType::createUnsignedInt(isConst, isVolatile, options);
+        case LanguageOptions::SizeTType ::UnsignedLong:
+            return PrimitiveType::createUnsignedLong(isConst, isVolatile, options);
+        case LanguageOptions::SizeTType ::UnsignedLongLong:
+            return PrimitiveType::createUnsignedLongLong(isConst, isVolatile);
     }
     CLD_UNREACHABLE;
 }
@@ -40,7 +57,7 @@ cld::Semantics::ArrayType::ArrayType(bool isRestricted, bool isStatic, std::shar
 }
 
 cld::Semantics::Type cld::Semantics::ArrayType::create(bool isConst, bool isVolatile, bool isRestricted, bool isStatic,
-                                                       cld::Semantics::Type&& type, std::size_t size)
+                                                       cld::Semantics::Type type, std::size_t size)
 {
     return cld::Semantics::Type(isConst, isVolatile,
                                 ArrayType(isRestricted, isStatic, std::make_shared<Type>(std::move(type)), size));
@@ -318,7 +335,7 @@ cld::Semantics::ValArrayType::ValArrayType(bool isRestricted, bool isStatic,
 }
 
 cld::Semantics::Type cld::Semantics::ValArrayType::create(bool isConst, bool isVolatile, bool isRestricted,
-                                                          bool isStatic, cld::Semantics::Type&& type)
+                                                          bool isStatic, cld::Semantics::Type type)
 {
     return cld::Semantics::Type(isConst, isVolatile,
                                 ValArrayType(isRestricted, isStatic, std::make_shared<Type>(std::move(type))));
@@ -334,7 +351,7 @@ bool cld::Semantics::ValArrayType::operator!=(const cld::Semantics::ValArrayType
     return !(rhs == *this);
 }
 
-cld::Semantics::Type cld::Semantics::FunctionType::create(cld::Semantics::Type&& returnType,
+cld::Semantics::Type cld::Semantics::FunctionType::create(cld::Semantics::Type returnType,
                                                           std::vector<std::pair<Type, std::string_view>>&& arguments,
                                                           bool lastIsVararg, bool isKandR)
 {
@@ -368,7 +385,7 @@ cld::Semantics::AbstractArrayType::AbstractArrayType(bool isRestricted, std::sha
 }
 
 cld::Semantics::Type cld::Semantics::AbstractArrayType::create(bool isConst, bool isVolatile, bool isRestricted,
-                                                               cld::Semantics::Type&& type)
+                                                               cld::Semantics::Type type)
 {
     return cld::Semantics::Type(isConst, isVolatile,
                                 AbstractArrayType(isRestricted, std::make_shared<Type>(std::move(type))));
@@ -498,6 +515,18 @@ bool cld::Semantics::isBool(const cld::Semantics::Type& type)
     return primitive->getKind() == PrimitiveType::Kind::Bool;
 }
 
+bool cld::Semantics::isCharType(const cld::Semantics::Type& type)
+{
+    auto* primitive = std::get_if<PrimitiveType>(&type.get());
+    if (!primitive)
+    {
+        return false;
+    }
+    return primitive->getKind() == PrimitiveType::Kind::Char
+           || primitive->getKind() == PrimitiveType::Kind::UnsignedChar
+           || primitive->getKind() == PrimitiveType::Kind::SignedChar;
+}
+
 cld::Semantics::TranslationUnit::TranslationUnit(std::vector<TranslationUnit::Variant> globals)
     : m_globals(std::move(globals))
 {
@@ -599,7 +628,7 @@ bool cld::Semantics::AnonymousEnumType::operator!=(const cld::Semantics::Anonymo
 }
 
 cld::Semantics::Type cld::Semantics::AnonymousEnumType::create(bool isConst, bool isVolatile, std::uint64_t id,
-                                                               Type&& type)
+                                                               Type type)
 {
     return Type(isConst, isVolatile, AnonymousEnumType(id, std::make_shared<Type>(std::move(type))));
 }
