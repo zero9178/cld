@@ -522,18 +522,25 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
             {
                 if (initializer)
                 {
+                    auto prevType = declaration->getType();
                     std::size_t size = 0;
-                    visit(*initializer, declaration->getType(), declaration->getLifetime() == Lifetime::Static, &size);
+                    auto expr = visit(*initializer, declaration->getType(),
+                                      declaration->getLifetime() == Lifetime::Static, &size);
                     if (std::holds_alternative<AbstractArrayType>(declaration->getType().get()))
                     {
-                        auto& prevType = declaration->getType();
-                        declaration = std::make_unique<Declaration>(
-                            ArrayType::create(prevType.isConst(), prevType.isVolatile(),
-                                              cld::get<AbstractArrayType>(prevType.get()).isRestricted(), false,
-                                              cld::get<AbstractArrayType>(prevType.get()).getType(), size),
-                            linkage, lifetime, loc);
-                        prev->second.declared = declaration.get();
+                        prevType = ArrayType::create(prevType.isConst(), prevType.isVolatile(),
+                                                     cld::get<AbstractArrayType>(prevType.get()).isRestricted(), false,
+                                                     cld::get<AbstractArrayType>(prevType.get()).getType(), size);
                     }
+                    declaration =
+                        std::make_unique<Declaration>(std::move(prevType), linkage, lifetime, loc, std::move(expr));
+                    prev->second.declared = declaration.get();
+                }
+                else if (std::holds_alternative<AbstractArrayType>(declaration->getType().get())
+                         && linkage == Linkage::None)
+                {
+                    log(Errors::Semantics::DECLARATION_MUST_HAVE_A_COMPLETE_TYPE.args(*loc, m_sourceInterface, *loc,
+                                                                                      declaration->getType()));
                 }
                 decls.push_back(std::move(declaration));
             }

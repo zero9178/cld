@@ -249,6 +249,9 @@ private:
                                      llvm::function_ref<void()> mustBePointer,
                                      llvm::function_ref<void()> voidFunctionPointers);
 
+    Expression doSingleElementInitialization(const Syntax::Node& node, const Type& type, Expression&& expression,
+                                             bool staticLifetime, std::size_t* size);
+
 public:
     explicit SemanticAnalysis(const SourceInterface& sourceInterface, llvm::raw_ostream* reporter = &llvm::errs(),
                               std::function<bool(std::string_view)> definedCallback = {})
@@ -363,7 +366,7 @@ public:
     Initializer visit(const Syntax::Initializer& node, const Type& type, bool staticLifetime,
                       std::size_t* size = nullptr);
 
-    InitializerList visit(const Syntax::InitializerList& node, const Type& type, bool staticLifetime,
-                          std::size_t* size = nullptr);
+    Initializer visit(const Syntax::InitializerList& node, const Type& type, bool staticLifetime,
+                      std::size_t* size = nullptr);
 };
 } // namespace cld::Semantics

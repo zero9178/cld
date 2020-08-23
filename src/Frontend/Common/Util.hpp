@@ -130,6 +130,27 @@ constexpr decltype(auto) get(Variant&& variant) noexcept
     }
 }
 
+template <typename G>
+struct YComb
+{
+    template <typename... X>
+    constexpr decltype(auto) operator()(X&&... x) const
+    {
+        return g(*this, std::forward<X>(x)...);
+    }
+
+    template <typename... X>
+    constexpr decltype(auto) operator()(X&&... x)
+    {
+        return g(*this, std::forward<X>(x)...);
+    }
+
+    G g;
+};
+
+template <typename G>
+YComb(G) -> YComb<G>;
+
 namespace detail
 {
 template <class... Ts>
@@ -139,21 +160,6 @@ struct overload : Ts...
 };
 template <class... Ts>
 overload(Ts...) -> overload<Ts...>;
-
-template <typename G>
-struct Y
-{
-    template <typename... X>
-    constexpr decltype(auto) operator()(X&&... x) const&
-    {
-        return g(*this, std::forward<X>(x)...);
-    }
-
-    G g;
-};
-
-template <typename G>
-Y(G) -> Y<G>;
 
 template <class T>
 struct Identity
@@ -424,8 +430,7 @@ constexpr Ret match(Variant&& variant, Matchers&&... matchers)
 template <typename Variant, typename... Matchers>
 constexpr decltype(auto) matchWithSelf(Variant&& variant, Matchers&&... matchers)
 {
-    return detail::visit(detail::Y{detail::overload{std::forward<Matchers>(matchers)...}},
-                         std::forward<Variant>(variant));
+    return detail::visit(YComb{detail::overload{std::forward<Matchers>(matchers)...}}, std::forward<Variant>(variant));
 }
 
 template <class Ret, typename Variant, typename... Matchers>

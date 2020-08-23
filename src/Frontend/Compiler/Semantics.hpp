@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -1293,11 +1294,24 @@ public:
     }
 };
 
-class InitializerList final
-{
-};
+bool isStringLiteralExpr(const Expression& expression);
+
+class InitializerList;
 
 using Initializer = std::variant<InitializerList, Expression>;
+
+class InitializerList final
+{
+    std::map<std::vector<std::size_t>, Expression> m_fields;
+
+public:
+    explicit InitializerList(std::map<std::vector<std::size_t>, Expression> fields) : m_fields(std::move(fields)) {}
+
+    [[nodiscard]] const std::map<std::vector<std::size_t>, Expression>& getFields() const
+    {
+        return m_fields;
+    }
+};
 
 enum class Linkage : std::uint8_t
 {
@@ -1319,16 +1333,16 @@ class Declaration final
     Linkage m_linkage;
     Lifetime m_lifetime;
     Lexer::CTokenIterator m_nameToken;
-    // std::optional<Expression> m_initializer;
+    std::optional<Initializer> m_initializer;
 
 public:
-    Declaration(Type type, Linkage linkage, Lifetime lifetime, Lexer::CTokenIterator nameToken/*,
-                std::optional<Expression> initializer = {}*/)
+    Declaration(Type type, Linkage linkage, Lifetime lifetime, Lexer::CTokenIterator nameToken,
+                std::optional<Initializer> initializer = {})
         : m_type(std::move(type)),
           m_linkage(linkage),
           m_lifetime(lifetime),
-          m_nameToken(nameToken)/*,
-          m_initializer(std::move(initializer))*/
+          m_nameToken(nameToken),
+          m_initializer(std::move(initializer))
     {
     }
 
@@ -1350,6 +1364,11 @@ public:
     [[nodiscard]] Lexer::CTokenIterator getNameToken() const
     {
         return m_nameToken;
+    }
+
+    [[nodiscard]] const std::optional<Initializer>& getInitializer() const
+    {
+        return m_initializer;
     }
 };
 
@@ -1611,6 +1630,8 @@ bool isVoid(const Type& type);
 
 bool isArray(const Type& type);
 
+const Type& getArrayElementType(const Type& type);
+
 bool isInteger(const Type& type);
 
 bool isArithmetic(const Type& type);
@@ -1622,6 +1643,8 @@ bool isRecord(const Type& type);
 bool isBool(const Type& type);
 
 bool isCharType(const Type& type);
+
+bool isAggregate(const Type& type);
 } // namespace cld::Semantics
 
 namespace cld::diag

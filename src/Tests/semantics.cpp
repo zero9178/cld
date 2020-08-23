@@ -2911,6 +2911,11 @@ TEST_CASE("Semantics assignment expression", "[semantics]")
                       "*i = *f;\n"
                       "}",
                       ProducesError(CANNOT_ASSIGN_TO_INCOMPLETE_TYPE_N, "'struct R'"));
+        SEMA_PRODUCES("void foo(int i) {\n"
+                      "int r[5];\n"
+                      "r = i;"
+                      "}",
+                      ProducesError(CANNOT_ASSIGN_TO_ARRAY_TYPE_N, "'int[5]'"));
         SEMA_PRODUCES("void foo(void) {\n"
                       "struct { int i; } r,f;\n"
                       "r = f;\n"
@@ -3346,8 +3351,10 @@ TEST_CASE("Semantics simple initializer", "[semantics]")
         SEMA_PRODUCES("signed char foo[6] = \"string\";", ProducesNoErrors());
         SEMA_PRODUCES("char foo[6] = L\"string\";",
                       ProducesError(CANNOT_INITIALIZE_CHAR_ARRAY_WITH_WIDE_STRING_LITERAL));
-        SEMA_PRODUCES("unsigned short foo[6] = \"string\";",
-                      ProducesError(CANNOT_INITIALIZE_WCHART_ARRAY_WITH_STRING_LITERAL));
+        CHECK_THAT(generateSemantics("unsigned short foo[6] = \"string\";", x64windowsGnu).second,
+                   ProducesError(CANNOT_INITIALIZE_WCHART_ARRAY_WITH_STRING_LITERAL));
+        CHECK_THAT(generateSemantics("int foo[6] = \"string\";", x64linux).second,
+                   ProducesError(CANNOT_INITIALIZE_WCHART_ARRAY_WITH_STRING_LITERAL));
     }
     SECTION("Size deduction")
     {
@@ -3433,4 +3440,114 @@ TEST_CASE("Semantics simple initializer", "[semantics]")
     SEMA_PRODUCES("extern void* foo;\n"
                   "void (*i)(void) = foo;",
                   ProducesError(CANNOT_INITIALIZE_FUNCTION_POINTER_WITH_VOID_POINTER_PARAMETER));
+}
+
+TEST_CASE("Semantics initializer list", "[semantics]")
+{
+    SECTION("Initializing struct")
+    {
+        SEMA_PRODUCES("\n"
+                      "struct A\n"
+                      "{\n"
+                      "    char s[5];\n"
+                      "    int r;\n"
+                      "};\n"
+                      "\n"
+                      "struct B\n"
+                      "{\n"
+                      "    struct A a;\n"
+                      "    int r;\n"
+                      "};\n"
+                      "\n"
+                      "struct C\n"
+                      "{\n"
+                      "    struct B b;\n"
+                      "    int r;\n"
+                      "};\n"
+                      "\n"
+                      "struct A getA();\n"
+                      "\n"
+                      "struct B getB();\n"
+                      "\n"
+                      "struct C getC();\n"
+                      "\n"
+                      "void foo(void)\n"
+                      "{\n"
+                      "    struct C c1 = {{{{\"d\"}}}};\n"
+                      "    struct C c2 = {{getA()}};\n"
+                      "    struct C c3 = {getB()};\n"
+                      "}\n",
+                      ProducesNothing());
+        auto [translationUnit, errors] = generateSemantics("typedef struct Point {\n"
+                                                           "float x;\n"
+                                                           "float y;\n"
+                                                           "} Point;\n"
+                                                           "\n"
+                                                           "Point point = {5.0,3.0};");
+        REQUIRE(translationUnit.getGlobals().size() == 1);
+        auto& global = translationUnit.getGlobals()[0];
+        REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(global));
+        auto& decl = cld::get<std::unique_ptr<Declaration>>(global);
+        REQUIRE(decl->getInitializer());
+        REQUIRE(std::holds_alternative<InitializerList>(*decl->getInitializer()));
+        auto& initializer = cld::get<InitializerList>(*decl->getInitializer());
+        //        REQUIRE(initializer.getFields().count(0) > 0);
+        //        REQUIRE(initializer.getFields().count(1) > 0);
+        //        REQUIRE(std::holds_alternative<Expression>(initializer.getFields().at(0)));
+        //        REQUIRE(std::holds_alternative<Expression>(initializer.getFields().at(1)));
+        //        CHECK(std::holds_alternative<Constant>(cld::get<Expression>(initializer.getFields().at(0)).get()));
+        //        CHECK(std::holds_alternative<Constant>(cld::get<Expression>(initializer.getFields().at(1)).get()));
+        SEMA_PRODUCES("typedef struct Point {\n"
+                      "float x;\n"
+                      "float y;\n"
+                      "} Point;\n"
+                      "\n"
+                      "Point point = {{5.0},{3.0}};\n",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("typedef struct Point {\n"
+                      "float x;\n"
+                      "float y;\n"
+                      "} Point;\n"
+                      "\n"
+                      "Point point = {5.0};\n",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("typedef struct Point {\n"
+                      "float x;\n"
+                      "float y;\n"
+                      "} Point;\n"
+                      "\n"
+                      "Point point = {5.0,3.0,2};\n",
+                      ProducesError(NO_MORE_SUB_OBJECTS_TO_INITIALIZE));
+        SEMA_PRODUCES("typedef struct Point {\n"
+                      "float x;\n"
+                      "float y;\n"
+                      "} Point;\n"
+                      "\n"
+                      "Point point = {5.0,3.0,2};\n",
+                      ProducesError(NO_MORE_SUB_OBJECTS_TO_INITIALIZE));
+        SEMA_PRODUCES("typedef struct Point\n"
+                      "{\n"
+                      "    float x,y;\n"
+                      "} Point;\n"
+                      "\n"
+                      "typedef struct Line\n"
+                      "{\n"
+                      "    Point p0,p1;\n"
+                      "} Line;\n"
+                      "\n"
+                      "Line line = {5.0,5.0,5.0,5.0};\n",
+                      ProducesNoErrors());
+    }
+    SECTION("Single brace")
+    {
+        SEMA_PRODUCES("int i = {5};", ProducesNoErrors());
+        SEMA_PRODUCES("int i = {{5}};",
+                      ProducesError(CANNOT_INITIALIZE_ARITHMETIC_OR_POINTER_TYPE_WITH_INITIALIZER_LIST));
+        SEMA_PRODUCES("int* i = {0};", ProducesNoErrors());
+        SEMA_PRODUCES("int i = {5,};", ProducesNoErrors());
+        SEMA_PRODUCES("int* i = {0,};", ProducesNoErrors());
+        SEMA_PRODUCES("char foo[6] = {\"string\"};", ProducesNoErrors());
+        SEMA_PRODUCES("unsigned char foo[6] = {\"string\"};", ProducesNoErrors());
+        SEMA_PRODUCES("signed char foo[6] = {\"string\"};", ProducesNoErrors());
+    }
 }

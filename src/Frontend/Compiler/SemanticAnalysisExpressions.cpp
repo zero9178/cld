@@ -243,6 +243,11 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         {
             case Syntax::AssignmentExpression::NoOperator:
             {
+                if (isArray(lhsValue.getType()))
+                {
+                    log(Errors::Semantics::CANNOT_ASSIGN_TO_ARRAY_TYPE_N.args(lhsValue, m_sourceInterface, lhsValue,
+                                                                              *token));
+                }
                 doAssignmentLikeConstraints(
                     lhsValue.getType(), rhsValue,
                     [&, token = token] {
@@ -1917,13 +1922,10 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::lvalueConversion(Expression expression)
 {
-    if (std::holds_alternative<ArrayType>(expression.getType().get())
-        || std::holds_alternative<ValArrayType>(expression.getType().get()))
+    if (isArray(expression.getType()))
     {
-        auto elementType = std::holds_alternative<ArrayType>(expression.getType().get()) ?
-                               cld::get<ArrayType>(expression.getType().get()).getType() :
-                               cld::get<ValArrayType>(expression.getType().get()).getType();
-        auto newType = PointerType::create(false, false, false, std::move(elementType));
+        auto& elementType = getArrayElementType(expression.getType());
+        auto newType = PointerType::create(false, false, false, elementType);
         return Expression(std::move(newType), ValueCategory::Rvalue,
                           Conversion(Conversion::LValue, std::make_unique<Expression>(std::move(expression))));
     }
@@ -1948,10 +1950,9 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::lvalueConversion(Ex
 
 cld::Semantics::Type cld::Semantics::SemanticAnalysis::lvalueConversion(Type type)
 {
-    if (std::holds_alternative<ArrayType>(type.get()) || std::holds_alternative<ValArrayType>(type.get()))
+    if (isArray(type))
     {
-        auto elementType = std::holds_alternative<ArrayType>(type.get()) ? cld::get<ArrayType>(type.get()).getType() :
-                                                                           cld::get<ValArrayType>(type.get()).getType();
+        auto& elementType = getArrayElementType(type);
         return PointerType::create(false, false, false, elementType);
     }
     if (std::holds_alternative<FunctionType>(type.get()))
@@ -2093,6 +2094,134 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(Type& lhs, Expressio
                      Conversion(Conversion::ArithmeticConversion, std::make_unique<Expression>(std::move(rhs))));
 }
 
+cld::Semantics::Expression cld::Semantics::SemanticAnalysis::doSingleElementInitialization(
+    const Syntax::Node& node, const Type& type, Expression&& expression, bool staticLifetime, std::size_t* size)
+{
+    CLD_ASSERT(!type.isUndefined() && !expression.isUndefined());
+    if (!isStringLiteralExpr(expression))
+    {
+        expression = lvalueConversion(std::move(expression));
+    }
+
+    if (isArray(type))
+    {
+        auto& elementType = getArrayElementType(type);
+        if (!isCharType(elementType)
+            && removeQualifiers(elementType)
+                   != PrimitiveType::createWcharT(false, false, m_sourceInterface.getLanguageOptions()))
+        {
+            log(Errors::Semantics::ARRAY_MUST_BE_INITIALIZED_WITH_INITIALIZER_LIST.args(expression, m_sourceInterface,
+                                                                                        expression));
+            return Expression(node);
+        }
+        if (!isStringLiteralExpr(expression))
+        {
+            if (isCharType(elementType))
+            {
+                log(Errors::Semantics::ARRAY_MUST_BE_INITIALIZED_WITH_STRING_OR_INITIALIZER_LIST.args(
+                    expression, m_sourceInterface, expression));
+            }
+            else
+            {
+                log(Errors::Semantics::ARRAY_MUST_BE_INITIALIZED_WITH_WIDE_STRING_OR_INITIALIZER_LIST.args(
+                    expression, m_sourceInterface, expression));
+            }
+            return Expression(node);
+        }
+        auto& str = cld::get<Constant>(expression.get()).getValue();
+        if (std::holds_alternative<std::string>(str) && !isCharType(elementType))
+        {
+            log(Errors::Semantics::CANNOT_INITIALIZE_WCHART_ARRAY_WITH_STRING_LITERAL.args(
+                expression, m_sourceInterface, expression));
+            return Expression(node);
+        }
+        else if (isCharType(elementType) && std::holds_alternative<Lexer::NonCharString>(str))
+        {
+            log(Errors::Semantics::CANNOT_INITIALIZE_CHAR_ARRAY_WITH_WIDE_STRING_LITERAL.args(
+                expression, m_sourceInterface, expression));
+            return Expression(node);
+        }
+    }
+
+    if (staticLifetime)
+    {
+        auto result = evaluateConstantExpression(expression, Mode::Initialization);
+        if (!result)
+        {
+            for (auto& iter : result.error())
+            {
+                log(iter);
+            }
+        }
+    }
+
+    doAssignmentLikeConstraints(
+        type, expression,
+        [&] {
+            log(Errors::Semantics::EXPECTED_INITIALIZER_TO_BE_AN_ARITHMETIC_TYPE.args(expression, m_sourceInterface,
+                                                                                      expression));
+        },
+        [&] {
+            log(Errors::Semantics::EXPECTED_INITIALIZER_TO_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
+                expression, m_sourceInterface, expression));
+        },
+        [&] { CLD_UNREACHABLE; },
+        [&] {
+            log(Errors::Semantics::CANNOT_INITIALIZE_VARIABLE_OF_TYPE_N_WITH_INCOMPATIBLE_TYPE_N.args(
+                expression, m_sourceInterface, type, expression));
+        },
+        [&] {
+            log(Errors::Semantics::EXPECTED_INITIALIZER_TO_BE_NULL_2.args(expression, m_sourceInterface, expression));
+        },
+        [&](const ConstValue& constant) {
+            log(Errors::Semantics::EXPECTED_INITIALIZER_TO_BE_NULL.args(expression, m_sourceInterface, expression,
+                                                                        constant));
+        },
+        [&] {
+            log(Errors::Semantics::EXPECTED_INITIALIZER_TO_BE_A_POINTER_TYPE.args(expression, m_sourceInterface,
+                                                                                  expression));
+        },
+        [&] {
+            if (isVoid(removeQualifiers(cld::get<PointerType>(type.get()).getElementType())))
+            {
+                log(Errors::Semantics::CANNOT_INITIALIZE_VOID_POINTER_WITH_FUNCTION_POINTER.args(
+                    expression, m_sourceInterface, expression));
+            }
+            else
+            {
+                log(Errors::Semantics::CANNOT_INITIALIZE_FUNCTION_POINTER_WITH_VOID_POINTER_PARAMETER.args(
+                    expression, m_sourceInterface, expression));
+            }
+        });
+
+    if (std::holds_alternative<AbstractArrayType>(type.get()) && size)
+    {
+        auto& elementType = cld::get<AbstractArrayType>(type.get()).getType();
+        if (isCharType(elementType))
+        {
+            if (std::holds_alternative<Constant>(expression.get())
+                && std::holds_alternative<std::string>(cld::get<Constant>(expression.get()).getValue()))
+            {
+                *size = cld::get<std::string>(cld::get<Constant>(expression.get()).getValue()).size() + 1;
+            }
+        }
+        else if (std::holds_alternative<PrimitiveType>(elementType.get())
+                 && removeQualifiers(elementType)
+                        == PrimitiveType::createWcharT(false, false, m_sourceInterface.getLanguageOptions()))
+        {
+            if (std::holds_alternative<Constant>(expression.get())
+                && std::holds_alternative<Lexer::NonCharString>(cld::get<Constant>(expression.get()).getValue()))
+            {
+                *size =
+                    cld::get<Lexer::NonCharString>(cld::get<Constant>(expression.get()).getValue()).characters.size()
+                    + 1;
+            }
+        }
+    }
+
+    return std::move(expression);
+}
+
 cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const Syntax::Initializer& node, const Type& type,
                                                                     bool staticLifetime, std::size_t* size)
 {
@@ -2104,146 +2233,229 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const Syntax
             {
                 return Expression(assignmentExpression);
             }
-            if (!std::holds_alternative<Constant>(value.get())
-                || (!std::holds_alternative<std::string>(cld::get<Constant>(value.get()).getValue())
-                    && !std::holds_alternative<Lexer::NonCharString>(cld::get<Constant>(value.get()).getValue())))
-            {
-                value = lvalueConversion(std::move(value));
-            }
 
-            if (isArray(type))
-            {
-                auto& elementType = cld::match(
-                    type.get(), [](const auto&) -> const Type& { CLD_UNREACHABLE; },
-                    [](const ArrayType& arrayType) -> const Type& { return arrayType.getType(); },
-                    [](const AbstractArrayType& abstractArrayType) -> const Type& {
-                        return abstractArrayType.getType();
-                    });
-                if (!isCharType(elementType)
-                    && removeQualifiers(elementType)
-                           != PrimitiveType::createWcharT(false, false, m_sourceInterface.getLanguageOptions()))
-                {
-                    log(Errors::Semantics::ARRAY_MUST_BE_INITIALIZED_WITH_INITIALIZER_LIST.args(
-                        value, m_sourceInterface, value));
-                    return Expression(assignmentExpression);
-                }
-                if (!std::holds_alternative<Constant>(value.get())
-                    || (!std::holds_alternative<std::string>(cld::get<Constant>(value.get()).getValue())
-                        && !std::holds_alternative<Lexer::NonCharString>(cld::get<Constant>(value.get()).getValue())))
-                {
-                    if (isCharType(elementType))
-                    {
-                        log(Errors::Semantics::ARRAY_MUST_BE_INITIALIZED_WITH_STRING_OR_INITIALIZER_LIST.args(
-                            value, m_sourceInterface, value));
-                    }
-                    else
-                    {
-                        log(Errors::Semantics::ARRAY_MUST_BE_INITIALIZED_WITH_WIDE_STRING_OR_INITIALIZER_LIST.args(
-                            value, m_sourceInterface, value));
-                    }
-                    return Expression(assignmentExpression);
-                }
-                auto& str = cld::get<Constant>(value.get()).getValue();
-                if (std::holds_alternative<std::string>(str) && !isCharType(elementType))
-                {
-                    log(Errors::Semantics::CANNOT_INITIALIZE_WCHART_ARRAY_WITH_STRING_LITERAL.args(
-                        value, m_sourceInterface, value));
-                    return Expression(assignmentExpression);
-                }
-                else if (isCharType(elementType) && std::holds_alternative<Lexer::NonCharString>(str))
-                {
-                    log(Errors::Semantics::CANNOT_INITIALIZE_CHAR_ARRAY_WITH_WIDE_STRING_LITERAL.args(
-                        value, m_sourceInterface, value));
-                    return Expression(assignmentExpression);
-                }
-            }
-
-            if (staticLifetime)
-            {
-                auto result = evaluateConstantExpression(value, Mode::Initialization);
-                if (!result)
-                {
-                    for (auto& iter : result.error())
-                    {
-                        log(iter);
-                    }
-                }
-            }
-
-            doAssignmentLikeConstraints(
-                type, value,
-                [&] {
-                    log(Errors::Semantics::EXPECTED_INITIALIZER_TO_BE_AN_ARITHMETIC_TYPE.args(value, m_sourceInterface,
-                                                                                              value));
-                },
-                [&] {
-                    log(Errors::Semantics::EXPECTED_INITIALIZER_TO_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
-                        value, m_sourceInterface, value));
-                },
-                [&] { CLD_UNREACHABLE; },
-                [&] {
-                    log(Errors::Semantics::CANNOT_INITIALIZE_VARIABLE_OF_TYPE_N_WITH_INCOMPATIBLE_TYPE_N.args(
-                        value, m_sourceInterface, type, value));
-                },
-                [&] {
-                    log(Errors::Semantics::EXPECTED_INITIALIZER_TO_BE_NULL_2.args(value, m_sourceInterface, value));
-                },
-                [&](const ConstValue& constant) {
-                    log(Errors::Semantics::EXPECTED_INITIALIZER_TO_BE_NULL.args(value, m_sourceInterface, value,
-                                                                                constant));
-                },
-                [&] {
-                    log(Errors::Semantics::EXPECTED_INITIALIZER_TO_BE_A_POINTER_TYPE.args(value, m_sourceInterface,
-                                                                                          value));
-                },
-                [&] {
-                    if (isVoid(removeQualifiers(cld::get<PointerType>(type.get()).getElementType())))
-                    {
-                        log(Errors::Semantics::CANNOT_INITIALIZE_VOID_POINTER_WITH_FUNCTION_POINTER.args(
-                            value, m_sourceInterface, value));
-                    }
-                    else
-                    {
-                        log(Errors::Semantics::CANNOT_INITIALIZE_FUNCTION_POINTER_WITH_VOID_POINTER_PARAMETER.args(
-                            value, m_sourceInterface, value));
-                    }
-                });
-
-            if (std::holds_alternative<AbstractArrayType>(type.get()) && size)
-            {
-                auto& elementType = cld::get<AbstractArrayType>(type.get()).getType();
-                if (isCharType(elementType))
-                {
-                    if (std::holds_alternative<Constant>(value.get())
-                        && std::holds_alternative<std::string>(cld::get<Constant>(value.get()).getValue()))
-                    {
-                        *size = cld::get<std::string>(cld::get<Constant>(value.get()).getValue()).size() + 1;
-                    }
-                }
-                else if (std::holds_alternative<PrimitiveType>(elementType.get())
-                         && removeQualifiers(elementType)
-                                == PrimitiveType::createWcharT(false, false, m_sourceInterface.getLanguageOptions()))
-                {
-                    if (std::holds_alternative<Constant>(value.get())
-                        && std::holds_alternative<Lexer::NonCharString>(cld::get<Constant>(value.get()).getValue()))
-                    {
-                        *size =
-                            cld::get<Lexer::NonCharString>(cld::get<Constant>(value.get()).getValue()).characters.size()
-                            + 1;
-                    }
-                }
-            }
-
-            return value;
+            return doSingleElementInitialization(assignmentExpression, type, std::move(value), staticLifetime, size);
         },
         [&](const Syntax::InitializerList& initializerList) -> Initializer {
             return visit(initializerList, type, staticLifetime, size);
         });
 }
 
-cld::Semantics::InitializerList cld::Semantics::SemanticAnalysis::visit(const cld::Syntax::InitializerList& node,
-                                                                        const cld::Semantics::Type& type,
-                                                                        bool staticLifetime, std::size_t* size)
+cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::Syntax::InitializerList& node,
+                                                                    const cld::Semantics::Type& type,
+                                                                    bool staticLifetime, std::size_t* size)
 {
-    return cld::Semantics::InitializerList();
+    if (!type.isUndefined() && !isArray(type) && !isRecord(type) && node.getNonCommaExpressionsAndBlocks().size() == 1
+        && node.getNonCommaExpressionsAndBlocks()[0].second.empty()
+        && std::holds_alternative<Syntax::AssignmentExpression>(
+            node.getNonCommaExpressionsAndBlocks()[0].first.getVariant()))
+    {
+        return visit(node.getNonCommaExpressionsAndBlocks()[0].first, type, staticLifetime, size);
+    }
+    if (!type.isUndefined() && !isArray(type) && !isRecord(type))
+    {
+        log(Errors::Semantics::CANNOT_INITIALIZE_ARITHMETIC_OR_POINTER_TYPE_WITH_INITIALIZER_LIST.args(
+            node, m_sourceInterface, node));
+        return Expression(node);
+    }
+    if (size)
+    {
+        *size = 0;
+    }
+
+    struct Node
+    {
+        const Type* CLD_NON_NULL type;
+        std::size_t index;
+        const Node* CLD_NULLABLE parent;
+        std::vector<Node> children;
+
+        Node() = default;
+        Node(const Node&) = delete;
+        Node& operator=(const Node&) = delete;
+        Node(Node&&) noexcept = default;
+        Node& operator=(Node&&) noexcept = default;
+    };
+    Node top{&type, static_cast<std::size_t>(-1), nullptr, {}};
+    bool isAbstractArray = false;
+    if (std::holds_alternative<AbstractArrayType>(type.get()))
+    {
+        isAbstractArray = true;
+    }
+    else
+    {
+        YComb{[&](auto&& self, const Type& type, std::vector<Node>& result, const Node* parent) -> void {
+            if (std::holds_alternative<StructType>(type.get()))
+            {
+                auto& structType = cld::get<StructType>(type.get());
+                auto* structDef = getStructDefinition(structType.getName(), structType.getScopeOrId());
+                CLD_ASSERT(structDef);
+                auto ref = llvm::ArrayRef(structDef->getFields());
+                if (std::holds_alternative<AbstractArrayType>(ref.back().type->get()))
+                {
+                    ref = ref.drop_back();
+                }
+                result.resize(ref.size());
+                std::transform(ref.begin(), ref.end(), result.begin(), result.begin(),
+                               [&, i = 0uLL](const Field& field, const Node& curr) mutable -> Node {
+                                   Node node;
+                                   node.type = field.type.get();
+                                   node.index = i++;
+                                   node.parent = parent;
+                                   if (isAggregate(*field.type))
+                                   {
+                                       self(*field.type, node.children, &curr);
+                                   }
+                                   return node;
+                               });
+            }
+            if (std::holds_alternative<AnonymousStructType>(type.get()))
+            {
+                auto& structType = cld::get<AnonymousStructType>(type.get());
+                auto ref = llvm::ArrayRef(structType.getFields());
+                if (std::holds_alternative<AbstractArrayType>(ref.back().type->get()))
+                {
+                    ref = ref.drop_back();
+                }
+                result.resize(ref.size());
+                std::transform(ref.begin(), ref.end(), result.begin(), result.begin(),
+                               [&, i = 0uLL](const Field& field, const Node& curr) mutable -> Node {
+                                   Node node;
+                                   node.type = field.type.get();
+                                   node.index = i++;
+                                   node.parent = parent;
+                                   if (isAggregate(*field.type))
+                                   {
+                                       self(*field.type, node.children, &curr);
+                                   }
+                                   return node;
+                               });
+            }
+            if (std::holds_alternative<UnionType>(type.get()))
+            {
+                auto& unionType = cld::get<UnionType>(type.get());
+                auto* unionDef = getUnionDefinition(unionType.getName(), unionType.getScopeOrId());
+                CLD_ASSERT(unionDef);
+                auto& field = unionDef->getFields().front();
+                result.resize(1);
+                result.back().index = 0;
+                result.back().type = field.type.get();
+                result.back().parent = parent;
+                if (isAggregate(*field.type))
+                {
+                    self(*field.type, result.back().children, &result.back());
+                }
+            }
+            if (std::holds_alternative<AnonymousUnionType>(type.get()))
+            {
+                auto& unionType = cld::get<AnonymousUnionType>(type.get());
+                auto& field = unionType.getFields().front();
+                result.resize(1);
+                result.back().index = 0;
+                result.back().type = field.type.get();
+                result.back().parent = parent;
+                if (isAggregate(*field.type))
+                {
+                    self(*field.type, result.back().children, &result.back());
+                }
+            }
+            if (std::holds_alternative<ArrayType>(type.get()))
+            {
+                auto& arrayType = cld::get<ArrayType>(type.get());
+                result.resize(arrayType.getSize());
+                std::size_t i = 0;
+                for (auto& iter : result)
+                {
+                    iter.type = &arrayType.getType();
+                    iter.index = i++;
+                    iter.parent = parent;
+                    if (isAggregate(arrayType.getType()))
+                    {
+                        self(*iter.type, iter.children, &iter);
+                    }
+                }
+            }
+        }}(type, top.children, &top);
+    }
+
+    std::map<std::vector<std::size_t>, Expression> map;
+    const Node* CLD_NON_NULL current = &top;
+    std::size_t currentIndex = 0;
+    for (auto iter = node.getNonCommaExpressionsAndBlocks().begin();
+         iter != node.getNonCommaExpressionsAndBlocks().end(); iter++)
+    {
+        auto& [initializer, designationList] = *iter;
+        if (!designationList.empty())
+        {
+            current = &top;
+            for (auto& desig : designationList)
+            {
+                if (isArray(*current->type))
+                {
+                    if (!std::holds_alternative<Syntax::ConstantExpression>(desig))
+                    {
+                        // TODO: error
+                    }
+                    auto exp = visit(cld::get<Syntax::ConstantExpression>(desig));
+                    auto constant = evaluateConstantExpression(exp);
+                    if (!constant)
+                    {
+                        for (auto& mes : constant.error())
+                        {
+                            log(mes);
+                        }
+                        // TODO: recovery
+                    }
+                    if (!isInteger(exp.getType()))
+                    {
+                        // TODO: Error
+                    }
+                    if (cld::get<PrimitiveType>(exp.getType().get()).isSigned() && constant->toInt() < 0)
+                    {
+                        // TODO: Error
+                    }
+                    if (!(current == &top && isAbstractArray)
+                        && constant->toUInt() >= cld::get<ArrayType>(current->type->get()).getSize())
+                    {
+                        // TODO: Error
+                    }
+                    else if (current == &top && isAbstractArray)
+                    {
+                        *size = std::max(*size, constant->toUInt());
+                    }
+                    current = &current->children[constant->toUInt()];
+                }
+                else if (isRecord(*current->type))
+                {
+                    if (!std::holds_alternative<std::string_view>(desig))
+                    {
+                        // TODO: Error
+                    }
+                    auto fields = getFields(*current->type);
+                    const auto* result = std::find_if(
+                        fields.begin(), fields.end(),
+                        [name = cld::get<std::string_view>(desig)](const Field& field) { return field.name == name; });
+                    if (result == fields.end())
+                    {
+                        // TODO: Error
+                    }
+                    if (std::holds_alternative<AbstractArrayType>(result->type->get()))
+                    {
+                        // TODO: Error
+                    }
+                    current = &current->children[result - fields.begin()];
+                }
+                else
+                {
+                    // TODO: Error
+                }
+            }
+        }
+        if (std::holds_alternative<Syntax::InitializerList>(initializer.getVariant()))
+        {
+            auto merge = visit(cld::get<Syntax::InitializerList>(initializer.getVariant()),
+                               *current->children[currentIndex].type, staticLifetime, nullptr);
+        }
+    }
+    return InitializerList(std::move(map));
 }

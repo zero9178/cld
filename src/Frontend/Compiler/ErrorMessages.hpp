@@ -413,6 +413,8 @@ CREATE_ERROR(TYPES_IN_CONDITIONAL_EXPRESSION_MUST_BE_OF_COMPATIBLE_TYPES,
 
 // Simple assignment
 
+CREATE_ERROR(CANNOT_ASSIGN_TO_ARRAY_TYPE_N, "Cannot assign to array type %fullType0", AnnotateExpr<0>, PointAt<1>);
+
 CREATE_ERROR(CANNOT_ASSIGN_TO_INCOMPLETE_TYPE_N, "Cannot assign to incomplete type %fullType0", AnnotateExpr<0>,
              PointAt<1>);
 
@@ -533,6 +535,11 @@ CREATE_ERROR(CANNOT_INITIALIZE_CHAR_ARRAY_WITH_WIDE_STRING_LITERAL,
 
 CREATE_ERROR(CANNOT_INITIALIZE_WCHART_ARRAY_WITH_STRING_LITERAL, "Cannot initialize wchar_t array with string literal",
              Underline<0>);
+
+CREATE_ERROR(CANNOT_INITIALIZE_ARITHMETIC_OR_POINTER_TYPE_WITH_INITIALIZER_LIST,
+             "Cannot initialize arithmetic or pointer type with initializer list", Underline<0>);
+
+CREATE_ERROR(NO_MORE_SUB_OBJECTS_TO_INITIALIZE, "No more sub objects to initialize", Underline<0>);
 
 // Enum
 
