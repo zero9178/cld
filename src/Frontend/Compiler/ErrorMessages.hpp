@@ -539,7 +539,24 @@ CREATE_ERROR(CANNOT_INITIALIZE_WCHART_ARRAY_WITH_STRING_LITERAL, "Cannot initial
 CREATE_ERROR(CANNOT_INITIALIZE_ARITHMETIC_OR_POINTER_TYPE_WITH_INITIALIZER_LIST,
              "Cannot initialize arithmetic or pointer type with initializer list", Underline<0>);
 
+CREATE_ERROR(CANNOT_INITIALIZE_FLEXIBLE_ARRAY_MEMBER, "Cannot initialize flexible array member", Underline<0>);
+
 CREATE_ERROR(NO_MORE_SUB_OBJECTS_TO_INITIALIZE, "No more sub objects to initialize", Underline<0>);
+
+CREATE_ERROR(EXPECTED_INDEX_DESIGNATOR_FOR_ARRAY_TYPE, "Expected index designator for array type", Underline<0>);
+
+CREATE_ERROR(EXPECTED_MEMBER_DESIGNATOR_FOR_STRUCT_TYPE, "Expected member designator for struct type", Underline<0>);
+
+CREATE_ERROR(EXPECTED_MEMBER_DESIGNATOR_FOR_UNION_TYPE, "Expected member designator for union type", Underline<0>);
+
+CREATE_ERROR(DESIGNATOR_INDEX_MUST_NOT_BE_NEGATIVE, "Designator index must not be negative", Annotate<0, 1>);
+
+CREATE_ERROR(DESIGNATOR_INDEX_OUT_OF_RANGE_FOR_ARRAY_TYPE_N, "Designator index out of range for array type %full0",
+             Annotate<1, 2>);
+
+CREATE_ERROR(CANNOT_INDEX_INTO_NON_ARRAY_TYPE_N,"Cannot index into non array type %full0");
+
+CREATE_ERROR(CANNOT_ACCESS_MEMBERS_OF_NON_STRUCT_OR_UNION_TYPE_N,"Cannot access members of non struct or union type %full0");
 
 // Enum
 

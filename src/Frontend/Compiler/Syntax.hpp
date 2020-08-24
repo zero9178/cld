@@ -1731,7 +1731,7 @@ public:
      * <Designator> ::= <TokenType::OpenSquareBracket> <ConstantExpression> <TokenType::CloseSquareBracket>]
      *                | <TokenType::Dot> <TokenType::Identifier>
      */
-    using Designator = std::variant<ConstantExpression, std::string_view>;
+    using Designator = std::variant<ConstantExpression, Lexer::CTokenIterator>;
 
     /**
      * <DesignatorList> ::= <Designator> { <Designator> }

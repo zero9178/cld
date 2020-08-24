@@ -2098,10 +2098,6 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::doSingleElementInit
     const Syntax::Node& node, const Type& type, Expression&& expression, bool staticLifetime, std::size_t* size)
 {
     CLD_ASSERT(!type.isUndefined() && !expression.isUndefined());
-    if (!isStringLiteralExpr(expression))
-    {
-        expression = lvalueConversion(std::move(expression));
-    }
 
     if (isArray(type))
     {
@@ -2234,6 +2230,10 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const Syntax
                 return Expression(assignmentExpression);
             }
 
+            if (!isStringLiteralExpr(value))
+            {
+                value = lvalueConversion(std::move(value));
+            }
             return doSingleElementInitialization(assignmentExpression, type, std::move(value), staticLifetime, size);
         },
         [&](const Syntax::InitializerList& initializerList) -> Initializer {
@@ -2258,25 +2258,213 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
             node, m_sourceInterface, node));
         return Expression(node);
     }
-    if (size)
+    std::size_t otherSize = 0;
+    if (!size)
     {
-        *size = 0;
+        size = &otherSize;
     }
+    *size = 0;
 
-    struct Node
+    class Node;
+
+    class INode
     {
+    public:
         const Type* CLD_NON_NULL type;
         std::size_t index;
-        const Node* CLD_NULLABLE parent;
-        std::vector<Node> children;
+        const INode* CLD_NULLABLE parent;
+
+        virtual INode& at(std::size_t index) = 0;
+
+        virtual const INode& at(std::size_t index) const = 0;
+
+        virtual std::size_t size() const = 0;
+
+        virtual void resize(std::size_t size) = 0;
+
+        virtual ~INode() = default;
+
+        virtual void push_back(Node&& node) = 0;
+    };
+
+    class Node : public INode
+    {
+        std::vector<Node> m_children;
+
+    public:
+        Node& at(std::size_t index) override
+        {
+            CLD_ASSERT(index < m_children.size());
+            return m_children[index];
+        }
+
+        const Node& at(std::size_t index) const override
+        {
+            CLD_ASSERT(index < m_children.size());
+            return m_children[index];
+        }
+
+        std::size_t size() const override
+        {
+            return m_children.size();
+        }
+
+        void resize(std::size_t size) override
+        {
+            m_children.resize(size);
+        }
+
+        void push_back(Node&& node) override
+        {
+            m_children.push_back(std::move(node));
+        }
 
         Node() = default;
         Node(const Node&) = delete;
         Node& operator=(const Node&) = delete;
         Node(Node&&) noexcept = default;
         Node& operator=(Node&&) noexcept = default;
+
+        Node(const Type& type, std::size_t index, const INode& parent)
+        {
+            this->type = &type;
+            this->index = index;
+            this->parent = &parent;
+        }
     };
-    Node top{&type, static_cast<std::size_t>(-1), nullptr, {}};
+    class Top : public INode
+    {
+        std::vector<std::unique_ptr<Node>> m_children;
+
+    public:
+        explicit Top(const Type& type)
+        {
+            this->type = &type;
+            index = static_cast<std::size_t>(-1);
+            parent = nullptr;
+        }
+
+        Node& at(std::size_t index) override
+        {
+            CLD_ASSERT(index < m_children.size());
+            return *m_children[index];
+        }
+
+        const Node& at(std::size_t index) const override
+        {
+            CLD_ASSERT(index < m_children.size());
+            return *m_children[index];
+        }
+
+        std::size_t size() const override
+        {
+            return m_children.size();
+        }
+
+        void resize(std::size_t size) override
+        {
+            auto prevSize = m_children.size();
+            m_children.resize(size);
+            for (std::size_t i = prevSize; i < m_children.size(); i++)
+            {
+                m_children[i] = std::make_unique<Node>();
+            }
+        }
+
+        void push_back(Node&& node) override
+        {
+            m_children.push_back(std::make_unique<Node>(std::move(node)));
+        }
+
+    } top(type);
+
+    auto assignChildren = YComb{[&](auto&& self, const Type& type, INode& parent) -> void {
+        if (std::holds_alternative<StructType>(type.get()))
+        {
+            auto& structType = cld::get<StructType>(type.get());
+            auto* structDef = getStructDefinition(structType.getName(), structType.getScopeOrId());
+            CLD_ASSERT(structDef);
+            auto ref = llvm::ArrayRef(structDef->getFields());
+            if (std::holds_alternative<AbstractArrayType>(ref.back().type->get()))
+            {
+                ref = ref.drop_back();
+            }
+            parent.resize(ref.size());
+            for (std::size_t i = 0; i < ref.size(); i++)
+            {
+                parent.at(i).type = ref[i].type.get();
+                parent.at(i).index = i;
+                parent.at(i).parent = &parent;
+                if (isAggregate(*ref[i].type))
+                {
+                    self(*ref[i].type, parent.at(i));
+                }
+            }
+        }
+        if (std::holds_alternative<AnonymousStructType>(type.get()))
+        {
+            auto& structType = cld::get<AnonymousStructType>(type.get());
+            auto ref = llvm::ArrayRef(structType.getFields());
+            if (std::holds_alternative<AbstractArrayType>(ref.back().type->get()))
+            {
+                ref = ref.drop_back();
+            }
+            parent.resize(ref.size());
+            for (std::size_t i = 0; i < ref.size(); i++)
+            {
+                parent.at(i).type = ref[i].type.get();
+                parent.at(i).index = i;
+                parent.at(i).parent = &parent;
+                if (isAggregate(*ref[i].type))
+                {
+                    self(*ref[i].type, parent.at(i));
+                }
+            }
+        }
+        if (std::holds_alternative<UnionType>(type.get()))
+        {
+            auto& unionType = cld::get<UnionType>(type.get());
+            auto* unionDef = getUnionDefinition(unionType.getName(), unionType.getScopeOrId());
+            CLD_ASSERT(unionDef);
+            auto& field = unionDef->getFields().front();
+            parent.resize(1);
+            parent.at(0).index = 0;
+            parent.at(0).type = field.type.get();
+            parent.at(0).parent = &parent;
+            if (isAggregate(*field.type))
+            {
+                self(*field.type, parent.at(0));
+            }
+        }
+        if (std::holds_alternative<AnonymousUnionType>(type.get()))
+        {
+            auto& unionType = cld::get<AnonymousUnionType>(type.get());
+            auto& field = unionType.getFields().front();
+            parent.resize(1);
+            parent.at(0).index = 0;
+            parent.at(0).type = field.type.get();
+            parent.at(0).parent = &parent;
+            if (isAggregate(*field.type))
+            {
+                self(*field.type, parent.at(0));
+            }
+        }
+        if (std::holds_alternative<ArrayType>(type.get()))
+        {
+            auto& arrayType = cld::get<ArrayType>(type.get());
+            parent.resize(arrayType.getSize());
+            for (std::size_t i = 0; i < arrayType.getSize(); i++)
+            {
+                parent.at(i).type = &arrayType.getType();
+                parent.at(i).index = i;
+                parent.at(i).parent = &parent;
+                if (isAggregate(arrayType.getType()))
+                {
+                    self(arrayType.getType(), parent.at(i));
+                }
+            }
+        }
+    }};
     bool isAbstractArray = false;
     if (std::holds_alternative<AbstractArrayType>(type.get()))
     {
@@ -2284,103 +2472,43 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
     }
     else
     {
-        YComb{[&](auto&& self, const Type& type, std::vector<Node>& result, const Node* parent) -> void {
-            if (std::holds_alternative<StructType>(type.get()))
-            {
-                auto& structType = cld::get<StructType>(type.get());
-                auto* structDef = getStructDefinition(structType.getName(), structType.getScopeOrId());
-                CLD_ASSERT(structDef);
-                auto ref = llvm::ArrayRef(structDef->getFields());
-                if (std::holds_alternative<AbstractArrayType>(ref.back().type->get()))
-                {
-                    ref = ref.drop_back();
-                }
-                result.resize(ref.size());
-                std::transform(ref.begin(), ref.end(), result.begin(), result.begin(),
-                               [&, i = 0uLL](const Field& field, const Node& curr) mutable -> Node {
-                                   Node node;
-                                   node.type = field.type.get();
-                                   node.index = i++;
-                                   node.parent = parent;
-                                   if (isAggregate(*field.type))
-                                   {
-                                       self(*field.type, node.children, &curr);
-                                   }
-                                   return node;
-                               });
-            }
-            if (std::holds_alternative<AnonymousStructType>(type.get()))
-            {
-                auto& structType = cld::get<AnonymousStructType>(type.get());
-                auto ref = llvm::ArrayRef(structType.getFields());
-                if (std::holds_alternative<AbstractArrayType>(ref.back().type->get()))
-                {
-                    ref = ref.drop_back();
-                }
-                result.resize(ref.size());
-                std::transform(ref.begin(), ref.end(), result.begin(), result.begin(),
-                               [&, i = 0uLL](const Field& field, const Node& curr) mutable -> Node {
-                                   Node node;
-                                   node.type = field.type.get();
-                                   node.index = i++;
-                                   node.parent = parent;
-                                   if (isAggregate(*field.type))
-                                   {
-                                       self(*field.type, node.children, &curr);
-                                   }
-                                   return node;
-                               });
-            }
-            if (std::holds_alternative<UnionType>(type.get()))
-            {
-                auto& unionType = cld::get<UnionType>(type.get());
-                auto* unionDef = getUnionDefinition(unionType.getName(), unionType.getScopeOrId());
-                CLD_ASSERT(unionDef);
-                auto& field = unionDef->getFields().front();
-                result.resize(1);
-                result.back().index = 0;
-                result.back().type = field.type.get();
-                result.back().parent = parent;
-                if (isAggregate(*field.type))
-                {
-                    self(*field.type, result.back().children, &result.back());
-                }
-            }
-            if (std::holds_alternative<AnonymousUnionType>(type.get()))
-            {
-                auto& unionType = cld::get<AnonymousUnionType>(type.get());
-                auto& field = unionType.getFields().front();
-                result.resize(1);
-                result.back().index = 0;
-                result.back().type = field.type.get();
-                result.back().parent = parent;
-                if (isAggregate(*field.type))
-                {
-                    self(*field.type, result.back().children, &result.back());
-                }
-            }
-            if (std::holds_alternative<ArrayType>(type.get()))
-            {
-                auto& arrayType = cld::get<ArrayType>(type.get());
-                result.resize(arrayType.getSize());
-                std::size_t i = 0;
-                for (auto& iter : result)
-                {
-                    iter.type = &arrayType.getType();
-                    iter.index = i++;
-                    iter.parent = parent;
-                    if (isAggregate(arrayType.getType()))
-                    {
-                        self(*iter.type, iter.children, &iter);
-                    }
-                }
-            }
-        }}(type, top.children, &top);
+        assignChildren(type, top);
     }
 
-    std::map<std::vector<std::size_t>, Expression> map;
-    const Node* CLD_NON_NULL current = &top;
+    auto finishRest = YComb{[&](auto&& self, Syntax::InitializerList::vector::const_iterator begin,
+                                Syntax::InitializerList::vector::const_iterator end) -> void {
+        for (auto iter = begin; iter != end; iter++)
+        {
+            auto& [initializer, designationList] = *iter;
+            if (!designationList.empty())
+            {
+                // We can check if they're proper integer constant expressions but that's about it
+                for (auto& desig : designationList)
+                {
+                    if (!std::holds_alternative<Syntax::ConstantExpression>(desig))
+                    {
+                        continue;
+                    }
+                    auto exp = visit(cld::get<Syntax::ConstantExpression>(desig));
+                }
+            }
+            if (std::holds_alternative<Syntax::InitializerList>(initializer.getVariant()))
+            {
+                auto& initializerList = cld::get<Syntax::InitializerList>(initializer.getVariant());
+                self(initializerList.getNonCommaExpressionsAndBlocks().begin(),
+                     initializerList.getNonCommaExpressionsAndBlocks().end());
+            }
+            else
+            {
+                visit(cld::get<Syntax::AssignmentExpression>(initializer.getVariant()));
+            }
+        }
+    }};
+
+    std::vector<InitializerList::Initialization> initializations;
+    const INode* CLD_NON_NULL current = &top;
     std::size_t currentIndex = 0;
+    std::vector<std::size_t> path;
     for (auto iter = node.getNonCommaExpressionsAndBlocks().begin();
          iter != node.getNonCommaExpressionsAndBlocks().end(); iter++)
     {
@@ -2394,7 +2522,11 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
                 {
                     if (!std::holds_alternative<Syntax::ConstantExpression>(desig))
                     {
-                        // TODO: error
+                        log(Errors::Semantics::EXPECTED_INDEX_DESIGNATOR_FOR_ARRAY_TYPE.args(
+                            *cld::get<Lexer::CTokenIterator>(desig), m_sourceInterface,
+                            *cld::get<Lexer::CTokenIterator>(desig)));
+                        finishRest(iter, node.getNonCommaExpressionsAndBlocks().end());
+                        return Expression(node);
                     }
                     auto exp = visit(cld::get<Syntax::ConstantExpression>(desig));
                     auto constant = evaluateConstantExpression(exp);
@@ -2404,58 +2536,215 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
                         {
                             log(mes);
                         }
-                        // TODO: recovery
+                        finishRest(iter + 1, node.getNonCommaExpressionsAndBlocks().end());
+                        return Expression(node);
                     }
                     if (!isInteger(exp.getType()))
                     {
-                        // TODO: Error
+                        log(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS.args(
+                            exp, m_sourceInterface, exp));
+                        finishRest(iter + 1, node.getNonCommaExpressionsAndBlocks().end());
+                        return Expression(node);
                     }
                     if (cld::get<PrimitiveType>(exp.getType().get()).isSigned() && constant->toInt() < 0)
                     {
-                        // TODO: Error
+                        log(Errors::Semantics::DESIGNATOR_INDEX_MUST_NOT_BE_NEGATIVE.args(exp, m_sourceInterface, exp,
+                                                                                          constant->toInt()));
+                        finishRest(iter + 1, node.getNonCommaExpressionsAndBlocks().end());
+                        return Expression(node);
                     }
                     if (!(current == &top && isAbstractArray)
                         && constant->toUInt() >= cld::get<ArrayType>(current->type->get()).getSize())
                     {
-                        // TODO: Error
+                        log(Errors::Semantics::DESIGNATOR_INDEX_OUT_OF_RANGE_FOR_ARRAY_TYPE_N.args(
+                            exp, m_sourceInterface, *current->type, exp, constant->toUInt()));
+                        finishRest(iter + 1, node.getNonCommaExpressionsAndBlocks().end());
+                        return Expression(node);
                     }
                     else if (current == &top && isAbstractArray)
                     {
                         *size = std::max(*size, constant->toUInt());
+                        auto prevSize = top.size();
+                        for (std::size_t i = prevSize; i < *size; i++)
+                        {
+                            top.push_back({cld::get<AbstractArrayType>(top.type->get()).getType(), i, top});
+                            assignChildren(*top.at(i).type, top.at(i));
+                        }
                     }
-                    current = &current->children[constant->toUInt()];
+                    current = &current->at(constant->toUInt());
                 }
                 else if (isRecord(*current->type))
                 {
-                    if (!std::holds_alternative<std::string_view>(desig))
+                    if (!std::holds_alternative<Lexer::CTokenIterator>(desig))
                     {
-                        // TODO: Error
+                        if (std::holds_alternative<StructType>(current->type->get())
+                            || std::holds_alternative<AnonymousStructType>(current->type->get()))
+                        {
+                            log(Errors::Semantics::EXPECTED_MEMBER_DESIGNATOR_FOR_STRUCT_TYPE.args(
+                                desig, m_sourceInterface, desig));
+                        }
+                        else
+                        {
+                            log(Errors::Semantics::EXPECTED_MEMBER_DESIGNATOR_FOR_UNION_TYPE.args(
+                                desig, m_sourceInterface, desig));
+                        }
+                        finishRest(iter, node.getNonCommaExpressionsAndBlocks().end());
+                        return Expression(node);
                     }
+                    const auto* token = cld::get<Lexer::CTokenIterator>(desig);
                     auto fields = getFields(*current->type);
-                    const auto* result = std::find_if(
-                        fields.begin(), fields.end(),
-                        [name = cld::get<std::string_view>(desig)](const Field& field) { return field.name == name; });
+                    const auto* result =
+                        std::find_if(fields.begin(), fields.end(),
+                                     [name = token->getText()](const Field& field) { return field.name == name; });
                     if (result == fields.end())
                     {
-                        // TODO: Error
+                        cld::match(
+                            current->type->get(),
+                            [&](const StructType& structType) {
+                                log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_STRUCT_N.args(
+                                    *token, m_sourceInterface, *token, structType.getName()));
+                            },
+                            [&](const AnonymousStructType&) {
+                                log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_ANONYMOUS_STRUCT.args(
+                                    *token, m_sourceInterface, *token));
+                            },
+                            [&](const UnionType& unionType) {
+                                log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_UNION_N.args(
+                                    *token, m_sourceInterface, *token, unionType.getName()));
+                            },
+                            [&](const AnonymousUnionType&) {
+                                log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_ANONYMOUS_UNION.args(
+                                    *token, m_sourceInterface, *token));
+                            },
+                            [&](const auto&) { CLD_UNREACHABLE; });
+                        finishRest(iter + 1, node.getNonCommaExpressionsAndBlocks().end());
+                        return Expression(node);
                     }
                     if (std::holds_alternative<AbstractArrayType>(result->type->get()))
                     {
-                        // TODO: Error
+                        log(Errors::Semantics::CANNOT_INITIALIZE_FLEXIBLE_ARRAY_MEMBER.args(*token, m_sourceInterface,
+                                                                                            *token));
+                        finishRest(iter, node.getNonCommaExpressionsAndBlocks().end());
+                        return Expression(node);
                     }
-                    current = &current->children[result - fields.begin()];
+                    current = &current->at(result - fields.begin());
                 }
-                else
+                else if (!current->type->isUndefined())
                 {
-                    // TODO: Error
+                    if (std::holds_alternative<Syntax::ConstantExpression>(desig))
+                    {
+                        log(Errors::Semantics::CANNOT_INDEX_INTO_NON_ARRAY_TYPE_N.args(desig, m_sourceInterface,
+                                                                                       *current->type));
+                    }
+                    else
+                    {
+                        log(Errors::Semantics::CANNOT_ACCESS_MEMBERS_OF_NON_STRUCT_OR_UNION_TYPE_N.args(
+                            desig, m_sourceInterface, *current->type));
+                    }
+                    finishRest(iter, node.getNonCommaExpressionsAndBlocks().end());
+                    return Expression(node);
                 }
+            }
+        }
+        if (!current)
+        {
+            log(Errors::Semantics::NO_MORE_SUB_OBJECTS_TO_INITIALIZE.args(initializer, m_sourceInterface, initializer));
+            finishRest(iter, node.getNonCommaExpressionsAndBlocks().end());
+            return Expression(node);
+        }
+        path.clear();
+        {
+            auto index = currentIndex;
+            const auto* curr = current;
+            while (true)
+            {
+                path.push_back(index);
+                if (!curr->parent)
+                {
+                    break;
+                }
+                index = curr->index;
+                curr = curr->parent;
             }
         }
         if (std::holds_alternative<Syntax::InitializerList>(initializer.getVariant()))
         {
+            if (current->at(currentIndex).type->isUndefined())
+            {
+                finishRest(iter, node.getNonCommaExpressionsAndBlocks().end());
+                return Expression(node);
+            }
             auto merge = visit(cld::get<Syntax::InitializerList>(initializer.getVariant()),
-                               *current->children[currentIndex].type, staticLifetime, nullptr);
+                               *current->at(currentIndex).type, staticLifetime, nullptr);
+            if (std::holds_alternative<InitializerList>(merge))
+            {
+                auto& initializerList = cld::get<InitializerList>(merge);
+                initializations.reserve(initializations.size() + initializerList.getFields().size());
+                std::transform(
+                    std::move_iterator(std::move(initializerList).getFields().begin()),
+                    std::move_iterator(std::move(initializerList).getFields().end()),
+                    std::back_inserter(initializations),
+                    [&](InitializerList::Initialization&& initialization) -> InitializerList::Initialization&& {
+                        initialization.path.insert(initialization.path.begin(), path.rbegin(), path.rend());
+                        return std::move(initialization);
+                    });
+            }
+            else
+            {
+                auto& expr = cld::get<Expression>(merge);
+                initializations.push_back({{path.rbegin(), path.rend()}, std::move(expr)});
+            }
+        }
+        else
+        {
+            auto expression = visit(cld::get<Syntax::AssignmentExpression>(initializer.getVariant()));
+            if (expression.getType().isUndefined())
+            {
+                finishRest(iter + 1, node.getNonCommaExpressionsAndBlocks().end());
+            }
+            if (!isStringLiteralExpr(expression))
+            {
+                expression = lvalueConversion(std::move(expression));
+            }
+            else if (currentIndex == 0 && &top == current && isArray(*top.type)
+                     && node.getNonCommaExpressionsAndBlocks().size() == 1 && designationList.empty())
+            {
+                // Handles the case of a string literal being used to initialize the top level object with optional
+                // braces surrounding it
+                return doSingleElementInitialization(initializer, type, std::move(expression), staticLifetime, size);
+            }
+            while (isAggregate(*current->at(currentIndex).type))
+            {
+                if (typesAreCompatible(removeQualifiers(expression.getType()), *current->at(currentIndex).type)
+                    || (isArray(*current->at(currentIndex).type) && isStringLiteralExpr(expression)))
+                {
+                    break;
+                }
+                current = &current->at(currentIndex);
+                currentIndex = 0;
+                path.insert(path.begin(), 0);
+            }
+            if (current->at(currentIndex).type->isUndefined())
+            {
+                finishRest(iter + 1, node.getNonCommaExpressionsAndBlocks().end());
+                return Expression(node);
+            }
+            expression = doSingleElementInitialization(initializer, *current->at(currentIndex).type,
+                                                       std::move(expression), staticLifetime, nullptr);
+            initializations.push_back({{path.rbegin(), path.rend()}, std::move(expression)});
+        }
+        currentIndex++;
+        while (current && currentIndex >= current->size())
+        {
+            currentIndex = current->index + 1;
+            current = current->parent;
+            if (current == &top && isAbstractArray && currentIndex >= top.size())
+            {
+                top.push_back({cld::get<AbstractArrayType>(top.type->get()).getType(), top.size(), top});
+                *size = currentIndex;
+                assignChildren(*top.at(currentIndex).type, top.at(currentIndex));
+            }
         }
     }
-    return InitializerList(std::move(map));
+    return InitializerList(std::move(initializations));
 }

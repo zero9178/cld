@@ -322,8 +322,7 @@ TEST_CASE("Semantics declarations", "[semantics]")
 
 TEST_CASE("Semantics primitive declarations", "[semantics]")
 {
-    auto isConst = GENERATE(false, true);
-    auto isVolatile = GENERATE(false, true);
+    auto [isConst,isVolatile] = GENERATE(table<bool,bool>({std::tuple{false,true},std::tuple{false,true}}));
     SECTION("void")
     {
         std::string text = "void ";
@@ -3446,38 +3445,6 @@ TEST_CASE("Semantics initializer list", "[semantics]")
 {
     SECTION("Initializing struct")
     {
-        SEMA_PRODUCES("\n"
-                      "struct A\n"
-                      "{\n"
-                      "    char s[5];\n"
-                      "    int r;\n"
-                      "};\n"
-                      "\n"
-                      "struct B\n"
-                      "{\n"
-                      "    struct A a;\n"
-                      "    int r;\n"
-                      "};\n"
-                      "\n"
-                      "struct C\n"
-                      "{\n"
-                      "    struct B b;\n"
-                      "    int r;\n"
-                      "};\n"
-                      "\n"
-                      "struct A getA();\n"
-                      "\n"
-                      "struct B getB();\n"
-                      "\n"
-                      "struct C getC();\n"
-                      "\n"
-                      "void foo(void)\n"
-                      "{\n"
-                      "    struct C c1 = {{{{\"d\"}}}};\n"
-                      "    struct C c2 = {{getA()}};\n"
-                      "    struct C c3 = {getB()};\n"
-                      "}\n",
-                      ProducesNothing());
         auto [translationUnit, errors] = generateSemantics("typedef struct Point {\n"
                                                            "float x;\n"
                                                            "float y;\n"
@@ -3490,13 +3457,6 @@ TEST_CASE("Semantics initializer list", "[semantics]")
         auto& decl = cld::get<std::unique_ptr<Declaration>>(global);
         REQUIRE(decl->getInitializer());
         REQUIRE(std::holds_alternative<InitializerList>(*decl->getInitializer()));
-        auto& initializer = cld::get<InitializerList>(*decl->getInitializer());
-        //        REQUIRE(initializer.getFields().count(0) > 0);
-        //        REQUIRE(initializer.getFields().count(1) > 0);
-        //        REQUIRE(std::holds_alternative<Expression>(initializer.getFields().at(0)));
-        //        REQUIRE(std::holds_alternative<Expression>(initializer.getFields().at(1)));
-        //        CHECK(std::holds_alternative<Constant>(cld::get<Expression>(initializer.getFields().at(0)).get()));
-        //        CHECK(std::holds_alternative<Constant>(cld::get<Expression>(initializer.getFields().at(1)).get()));
         SEMA_PRODUCES("typedef struct Point {\n"
                       "float x;\n"
                       "float y;\n"
@@ -3537,6 +3497,39 @@ TEST_CASE("Semantics initializer list", "[semantics]")
                       "\n"
                       "Line line = {5.0,5.0,5.0,5.0};\n",
                       ProducesNoErrors());
+        SEMA_PRODUCES("\n"
+                      "struct A\n"
+                      "{\n"
+                      "    char s[5];\n"
+                      "    int r;\n"
+                      "};\n"
+                      "\n"
+                      "struct B\n"
+                      "{\n"
+                      "    struct A a;\n"
+                      "    int r;\n"
+                      "};\n"
+                      "\n"
+                      "struct C\n"
+                      "{\n"
+                      "    struct B b;\n"
+                      "    int r;\n"
+                      "};\n"
+                      "\n"
+                      "struct A getA();\n"
+                      "\n"
+                      "struct B getB();\n"
+                      "\n"
+                      "struct C getC();\n"
+                      "\n"
+                      "void foo(void)\n"
+                      "{\n"
+                      "    struct C c = {\"d\"};\n"
+                      "    struct C c1 = {{{{\"d\"}}}};\n"
+                      "    struct C c2 = {{getA()}};\n"
+                      "    struct C c3 = {getB()};\n"
+                      "}\n",
+                      ProducesNothing());
     }
     SECTION("Single brace")
     {

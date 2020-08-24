@@ -1739,7 +1739,7 @@ std::optional<cld::Syntax::InitializerList>
             expect(Lexer::TokenType::Comma, begin, end, context);
         }
 
-        std::vector<std::variant<ConstantExpression, std::string_view>> designation;
+        Syntax::InitializerList::DesignatorList designation;
         bool hasDesignation = false;
         while (begin < end
                && (begin->getTokenType() == Lexer::TokenType::OpenSquareBracket
@@ -1770,16 +1770,15 @@ std::optional<cld::Syntax::InitializerList>
             }
             else
             {
-                begin++;
-                std::string_view name;
-                if (!expectIdentifier(begin, end, context, name))
+                const auto* token = begin++;
+                if (!expect(Lexer::TokenType::Identifier, begin, end, context))
                 {
                     context.skipUntil(begin, end,
                                       Context::fromTokenTypes(Lexer::TokenType::Assignment,
                                                               Lexer::TokenType::OpenSquareBracket,
                                                               Lexer::TokenType::Dot));
                 }
-                designation.emplace_back(std::move(name));
+                designation.emplace_back(token);
             }
         }
         if (hasDesignation)

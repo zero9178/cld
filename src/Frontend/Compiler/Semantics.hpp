@@ -1302,14 +1302,27 @@ using Initializer = std::variant<InitializerList, Expression>;
 
 class InitializerList final
 {
-    std::map<std::vector<std::size_t>, Expression> m_fields;
+public:
+    struct Initialization
+    {
+        std::vector<std::size_t> path;
+        Expression expression;
+    };
+
+private:
+    std::vector<Initialization> m_fields;
 
 public:
-    explicit InitializerList(std::map<std::vector<std::size_t>, Expression> fields) : m_fields(std::move(fields)) {}
+    explicit InitializerList(std::vector<Initialization> fields) : m_fields(std::move(fields)) {}
 
-    [[nodiscard]] const std::map<std::vector<std::size_t>, Expression>& getFields() const
+    [[nodiscard]] const std::vector<Initialization>& getFields() const &
     {
         return m_fields;
+    }
+
+    [[nodiscard]] std::vector<Initialization>&& getFields() &&
+    {
+        return std::move(m_fields);
     }
 };
 
