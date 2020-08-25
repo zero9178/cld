@@ -329,16 +329,19 @@ cld::Semantics::Type cld::Semantics::PrimitiveType::createVoid(bool isConst, boo
 }
 
 cld::Semantics::ValArrayType::ValArrayType(bool isRestricted, bool isStatic,
-                                           std::shared_ptr<cld::Semantics::Type>&& type)
-    : m_type(std::move(type)), m_restricted(isRestricted), m_static(isStatic)
+                                           std::shared_ptr<cld::Semantics::Type>&& type,
+                                           std::shared_ptr<const Expression>&& expression)
+    : m_type(std::move(type)), m_restricted(isRestricted), m_static(isStatic), m_expression(std::move(expression))
 {
 }
 
 cld::Semantics::Type cld::Semantics::ValArrayType::create(bool isConst, bool isVolatile, bool isRestricted,
-                                                          bool isStatic, cld::Semantics::Type type)
+                                                          bool isStatic, cld::Semantics::Type type,
+                                                          std::shared_ptr<const Expression> expression)
 {
-    return cld::Semantics::Type(isConst, isVolatile,
-                                ValArrayType(isRestricted, isStatic, std::make_shared<Type>(std::move(type))));
+    return cld::Semantics::Type(
+        isConst, isVolatile,
+        ValArrayType(isRestricted, isStatic, std::make_shared<Type>(std::move(type)), std::move(expression)));
 }
 
 bool cld::Semantics::ValArrayType::operator==(const cld::Semantics::ValArrayType& rhs) const

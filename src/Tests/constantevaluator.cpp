@@ -421,84 +421,11 @@ TEST_CASE("Const eval unary expression", "[constEval]")
     }
     SECTION("Sizeof")
     {
-        SECTION("Type")
-        {
-            SECTION("Successful")
-            {
-                struct Test
-                {
-                    int f;
-                    float r[5];
-                    char c[24];
-                };
-                union TestU
-                {
-                    int f;
-                    float r[5];
-                    char c[24];
-                };
-#define SIZEPAIR(type) std::pair{#type, sizeof(type)}
-                std::array sizes = {SIZEPAIR(char),
-                                    SIZEPAIR(unsigned char),
-                                    SIZEPAIR(short),
-                                    SIZEPAIR(unsigned short),
-                                    SIZEPAIR(int),
-                                    SIZEPAIR(long),
-                                    SIZEPAIR(unsigned int),
-                                    SIZEPAIR(unsigned long),
-                                    SIZEPAIR(long long),
-                                    SIZEPAIR(unsigned long long),
-                                    SIZEPAIR(float),
-                                    SIZEPAIR(double),
-                                    SIZEPAIR(long double),
-                                    SIZEPAIR(int[5]),
-                                    std::pair{"struct Test"
-                                              "{"
-                                              "int f;"
-                                              "float r[5];"
-                                              "char c[24];"
-                                              "}",
-                                              sizeof(Test)},
-                                    std::pair{"struct"
-                                              "{"
-                                              "int f;"
-                                              "float r[5];"
-                                              "char c[24];"
-                                              "}",
-                                              sizeof(Test)},
-                                    std::pair{"union Test"
-                                              "{"
-                                              "int f;"
-                                              "float r[5];"
-                                              "char c[24];"
-                                              "}",
-                                              sizeof(TestU)},
-                                    std::pair{"union"
-                                              "{"
-                                              "int f;"
-                                              "float r[5];"
-                                              "char c[24];"
-                                              "}",
-                                              sizeof(TestU)},
-                                    SIZEPAIR(void*),
-                                    SIZEPAIR(struct u*)};
-#undef SIZEPAIR
-                for (auto& [name, size] : sizes)
-                {
-                    DYNAMIC_SECTION(name)
-                    {
-                        auto [value, error] = evaluateConstantExpression("sizeof(" + std::string(name) + ")");
-                        REQUIRE_THAT(error, ProducesNoErrors());
-                        REQUIRE(!value.isUndefined());
-                        REQUIRE(std::holds_alternative<llvm::APSInt>(value.getValue()));
-                        auto result = std::get<llvm::APSInt>(value.getValue());
-                        CHECK(result == size);
-                        CHECK(result.isUnsigned());
-                        CHECK(result.getBitWidth() == sizeof(unsigned long long) * 8);
-                    }
-                }
-            }
-        }
+        INT_EVAL_PROG_PRODUCES("void foo(int i) {\n"
+                               "int r[i * 2];\n"
+                               "sizeof r;\n"
+                               "}",
+                               ProducesError(SIZEOF_VAL_MODIFIED_TYPE_CANNOT_BE_DETERMINED_IN_CONSTANT_EXPRESSION));
     }
 }
 

@@ -248,16 +248,21 @@ public:
     [[nodiscard]] bool operator!=(const AbstractArrayType& rhs) const;
 };
 
+class Expression;
+
 class ValArrayType final
 {
     std::shared_ptr<const Type> m_type;
     bool m_restricted : 1;
     bool m_static : 1;
+    std::shared_ptr<const Expression> m_expression;
 
-    ValArrayType(bool isRestricted, bool isStatic, std::shared_ptr<cld::Semantics::Type>&& type);
+    ValArrayType(bool isRestricted, bool isStatic, std::shared_ptr<cld::Semantics::Type>&& type,
+                 std::shared_ptr<const Expression>&& expression);
 
 public:
-    [[nodiscard]] static Type create(bool isConst, bool isVolatile, bool isRestricted, bool isStatic, Type type);
+    [[nodiscard]] static Type create(bool isConst, bool isVolatile, bool isRestricted, bool isStatic, Type type,
+                                     std::shared_ptr<const Expression> expression);
 
     [[nodiscard]] const Type& getType() const
     {
@@ -272,6 +277,12 @@ public:
     [[nodiscard]] bool isStatic() const
     {
         return m_static;
+    }
+
+    // NULLABLE
+    [[nodiscard]] const std::shared_ptr<const Expression>& getExpression() const
+    {
+        return m_expression;
     }
 
     [[nodiscard]] std::size_t getSizeOf(const SemanticAnalysis&) const
@@ -651,8 +662,6 @@ public:
 
     [[nodiscard]] std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
 };
-
-class Expression;
 
 class Constant final
 {
@@ -1432,7 +1441,7 @@ class IfStatement final
 class CompoundStatement final
 {
 public:
-    using Variant = std::variant<Statement, std::unique_ptr<Declaration>>;
+    using Variant = std::variant<Statement, std::unique_ptr<Declaration>, std::shared_ptr<const Expression>>;
 
 private:
     std::vector<Variant> m_compoundItems;

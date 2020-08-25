@@ -929,10 +929,11 @@ cld::Lexer::CTokenIterator cld::Syntax::DirectDeclaratorStatic::getStaticLoc() c
 
 cld::Syntax::DirectDeclaratorAsterisk::DirectDeclaratorAsterisk(
     Lexer::CTokenIterator begin, Lexer::CTokenIterator end, cld::Syntax::DirectDeclarator&& directDeclarator,
-    std::vector<cld::Syntax::TypeQualifier>&& typeQualifiers)
+    std::vector<cld::Syntax::TypeQualifier>&& typeQualifiers, Lexer::CTokenIterator asterisk)
     : Node(begin, end),
       m_directDeclarator(std::make_unique<DirectDeclarator>(std::move(directDeclarator))),
-      m_typeQualifiers(std::move(typeQualifiers))
+      m_typeQualifiers(std::move(typeQualifiers)),
+      m_asterisk(asterisk)
 {
 }
 
@@ -944,6 +945,11 @@ const cld::Syntax::DirectDeclarator& cld::Syntax::DirectDeclaratorAsterisk::getD
 const std::vector<cld::Syntax::TypeQualifier>& cld::Syntax::DirectDeclaratorAsterisk::getTypeQualifiers() const
 {
     return m_typeQualifiers;
+}
+
+cld::Lexer::CTokenIterator cld::Syntax::DirectDeclaratorAsterisk::getAsterisk() const
+{
+    return m_asterisk;
 }
 
 cld::Syntax::DirectDeclaratorParenthesesParameters::DirectDeclaratorParenthesesParameters(
@@ -1223,16 +1229,22 @@ const cld::Syntax::AbstractDeclarator& cld::Syntax::DirectAbstractDeclaratorPare
 
 cld::Syntax::DirectAbstractDeclaratorAsterisk::DirectAbstractDeclaratorAsterisk(
     Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-    std::unique_ptr<DirectAbstractDeclarator>&& directAbstractDeclarator)
-    : Node(begin, end), m_directAbstractDeclarator(std::move(directAbstractDeclarator))
+    std::unique_ptr<DirectAbstractDeclarator>&& directAbstractDeclarator, Lexer::CTokenIterator asterisk)
+    : Node(begin, end), m_directAbstractDeclarator(std::move(directAbstractDeclarator)), m_asterisk(asterisk)
 {
 }
 
-const std::unique_ptr<cld::Syntax::DirectAbstractDeclarator>&
+const cld::Syntax::DirectAbstractDeclarator*
     cld::Syntax::DirectAbstractDeclaratorAsterisk::getDirectAbstractDeclarator() const
 {
-    return m_directAbstractDeclarator;
+    return m_directAbstractDeclarator.get();
 }
+
+cld::Lexer::CTokenIterator cld::Syntax::DirectAbstractDeclaratorAsterisk::getAsterisk() const
+{
+    return m_asterisk;
+}
+
 cld::Syntax::AssignmentExpression::AssignmentExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                                         cld::Syntax::ConditionalExpression&& conditionalExpression,
                                                         std::vector<Operand>&& optionalConditionalExpressions)

@@ -1341,12 +1341,16 @@ public:
 class DirectAbstractDeclaratorAsterisk final : public Node
 {
     std::unique_ptr<DirectAbstractDeclarator> m_directAbstractDeclarator;
+    Lexer::CTokenIterator m_asterisk;
 
 public:
     DirectAbstractDeclaratorAsterisk(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                                     std::unique_ptr<DirectAbstractDeclarator>&& directAbstractDeclarator);
+                                     std::unique_ptr<DirectAbstractDeclarator>&& directAbstractDeclarator,
+                                     Lexer::CTokenIterator asterisk);
 
-    [[nodiscard]] const std::unique_ptr<DirectAbstractDeclarator>& getDirectAbstractDeclarator() const;
+    [[nodiscard]] const DirectAbstractDeclarator* getDirectAbstractDeclarator() const;
+
+    [[nodiscard]] Lexer::CTokenIterator getAsterisk() const;
 };
 
 /**
@@ -1516,14 +1520,18 @@ class DirectDeclaratorAsterisk final : public Node
 {
     std::unique_ptr<DirectDeclarator> m_directDeclarator;
     std::vector<TypeQualifier> m_typeQualifiers;
+    Lexer::CTokenIterator m_asterisk;
 
 public:
     DirectDeclaratorAsterisk(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                             DirectDeclarator&& directDeclarator, std::vector<TypeQualifier>&& typeQualifiers);
+                             DirectDeclarator&& directDeclarator, std::vector<TypeQualifier>&& typeQualifiers,
+                             Lexer::CTokenIterator asterisk);
 
     [[nodiscard]] const DirectDeclarator& getDirectDeclarator() const;
 
     [[nodiscard]] const std::vector<TypeQualifier>& getTypeQualifiers() const;
+
+    [[nodiscard]] Lexer::CTokenIterator getAsterisk() const;
 };
 
 /**

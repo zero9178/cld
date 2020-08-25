@@ -302,16 +302,55 @@ TEST_CASE("Semantics declarations", "[semantics]")
             CHECK(decl->getType()
                   == cld::Semantics::PrimitiveType::createLongDouble(true, true, cld::LanguageOptions::native()));
         }
+        SECTION("Variable length array")
+        {
+            auto [translationUnit, errors] = generateSemantics("void foo(int n) {\n"
+                                                               "typedef int r[2 * n][n++];\n"
+                                                               "r f;\n"
+                                                               "}");
+            REQUIRE_THAT(errors, ProducesNothing());
+            REQUIRE(translationUnit.getGlobals().size() == 1);
+            auto& global = translationUnit.getGlobals()[0];
+            REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(global));
+            auto& def = *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(global);
+            REQUIRE(def.getCompoundStatement().getCompoundItems().size() == 3);
+            auto& first = def.getCompoundStatement().getCompoundItems()[0];
+            REQUIRE(std::holds_alternative<std::shared_ptr<const cld::Semantics::Expression>>(first));
+            auto& firstExpr = *cld::get<std::shared_ptr<const cld::Semantics::Expression>>(first);
+            CHECK(std::holds_alternative<cld::Semantics::BinaryOperator>(firstExpr.get()));
+            auto& second = def.getCompoundStatement().getCompoundItems()[1];
+            REQUIRE(std::holds_alternative<std::shared_ptr<const cld::Semantics::Expression>>(second));
+            auto& secondExpr = *cld::get<std::shared_ptr<const cld::Semantics::Expression>>(second);
+            CHECK(std::holds_alternative<cld::Semantics::UnaryOperator>(secondExpr.get()));
+            auto& third = def.getCompoundStatement().getCompoundItems()[2];
+            REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(third));
+            auto& thirdDecl = *cld::get<std::unique_ptr<cld::Semantics::Declaration>>(third);
+            CHECK(std::holds_alternative<cld::Semantics::ValArrayType>(thirdDecl.getType().get()));
+            SEMA_PRODUCES("extern int i;\n"
+                          "typedef int n[i];",
+                          ProducesError(VARIABLE_LENGTH_ARRAY_TYPEDEF_NOT_ALLOWED_AT_FILE_SCOPE));
+            SEMA_PRODUCES("extern int i;\n"
+                          "void foo(void) {\n"
+                          "typedef int n[i];\n"
+                          "}",
+                          ProducesNoErrors());
+            SEMA_PRODUCES("extern int i;\n"
+                          "void foo(void) {\n"
+                          "int n[i] = {5.3034};\n"
+                          "}",
+                          ProducesError(CANNOT_INITIALIZE_VARIABLE_LENGTH_ARRAY_TYPE));
+        }
         SEMA_PRODUCES("typedef int i;\n"
                       "typedef float i;",
                       ProducesError(REDEFINITION_OF_SYMBOL_N, "'i'") && ProducesNote(PREVIOUSLY_DECLARED_HERE));
         SEMA_PRODUCES("typedef int i;\n"
                       "typedef int i;",
-                      ProducesNothing());
+                      ProducesNoErrors());
         SEMA_PRODUCES("typedef int i;\n"
                       "i float f;",
                       ProducesError(EXPECTED_NO_FURTHER_TYPE_SPECIFIERS_AFTER_TYPENAME));
         SEMA_PRODUCES("typedef void V;", ProducesNoErrors());
+        SEMA_PRODUCES("typedef struct Point { float x,y; };", ProducesError(TYPEDEF_DECLARATION_DOES_NOT_HAVE_A_NAME));
         SEMA_PRODUCES("typedef struct Point Point;\n"
                       "\n"
                       "struct Point {\n"
@@ -594,8 +633,21 @@ TEST_CASE("Semantics array declarations", "[semantics]")
         SEMA_PRODUCES("int n = 1;\n"
                       "int f[n][5];",
                       ProducesError(VARIABLE_LENGTH_ARRAY_NOT_ALLOWED_AT_FILE_SCOPE));
-        SEMA_PRODUCES("int f[*];", ProducesError(VARIABLE_LENGTH_ARRAY_NOT_ALLOWED_AT_FILE_SCOPE));
-        SEMA_PRODUCES("int f[*][5];", ProducesError(VARIABLE_LENGTH_ARRAY_NOT_ALLOWED_AT_FILE_SCOPE));
+        SEMA_PRODUCES("int f[*];", ProducesError(VARIABLE_LENGTH_ARRAY_NOT_ALLOWED_AT_FILE_SCOPE)
+                                       && ProducesError(STAR_IN_ARRAY_DECLARATOR_ONLY_ALLOWED_IN_FUNCTION_PROTOTYPES));
+        SEMA_PRODUCES("int f[*][5];",
+                      ProducesError(VARIABLE_LENGTH_ARRAY_NOT_ALLOWED_AT_FILE_SCOPE)
+                          && ProducesError(STAR_IN_ARRAY_DECLARATOR_ONLY_ALLOWED_IN_FUNCTION_PROTOTYPES));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      "int f[*];\n"
+                      "}",
+                      !ProducesError(VARIABLE_LENGTH_ARRAY_NOT_ALLOWED_AT_FILE_SCOPE)
+                          && ProducesError(STAR_IN_ARRAY_DECLARATOR_ONLY_ALLOWED_IN_FUNCTION_PROTOTYPES));
+        SEMA_PRODUCES("int foo(void) {\n"
+                      "int f[*][5];\n"
+                      "}",
+                      !ProducesError(VARIABLE_LENGTH_ARRAY_NOT_ALLOWED_AT_FILE_SCOPE)
+                          && ProducesError(STAR_IN_ARRAY_DECLARATOR_ONLY_ALLOWED_IN_FUNCTION_PROTOTYPES));
         SEMA_PRODUCES("int n = 1;\n"
                       "int f[static n];",
                       ProducesError(ARRAY_OUTSIDE_OF_FUNCTION_PARAMETER_MAY_NOT_BE_STATIC));
@@ -3704,6 +3756,10 @@ TEST_CASE("Semantics compound literal", "[semantics]")
                   " (int(void)){5};\n"
                   "}",
                   ProducesError(CANNOT_INITIALIZE_FUNCTION_TYPE));
+    SEMA_PRODUCES("void foo(int i) {\n"
+                  " (int[i]){5};\n"
+                  "}",
+                  ProducesError(CANNOT_INITIALIZE_VARIABLE_LENGTH_ARRAY_TYPE));
     SEMA_PRODUCES("typedef struct Point {\n"
                   " float x;\n"
                   " float y;\n"

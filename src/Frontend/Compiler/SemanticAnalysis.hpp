@@ -68,6 +68,14 @@ class SemanticAnalysis final
     std::int64_t m_currentFunctionScope = -1;
     std::vector<FunctionScope> m_functionScopes;
     bool m_inStaticInitializer = false;
+    bool m_inFunctionPrototype = false;
+
+    [[nodiscard]] auto changeFunctionPrototypeScope(bool newValue)
+    {
+        auto result = llvm::make_scope_exit([this, prev = m_inFunctionPrototype] { m_inFunctionPrototype = prev; });
+        m_inFunctionPrototype = newValue;
+        return result;
+    }
 
     constexpr static std::uint64_t IS_SCOPE = 1ull << 63;
     constexpr static std::uint64_t SCOPE_OR_ID_MASK = ~(1ull << 63);
@@ -320,7 +328,9 @@ public:
 
     std::vector<TranslationUnit::Variant> visit(const Syntax::FunctionDefinition& node);
 
-    std::vector<TranslationUnit::Variant> visit(const Syntax::Declaration& node);
+    using DeclRetVariant = std::variant<std::unique_ptr<Declaration>, std::shared_ptr<const Expression>>;
+
+    std::vector<DeclRetVariant> visit(const Syntax::Declaration& node);
 
     CompoundStatement visit(const Syntax::CompoundStatement& node, bool pushScope = true);
 

@@ -990,7 +990,13 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         visit(node.getInitializerList(), Type{}, !inFunction() || m_inStaticInitializer);
         return Expression(node);
     }
-    // TODO: VLA
+    if (std::holds_alternative<ValArrayType>(type.get()))
+    {
+        log(Errors::Semantics::CANNOT_INITIALIZE_VARIABLE_LENGTH_ARRAY_TYPE.args(node.getTypeName(), m_sourceInterface,
+                                                                                 node.getTypeName(), type));
+        visit(node.getInitializerList(), Type{}, !inFunction() || m_inStaticInitializer);
+        return Expression(node);
+    }
     Initializer value{Expression(node)};
     if (std::holds_alternative<AbstractArrayType>(type.get()))
     {
@@ -1152,10 +1158,21 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
             {
                 log(Errors::Semantics::BITFIELD_NOT_ALLOWED_IN_SIZE_OF.args(exp, m_sourceInterface, exp));
             }
-            auto size = exp.getType().getSizeOf(*this);
-            return Expression(
-                PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()), ValueCategory::Rvalue,
-                SizeofOperator(node.getSizeOfToken(), size, std::make_unique<Expression>(std::move(exp))));
+            if (!isVariablyModified(type))
+            {
+                auto size = exp.getType().getSizeOf(*this);
+                return Expression(
+                    PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()),
+                    ValueCategory::Rvalue,
+                    SizeofOperator(node.getSizeOfToken(), size, std::make_unique<Expression>(std::move(exp))));
+            }
+            else
+            {
+                return Expression(
+                    PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()),
+                    ValueCategory::Rvalue,
+                    SizeofOperator(node.getSizeOfToken(), {}, std::make_unique<Expression>(std::move(exp))));
+            }
         },
         [&](const std::unique_ptr<Syntax::TypeName>& typeName) -> Expression {
             auto type = declaratorsToType(typeName->getSpecifierQualifiers(), typeName->getAbstractDeclarator());
@@ -1175,12 +1192,23 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                                                                                  *typeName, type));
                 return Expression(node);
             }
-            auto size = type.getSizeOf(*this);
-            return Expression(PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()),
-                              ValueCategory::Rvalue,
-                              SizeofOperator(node.getSizeOfToken(), size,
-                                             SizeofOperator::TypeVariant{node.getSizeOfToken() + 1, std::move(type),
-                                                                         node.end() - 1}));
+            if (!isVariablyModified(type))
+            {
+                auto size = type.getSizeOf(*this);
+                return Expression(PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()),
+                                  ValueCategory::Rvalue,
+                                  SizeofOperator(node.getSizeOfToken(), size,
+                                                 SizeofOperator::TypeVariant{node.getSizeOfToken() + 1, std::move(type),
+                                                                             node.end() - 1}));
+            }
+            else
+            {
+                return Expression(PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()),
+                                  ValueCategory::Rvalue,
+                                  SizeofOperator(node.getSizeOfToken(), {},
+                                                 SizeofOperator::TypeVariant{node.getSizeOfToken() + 1, std::move(type),
+                                                                             node.end() - 1}));
+            }
         });
 }
 

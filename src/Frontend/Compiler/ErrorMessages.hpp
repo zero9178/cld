@@ -151,6 +151,8 @@ CREATE_ERROR(DECLARING_VARIABLES_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR,
 CREATE_ERROR(DECLARING_TYPEDEFS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR,
              "Declaring typedefs with the name __func__ is undefined behaviour", PointAt<0>);
 
+CREATE_ERROR(TYPEDEF_DECLARATION_DOES_NOT_HAVE_A_NAME, "Typedef declaration does not have a name", Underline<0>);
+
 // Arrays
 
 CREATE_ERROR(ARRAY_ELEMENT_TYPE_MUST_NOT_BE_A_FUNCTION, "Array element type must not be a function type",
@@ -176,11 +178,17 @@ CREATE_ERROR(ARRAY_OUTSIDE_OF_FUNCTION_PARAMETER_MAY_NOT_BE_QUALIFIED,
 CREATE_ERROR(VARIABLE_LENGTH_ARRAY_NOT_ALLOWED_AT_FILE_SCOPE, "Variable length array not allowed at file scope",
              Underline<0>);
 
+CREATE_ERROR(VARIABLE_LENGTH_ARRAY_TYPEDEF_NOT_ALLOWED_AT_FILE_SCOPE,
+             "Variable length array typedef not allowed at file scope", Underline<0>);
+
 CREATE_ERROR(VARIABLE_LENGTH_ARRAY_MUST_NOT_HAVE_ANY_LINKAGE, "Variable length array must not have any linkage",
              PointAt<0>);
 
 CREATE_ERROR(VARIABLE_LENGTH_ARRAY_MUST_NOT_HAVE_STATIC_LIFETIME, "Variable length array must not have static lifetime",
              PointAt<0>);
+
+CREATE_ERROR(STAR_IN_ARRAY_DECLARATOR_ONLY_ALLOWED_IN_FUNCTION_PROTOTYPES,
+             "Star in array declarator only allowed in function prototypes", PointAt<0>);
 
 // Function type
 
@@ -554,6 +562,9 @@ CREATE_ERROR(CANNOT_INITIALIZE_ARITHMETIC_OR_POINTER_TYPE_WITH_INITIALIZER_LIST,
              "Cannot initialize arithmetic or pointer type with initializer list", Underline<0>);
 
 CREATE_ERROR(CANNOT_INITIALIZE_FUNCTION_TYPE, "Cannot initialize function type", Annotate<0, 1>);
+
+CREATE_ERROR(CANNOT_INITIALIZE_VARIABLE_LENGTH_ARRAY_TYPE, "Cannot initialize variable length array type",
+             Annotate<0, 1>);
 
 CREATE_ERROR(CANNOT_INITIALIZE_FLEXIBLE_ARRAY_MEMBER, "Cannot initialize flexible array member", Underline<0>);
 

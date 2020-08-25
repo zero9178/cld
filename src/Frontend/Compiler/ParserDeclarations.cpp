@@ -1116,12 +1116,12 @@ std::optional<cld::Syntax::DirectDeclarator>
                 }
                 else if (begin->getTokenType() == Lexer::TokenType::Asterisk)
                 {
-                    begin++;
+                    const auto* asterisk = begin++;
                     checkForClose.reset();
                     if (directDeclarator)
                     {
                         directDeclarator = std::make_unique<DirectDeclarator>(DirectDeclaratorAsterisk(
-                            start, begin, std::move(*directDeclarator), std::move(typeQualifiers)));
+                            start, begin, std::move(*directDeclarator), std::move(typeQualifiers), asterisk));
                     }
                 }
                 else if (firstIsInAssignmentExpression(*begin, context))
@@ -1442,10 +1442,10 @@ std::optional<cld::Syntax::DirectAbstractDeclarator>
                 begin++;
                 if (begin < end && begin->getTokenType() == Lexer::TokenType::Asterisk)
                 {
-                    begin++;
+                    const auto* asterisk = begin++;
                     closeParenth.reset();
                     directAbstractDeclarator = std::make_unique<DirectAbstractDeclarator>(
-                        DirectAbstractDeclaratorAsterisk(start, begin, std::move(directAbstractDeclarator)));
+                        DirectAbstractDeclaratorAsterisk(start, begin, std::move(directAbstractDeclarator), asterisk));
                     break;
                 }
 
