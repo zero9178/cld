@@ -182,17 +182,29 @@ cld::Syntax::PostFixExpressionFunctionCall::PostFixExpressionFunctionCall(
 }
 
 cld::Syntax::PostFixExpressionTypeInitializer::PostFixExpressionTypeInitializer(
-    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, TypeName&& typeName,
-    cld::Syntax::InitializerList&& initializerList)
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, Lexer::CTokenIterator openParentheses, TypeName&& typeName,
+    Lexer::CTokenIterator closeParentheses, cld::Syntax::InitializerList&& initializerList)
     : Node(begin, end),
+      m_openParentheses(openParentheses),
       m_typeName(std::make_unique<TypeName>(std::move(typeName))),
+      m_closeParentheses(closeParentheses),
       m_initializerList(std::make_unique<InitializerList>(std::move(initializerList)))
 {
+}
+
+cld::Lexer::CTokenIterator cld::Syntax::PostFixExpressionTypeInitializer::getOpenParentheses() const
+{
+    return m_openParentheses;
 }
 
 const cld::Syntax::InitializerList& cld::Syntax::PostFixExpressionTypeInitializer::getInitializerList() const
 {
     return *m_initializerList;
+}
+
+cld::Lexer::CTokenIterator cld::Syntax::PostFixExpressionTypeInitializer::getCloseParentheses() const
+{
+    return m_closeParentheses;
 }
 
 const cld::Syntax::TypeName& cld::Syntax::PostFixExpressionTypeInitializer::getTypeName() const

@@ -810,7 +810,7 @@ std::optional<cld::Syntax::CastExpression> cld::Parser::parseCastExpression(Lexe
     begin++;
     auto typeName = parseTypeName(
         begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
-    const auto* openParenth = begin;
+    const auto* closeParenth = begin;
     if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
                 [&] { return Notes::TO_MATCH_N_HERE.args(*start, context.getSourceInterface(), *start); }))
     {
@@ -824,7 +824,7 @@ std::optional<cld::Syntax::CastExpression> cld::Parser::parseCastExpression(Lexe
             return {};
         }
         return CastExpression(start, begin,
-                              CastExpression::CastVariant{start, std::move(*typeName), openParenth,
+                              CastExpression::CastVariant{start, std::move(*typeName), closeParenth,
                                                           std::make_unique<CastExpression>(std::move(*cast))});
     }
 
@@ -864,8 +864,8 @@ std::optional<cld::Syntax::CastExpression> cld::Parser::parseCastExpression(Lexe
     std::unique_ptr<PostFixExpression> current;
     if (initializer && typeName)
     {
-        current = std::make_unique<PostFixExpression>(
-            PostFixExpressionTypeInitializer(start, begin, std::move(*typeName), std::move(*initializer)));
+        current = std::make_unique<PostFixExpression>(PostFixExpressionTypeInitializer(
+            start, begin, start, std::move(*typeName), closeParenth, std::move(*initializer)));
     }
     parsePostFixExpressionSuffix(start, begin, end, current, context);
     if (!current)
@@ -1199,6 +1199,7 @@ std::optional<cld::Syntax::PostFixExpression>
     {
         begin++;
         auto type = parseTypeName(begin, end, context);
+        const auto* closeParentheses = begin;
         if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
                     [&] { return Notes::TO_MATCH_N_HERE.args(*start, context.getSourceInterface(), *start); }))
         {
@@ -1238,8 +1239,8 @@ std::optional<cld::Syntax::PostFixExpression>
         }
         if (initializer && type)
         {
-            current = std::make_unique<PostFixExpression>(
-                PostFixExpressionTypeInitializer(start, begin, std::move(*type), std::move(*initializer)));
+            current = std::make_unique<PostFixExpression>(PostFixExpressionTypeInitializer(
+                start, begin, start, std::move(*type), closeParentheses, std::move(*initializer)));
         }
     }
 

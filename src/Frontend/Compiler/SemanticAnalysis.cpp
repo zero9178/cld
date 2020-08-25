@@ -2511,6 +2511,11 @@ cld::Semantics::ConstValue
             }
             return evaluate(commaExpression.getLastExpression(), mode, logger);
         },
+        [&](const CompoundLiteral& compoundLiteral) -> ConstValue {
+            logger(Errors::Semantics::COMPOUND_LITERAL_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
+                compoundLiteral, m_sourceInterface, compoundLiteral));
+            return {};
+        },
         [&](const DeclarationRead& declRead) -> ConstValue {
             if (mode != Initialization
                 || cld::match(

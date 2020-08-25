@@ -538,6 +538,8 @@ CREATE_ERROR(CANNOT_INITIALIZE_WCHART_ARRAY_WITH_STRING_LITERAL, "Cannot initial
 CREATE_ERROR(CANNOT_INITIALIZE_ARITHMETIC_OR_POINTER_TYPE_WITH_INITIALIZER_LIST,
              "Cannot initialize arithmetic or pointer type with initializer list", Underline<0>);
 
+CREATE_ERROR(CANNOT_INITIALIZE_FUNCTION_TYPE, "Cannot initialize function type", Annotate<0, 1>);
+
 CREATE_ERROR(CANNOT_INITIALIZE_FLEXIBLE_ARRAY_MEMBER, "Cannot initialize flexible array member", Underline<0>);
 
 CREATE_ERROR(NO_MORE_SUB_OBJECTS_TO_INITIALIZE, "No more sub objects to initialize", Underline<0>);
@@ -598,7 +600,7 @@ CREATE_ERROR(VARIABLE_ACCESS_NOT_ALLOWED_IN_CONSTANT_EXPRESSION, "Variable acces
 CREATE_ERROR(FUNCTION_CALL_NOT_ALLOWED_IN_CONSTANT_EXPRESSION, "Function call not allowed in constant expression",
              Underline<0>);
 
-CREATE_ERROR(INITIALIZER_NOT_ALLOWED_IN_CONSTANT_EXPRESSION, "Initializer not allowed in constant expression",
+CREATE_ERROR(COMPOUND_LITERAL_NOT_ALLOWED_IN_CONSTANT_EXPRESSION, "Initializer not allowed in constant expression",
              Underline<0>);
 
 CREATE_ERROR(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,

@@ -3670,3 +3670,30 @@ TEST_CASE("Semantics initializer list", "[semantics]")
         SEMA_PRODUCES("signed char foo[6] = {\"string\"};", ProducesNoErrors());
     }
 }
+
+TEST_CASE("Semantics compound literal", "[semantics]")
+{
+    SECTION("Simple")
+    {
+        auto& exp = generateExpression("void foo(void) {\n"
+                                       "(struct { int r; float f; }){.r = 3,.f = 3.53f};\n"
+                                       "}");
+        CHECK(exp.getValueCategory() == ValueCategory::Lvalue);
+        CHECK(std::holds_alternative<CompoundLiteral>(exp.get()));
+        CHECK(std::holds_alternative<AnonymousStructType>(exp.getType().get()));
+    }
+    SECTION("Size deduction")
+    {
+        auto& exp = generateExpression("void foo(void) {\n"
+                                       "(float[]){3,3.53f};\n"
+                                       "}");
+        CHECK(exp.getValueCategory() == ValueCategory::Lvalue);
+        CHECK(std::holds_alternative<CompoundLiteral>(exp.get()));
+        REQUIRE(std::holds_alternative<ArrayType>(exp.getType().get()));
+        CHECK(cld::get<ArrayType>(exp.getType().get()).getSize() == 2);
+    }
+    SEMA_PRODUCES("void foo(void) {\n"
+                  " (int(void)){5};\n"
+                  "}",
+                  ProducesError(CANNOT_INITIALIZE_FUNCTION_TYPE));
+}

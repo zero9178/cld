@@ -967,7 +967,38 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::PostFixExpressionTypeInitializer& node)
 {
-    CLD_UNREACHABLE;
+    // TODO: staticLifetime = true if we are not in a function body
+    auto type =
+        declaratorsToType(node.getTypeName().getSpecifierQualifiers(), node.getTypeName().getAbstractDeclarator());
+    if (type.isUndefined())
+    {
+        visit(node.getInitializerList(), type);
+        return Expression(node);
+    }
+    if (std::holds_alternative<FunctionType>(type.get()))
+    {
+        log(Errors::Semantics::CANNOT_INITIALIZE_FUNCTION_TYPE.args(node.getTypeName(), m_sourceInterface,
+                                                                    node.getTypeName(), type));
+        visit(node.getInitializerList(), Type{});
+        return Expression(node);
+    }
+    // TODO: VLA
+    Initializer value{Expression(node)};
+    if (std::holds_alternative<AbstractArrayType>(type.get()))
+    {
+        std::size_t size = 0;
+        value = visit(node.getInitializerList(), type, false, &size);
+        auto& abstractArrayType = cld::get<AbstractArrayType>(type.get());
+        type = ArrayType::create(type.isConst(), type.isVolatile(), abstractArrayType.isRestricted(), false,
+                                 abstractArrayType.getType(), size);
+    }
+    else
+    {
+        value = visit(node.getInitializerList(), type);
+    }
+    return Expression(std::move(type), ValueCategory::Lvalue,
+                      CompoundLiteral(node.getOpenParentheses(), std::move(value), node.getCloseParentheses(),
+                                      node.getInitializerList().end()));
 }
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::UnaryExpression& node)
@@ -2462,8 +2493,14 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
         }
     }};
 
+    if (type.isUndefined())
+    {
+        finishRest(node.getNonCommaExpressionsAndBlocks().begin(), node.getNonCommaExpressionsAndBlocks().end());
+        return Expression(node);
+    }
+
     std::vector<InitializerList::Initialization> initializations;
-    const INode* CLD_NON_NULL current = &top;
+    const INode* CLD_NULLABLE current = &top;
     std::size_t currentIndex = 0;
     std::vector<std::size_t> path;
     for (auto iter = node.getNonCommaExpressionsAndBlocks().begin();
@@ -2609,13 +2646,16 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
         }
         while (current && currentIndex >= current->size())
         {
-            currentIndex = current->index + 1;
-            current = current->parent;
-            if (current == &top && isAbstractArray && currentIndex >= top.size())
+            if (current == &top && isAbstractArray)
             {
                 top.push_back({cld::get<AbstractArrayType>(top.type->get()).getType(), top.size(), top});
                 *size = currentIndex + 1;
                 assignChildren(*top.at(currentIndex).type, top.at(currentIndex));
+            }
+            else
+            {
+                currentIndex = current->index + 1;
+                current = current->parent;
             }
         }
         if (!current)

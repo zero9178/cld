@@ -264,10 +264,7 @@ TEST_CASE("Const eval postfix expression", "[constEval]")
     }
     SECTION("Initializer")
     {
-        // TODO:
-        //        auto [value, error] = evaluateConstantExpression("(int){0}");
-        //        CHECK(value.isUndefined());
-        //        CHECK_THAT(error, ProducesError(INITIALIZER_NOT_ALLOWED_IN_CONSTANT_EXPRESSION));
+        INT_EVAL_PRODUCES("(int){0}", ProducesError(COMPOUND_LITERAL_NOT_ALLOWED_IN_CONSTANT_EXPRESSION));
     }
 }
 

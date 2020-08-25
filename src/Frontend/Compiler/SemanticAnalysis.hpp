@@ -363,10 +363,10 @@ public:
 
     Expression visit(const Syntax::ConditionalExpression& node);
 
-    Initializer visit(const Syntax::Initializer& node, const Type& type, bool staticLifetime,
+    Initializer visit(const Syntax::Initializer& node, const Type& type, bool staticLifetime = false,
                       std::size_t* size = nullptr);
 
-    Initializer visit(const Syntax::InitializerList& node, const Type& type, bool staticLifetime,
+    Initializer visit(const Syntax::InitializerList& node, const Type& type, bool staticLifetime = false,
                       std::size_t* size = nullptr);
 };
 } // namespace cld::Semantics

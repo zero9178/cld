@@ -1053,3 +1053,37 @@ cld::Lexer::CTokenIterator cld::Semantics::CallExpression::end() const
 {
     return m_closeParentheses + 1;
 }
+
+cld::Semantics::CompoundLiteral::CompoundLiteral(Lexer::CTokenIterator openParentheses, Initializer initializer,
+                                                 Lexer::CTokenIterator closeParentheses, Lexer::CTokenIterator initEnd)
+    : m_openParentheses(openParentheses),
+      m_initializer(std::make_unique<Initializer>(std::move(initializer))),
+      m_closeParentheses(closeParentheses),
+      m_initEnd(initEnd)
+{
+}
+
+cld::Lexer::CTokenIterator cld::Semantics::CompoundLiteral::getOpenParentheses() const
+{
+    return m_openParentheses;
+}
+
+const cld::Semantics::Initializer& cld::Semantics::CompoundLiteral::getInitializer() const
+{
+    return *m_initializer;
+}
+
+cld::Lexer::CTokenIterator cld::Semantics::CompoundLiteral::getCloseParentheses() const
+{
+    return m_closeParentheses;
+}
+
+cld::Lexer::CTokenIterator cld::Semantics::CompoundLiteral::begin() const
+{
+    return m_openParentheses;
+}
+
+cld::Lexer::CTokenIterator cld::Semantics::CompoundLiteral::end() const
+{
+    return m_initEnd;
+}

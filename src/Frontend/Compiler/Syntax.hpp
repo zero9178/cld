@@ -418,14 +418,21 @@ public:
  */
 class PostFixExpressionTypeInitializer final : public Node
 {
+    Lexer::CTokenIterator m_openParentheses;
     std::unique_ptr<TypeName> m_typeName;
+    Lexer::CTokenIterator m_closeParentheses;
     std::unique_ptr<InitializerList> m_initializerList;
 
 public:
-    PostFixExpressionTypeInitializer(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, TypeName&& typeName,
-                                     InitializerList&& initializerList);
+    PostFixExpressionTypeInitializer(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
+                                     Lexer::CTokenIterator openParentheses, TypeName&& typeName,
+                                     Lexer::CTokenIterator closeParentheses, InitializerList&& initializerList);
+
+    [[nodiscard]] Lexer::CTokenIterator getOpenParentheses() const;
 
     [[nodiscard]] const InitializerList& getInitializerList() const;
+
+    [[nodiscard]] Lexer::CTokenIterator getCloseParentheses() const;
 
     [[nodiscard]] const TypeName& getTypeName() const;
 };

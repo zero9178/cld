@@ -1212,6 +1212,32 @@ public:
     [[nodiscard]] Lexer::CTokenIterator end() const;
 };
 
+class InitializerList;
+
+using Initializer = std::variant<InitializerList, Expression>;
+
+class CompoundLiteral final
+{
+    Lexer::CTokenIterator m_openParentheses;
+    std::unique_ptr<Initializer> m_initializer;
+    Lexer::CTokenIterator m_closeParentheses;
+    Lexer::CTokenIterator m_initEnd;
+
+public:
+    explicit CompoundLiteral(Lexer::CTokenIterator openParentheses, Initializer initializer,
+                             Lexer::CTokenIterator closeParentheses, Lexer::CTokenIterator initEnd);
+
+    [[nodiscard]] Lexer::CTokenIterator getOpenParentheses() const;
+
+    [[nodiscard]] const Initializer& getInitializer() const;
+
+    [[nodiscard]] Lexer::CTokenIterator getCloseParentheses() const;
+
+    [[nodiscard]] Lexer::CTokenIterator begin() const;
+
+    [[nodiscard]] Lexer::CTokenIterator end() const;
+};
+
 enum class ValueCategory : std::uint8_t
 {
     Lvalue,
@@ -1224,9 +1250,10 @@ class Expression final
     ValueCategory m_valueCategory;
 
 public:
-    using Variant = std::variant<std::pair<Lexer::CTokenIterator, Lexer::CTokenIterator>, Constant, DeclarationRead,
-                                 Conversion, MemberAccess, BinaryOperator, Cast, UnaryOperator, SizeofOperator,
-                                 SubscriptOperator, Conditional, Assignment, CommaExpression, CallExpression>;
+    using Variant =
+        std::variant<std::pair<Lexer::CTokenIterator, Lexer::CTokenIterator>, Constant, DeclarationRead, Conversion,
+                     MemberAccess, BinaryOperator, Cast, UnaryOperator, SizeofOperator, SubscriptOperator, Conditional,
+                     Assignment, CommaExpression, CallExpression, CompoundLiteral>;
 
 private:
     Variant m_expression;
@@ -1295,10 +1322,6 @@ public:
 };
 
 bool isStringLiteralExpr(const Expression& expression);
-
-class InitializerList;
-
-using Initializer = std::variant<InitializerList, Expression>;
 
 class InitializerList final
 {
