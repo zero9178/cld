@@ -1770,7 +1770,7 @@ std::optional<cld::Syntax::InitializerList>
             }
             else
             {
-                const auto* token = begin++;
+                const auto* token = ++begin;
                 if (!expect(Lexer::TokenType::Identifier, begin, end, context))
                 {
                     context.skipUntil(begin, end,

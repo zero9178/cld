@@ -3531,6 +3531,132 @@ TEST_CASE("Semantics initializer list", "[semantics]")
                       "}\n",
                       ProducesNothing());
     }
+    SECTION("Initializing union")
+    {
+        SEMA_PRODUCES("union F {\n"
+                      "int r;\n"
+                      "float f;\n"
+                      "} t = {5,3.0};",
+                      ProducesError(NO_MORE_SUB_OBJECTS_TO_INITIALIZE));
+        SEMA_PRODUCES("struct R {\n"
+                      " union {\n"
+                      "  int r;\n"
+                      "  float f;\n"
+                      " } u;\n"
+                      "} t = {5,3.0};",
+                      ProducesError(NO_MORE_SUB_OBJECTS_TO_INITIALIZE));
+        SEMA_PRODUCES("struct R {\n"
+                      " union {\n"
+                      "  int r;\n"
+                      "  float f;\n"
+                      " } u;\n"
+                      " float f;\n"
+                      "} t = {5,3.0};",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("struct R {\n"
+                      " union {\n"
+                      "  int r;\n"
+                      "  float f;\n"
+                      " } u;\n"
+                      " float f;\n"
+                      "} t = {.u.f = 5,3.0};",
+                      ProducesNoErrors());
+    }
+    SECTION("Initializing arrays")
+    {
+        SEMA_PRODUCES("int r[5] = {3,3,53,34,3};", ProducesNoErrors());
+        SEMA_PRODUCES("int r[5] = {3,3,53,34,3,5};", ProducesError(NO_MORE_SUB_OBJECTS_TO_INITIALIZE));
+        SEMA_PRODUCES("struct Point {\n"
+                      " float x,y;\n"
+                      "} points[2] = {5.0,2.0,4.0,23.04};",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("struct Point {\n"
+                      " float x,y;\n"
+                      "} points[2] = {5.0,2.0,4.0,23.04,7};",
+                      ProducesError(NO_MORE_SUB_OBJECTS_TO_INITIALIZE));
+        SECTION("Size deduction")
+        {
+            SECTION("array of structs")
+            {
+                auto [translationUnit, errors] = generateSemantics("struct Point {\n"
+                                                                   " float x,y;\n"
+                                                                   "} points[] = {5.0,2.0,4.0,23.04,7};");
+                REQUIRE_THAT(errors, ProducesNoErrors());
+                REQUIRE(translationUnit.getGlobals().size() == 1);
+                auto& global = translationUnit.getGlobals()[0];
+                REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(global));
+                auto& declaration = *cld::get<std::unique_ptr<Declaration>>(global);
+                REQUIRE(std::holds_alternative<ArrayType>(declaration.getType().get()));
+                CHECK(cld::get<ArrayType>(declaration.getType().get()).getSize() == 3);
+            }
+            SECTION("Designators")
+            {
+                using Catch::Matchers::Equals;
+                auto [translationUnit, errors] =
+                    generateSemantics("struct Point {\n"
+                                      " float x,y;\n"
+                                      "} points[] = {[10].x = 5,[10].y = 3,[0] = {3.0,2.0},3.0,3.0,23.025,23.024};");
+                REQUIRE_THAT(errors, ProducesNoErrors());
+                REQUIRE(translationUnit.getGlobals().size() == 1);
+                auto& global = translationUnit.getGlobals()[0];
+                REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(global));
+                auto& declaration = *cld::get<std::unique_ptr<Declaration>>(global);
+                REQUIRE(std::holds_alternative<ArrayType>(declaration.getType().get()));
+                CHECK(cld::get<ArrayType>(declaration.getType().get()).getSize() == 11);
+                REQUIRE(declaration.getInitializer());
+                REQUIRE(std::holds_alternative<InitializerList>(*declaration.getInitializer()));
+                auto& initialization = cld::get<InitializerList>(*declaration.getInitializer());
+                REQUIRE(initialization.getFields().size() == 8);
+                auto& fields = initialization.getFields();
+                CHECK_THAT(fields[0].path, Equals<std::size_t>({10, 0}));
+                CHECK_THAT(fields[1].path, Equals<std::size_t>({10, 1}));
+                CHECK_THAT(fields[2].path, Equals<std::size_t>({0, 0}));
+                CHECK_THAT(fields[3].path, Equals<std::size_t>({0, 1}));
+                CHECK_THAT(fields[4].path, Equals<std::size_t>({1, 0}));
+                CHECK_THAT(fields[5].path, Equals<std::size_t>({1, 1}));
+                CHECK_THAT(fields[6].path, Equals<std::size_t>({2, 0}));
+                CHECK_THAT(fields[7].path, Equals<std::size_t>({2, 1}));
+            }
+            SECTION("array is declared")
+            {
+                auto [translationUnit, errors] = generateSemantics("int a[] = {[sizeof(*a) - 1] = 5};");
+                REQUIRE_THAT(errors, ProducesNoErrors());
+                REQUIRE(translationUnit.getGlobals().size() == 1);
+                auto& global = translationUnit.getGlobals()[0];
+                REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(global));
+                auto& declaration = *cld::get<std::unique_ptr<Declaration>>(global);
+                REQUIRE(std::holds_alternative<ArrayType>(declaration.getType().get()));
+                CHECK(cld::get<ArrayType>(declaration.getType().get()).getSize() == 4);
+            }
+        }
+    }
+    SECTION("Designators")
+    {
+        SEMA_PRODUCES("struct r { int i; float f; } a[2] = { .i = 3};",
+                      ProducesError(EXPECTED_INDEX_DESIGNATOR_FOR_ARRAY_TYPE));
+        SEMA_PRODUCES("int a[] = { [0.0] = 3};", ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+        SEMA_PRODUCES("int a[] = { [-5] = 3};", ProducesError(DESIGNATOR_INDEX_MUST_NOT_BE_NEGATIVE));
+        SEMA_PRODUCES("int a[5] = { [5] = 3};",
+                      ProducesError(DESIGNATOR_INDEX_OUT_OF_RANGE_FOR_ARRAY_TYPE_N, "'int[5]'"));
+        SEMA_PRODUCES("struct r { int i; float f; } a = { [0] = 3};",
+                      ProducesError(EXPECTED_MEMBER_DESIGNATOR_FOR_STRUCT_TYPE));
+        SEMA_PRODUCES("union r { int i; float f; } a = { [0] = 3};",
+                      ProducesError(EXPECTED_MEMBER_DESIGNATOR_FOR_UNION_TYPE));
+        SEMA_PRODUCES("struct r { int i; float f; } a = { .r = 3};",
+                      ProducesError(NO_MEMBER_CALLED_N_FOUND_IN_STRUCT_N, "'r'", "r"));
+        SEMA_PRODUCES("union r { int i; float f; } a = { .r = 3};",
+                      ProducesError(NO_MEMBER_CALLED_N_FOUND_IN_UNION_N, "'r'", "r"));
+        SEMA_PRODUCES("struct { int i; float f; } a = { .r = 3};",
+                      ProducesError(NO_MEMBER_CALLED_N_FOUND_IN_ANONYMOUS_STRUCT, "'r'"));
+        SEMA_PRODUCES("union { int i; float f; } a = { .r = 3};",
+                      ProducesError(NO_MEMBER_CALLED_N_FOUND_IN_ANONYMOUS_UNION, "'r'"));
+        SEMA_PRODUCES("struct { int i; float f; int r[]; } a = { .r[0] = 3};",
+                      ProducesError(CANNOT_INITIALIZE_FLEXIBLE_ARRAY_MEMBER));
+        SEMA_PRODUCES("struct r { int i; float f; } a = { .i[0] = 3};",
+                      ProducesError(CANNOT_INDEX_INTO_NON_ARRAY_TYPE_N, "'int'"));
+        SEMA_PRODUCES("struct r { int i; float f; } a = { .i.m = 3};",
+                      ProducesError(CANNOT_ACCESS_MEMBERS_OF_NON_STRUCT_OR_UNION_TYPE_N, "'int'"));
+    }
     SECTION("Single brace")
     {
         SEMA_PRODUCES("int i = {5};", ProducesNoErrors());

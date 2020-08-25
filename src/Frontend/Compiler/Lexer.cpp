@@ -823,7 +823,7 @@ public:
         return m_result;
     }
 
-    void push(std::uint64_t start, std::uint64_t end, TokenType tokenType, std::string_view value = {})
+    void push(std::uint64_t start, std::uint64_t end, TokenType tokenType, std::string value = {})
     {
         bool leadingWhitespace = m_lastBlockCommentEndPos == start;
         if (!leadingWhitespace)
@@ -853,17 +853,17 @@ public:
         }
         auto sourceStart = map(m_characterToSourceSpace, start).first;
         auto sourceEnd = map(m_characterToSourceSpace, end - 1).second;
-        auto& newToken =
-            m_result.emplace_back(tokenType, sourceStart, sourceEnd - sourceStart, start, end - start, 0, 0, value);
+        auto& newToken = m_result.emplace_back(tokenType, sourceStart, sourceEnd - sourceStart, start, end - start, 0,
+                                               0, std::move(value));
         newToken.setLeadingWhitespace(leadingWhitespace);
     }
 
-    void push(TokenType tokenType, std::string_view value = {})
+    void push(TokenType tokenType, std::string value = {})
     {
         push(tokenStartOffset, m_offset, tokenType, std::move(value));
     }
 
-    void push(std::uint64_t diff, TokenType tokenType, std::string_view value = {})
+    void push(std::uint64_t diff, TokenType tokenType, std::string value = {})
     {
         push(tokenStartOffset, m_offset - diff, tokenType, std::move(value));
     }

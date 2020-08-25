@@ -49,7 +49,16 @@ class Preprocessor final : private cld::PPSourceInterface
         llvm::ArrayRef<cld::Lexer::PPToken> replacement;
     };
     std::unordered_map<std::string_view, Macro> m_defines;
-    std::vector<std::unordered_set<std::string>> m_disabledMacros{1};
+
+    struct PairHash
+    {
+        std::size_t operator()(const std::pair<std::uint64_t, std::uint32_t>& pair) const noexcept
+        {
+            return std::hash<std::uint64_t>()(pair.first) ^ (std::hash<std::uint32_t>()(pair.second) << 1);
+        }
+    };
+
+    std::vector<std::unordered_set<std::pair<std::uint64_t, std::uint32_t>, PairHash>> m_disabledMacros{1};
     std::vector<cld::Source::File> m_files;
     std::vector<cld::Lexer::IntervalMap> m_intervalMaps;
     bool m_errorsOccurred = false;
@@ -570,7 +579,9 @@ class Preprocessor final : private cld::PPSourceInterface
             auto result = m_defines.find(name);
             if (result == m_defines.end()
                 || (iter->getMacroId() < m_disabledMacros.size()
-                    && m_disabledMacros[iter->getMacroId()].count(cld::to_string(name)) > 0))
+                    && m_disabledMacros[iter->getMacroId()].count(
+                           {result->second.identifierPos->getOffset(), result->second.identifierPos->getFileId()})
+                           > 0))
             {
                 iter++;
                 continue;
@@ -594,7 +605,8 @@ class Preprocessor final : private cld::PPSourceInterface
             {
                 // Object like macro
                 auto i = ++m_macroID;
-                m_disabledMacros.push_back({cld::to_string(name)});
+                m_disabledMacros.push_back(
+                    {{result->second.identifierPos->getOffset(), result->second.identifierPos->getFileId()}});
                 m_disabledMacros[i].insert(m_disabledMacros[iter->getMacroId()].begin(),
                                            m_disabledMacros[iter->getMacroId()].end());
                 std::vector<cld::Lexer::PPToken> temp = result->second.replacement;
@@ -626,7 +638,8 @@ class Preprocessor final : private cld::PPSourceInterface
             // Function like macro
             auto* namePos = iter;
             auto i = ++m_macroID;
-            m_disabledMacros.push_back({cld::to_string(name)});
+            m_disabledMacros.push_back(
+                {{result->second.identifierPos->getOffset(), result->second.identifierPos->getFileId()}});
             m_disabledMacros[i].insert(m_disabledMacros[iter->getMacroId()].begin(),
                                        m_disabledMacros[iter->getMacroId()].end());
             m_substitutions.push_back({});

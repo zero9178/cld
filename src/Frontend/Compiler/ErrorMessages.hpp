@@ -280,8 +280,7 @@ CREATE_ERROR(NO_MEMBER_CALLED_N_FOUND_IN_UNION_N, "No member called %0 found in 
 CREATE_ERROR(NO_MEMBER_CALLED_N_FOUND_IN_ANONYMOUS_STRUCT, "No member called %0 found in anonymous struct",
              Underline<0>);
 
-CREATE_ERROR(NO_MEMBER_CALLED_N_FOUND_IN_ANONYMOUS_UNION, "No member called %0 found in anonymous struct",
-             Underline<0>);
+CREATE_ERROR(NO_MEMBER_CALLED_N_FOUND_IN_ANONYMOUS_UNION, "No member called %0 found in anonymous union", Underline<0>);
 
 // Address of
 
@@ -554,9 +553,10 @@ CREATE_ERROR(DESIGNATOR_INDEX_MUST_NOT_BE_NEGATIVE, "Designator index must not b
 CREATE_ERROR(DESIGNATOR_INDEX_OUT_OF_RANGE_FOR_ARRAY_TYPE_N, "Designator index out of range for array type %full0",
              Annotate<1, 2>);
 
-CREATE_ERROR(CANNOT_INDEX_INTO_NON_ARRAY_TYPE_N,"Cannot index into non array type %full0");
+CREATE_ERROR(CANNOT_INDEX_INTO_NON_ARRAY_TYPE_N, "Cannot index into non array type %full0", Underline<1>);
 
-CREATE_ERROR(CANNOT_ACCESS_MEMBERS_OF_NON_STRUCT_OR_UNION_TYPE_N,"Cannot access members of non struct or union type %full0");
+CREATE_ERROR(CANNOT_ACCESS_MEMBERS_OF_NON_STRUCT_OR_UNION_TYPE_N,
+             "Cannot access members of non struct or union type %full0", Underline<1>);
 
 // Enum
 

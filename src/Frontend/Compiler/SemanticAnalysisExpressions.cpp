@@ -2263,7 +2263,7 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
     {
         size = &otherSize;
     }
-    *size = 0;
+    *size = 1;
 
     class Node;
 
@@ -2287,7 +2287,7 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
         virtual void push_back(Node&& node) = 0;
     };
 
-    class Node : public INode
+    class Node final : public INode
     {
         std::vector<Node> m_children;
 
@@ -2332,7 +2332,7 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
             this->parent = &parent;
         }
     };
-    class Top : public INode
+    class Top final : public INode
     {
         std::vector<std::unique_ptr<Node>> m_children;
 
@@ -2379,12 +2379,9 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
     } top(type);
 
     auto assignChildren = YComb{[&](auto&& self, const Type& type, INode& parent) -> void {
-        if (std::holds_alternative<StructType>(type.get()))
+        if (isRecord(type))
         {
-            auto& structType = cld::get<StructType>(type.get());
-            auto* structDef = getStructDefinition(structType.getName(), structType.getScopeOrId());
-            CLD_ASSERT(structDef);
-            auto ref = llvm::ArrayRef(structDef->getFields());
+            auto ref = getFields(type);
             if (std::holds_alternative<AbstractArrayType>(ref.back().type->get()))
             {
                 ref = ref.drop_back();
@@ -2399,54 +2396,6 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
                 {
                     self(*ref[i].type, parent.at(i));
                 }
-            }
-        }
-        if (std::holds_alternative<AnonymousStructType>(type.get()))
-        {
-            auto& structType = cld::get<AnonymousStructType>(type.get());
-            auto ref = llvm::ArrayRef(structType.getFields());
-            if (std::holds_alternative<AbstractArrayType>(ref.back().type->get()))
-            {
-                ref = ref.drop_back();
-            }
-            parent.resize(ref.size());
-            for (std::size_t i = 0; i < ref.size(); i++)
-            {
-                parent.at(i).type = ref[i].type.get();
-                parent.at(i).index = i;
-                parent.at(i).parent = &parent;
-                if (isAggregate(*ref[i].type))
-                {
-                    self(*ref[i].type, parent.at(i));
-                }
-            }
-        }
-        if (std::holds_alternative<UnionType>(type.get()))
-        {
-            auto& unionType = cld::get<UnionType>(type.get());
-            auto* unionDef = getUnionDefinition(unionType.getName(), unionType.getScopeOrId());
-            CLD_ASSERT(unionDef);
-            auto& field = unionDef->getFields().front();
-            parent.resize(1);
-            parent.at(0).index = 0;
-            parent.at(0).type = field.type.get();
-            parent.at(0).parent = &parent;
-            if (isAggregate(*field.type))
-            {
-                self(*field.type, parent.at(0));
-            }
-        }
-        if (std::holds_alternative<AnonymousUnionType>(type.get()))
-        {
-            auto& unionType = cld::get<AnonymousUnionType>(type.get());
-            auto& field = unionType.getFields().front();
-            parent.resize(1);
-            parent.at(0).index = 0;
-            parent.at(0).type = field.type.get();
-            parent.at(0).parent = &parent;
-            if (isAggregate(*field.type))
-            {
-                self(*field.type, parent.at(0));
             }
         }
         if (std::holds_alternative<ArrayType>(type.get()))
@@ -2469,6 +2418,14 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
     if (std::holds_alternative<AbstractArrayType>(type.get()))
     {
         isAbstractArray = true;
+        top.resize(1);
+        top.at(0).type = &cld::get<AbstractArrayType>(type.get()).getType();
+        top.at(0).index = 0;
+        top.at(0).parent = &top;
+        if (isAggregate(*top.at(0).type))
+        {
+            assignChildren(*top.at(0).type, top.at(0));
+        }
     }
     else
     {
@@ -2518,6 +2475,10 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
             current = &top;
             for (auto& desig : designationList)
             {
+                if (&desig != &designationList.front())
+                {
+                    current = &current->at(currentIndex);
+                }
                 if (isArray(*current->type))
                 {
                     if (!std::holds_alternative<Syntax::ConstantExpression>(desig))
@@ -2563,7 +2524,7 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
                     }
                     else if (current == &top && isAbstractArray)
                     {
-                        *size = std::max(*size, constant->toUInt());
+                        *size = std::max(*size, constant->toUInt() + 1);
                         auto prevSize = top.size();
                         for (std::size_t i = prevSize; i < *size; i++)
                         {
@@ -2571,7 +2532,7 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
                             assignChildren(*top.at(i).type, top.at(i));
                         }
                     }
-                    current = &current->at(constant->toUInt());
+                    currentIndex = constant->toUInt();
                 }
                 else if (isRecord(*current->type))
                 {
@@ -2627,23 +2588,34 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
                         finishRest(iter, node.getNonCommaExpressionsAndBlocks().end());
                         return Expression(node);
                     }
-                    current = &current->at(result - fields.begin());
+                    currentIndex = result - fields.begin();
                 }
                 else if (!current->type->isUndefined())
                 {
                     if (std::holds_alternative<Syntax::ConstantExpression>(desig))
                     {
                         log(Errors::Semantics::CANNOT_INDEX_INTO_NON_ARRAY_TYPE_N.args(desig, m_sourceInterface,
-                                                                                       *current->type));
+                                                                                       *current->type, desig));
                     }
                     else
                     {
                         log(Errors::Semantics::CANNOT_ACCESS_MEMBERS_OF_NON_STRUCT_OR_UNION_TYPE_N.args(
-                            desig, m_sourceInterface, *current->type));
+                            desig, m_sourceInterface, *current->type, desig));
                     }
                     finishRest(iter, node.getNonCommaExpressionsAndBlocks().end());
                     return Expression(node);
                 }
+            }
+        }
+        while (current && currentIndex >= current->size())
+        {
+            currentIndex = current->index + 1;
+            current = current->parent;
+            if (current == &top && isAbstractArray && currentIndex >= top.size())
+            {
+                top.push_back({cld::get<AbstractArrayType>(top.type->get()).getType(), top.size(), top});
+                *size = currentIndex + 1;
+                assignChildren(*top.at(currentIndex).type, top.at(currentIndex));
             }
         }
         if (!current)
@@ -2733,17 +2705,15 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
                                                        std::move(expression), staticLifetime, nullptr);
             initializations.push_back({{path.rbegin(), path.rend()}, std::move(expression)});
         }
-        currentIndex++;
-        while (current && currentIndex >= current->size())
+        if (std::holds_alternative<UnionType>(current->type->get())
+            || std::holds_alternative<AnonymousUnionType>(current->type->get()))
         {
             currentIndex = current->index + 1;
             current = current->parent;
-            if (current == &top && isAbstractArray && currentIndex >= top.size())
-            {
-                top.push_back({cld::get<AbstractArrayType>(top.type->get()).getType(), top.size(), top});
-                *size = currentIndex;
-                assignChildren(*top.at(currentIndex).type, top.at(currentIndex));
-            }
+        }
+        else
+        {
+            currentIndex++;
         }
     }
     return InitializerList(std::move(initializations));
