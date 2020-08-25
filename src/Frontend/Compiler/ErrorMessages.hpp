@@ -121,6 +121,12 @@ CREATE_ERROR(EXPECTED_PARAMETER_LIST_IN_FUNCTION_DEFINITION, "Expected parameter
 CREATE_ERROR(DECLARATIONS_ONLY_ALLOWED_WITH_IDENTIFIER_LIST, "Declarations only allowed with identifier list",
              Underline<0>);
 
+CREATE_ERROR(DEFINING_FUNCTIONS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR,
+             "Defining functions with the name __func__ is undefined behaviour", PointAt<0>);
+
+CREATE_ERROR(DECLARING_PARAMETERS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR,
+             "Declaring parameters with the name __func__ is undefined behaviour", PointAt<0>);
+
 // Declarations
 
 CREATE_ERROR(DECLARATION_DOES_NOT_DECLARE_ANYTHING, "Declaration does not declare anything", Underline<0>);
@@ -135,6 +141,15 @@ CREATE_ERROR(DECLARATION_MUST_HAVE_A_COMPLETE_TYPE, "Declaration must have a com
 CREATE_ERROR(DECLARATION_MUST_NOT_BE_VOID, "Declaration must not be void", Underline<0>);
 
 CREATE_ERROR(INLINE_ONLY_ALLOWED_FOR_FUNCTIONS, "'inline' only allowed for functions", PointAt<0>);
+
+CREATE_ERROR(DECLARING_FUNCTIONS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR,
+             "Declaring functions with the name __func__ is undefined behaviour", PointAt<0>);
+
+CREATE_ERROR(DECLARING_VARIABLES_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR,
+             "Declaring variables with the name __func__ is undefined behaviour", PointAt<0>);
+
+CREATE_ERROR(DECLARING_TYPEDEFS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR,
+             "Declaring typedefs with the name __func__ is undefined behaviour", PointAt<0>);
 
 // Arrays
 

@@ -106,7 +106,7 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
         log(Errors::Semantics::FUNCTION_DEFINITION_MUST_HAVE_A_PARAMETER_LIST.args(
             std::forward_as_tuple(node.getDeclarationSpecifiers(), node.getDeclarator()), m_sourceInterface,
             std::forward_as_tuple(node.getDeclarationSpecifiers(), node.getDeclarator())));
-        visit(node.getCompoundStatement());
+        visit(node.getCompoundStatement(), false);
         return {};
     }
 
@@ -128,6 +128,12 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
             CLD_ASSERT(std::holds_alternative<std::unique_ptr<Syntax::Declarator>>(parameterSyntaxDecls[i].declarator));
             auto& declarator = *cld::get<std::unique_ptr<Syntax::Declarator>>(parameterSyntaxDecls[i].declarator);
             auto* loc = declaratorToLoc(declarator);
+            if (loc->getText() == "__func__")
+            {
+                log(Errors::Semantics::DECLARING_PARAMETERS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR.args(
+                    *loc, m_sourceInterface, *loc));
+                continue;
+            }
             Lifetime lifetime = Lifetime ::Automatic;
             for (auto& iter : parameterSyntaxDecls[i].declarationSpecifiers)
             {
@@ -198,6 +204,13 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
     }
 
     const auto* loc = declaratorToLoc(node.getDeclarator());
+    if (loc->getText() == "__func__")
+    {
+        log(Errors::Semantics::DEFINING_FUNCTIONS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR.args(
+            *loc, m_sourceInterface, *loc));
+        visit(node.getCompoundStatement(), false);
+        return {};
+    }
     std::vector<TranslationUnit::Variant> result;
     auto& ptr = cld::get<std::unique_ptr<FunctionDefinition>>(result.emplace_back(std::make_unique<FunctionDefinition>(
         std::move(type), loc, std::move(parameterDeclarations),
@@ -224,6 +237,8 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
             prev->second = DeclarationInScope{loc, ptr.get()};
         }
     }
+
+    auto functionScope = pushFunctionScope(*ptr);
 
     auto comp = visit(node.getCompoundStatement(), false);
     ptr->setCompoundStatement(std::move(comp));
@@ -315,6 +330,12 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
                 linkage = Linkage::Internal;
             }
             Lifetime lifetime = Lifetime::Static;
+            if (loc->getText() == "__func__")
+            {
+                log(Errors::Semantics::DECLARING_FUNCTIONS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR.args(
+                    *loc, m_sourceInterface, *loc));
+                continue;
+            }
             auto declaration = std::make_unique<Declaration>(std::move(result), linkage, lifetime, loc);
             auto [prev, notRedefinition] =
                 getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, declaration.get()}});
@@ -337,7 +358,7 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
                 {
                     auto& otherType = cld::get<const Declaration*>(prev->second.declared)->getType();
                     auto composite = compositeType(otherType, declaration->getType());
-                    declaration = std::make_unique<Declaration>(std::move(composite), linkage, lifetime, loc);
+                    *declaration = Declaration(std::move(composite), linkage, lifetime, loc);
                     prev->second.declared = declaration.get();
                     decls.push_back(std::move(declaration));
                 }
@@ -379,13 +400,17 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
                 lifetime = Lifetime::Static;
             }
             if (linkage == Linkage::None && !isCompleteType(result)
-                && !(std::holds_alternative<AbstractArrayType>(result.get()) && initializer))
+                && !(std::holds_alternative<AbstractArrayType>(result.get()) && initializer)
+                && !(storageClassSpecifier
+                     && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Typedef))
             {
                 log(Errors::Semantics::DECLARATION_MUST_HAVE_A_COMPLETE_TYPE.args(*loc, m_sourceInterface, *loc,
                                                                                   result));
                 errors = true;
             }
-            else if (isVoid(removeQualifiers(result)))
+            else if (isVoid(removeQualifiers(result))
+                     && !(storageClassSpecifier
+                          && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Typedef))
             {
                 log(Errors::Semantics::DECLARATION_MUST_NOT_BE_VOID.args(*loc, m_sourceInterface, *loc));
                 errors = true;
@@ -482,6 +507,12 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
             if (storageClassSpecifier
                 && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Typedef)
             {
+                if (loc->getText() == "__func__")
+                {
+                    log(Errors::Semantics::DECLARING_TYPEDEFS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR.args(
+                        *loc, m_sourceInterface, *loc));
+                    continue;
+                }
                 result.setName(loc->getText());
                 auto [prev, noRedefinition] =
                     getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, result}});
@@ -493,6 +524,12 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
                     log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
                                                              *prev->second.identifier));
                 }
+                continue;
+            }
+            if (loc->getText() == "__func__")
+            {
+                log(Errors::Semantics::DECLARING_VARIABLES_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR.args(
+                    *loc, m_sourceInterface, *loc));
                 continue;
             }
             auto declaration = std::make_unique<Declaration>(std::move(result), linkage, lifetime, loc);
@@ -514,36 +551,34 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
                 {
                     auto& otherType = cld::get<const Declaration*>(prev->second.declared)->getType();
                     auto composite = compositeType(otherType, declaration->getType());
-                    declaration = std::make_unique<Declaration>(std::move(composite), linkage, lifetime, loc);
+                    *declaration = Declaration(std::move(composite), linkage, lifetime, loc);
                     prev->second.declared = declaration.get();
                 }
             }
-            else
+            if (initializer)
             {
-                if (initializer)
+                m_inStaticInitializer = lifetime == Lifetime::Static;
+                auto prevType = declaration->getType();
+                std::size_t size = 0;
+                auto expr =
+                    visit(*initializer, declaration->getType(), declaration->getLifetime() == Lifetime::Static, &size);
+                if (std::holds_alternative<AbstractArrayType>(declaration->getType().get()))
                 {
-                    auto prevType = declaration->getType();
-                    std::size_t size = 0;
-                    auto expr = visit(*initializer, declaration->getType(),
-                                      declaration->getLifetime() == Lifetime::Static, &size);
-                    if (std::holds_alternative<AbstractArrayType>(declaration->getType().get()))
-                    {
-                        prevType = ArrayType::create(prevType.isConst(), prevType.isVolatile(),
-                                                     cld::get<AbstractArrayType>(prevType.get()).isRestricted(), false,
-                                                     cld::get<AbstractArrayType>(prevType.get()).getType(), size);
-                    }
-                    declaration =
-                        std::make_unique<Declaration>(std::move(prevType), linkage, lifetime, loc, std::move(expr));
-                    prev->second.declared = declaration.get();
+                    prevType = ArrayType::create(prevType.isConst(), prevType.isVolatile(),
+                                                 cld::get<AbstractArrayType>(prevType.get()).isRestricted(), false,
+                                                 cld::get<AbstractArrayType>(prevType.get()).getType(), size);
                 }
-                else if (std::holds_alternative<AbstractArrayType>(declaration->getType().get())
-                         && linkage == Linkage::None)
-                {
-                    log(Errors::Semantics::DECLARATION_MUST_HAVE_A_COMPLETE_TYPE.args(*loc, m_sourceInterface, *loc,
-                                                                                      declaration->getType()));
-                }
-                decls.push_back(std::move(declaration));
+                *declaration = Declaration(std::move(prevType), linkage, lifetime, loc, std::move(expr));
+                prev->second.declared = declaration.get();
+                m_inStaticInitializer = false;
             }
+            else if (std::holds_alternative<AbstractArrayType>(declaration->getType().get())
+                     && linkage == Linkage::None)
+            {
+                log(Errors::Semantics::DECLARATION_MUST_HAVE_A_COMPLETE_TYPE.args(*loc, m_sourceInterface, *loc,
+                                                                                  declaration->getType()));
+            }
+            decls.push_back(std::move(declaration));
         }
     }
     return decls;
@@ -917,7 +952,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                     type = Type{};
                     return;
                 }
-                if (identifiers.getIdentifiers().empty())
+                if (identifiers.getIdentifiers().empty() && !inFunctionDefinition)
                 {
                     type = FunctionType::create(std::move(type), {}, false, true);
                     return;
@@ -934,6 +969,11 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                 std::unordered_map<std::string_view, Lexer::CTokenIterator> seenParameters;
                 for (auto& iter : identifiers.getIdentifiers())
                 {
+                    if (iter->getText() == "__func__")
+                    {
+                        log(Errors::Semantics::DECLARING_PARAMETERS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR.args(
+                            *iter, m_sourceInterface, *iter));
+                    }
                     auto name = iter->getText();
                     paramNames[name] = paramNames.size();
                     parameters.emplace_back(Type{}, iter->getText());
@@ -985,8 +1025,18 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                         auto result = paramNames.find(loc->getText());
                         if (result == paramNames.end())
                         {
-                            log(Errors::Semantics::DECLARATION_OF_IDENTIFIER_LIST_NOT_BELONGING_TO_ANY_PARAMETER.args(
-                                *loc, m_sourceInterface, *loc, identifiers.getIdentifiers()));
+                            // In case the parameter name __func__ appears in the declarations but not in the identifier
+                            // list
+                            if (loc->getText() == "__func__")
+                            {
+                                log(Errors::Semantics::DECLARING_PARAMETERS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR
+                                        .args(*loc, m_sourceInterface, *loc));
+                            }
+                            else
+                            {
+                                log(Errors::Semantics::DECLARATION_OF_IDENTIFIER_LIST_NOT_BELONGING_TO_ANY_PARAMETER
+                                        .args(*loc, m_sourceInterface, *loc, identifiers.getIdentifiers()));
+                            }
                             continue;
                         }
                         auto& element = seenParameters[loc->getText()];
@@ -2512,9 +2562,13 @@ cld::Semantics::ConstValue
             return evaluate(commaExpression.getLastExpression(), mode, logger);
         },
         [&](const CompoundLiteral& compoundLiteral) -> ConstValue {
-            logger(Errors::Semantics::COMPOUND_LITERAL_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
-                compoundLiteral, m_sourceInterface, compoundLiteral));
-            return {};
+            if (mode != Initialization)
+            {
+                logger(Errors::Semantics::COMPOUND_LITERAL_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
+                    compoundLiteral, m_sourceInterface, compoundLiteral));
+                return {};
+            }
+            return {AddressConstant{}};
         },
         [&](const DeclarationRead& declRead) -> ConstValue {
             if (mode != Initialization
@@ -2538,6 +2592,7 @@ cld::Semantics::ConstValue
             {
                 if (mode == Initialization
                     && (isArray(conversion.getExpression().getType())
+                        || std::holds_alternative<CompoundLiteral>(conversion.getExpression().get())
                         || std::holds_alternative<FunctionType>(conversion.getExpression().getType().get())))
                 {
                     return {AddressConstant{}};

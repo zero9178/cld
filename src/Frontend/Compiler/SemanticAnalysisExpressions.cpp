@@ -491,6 +491,15 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::PrimaryExpressionIdentifier& node)
 {
+    if (node.getIdentifier()->getText() == "__func__" && inFunction())
+    {
+        auto functionName = getCurrentFunctionScope()->currentFunction->getNameToken()->getText();
+        auto type = ArrayType::create(false, false, false, false,
+                                      PrimitiveType::createChar(false, false, m_sourceInterface.getLanguageOptions()),
+                                      functionName.size() + 1);
+        return Expression(std::move(type), ValueCategory::Lvalue,
+                          Constant(cld::to_string(functionName), node.begin(), node.end()));
+    }
     auto* result = lookupDecl(node.getIdentifier()->getText());
     if (!result || std::holds_alternative<Type>(*result))
     {
@@ -967,19 +976,18 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::PostFixExpressionTypeInitializer& node)
 {
-    // TODO: staticLifetime = true if we are not in a function body
     auto type =
         declaratorsToType(node.getTypeName().getSpecifierQualifiers(), node.getTypeName().getAbstractDeclarator());
     if (type.isUndefined())
     {
-        visit(node.getInitializerList(), type);
+        visit(node.getInitializerList(), type, !inFunction() || m_inStaticInitializer);
         return Expression(node);
     }
     if (std::holds_alternative<FunctionType>(type.get()))
     {
         log(Errors::Semantics::CANNOT_INITIALIZE_FUNCTION_TYPE.args(node.getTypeName(), m_sourceInterface,
                                                                     node.getTypeName(), type));
-        visit(node.getInitializerList(), Type{});
+        visit(node.getInitializerList(), Type{}, !inFunction() || m_inStaticInitializer);
         return Expression(node);
     }
     // TODO: VLA
@@ -987,14 +995,14 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
     if (std::holds_alternative<AbstractArrayType>(type.get()))
     {
         std::size_t size = 0;
-        value = visit(node.getInitializerList(), type, false, &size);
+        value = visit(node.getInitializerList(), type, !inFunction() || m_inStaticInitializer, &size);
         auto& abstractArrayType = cld::get<AbstractArrayType>(type.get());
         type = ArrayType::create(type.isConst(), type.isVolatile(), abstractArrayType.isRestricted(), false,
                                  abstractArrayType.getType(), size);
     }
     else
     {
-        value = visit(node.getInitializerList(), type);
+        value = visit(node.getInitializerList(), type, !inFunction() || m_inStaticInitializer);
     }
     return Expression(std::move(type), ValueCategory::Lvalue,
                       CompoundLiteral(node.getOpenParentheses(), std::move(value), node.getCloseParentheses(),

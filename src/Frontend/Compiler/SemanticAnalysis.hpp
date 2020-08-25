@@ -60,9 +60,38 @@ class SemanticAnalysis final
     std::vector<StructDefinition> m_structDefinitions;
     std::vector<UnionDefinition> m_unionDefinitions;
     std::vector<EnumDefinition> m_enumDefinitions;
+    struct FunctionScope
+    {
+        const FunctionDefinition* CLD_NON_NULL currentFunction;
+        std::unordered_map<std::string_view, Lexer::CTokenIterator> labels;
+    };
+    std::int64_t m_currentFunctionScope = -1;
+    std::vector<FunctionScope> m_functionScopes;
+    bool m_inStaticInitializer = false;
 
     constexpr static std::uint64_t IS_SCOPE = 1ull << 63;
     constexpr static std::uint64_t SCOPE_OR_ID_MASK = ~(1ull << 63);
+
+    [[nodiscard]] auto pushFunctionScope(const FunctionDefinition& functionDefinition)
+    {
+        m_functionScopes.push_back({&functionDefinition, {}});
+        m_currentFunctionScope = m_functionScopes.size() - 1;
+        return llvm::make_scope_exit([this] { m_currentFunctionScope = -1; });
+    }
+
+    [[nodiscard]] bool inFunction() const
+    {
+        return m_currentFunctionScope >= 0;
+    }
+
+    [[nodiscard]] const FunctionScope* getCurrentFunctionScope() const
+    {
+        if (m_currentFunctionScope >= 0)
+        {
+            return &m_functionScopes[m_currentFunctionScope];
+        }
+        return nullptr;
+    }
 
     [[nodiscard]] auto pushScope()
     {

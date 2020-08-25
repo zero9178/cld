@@ -311,6 +311,14 @@ TEST_CASE("Semantics declarations", "[semantics]")
         SEMA_PRODUCES("typedef int i;\n"
                       "i float f;",
                       ProducesError(EXPECTED_NO_FURTHER_TYPE_SPECIFIERS_AFTER_TYPENAME));
+        SEMA_PRODUCES("typedef void V;", ProducesNoErrors());
+        SEMA_PRODUCES("typedef struct Point Point;\n"
+                      "\n"
+                      "struct Point {\n"
+                      " float x,y;\n"
+                      "};\n"
+                      "Point p;",
+                      ProducesNoErrors());
     }
     SEMA_PRODUCES("int;", ProducesError(DECLARATION_DOES_NOT_DECLARE_ANYTHING));
     SEMA_PRODUCES("struct f;", !ProducesError(DECLARATION_DOES_NOT_DECLARE_ANYTHING));
@@ -3696,4 +3704,66 @@ TEST_CASE("Semantics compound literal", "[semantics]")
                   " (int(void)){5};\n"
                   "}",
                   ProducesError(CANNOT_INITIALIZE_FUNCTION_TYPE));
+    SEMA_PRODUCES("typedef struct Point {\n"
+                  " float x;\n"
+                  " float y;\n"
+                  "} Point;\n"
+                  "\n"
+                  "Point p0 = (Point){.y = 3,.x = 5};",
+                  ProducesNoErrors());
+    SEMA_PRODUCES("typedef struct Point {\n"
+                  " float x;\n"
+                  " float y;\n"
+                  "} Point;\n"
+                  "\n"
+                  "int getX();\n"
+                  "\n"
+                  "Point p0 = (Point){.y = 3,.x = getX()};",
+                  ProducesError(FUNCTION_CALL_NOT_ALLOWED_IN_CONSTANT_EXPRESSION));
+    SEMA_PRODUCES("typedef struct Point {\n"
+                  " float x;\n"
+                  " float y;\n"
+                  "} Point;\n"
+                  "\n"
+                  "int getX();\n"
+                  "\n"
+                  "void foo(void) {\n"
+                  "static Point p0 = (Point){.y = 3,.x = getX()};\n"
+                  "}",
+                  ProducesError(FUNCTION_CALL_NOT_ALLOWED_IN_CONSTANT_EXPRESSION));
+    SEMA_PRODUCES("typedef struct Point {\n"
+                  " float x;\n"
+                  " float y;\n"
+                  "} Point;\n"
+                  "\n"
+                  "int getX();\n"
+                  "\n"
+                  "void foo(void) {\n"
+                  "static Point p0 = (Point){.y = 3,.x = 5};\n"
+                  "Point p1 = (Point){.y = 3,.x = getX()};\n"
+                  "}",
+                  ProducesNoErrors());
+}
+
+TEST_CASE("Semantics __func__", "[semantics]")
+{
+    auto& exp = generateExpression("void foo(void) {\n"
+                                   "__func__;\n"
+                                   "}");
+    REQUIRE(std::holds_alternative<Constant>(exp.get()));
+    auto& constant = cld::get<Constant>(exp.get());
+    REQUIRE(std::holds_alternative<std::string>(constant.getValue()));
+    CHECK(cld::get<std::string>(constant.getValue()) == "foo");
+    SEMA_PRODUCES("void __func__(void) {}",
+                  ProducesError(DEFINING_FUNCTIONS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR));
+    SEMA_PRODUCES("int __func__(void);", ProducesError(DECLARING_FUNCTIONS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR));
+    SEMA_PRODUCES("int __func__;", ProducesError(DECLARING_VARIABLES_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR));
+    SEMA_PRODUCES("typedef int __func__;", ProducesError(DECLARING_TYPEDEFS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR));
+    SEMA_PRODUCES("int foo(int __func__) {}",
+                  ProducesError(DECLARING_PARAMETERS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR));
+    SEMA_PRODUCES("int foo(int __func__);", ProducesNoErrors());
+    SEMA_PRODUCES("int foo(__func__) {}",
+                  ProducesError(DECLARING_PARAMETERS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR));
+    SEMA_PRODUCES("int foo() int __func__; {}",
+                  ProducesError(DECLARING_PARAMETERS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR));
 }
