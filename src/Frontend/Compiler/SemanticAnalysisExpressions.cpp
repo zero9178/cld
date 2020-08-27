@@ -990,7 +990,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         visit(node.getInitializerList(), Type{}, !inFunction() || m_inStaticInitializer);
         return Expression(node);
     }
-    if (std::holds_alternative<ValArrayType>(type.get()))
+    if (isVariableLengthArray(type))
     {
         log(Errors::Semantics::CANNOT_INITIALIZE_VARIABLE_LENGTH_ARRAY_TYPE.args(node.getTypeName(), m_sourceInterface,
                                                                                  node.getTypeName(), type));
@@ -1158,7 +1158,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
             {
                 log(Errors::Semantics::BITFIELD_NOT_ALLOWED_IN_SIZE_OF.args(exp, m_sourceInterface, exp));
             }
-            if (!isVariablyModified(type))
+            if (!isVariableLengthArray(type))
             {
                 auto size = exp.getType().getSizeOf(*this);
                 return Expression(
@@ -1192,7 +1192,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                                                                                  *typeName, type));
                 return Expression(node);
             }
-            if (!isVariablyModified(type))
+            if (!isVariableLengthArray(type))
             {
                 auto size = type.getSizeOf(*this);
                 return Expression(PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()),

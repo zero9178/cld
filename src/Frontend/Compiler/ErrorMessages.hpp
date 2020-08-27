@@ -175,13 +175,13 @@ CREATE_ERROR(ARRAY_OUTSIDE_OF_FUNCTION_PARAMETER_MAY_NOT_BE_QUALIFIED,
 
 // VLA
 
-CREATE_ERROR(VARIABLE_LENGTH_ARRAY_NOT_ALLOWED_AT_FILE_SCOPE, "Variable length array not allowed at file scope",
+CREATE_ERROR(VARIABLY_MODIFIED_TYPE_NOT_ALLOWED_AT_FILE_SCOPE, "Variably modified type not allowed at file scope",
              Underline<0>);
 
-CREATE_ERROR(VARIABLE_LENGTH_ARRAY_TYPEDEF_NOT_ALLOWED_AT_FILE_SCOPE,
-             "Variable length array typedef not allowed at file scope", Underline<0>);
+CREATE_ERROR(VARIABLY_MODIFIED_TYPEDEF_NOT_ALLOWED_AT_FILE_SCOPE, "Variably modified typedef not allowed at file scope",
+             Underline<0>);
 
-CREATE_ERROR(VARIABLE_LENGTH_ARRAY_MUST_NOT_HAVE_ANY_LINKAGE, "Variable length array must not have any linkage",
+CREATE_ERROR(VARIABLY_MODIFIED_TYPE_MUST_NOT_HAVE_ANY_LINKAGE, "Variably modified type must not have any linkage",
              PointAt<0>);
 
 CREATE_ERROR(VARIABLE_LENGTH_ARRAY_MUST_NOT_HAVE_STATIC_LIFETIME, "Variable length array must not have static lifetime",
@@ -640,6 +640,103 @@ CREATE_ERROR(CANNOT_CAST_TO_NON_ARITHMETIC_TYPE_IN_ARITHMETIC_CONSTANT_EXPRESSIO
 
 CREATE_ERROR(INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARABLE_WITH_POINTER,
              "Integer must evaluate to null to be comparable with pointer", Underline<0>);
+
+// Return statement
+
+CREATE_ERROR(CANNOT_RETURN_NO_VALUE_FROM_FUNCTION_N_WITH_RETURN_TYPE_N,
+             "Cannot return no value from function %0 with return type %full1", Underline<2>);
+
+CREATE_ERROR(CANNOT_RETURN_VALUE_FROM_FUNCTION_N_WITH_VOID_RETURN_TYPE,
+             "Cannot return value from function %0 with void return type", Underline<1>);
+
+CREATE_ERROR(EXPECTED_RETURN_VALUE_TO_BE_AN_ARITHMETIC_TYPE, "Expected return value to be an arithmetic type",
+             Underline<0>, AnnotateExpr<1>);
+
+CREATE_ERROR(EXPECTED_RETURN_VALUE_TO_BE_AN_ARITHMETIC_OR_POINTER_TYPE,
+             "Expected return value to be an arithmetic or pointer type", Underline<0>, AnnotateExpr<1>);
+
+CREATE_ERROR(EXPECTED_RETURN_VALUE_TO_BE_A_POINTER_TYPE, "Expected return value to be a pointer type", Underline<0>,
+             AnnotateExpr<1>);
+
+CREATE_ERROR(EXPECTED_RETURN_VALUE_TO_BE_NULL, "Expected return value to be null", Underline<0>, Annotate<1, 2>);
+
+CREATE_ERROR(EXPECTED_RETURN_VALUE_TO_BE_NULL_2, "Expected return value to be null", Underline<0>, Underline<1>);
+
+CREATE_ERROR(CANNOT_RETURN_VARIABLE_OF_TYPE_N_TO_INCOMPATIBLE_RETURN_TYPE_N,
+             "Cannot return variable of type %fullType0 to incompatible return type %full1", AnnotateExpr<0>,
+             Underline<2>);
+
+CREATE_ERROR(CANNOT_RETURN_VOID_POINTER_WITH_FUNCTION_POINTER_RETURN_TYPE,
+             "Cannot return void pointer with function pointer return type", Underline<0>, AnnotateExpr<1>);
+
+CREATE_ERROR(CANNOT_RETURN_FUNCTION_POINTER_WITH_VOID_POINTER_RETURN_TYPE,
+             "Cannot return function pointer with void pointer return type", Underline<0>, AnnotateExpr<1>);
+
+// Statements in general
+
+CREATE_ERROR(CONTROLLING_EXPRESSION_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE,
+             "Controlling expression must be ans arithmetic or pointer type", AnnotateExpr<0>);
+
+// For Statement
+
+CREATE_ERROR(ONLY_AUTO_OR_REGISTER_ALLOWED_IN_FOR_STATEMENTS_DECLARATION,
+             "Only 'auto' or 'register' allowed in for-statements declaration", Underline<0>);
+
+// Labels
+
+CREATE_ERROR(DECLARING_LABEL_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR,
+             "Declaring label with the name __func__ is undefined behaviour", PointAt<0>);
+
+CREATE_ERROR(REDEFINITION_OF_LABEL_N, "Redefinition of label %0", Underline<0>);
+
+// Goto
+
+CREATE_ERROR(NO_LABEL_CALLED_N_FOUND_IN_FUNCTION_N, "No label called %0 found in function %1", Underline<0>);
+
+CREATE_ERROR(GOTO_TO_LABEL_N_SKIPS_INITIALIZATION_OF_VARIABLY_MODIFIED_VARIABLE_N,
+             "Goto to label %0 skips initialization of variably modified variable %1", Underline<0>);
+
+CREATE_ERROR(GOTO_TO_LABEL_N_SKIPS_INITIALIZATION_OF_VARIABLY_MODIFIED_TYPEDEF_N,
+             "Goto to label %0 skips initialization of variably modified typedef %1", Underline<0>);
+
+// Switch
+
+CREATE_ERROR(CONTROLLING_EXPRESSION_MUST_BE_AN_INTEGER_TYPE, "Controlling expression must be an integer type",
+             AnnotateExpr<0>);
+
+// Case
+
+CREATE_ERROR(CASE_MUST_BE_WITHIN_A_SWITCH_STATEMENT, "Case must be within a switch statement", Underline<0>);
+
+CREATE_ERROR(REDEFINITION_OF_CASE_WITH_VALUE_N, "Redefinition of case with value %0", Annotate<1, 0>);
+
+CREATE_ERROR(CASE_OF_SWITCH_SKIPS_INITIALIZATION_OF_VARIABLY_MODIFIED_VARIABLE_N,
+             "Case of switch skips initialization of variably modified variable %0", Underline<1>);
+
+CREATE_ERROR(CASE_OF_SWITCH_SKIPS_INITIALIZATION_OF_VARIABLY_MODIFIED_TYPEDEF_N,
+             "Case of switch skips initialization of variably modified typedef %0", Underline<1>);
+
+// Default
+
+CREATE_ERROR(DEFAULT_MUST_BE_WITHIN_A_SWITCH_STATEMENT, "Default must be within a switch statement", Underline<0>);
+
+CREATE_ERROR(REDEFINITION_OF_DEFAULT, "Redefinition of default", Underline<0>);
+
+CREATE_ERROR(DEFAULT_CASE_OF_SWITCH_SKIPS_INITIALIZATION_OF_VARIABLY_MODIFIED_VARIABLE_N,
+             "Default case of switch skips initialization of variably modified variable %0", Underline<1>);
+
+CREATE_ERROR(DEFAULT_CASE_OF_SWITCH_SKIPS_INITIALIZATION_OF_VARIABLY_MODIFIED_TYPEDEF_N,
+             "Default case of switch skips initialization of variably modified typedef %0", Underline<1>);
+
+// Break
+
+CREATE_ERROR(BREAK_MUST_BE_WITHIN_A_SWITCH_OR_LOOP_STATEMENT, "Break must be within a switch or loop statement",
+             Underline<0>);
+
+// Continue
+
+CREATE_ERROR(CONTINUE_MUST_BE_WITHIN_A_LOOP_STATEMENT, "Continue must be within a loop statement", Underline<0>);
+
 } // namespace Semantics
 
 namespace Lexer
@@ -814,7 +911,22 @@ CREATE_NOTE(TO_MATCH_N_HERE, "To match %0 here:", PointAt<0>);
 
 CREATE_NOTE(PREVIOUSLY_DECLARED_HERE, "Previously declared here:", Underline<0>);
 
+namespace Semantics
+{
 CREATE_NOTE(PREVIOUS_STORAGE_SPECIFIER_HERE, "Previous storage specifier encountered here:", Underline<0>);
+
+CREATE_NOTE(VARIABLY_MODIFIED_VARIABLE_N_WITH_TYPE_N_HERE,
+            "Variably modified variable %0 with type %full1 here:", Annotate<0, 1>);
+
+CREATE_NOTE(VARIABLY_MODIFIED_TYPEDEF_N_HERE, "Variably modified typedef %0 here:", Underline<0>);
+
+CREATE_NOTE(LABEL_N_HERE, "Label %0 here:", Underline<0>);
+
+CREATE_NOTE(PREVIOUS_CASE_HERE, "Previous case here:", Annotate<0, 1>);
+
+CREATE_NOTE(PREVIOUS_DEFAULT_HERE, "Previous default here:", Underline<0>);
+
+} // namespace Semantics
 
 namespace PP
 {

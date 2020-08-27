@@ -8,6 +8,8 @@
 #include <functional>
 #include <unordered_map>
 
+#include <tsl/ordered_map.h>
+
 #include "ConstValue.hpp"
 #include "Message.hpp"
 #include "Semantics.hpp"
@@ -52,7 +54,7 @@ class SemanticAnalysis final
     struct Scope
     {
         std::int64_t previousScope;
-        std::unordered_map<std::string_view, DeclarationInScope> declarations;
+        tsl::ordered_map<std::string_view, DeclarationInScope> declarations;
         std::unordered_map<std::string_view, TagTypeInScope> types;
     };
     std::int64_t m_currentScope = 0;
@@ -63,12 +65,22 @@ class SemanticAnalysis final
     struct FunctionScope
     {
         const FunctionDefinition* CLD_NON_NULL currentFunction;
-        std::unordered_map<std::string_view, Lexer::CTokenIterator> labels;
+        std::unordered_map<std::string_view, const LabelStatement * CLD_NON_NULL> labels;
     };
     std::int64_t m_currentFunctionScope = -1;
     std::vector<FunctionScope> m_functionScopes;
     bool m_inStaticInitializer = false;
     bool m_inFunctionPrototype = false;
+    std::vector<std::pair<Lexer::CTokenIterator, GotoStatement * CLD_NON_NULL>> m_scheduledGotos;
+    std::vector<LoopStatements> m_loopStatements;
+    std::vector<BreakableStatements> m_breakableStatements;
+    struct SwitchStack
+    {
+        const SwitchStatement* CLD_NON_NULL switchStatement;
+        std::map<llvm::APSInt, const CaseStatement * CLD_NON_NULL> cases;
+        const DefaultStatement* CLD_NULLABLE defaultStmt;
+    };
+    std::vector<SwitchStack> m_switchStatements;
 
     [[nodiscard]] auto changeFunctionPrototypeScope(bool newValue)
     {
@@ -80,11 +92,16 @@ class SemanticAnalysis final
     constexpr static std::uint64_t IS_SCOPE = 1ull << 63;
     constexpr static std::uint64_t SCOPE_OR_ID_MASK = ~(1ull << 63);
 
+    void resolveGotos();
+
     [[nodiscard]] auto pushFunctionScope(const FunctionDefinition& functionDefinition)
     {
         m_functionScopes.push_back({&functionDefinition, {}});
         m_currentFunctionScope = m_functionScopes.size() - 1;
-        return llvm::make_scope_exit([this] { m_currentFunctionScope = -1; });
+        return llvm::make_scope_exit([this] {
+            resolveGotos();
+            m_currentFunctionScope = -1;
+        });
     }
 
     [[nodiscard]] bool inFunction() const
@@ -92,7 +109,7 @@ class SemanticAnalysis final
         return m_currentFunctionScope >= 0;
     }
 
-    [[nodiscard]] const FunctionScope* getCurrentFunctionScope() const
+    [[nodiscard]] FunctionScope* getCurrentFunctionScope()
     {
         if (m_currentFunctionScope >= 0)
         {
@@ -106,6 +123,26 @@ class SemanticAnalysis final
         m_scopes.push_back({m_currentScope, {}, {}});
         m_currentScope = m_scopes.size() - 1;
         return llvm::make_scope_exit([this, scope = m_scopes.back().previousScope] { m_currentScope = scope; });
+    }
+
+    [[nodiscard]] auto pushLoop(LoopStatements loop)
+    {
+        m_loopStatements.push_back(loop);
+        cld::match(loop, [&](auto&& value) { m_breakableStatements.emplace_back(value); });
+        return llvm::make_scope_exit([&] {
+            m_loopStatements.pop_back();
+            m_breakableStatements.pop_back();
+        });
+    }
+
+    [[nodiscard]] auto pushSwitch(const SwitchStatement& switchStatement)
+    {
+        m_breakableStatements.push_back(&switchStatement);
+        m_switchStatements.push_back({&switchStatement, {}, nullptr});
+        return llvm::make_scope_exit([&] {
+            m_breakableStatements.pop_back();
+            m_switchStatements.pop_back();
+        });
     }
 
     template <class T>
@@ -277,6 +314,8 @@ private:
 
     [[nodiscard]] bool isVariablyModified(const Type& type) const;
 
+    [[nodiscard]] bool isVariableLengthArray(const Type& type) const;
+
     bool doAssignmentLikeConstraints(const Type& lhsTyp, const Expression& rhsValue,
                                      llvm::function_ref<void()> mustBeArithmetic,
                                      llvm::function_ref<void()> mustBeArithmeticOrPointer,
@@ -288,6 +327,9 @@ private:
 
     Expression doSingleElementInitialization(const Syntax::Node& node, const Type& type, Expression&& expression,
                                              bool staticLifetime, std::size_t* size);
+
+    void checkForIllegalSwitchJumps(std::tuple<const Lexer::CToken&, const Lexer::CToken&> loc,
+                                    const SwitchStatement& switchStatement, bool isCaseOrDefault);
 
 public:
     explicit SemanticAnalysis(const SourceInterface& sourceInterface, llvm::raw_ostream* reporter = &llvm::errs(),
@@ -331,10 +373,6 @@ public:
     using DeclRetVariant = std::variant<std::unique_ptr<Declaration>, std::shared_ptr<const Expression>>;
 
     std::vector<DeclRetVariant> visit(const Syntax::Declaration& node);
-
-    CompoundStatement visit(const Syntax::CompoundStatement& node, bool pushScope = true);
-
-    std::vector<CompoundStatement::Variant> visit(const Syntax::CompoundItem& node);
 
     Statement visit(const Syntax::Statement& node);
 
@@ -407,5 +445,33 @@ public:
 
     Initializer visit(const Syntax::InitializerList& node, const Type& type, bool staticLifetime = false,
                       std::size_t* size = nullptr);
+
+    [[nodiscard]] CompoundStatement visit(const Syntax::CompoundStatement& node, bool pushScope = true);
+
+    [[nodiscard]] std::vector<CompoundStatement::Variant> visit(const Syntax::CompoundItem& node);
+
+    [[nodiscard]] ReturnStatement visit(const Syntax::ReturnStatement& node);
+
+    [[nodiscard]] IfStatement visit(const Syntax::IfStatement& node);
+
+    [[nodiscard]] std::unique_ptr<ForStatement> visit(const Syntax::ForStatement& node);
+
+    [[nodiscard]] std::unique_ptr<HeadWhileStatement> visit(const Syntax::HeadWhileStatement& node);
+
+    [[nodiscard]] std::unique_ptr<FootWhileStatement> visit(const Syntax::FootWhileStatement& node);
+
+    [[nodiscard]] BreakStatement visit(const Syntax::BreakStatement& node);
+
+    [[nodiscard]] ContinueStatement visit(const Syntax::ContinueStatement& node);
+
+    [[nodiscard]] std::unique_ptr<SwitchStatement> visit(const Syntax::SwitchStatement& node);
+
+    [[nodiscard]] std::unique_ptr<DefaultStatement> visit(const Syntax::DefaultStatement& node);
+
+    [[nodiscard]] std::unique_ptr<CaseStatement> visit(const Syntax::CaseStatement& node);
+
+    [[nodiscard]] std::unique_ptr<GotoStatement> visit(const Syntax::GotoStatement& node);
+
+    [[nodiscard]] std::unique_ptr<LabelStatement> visit(const Syntax::LabelStatement& node);
 };
 } // namespace cld::Semantics

@@ -676,10 +676,21 @@ const cld::Syntax::Statement& cld::Syntax::SwitchStatement::getStatement() const
 }
 
 cld::Syntax::DefaultStatement::DefaultStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
+                                                Lexer::CTokenIterator defaultToken, Lexer::CTokenIterator colonToken,
                                                 std::unique_ptr<Statement>&& statement)
-    : Node(begin, end), m_statement(std::move(statement))
+    : Node(begin, end), m_defaultToken(defaultToken), m_colonToken(colonToken), m_statement(std::move(statement))
 {
     CLD_ASSERT(m_statement);
+}
+
+cld::Lexer::CTokenIterator cld::Syntax::DefaultStatement::getDefaultToken() const
+{
+    return m_defaultToken;
+}
+
+cld::Lexer::CTokenIterator cld::Syntax::DefaultStatement::getColonToken() const
+{
+    return m_colonToken;
 }
 
 const cld::Syntax::Statement& cld::Syntax::DefaultStatement::getStatement() const
@@ -688,15 +699,29 @@ const cld::Syntax::Statement& cld::Syntax::DefaultStatement::getStatement() cons
 }
 
 cld::Syntax::CaseStatement::CaseStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                                          ConstantExpression&& constantExpression,
-                                          std::unique_ptr<Statement>&& statement)
-    : Node(begin, end), m_constantExpression(std::move(constantExpression)), m_statement(std::move(statement))
+                                          Lexer::CTokenIterator caseToken, ConstantExpression&& constantExpression,
+                                          Lexer::CTokenIterator colonToken, std::unique_ptr<Statement>&& statement)
+    : Node(begin, end),
+      m_caseToken(caseToken),
+      m_constantExpression(std::move(constantExpression)),
+      m_colonToken(colonToken),
+      m_statement(std::move(statement))
 {
 }
 
 const cld::Syntax::Statement& cld::Syntax::CaseStatement::getStatement() const
 {
     return *m_statement;
+}
+
+cld::Lexer::CTokenIterator cld::Syntax::CaseStatement::getCaseToken() const
+{
+    return m_caseToken;
+}
+
+cld::Lexer::CTokenIterator cld::Syntax::CaseStatement::getColonToken() const
+{
+    return m_colonToken;
 }
 
 const cld::Syntax::ConstantExpression& cld::Syntax::CaseStatement::getConstantExpression() const
@@ -1100,7 +1125,7 @@ cld::Lexer::CTokenIterator cld::Syntax::GotoStatement::getIdentifier() const
 }
 
 cld::Syntax::LabelStatement::LabelStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                                            std::string_view identifier, Statement&& statement)
+                                            Lexer::CTokenIterator identifier, Statement&& statement)
     : Node(begin, end), m_identifier(identifier), m_statement(std::make_unique<Statement>(std::move(statement)))
 {
 }
@@ -1108,6 +1133,11 @@ cld::Syntax::LabelStatement::LabelStatement(Lexer::CTokenIterator begin, Lexer::
 const cld::Syntax::Statement& cld::Syntax::LabelStatement::getStatement() const
 {
     return *m_statement;
+}
+
+cld::Lexer::CTokenIterator cld::Syntax::LabelStatement::getIdentifierToken() const
+{
+    return m_identifier;
 }
 
 cld::Syntax::TranslationUnit::TranslationUnit(std::vector<cld::Syntax::ExternalDeclaration>&& globals) noexcept

@@ -1890,7 +1890,8 @@ std::optional<cld::Syntax::Statement> cld::Parser::parseStatement(Lexer::CTokenI
             }
             case Lexer::TokenType::DefaultKeyword:
             {
-                begin++;
+                const auto* defaultToken = begin++;
+                const auto* colonToken = begin;
                 if (!expect(Lexer::TokenType::Colon, begin, end, context))
                 {
                     context.skipUntil(begin, end, firstStatementSet);
@@ -1900,13 +1901,15 @@ std::optional<cld::Syntax::Statement> cld::Parser::parseStatement(Lexer::CTokenI
                 {
                     return {};
                 }
-                return Statement(DefaultStatement(start, begin, std::make_unique<Statement>(std::move(*statement))));
+                return Statement(DefaultStatement(start, begin, defaultToken, colonToken,
+                                                  std::make_unique<Statement>(std::move(*statement))));
             }
             case Lexer::TokenType::CaseKeyword:
             {
-                begin++;
+                const auto* caseToken = begin++;
                 auto expression = parseConditionalExpression(
                     begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Colon)));
+                const auto* colonToken = begin;
                 if (!expect(Lexer::TokenType::Colon, begin, end, context))
                 {
                     context.skipUntil(begin, end, firstStatementSet);
@@ -1916,7 +1919,7 @@ std::optional<cld::Syntax::Statement> cld::Parser::parseStatement(Lexer::CTokenI
                 {
                     return {};
                 }
-                return Statement(CaseStatement(start, begin, std::move(*expression),
+                return Statement(CaseStatement(start, begin, caseToken, std::move(*expression), colonToken,
                                                std::make_unique<Statement>(std::move(*statement))));
             }
             case Lexer::TokenType::GotoKeyword:
@@ -1944,7 +1947,7 @@ std::optional<cld::Syntax::Statement> cld::Parser::parseStatement(Lexer::CTokenI
             {
                 if (begin + 1 < end && (begin + 1)->getTokenType() == Lexer::TokenType::Colon)
                 {
-                    auto name = begin->getText();
+                    const auto* name = begin;
                     begin += 2;
                     auto statement = parseStatement(begin, end, context);
                     if (!statement)

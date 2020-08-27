@@ -46,6 +46,7 @@ using namespace cld::Errors;
 using namespace cld::Warnings::Semantics;
 using namespace cld::Warnings;
 using namespace cld::Notes;
+using namespace cld::Notes::Semantics;
 
 TEST_CASE("Semantics declarations", "[semantics]")
 {
@@ -328,7 +329,7 @@ TEST_CASE("Semantics declarations", "[semantics]")
             CHECK(std::holds_alternative<cld::Semantics::ValArrayType>(thirdDecl.getType().get()));
             SEMA_PRODUCES("extern int i;\n"
                           "typedef int n[i];",
-                          ProducesError(VARIABLE_LENGTH_ARRAY_TYPEDEF_NOT_ALLOWED_AT_FILE_SCOPE));
+                          ProducesError(VARIABLY_MODIFIED_TYPEDEF_NOT_ALLOWED_AT_FILE_SCOPE));
             SEMA_PRODUCES("extern int i;\n"
                           "void foo(void) {\n"
                           "typedef int n[i];\n"
@@ -629,24 +630,24 @@ TEST_CASE("Semantics array declarations", "[semantics]")
 
         SEMA_PRODUCES("int n = 1;\n"
                       "int f[n];",
-                      ProducesError(VARIABLE_LENGTH_ARRAY_NOT_ALLOWED_AT_FILE_SCOPE));
+                      ProducesError(VARIABLY_MODIFIED_TYPE_NOT_ALLOWED_AT_FILE_SCOPE));
         SEMA_PRODUCES("int n = 1;\n"
                       "int f[n][5];",
-                      ProducesError(VARIABLE_LENGTH_ARRAY_NOT_ALLOWED_AT_FILE_SCOPE));
-        SEMA_PRODUCES("int f[*];", ProducesError(VARIABLE_LENGTH_ARRAY_NOT_ALLOWED_AT_FILE_SCOPE)
+                      ProducesError(VARIABLY_MODIFIED_TYPE_NOT_ALLOWED_AT_FILE_SCOPE));
+        SEMA_PRODUCES("int f[*];", ProducesError(VARIABLY_MODIFIED_TYPE_NOT_ALLOWED_AT_FILE_SCOPE)
                                        && ProducesError(STAR_IN_ARRAY_DECLARATOR_ONLY_ALLOWED_IN_FUNCTION_PROTOTYPES));
         SEMA_PRODUCES("int f[*][5];",
-                      ProducesError(VARIABLE_LENGTH_ARRAY_NOT_ALLOWED_AT_FILE_SCOPE)
+                      ProducesError(VARIABLY_MODIFIED_TYPE_NOT_ALLOWED_AT_FILE_SCOPE)
                           && ProducesError(STAR_IN_ARRAY_DECLARATOR_ONLY_ALLOWED_IN_FUNCTION_PROTOTYPES));
         SEMA_PRODUCES("int foo(void) {\n"
                       "int f[*];\n"
                       "}",
-                      !ProducesError(VARIABLE_LENGTH_ARRAY_NOT_ALLOWED_AT_FILE_SCOPE)
+                      !ProducesError(VARIABLY_MODIFIED_TYPE_NOT_ALLOWED_AT_FILE_SCOPE)
                           && ProducesError(STAR_IN_ARRAY_DECLARATOR_ONLY_ALLOWED_IN_FUNCTION_PROTOTYPES));
         SEMA_PRODUCES("int foo(void) {\n"
                       "int f[*][5];\n"
                       "}",
-                      !ProducesError(VARIABLE_LENGTH_ARRAY_NOT_ALLOWED_AT_FILE_SCOPE)
+                      !ProducesError(VARIABLY_MODIFIED_TYPE_NOT_ALLOWED_AT_FILE_SCOPE)
                           && ProducesError(STAR_IN_ARRAY_DECLARATOR_ONLY_ALLOWED_IN_FUNCTION_PROTOTYPES));
         SEMA_PRODUCES("int n = 1;\n"
                       "int f[static n];",
@@ -1040,7 +1041,7 @@ TEST_CASE("Semantics enums", "[semantics]")
                   "\n"
                   "int a_[a];\n",
                   ProducesError(CANNOT_CAST_TO_NON_INTEGER_TYPE_IN_INTEGER_CONSTANT_EXPRESSION)
-                      && !ProducesError(VARIABLE_LENGTH_ARRAY_NOT_ALLOWED_AT_FILE_SCOPE));
+                      && !ProducesError(VARIABLY_MODIFIED_TYPE_NOT_ALLOWED_AT_FILE_SCOPE));
 }
 
 TEST_CASE("Semantics function definitions")
@@ -3822,4 +3823,297 @@ TEST_CASE("Semantics __func__", "[semantics]")
                   ProducesError(DECLARING_PARAMETERS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR));
     SEMA_PRODUCES("int foo() int __func__; {}",
                   ProducesError(DECLARING_PARAMETERS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR));
+}
+
+TEST_CASE("Semantics return statement", "[semantics]")
+{
+    SEMA_PRODUCES("int foo(void) {\n"
+                  "return;\n"
+                  "}",
+                  ProducesError(CANNOT_RETURN_NO_VALUE_FROM_FUNCTION_N_WITH_RETURN_TYPE_N, "'foo'", "'int'"));
+    SEMA_PRODUCES("void foo(void) {\n"
+                  "return 5;\n"
+                  "}",
+                  ProducesError(CANNOT_RETURN_VALUE_FROM_FUNCTION_N_WITH_VOID_RETURN_TYPE, "'foo'"));
+}
+
+TEST_CASE("Semantics if statement", "[semantics]")
+{
+    SEMA_PRODUCES("struct R { int x; };\n"
+                  "void foo(struct R r) {\n"
+                  " if(r);\n"
+                  "}",
+                  ProducesError(CONTROLLING_EXPRESSION_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE));
+}
+
+TEST_CASE("Semantics for statement", "[semantics]")
+{
+    SEMA_PRODUCES("void foo(int i) {\n"
+                  "for(int i;;);\n"
+                  "}",
+                  ProducesNoErrors());
+    SEMA_PRODUCES("void foo(int i) {\n"
+                  "for(extern int i;;);\n"
+                  "}",
+                  ProducesError(ONLY_AUTO_OR_REGISTER_ALLOWED_IN_FOR_STATEMENTS_DECLARATION));
+    SEMA_PRODUCES("void foo(int i) {\n"
+                  "for(static int i;;);\n"
+                  "}",
+                  ProducesError(ONLY_AUTO_OR_REGISTER_ALLOWED_IN_FOR_STATEMENTS_DECLARATION));
+    SEMA_PRODUCES("void foo(int i) {\n"
+                  "for(typedef int i;;);\n"
+                  "}",
+                  ProducesError(ONLY_AUTO_OR_REGISTER_ALLOWED_IN_FOR_STATEMENTS_DECLARATION));
+    SEMA_PRODUCES("void foo(int i) {\n"
+                  "for(auto int i;;);\n"
+                  "}",
+                  ProducesNoErrors());
+    SEMA_PRODUCES("void foo(int i) {\n"
+                  "for(register int i;;);\n"
+                  "}",
+                  ProducesNoErrors());
+    SEMA_PRODUCES("struct R { int x; };\n"
+                  "void foo(struct R r) {\n"
+                  " for(;r;);\n"
+                  "}",
+                  ProducesError(CONTROLLING_EXPRESSION_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE));
+}
+
+TEST_CASE("Semantics while statement", "[semantics]")
+{
+    SEMA_PRODUCES("struct R { int x; };\n"
+                  "void foo(struct R r) {\n"
+                  " while(r);\n"
+                  "}",
+                  ProducesError(CONTROLLING_EXPRESSION_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE));
+}
+
+TEST_CASE("Semantics do while statement", "[semantics]")
+{
+    SEMA_PRODUCES("struct R { int x; };\n"
+                  "void foo(struct R r) {\n"
+                  " do;while(r);\n"
+                  "}",
+                  ProducesError(CONTROLLING_EXPRESSION_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE));
+}
+
+TEST_CASE("Semantics goto and label statement", "[semantics]")
+{
+    SEMA_PRODUCES("void foo(void) {\n"
+                  "__func__:;\n"
+                  "}",
+                  ProducesError(DECLARING_LABEL_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR));
+    SEMA_PRODUCES("void foo(void) {\n"
+                  "text:;\n"
+                  "text:;\n"
+                  "}",
+                  ProducesError(REDEFINITION_OF_LABEL_N, "'text'") && ProducesNote(PREVIOUSLY_DECLARED_HERE));
+    SEMA_PRODUCES("void foo(void) {\n"
+                  "goto text;\n"
+                  "}",
+                  ProducesError(NO_LABEL_CALLED_N_FOUND_IN_FUNCTION_N, "'text'", "'foo'"));
+    SEMA_PRODUCES("void foo(void) {\n"
+                  "text:\n"
+                  "goto text;\n"
+                  "}",
+                  ProducesNoErrors());
+    SEMA_PRODUCES("void foo(void) {\n"
+                  "goto text;\n"
+                  "{\n"
+                  " text:;\n"
+                  "}\n"
+                  "}",
+                  ProducesNoErrors());
+    SEMA_PRODUCES("void foo(int n) {\n"
+                  "goto text;\n"
+                  "{\n"
+                  " int r[n];\n"
+                  " text:;\n"
+                  "}\n"
+                  "}",
+                  ProducesError(GOTO_TO_LABEL_N_SKIPS_INITIALIZATION_OF_VARIABLY_MODIFIED_VARIABLE_N, "'text'", "'r'")
+                      && ProducesNote(VARIABLY_MODIFIED_VARIABLE_N_WITH_TYPE_N_HERE, "'r'", "'int[*]'")
+                      && ProducesNote(LABEL_N_HERE, "'text'"));
+    SEMA_PRODUCES("void foo(int n) {\n"
+                  "goto text;\n"
+                  "{\n"
+                  " int (*r)[n];\n"
+                  " text:;\n"
+                  "}\n"
+                  "}",
+                  ProducesError(GOTO_TO_LABEL_N_SKIPS_INITIALIZATION_OF_VARIABLY_MODIFIED_VARIABLE_N, "'text'", "'r'")
+                      && ProducesNote(VARIABLY_MODIFIED_VARIABLE_N_WITH_TYPE_N_HERE, "'r'", "'int(*)[*]'")
+                      && ProducesNote(LABEL_N_HERE, "'text'"));
+    SEMA_PRODUCES("void foo(int n) {\n"
+                  "goto text;\n"
+                  "{\n"
+                  " typedef int r[n];\n"
+                  " text:;\n"
+                  "}\n"
+                  "}",
+                  ProducesError(GOTO_TO_LABEL_N_SKIPS_INITIALIZATION_OF_VARIABLY_MODIFIED_TYPEDEF_N, "'text'", "'r'")
+                      && ProducesNote(VARIABLY_MODIFIED_TYPEDEF_N_HERE, "'r'") && ProducesNote(LABEL_N_HERE, "'text'"));
+    SEMA_PRODUCES("void foo(int n) {\n"
+                  "goto text;\n"
+                  "{\n"
+                  " text:;\n"
+                  " typedef int r[n];\n"
+                  "}\n"
+                  "}",
+                  ProducesNoErrors());
+    SEMA_PRODUCES("void foo(int n) {\n"
+                  " goto text;\n"
+                  " int r[n];\n"
+                  " text:;\n"
+                  "}",
+                  ProducesError(GOTO_TO_LABEL_N_SKIPS_INITIALIZATION_OF_VARIABLY_MODIFIED_VARIABLE_N, "'text'", "'r'")
+                      && ProducesNote(VARIABLY_MODIFIED_VARIABLE_N_WITH_TYPE_N_HERE, "'r'", "'int[*]'")
+                      && ProducesNote(LABEL_N_HERE, "'text'"));
+    SEMA_PRODUCES("void foo(int n) {\n"
+                  " goto text;\n"
+                  " text:;\n"
+                  " typedef int r[n];\n"
+                  "}",
+                  ProducesNoErrors());
+}
+
+TEST_CASE("Semantics switch statement", "[semantics]")
+{
+    SEMA_PRODUCES("void foo(void) {\n"
+                  "switch(5.0);\n"
+                  "}",
+                  ProducesError(CONTROLLING_EXPRESSION_MUST_BE_AN_INTEGER_TYPE));
+    SEMA_PRODUCES("void foo(int n) {\n"
+                  "switch(n) {\n"
+                  " case 5.0:;\n"
+                  "}\n"
+                  "}",
+                  ProducesError(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS));
+    SEMA_PRODUCES("void foo(int n) {\n"
+                  " case 5:;\n"
+                  "}",
+                  ProducesError(CASE_MUST_BE_WITHIN_A_SWITCH_STATEMENT));
+    SEMA_PRODUCES("void foo(int n) {\n"
+                  "switch(n) {\n"
+                  " case 3 + 2:;\n"
+                  " case 2 + 3:;\n"
+                  "}\n"
+                  "}",
+                  ProducesError(REDEFINITION_OF_CASE_WITH_VALUE_N, "'5'") && ProducesNote(PREVIOUS_CASE_HERE));
+    SEMA_PRODUCES("void foo(int n) {\n"
+                  " default:;\n"
+                  "}",
+                  ProducesError(DEFAULT_MUST_BE_WITHIN_A_SWITCH_STATEMENT));
+    SEMA_PRODUCES("void foo(int n) {\n"
+                  "switch(n) {\n"
+                  " default:;\n"
+                  " default:;\n"
+                  "}\n"
+                  "}",
+                  ProducesError(REDEFINITION_OF_DEFAULT) && ProducesNote(PREVIOUS_DEFAULT_HERE));
+    SEMA_PRODUCES("void foo(int n) {\n"
+                  "switch(n) {\n"
+                  " int r[n];\n"
+                  " case 2 + 3:;\n"
+                  "}\n"
+                  "}",
+                  ProducesError(CASE_OF_SWITCH_SKIPS_INITIALIZATION_OF_VARIABLY_MODIFIED_VARIABLE_N, "'r'")
+                      && ProducesNote(VARIABLY_MODIFIED_VARIABLE_N_WITH_TYPE_N_HERE, "'r'", "'int[*]'"));
+    SEMA_PRODUCES("void foo(int n) {\n"
+                  "switch(n) {\n"
+                  " int r[n];\n"
+                  " default:;\n"
+                  "}\n"
+                  "}",
+                  ProducesError(DEFAULT_CASE_OF_SWITCH_SKIPS_INITIALIZATION_OF_VARIABLY_MODIFIED_VARIABLE_N, "'r'")
+                      && ProducesNote(VARIABLY_MODIFIED_VARIABLE_N_WITH_TYPE_N_HERE, "'r'", "'int[*]'"));
+    SEMA_PRODUCES("void foo(int n) {\n"
+                  "switch(n) {\n"
+                  " typedef int r[n];\n"
+                  " case 2 + 3:;\n"
+                  "}\n"
+                  "}",
+                  ProducesError(CASE_OF_SWITCH_SKIPS_INITIALIZATION_OF_VARIABLY_MODIFIED_TYPEDEF_N, "'r'")
+                      && ProducesNote(VARIABLY_MODIFIED_TYPEDEF_N_HERE, "'r'"));
+    SEMA_PRODUCES("void foo(int n) {\n"
+                  "switch(n) {\n"
+                  " typedef int r[n];\n"
+                  " default:;\n"
+                  "}\n"
+                  "}",
+                  ProducesError(DEFAULT_CASE_OF_SWITCH_SKIPS_INITIALIZATION_OF_VARIABLY_MODIFIED_TYPEDEF_N, "'r'")
+                      && ProducesNote(VARIABLY_MODIFIED_TYPEDEF_N_HERE, "'r'"));
+
+    SEMA_PRODUCES("void foo(int n) {\n"
+                  "switch(n) {\n"
+                  " case 2 + 3:;\n"
+                  " int r[n];\n"
+                  "}\n"
+                  "}",
+                  ProducesNoErrors());
+    SEMA_PRODUCES("void foo(int n) {\n"
+                  "switch(n) {\n"
+                  " default:;\n"
+                  " int r[n];\n"
+                  "}\n"
+                  "}",
+                  ProducesNoErrors());
+    SEMA_PRODUCES("void foo(int n) {\n"
+                  "switch(n) {\n"
+                  " case 2 + 3:;\n"
+                  " typedef int r[n];\n"
+                  "}\n"
+                  "}",
+                  ProducesNoErrors());
+    SEMA_PRODUCES("void foo(int n) {\n"
+                  "switch(n) {\n"
+                  " default:;\n"
+                  " typedef int r[n];\n"
+                  "}\n"
+                  "}",
+                  ProducesNoErrors());
+}
+
+TEST_CASE("Semantics break and continue", "[semantics]")
+{
+    SEMA_PRODUCES("void foo(void) {\n"
+                  "break;\n"
+                  "}",
+                  ProducesError(BREAK_MUST_BE_WITHIN_A_SWITCH_OR_LOOP_STATEMENT));
+    SEMA_PRODUCES("void foo(void) {\n"
+                  "continue;\n"
+                  "}",
+                  ProducesError(CONTINUE_MUST_BE_WITHIN_A_LOOP_STATEMENT));
+    SEMA_PRODUCES("void foo(int n) {\n"
+                  "switch(n) {\n"
+                  "case 5:break;\n"
+                  "case 10:n += 5;\n"
+                  "default:break;\n"
+                  "}"
+                  "}",
+                  ProducesNoErrors());
+    SEMA_PRODUCES("void foo(int n) {\n"
+                  "while(1) break;\n"
+                  "}",
+                  ProducesNoErrors());
+    SEMA_PRODUCES("void foo(int n) {\n"
+                  "do break; while(1);\n"
+                  "}",
+                  ProducesNoErrors());
+    SEMA_PRODUCES("void foo(int n) {\n"
+                  "for(;;) break;\n"
+                  "}",
+                  ProducesNoErrors());
+    SEMA_PRODUCES("void foo(int n) {\n"
+                  "while(1) continue;\n"
+                  "}",
+                  ProducesNoErrors());
+    SEMA_PRODUCES("void foo(int n) {\n"
+                  "do continue; while(1);\n"
+                  "}",
+                  ProducesNoErrors());
+    SEMA_PRODUCES("void foo(int n) {\n"
+                  "for(;;) continue;\n"
+                  "}",
+                  ProducesNoErrors());
 }

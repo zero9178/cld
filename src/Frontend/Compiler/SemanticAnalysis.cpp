@@ -78,7 +78,6 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
         log(Errors::Semantics::FUNCTION_DEFINITION_MUST_HAVE_FUNCTION_TYPE.args(
             std::forward_as_tuple(node.getDeclarationSpecifiers(), node.getDeclarator()), m_sourceInterface,
             std::forward_as_tuple(node.getDeclarationSpecifiers(), node.getDeclarator()), type));
-        visit(node.getCompoundStatement());
         return {};
     }
 
@@ -121,7 +120,6 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
         log(Errors::Semantics::FUNCTION_DEFINITION_MUST_HAVE_A_PARAMETER_LIST.args(
             std::forward_as_tuple(node.getDeclarationSpecifiers(), node.getDeclarator()), m_sourceInterface,
             std::forward_as_tuple(node.getDeclarationSpecifiers(), node.getDeclarator())));
-        visit(node.getCompoundStatement(), false);
         return {};
     }
 
@@ -223,7 +221,6 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
     {
         log(Errors::Semantics::DEFINING_FUNCTIONS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR.args(
             *loc, m_sourceInterface, *loc));
-        visit(node.getCompoundStatement(), false);
         return {};
     }
     std::vector<TranslationUnit::Variant> result;
@@ -249,7 +246,7 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
         }
         else
         {
-            prev->second = DeclarationInScope{loc, ptr.get()};
+            prev.value() = DeclarationInScope{loc, ptr.get()};
         }
     }
 
@@ -279,8 +276,8 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
         else
         {
             log(Errors::Semantics::ONLY_ONE_STORAGE_SPECIFIER.args(storage, m_sourceInterface, storage));
-            log(Notes::PREVIOUS_STORAGE_SPECIFIER_HERE.args(*storageClassSpecifier, m_sourceInterface,
-                                                            *storageClassSpecifier));
+            log(Notes::Semantics::PREVIOUS_STORAGE_SPECIFIER_HERE.args(*storageClassSpecifier, m_sourceInterface,
+                                                                       *storageClassSpecifier));
         }
         if (m_currentScope == 0
             && (storage.getSpecifier() == Syntax::StorageClassSpecifier::Auto
@@ -380,7 +377,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                     auto& otherType = cld::get<const Declaration*>(prev->second.declared)->getType();
                     auto composite = compositeType(otherType, declaration->getType());
                     *declaration = Declaration(std::move(composite), linkage, lifetime, loc);
-                    prev->second.declared = declaration.get();
+                    prev.value().declared = declaration.get();
                     decls.push_back(std::move(declaration));
                 }
                 else
@@ -443,28 +440,45 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                     if (storageClassSpecifier
                         && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Typedef)
                     {
-                        log(Errors::Semantics::VARIABLE_LENGTH_ARRAY_TYPEDEF_NOT_ALLOWED_AT_FILE_SCOPE.args(
+                        log(Errors::Semantics::VARIABLY_MODIFIED_TYPEDEF_NOT_ALLOWED_AT_FILE_SCOPE.args(
                             *loc, m_sourceInterface, *loc));
                     }
                     else
                     {
-                        log(Errors::Semantics::VARIABLE_LENGTH_ARRAY_NOT_ALLOWED_AT_FILE_SCOPE.args(
+                        log(Errors::Semantics::VARIABLY_MODIFIED_TYPE_NOT_ALLOWED_AT_FILE_SCOPE.args(
                             *loc, m_sourceInterface, *loc));
                     }
                     errors = true;
                 }
                 else if (linkage != Linkage::None)
                 {
-                    CLD_ASSERT(storageClassSpecifier);
-                    log(Errors::Semantics::VARIABLE_LENGTH_ARRAY_MUST_NOT_HAVE_ANY_LINKAGE.args(
-                        *loc, m_sourceInterface, *storageClassSpecifier));
+                    if (storageClassSpecifier)
+                    {
+                        log(Errors::Semantics::VARIABLY_MODIFIED_TYPE_MUST_NOT_HAVE_ANY_LINKAGE.args(
+                            *loc, m_sourceInterface, *storageClassSpecifier));
+                    }
+                    else
+                    {
+                        log(Errors::Semantics::VARIABLY_MODIFIED_TYPE_MUST_NOT_HAVE_ANY_LINKAGE.args(
+                            *loc, m_sourceInterface, *loc));
+                    }
                     errors = true;
                 }
-                else if (lifetime == Lifetime::Static)
+            }
+            if (isVariableLengthArray(result))
+            {
+                if (lifetime == Lifetime::Static)
                 {
-                    CLD_ASSERT(storageClassSpecifier);
-                    log(Errors::Semantics::VARIABLE_LENGTH_ARRAY_MUST_NOT_HAVE_STATIC_LIFETIME.args(
-                        *loc, m_sourceInterface, *storageClassSpecifier));
+                    if (storageClassSpecifier)
+                    {
+                        log(Errors::Semantics::VARIABLE_LENGTH_ARRAY_MUST_NOT_HAVE_STATIC_LIFETIME.args(
+                            *loc, m_sourceInterface, *storageClassSpecifier));
+                    }
+                    else
+                    {
+                        log(Errors::Semantics::VARIABLE_LENGTH_ARRAY_MUST_NOT_HAVE_STATIC_LIFETIME.args(
+                            *loc, m_sourceInterface, *loc));
+                    }
                     errors = true;
                 }
             }
@@ -589,12 +603,12 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                     auto& otherType = cld::get<const Declaration*>(prev->second.declared)->getType();
                     auto composite = compositeType(otherType, declaration->getType());
                     *declaration = Declaration(std::move(composite), linkage, lifetime, loc);
-                    prev->second.declared = declaration.get();
+                    prev.value().declared = declaration.get();
                 }
             }
             if (initializer)
             {
-                if (isVariablyModified(declaration->getType()))
+                if (isVariableLengthArray(declaration->getType()))
                 {
                     log(Errors::Semantics::CANNOT_INITIALIZE_VARIABLE_LENGTH_ARRAY_TYPE.args(
                         *loc, m_sourceInterface, *loc, declaration->getType()));
@@ -669,7 +683,7 @@ std::vector<cld::Semantics::CompoundStatement::Variant>
 cld::Semantics::Statement cld::Semantics::SemanticAnalysis::visit(const Syntax::Statement& node)
 {
     return cld::match(
-        node, [](const auto&) -> Statement { CLD_UNREACHABLE; },
+        node, [&](const auto& node) -> Statement { return visit(node); },
         [&](const Syntax::ExpressionStatement& node) -> Statement {
             if (!node.getOptionalExpression())
             {
@@ -1123,6 +1137,13 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::compositeType(const cld::
 }
 
 bool cld::Semantics::SemanticAnalysis::isVariablyModified(const cld::Semantics::Type& type) const
+{
+    auto typeVisitor = RecursiveVisitor(type, TYPE_NEXT_FN);
+    return std::any_of(typeVisitor.begin(), typeVisitor.end(),
+                       [](const Type& type) { return std::holds_alternative<ValArrayType>(type.get()); });
+}
+
+bool cld::Semantics::SemanticAnalysis::isVariableLengthArray(const cld::Semantics::Type& type) const
 {
     auto typeVisitor = RecursiveVisitor(type, ARRAY_TYPE_NEXT_FN);
     return std::any_of(typeVisitor.begin(), typeVisitor.end(),

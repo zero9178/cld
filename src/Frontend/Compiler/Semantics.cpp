@@ -1090,3 +1090,111 @@ cld::Lexer::CTokenIterator cld::Semantics::CompoundLiteral::end() const
 {
     return m_initEnd;
 }
+
+cld::Semantics::IfStatement::IfStatement(Expression&& expression, Statement&& trueBranch,
+                                         std::unique_ptr<Statement>&& falseBranch)
+    : m_expression(std::move(expression)),
+      m_trueBranch(std::make_unique<Statement>(std::move(trueBranch))),
+      m_falseBranch(std::move(falseBranch))
+{
+}
+
+const cld::Semantics::Statement& cld::Semantics::IfStatement::getTrueBranch() const
+{
+    return *m_trueBranch;
+}
+
+cld::Semantics::ForStatement::ForStatement(Variant initial, std::optional<Expression> controlling,
+                                           std::optional<Expression> iteration, Statement&& statement)
+    : m_initial(std::move(initial)),
+      m_controlling(std::move(controlling)),
+      m_iteration(std::move(iteration)),
+      m_statement(std::make_unique<Statement>(std::move(statement)))
+{
+}
+
+const cld::Semantics::Statement& cld::Semantics::ForStatement::getStatement() const
+{
+    return *m_statement;
+}
+
+cld::Semantics::HeadWhileStatement::HeadWhileStatement(Expression&& expression, Statement&& statement)
+    : m_expression(std::move(expression)), m_statement(std::make_unique<Statement>(std::move(statement)))
+{
+}
+
+const cld::Semantics::Statement& cld::Semantics::HeadWhileStatement::getStatement() const
+{
+    return *m_statement;
+}
+
+cld::Semantics::FootWhileStatement::FootWhileStatement(Statement&& statement, Expression&& expression)
+    : m_statement(std::make_unique<Statement>(std::move(statement))), m_expression(std::move(expression))
+{
+}
+
+const cld::Semantics::Statement& cld::Semantics::FootWhileStatement::getStatement() const
+{
+    return *m_statement;
+}
+
+cld::Semantics::LabelStatement::LabelStatement(Lexer::CTokenIterator identifier, std::int64_t scope,
+                                               std::size_t sizeOfCurrentScope, Statement&& statement)
+    : m_identifier(identifier),
+      m_scope(scope),
+      m_sizeOfCurrentScope(sizeOfCurrentScope),
+      m_statement(std::make_unique<Statement>(std::move(statement)))
+{
+}
+
+const cld::Semantics::Statement& cld::Semantics::LabelStatement::getStatement() const
+{
+    return *m_statement;
+}
+
+cld::Semantics::SwitchStatement::SwitchStatement(Expression&& expression, Statement&& statement, std::int64_t scope,
+                                                 std::map<llvm::APSInt, const CaseStatement * CLD_NON_NULL> cases,
+                                                 const DefaultStatement* CLD_NULLABLE defaultStmt)
+    : m_expression(std::move(expression)),
+      m_statement(std::make_unique<Statement>(std::move(statement))),
+      m_scope(scope),
+      m_cases(std::move(cases)),
+      m_default(defaultStmt)
+{
+}
+
+const cld::Semantics::Statement& cld::Semantics::SwitchStatement::getStatement() const
+{
+    return *m_statement;
+}
+
+cld::Semantics::CaseStatement::CaseStatement(Lexer::CTokenIterator caseToken, llvm::APSInt constant,
+                                             Lexer::CTokenIterator colonToken, Statement&& statement,
+                                             const SwitchStatement& switchStmt)
+    : m_caseToken(caseToken),
+      m_constant(std::move(constant)),
+      m_colonToken(colonToken),
+      m_statement(std::make_unique<Statement>(std::move(statement))),
+      m_switchStmt(&switchStmt)
+
+{
+}
+
+const cld::Semantics::Statement& cld::Semantics::CaseStatement::getStatement() const
+{
+    return *m_statement;
+}
+
+cld::Semantics::DefaultStatement::DefaultStatement(Lexer::CTokenIterator defaultToken, Lexer::CTokenIterator colonToken,
+                                                   Statement&& statement, const SwitchStatement& switchStmt)
+    : m_defaultToken(defaultToken),
+      m_colonToken(colonToken),
+      m_statement(std::make_unique<Statement>(std::move(statement))),
+      m_switchStmt(&switchStmt)
+{
+}
+
+const cld::Semantics::Statement& cld::Semantics::DefaultStatement::getStatement() const
+{
+    return *m_statement;
+}

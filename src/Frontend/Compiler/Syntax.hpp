@@ -1064,10 +1064,17 @@ public:
  */
 class DefaultStatement final : public Node
 {
+    Lexer::CTokenIterator m_defaultToken;
+    Lexer::CTokenIterator m_colonToken;
     std::unique_ptr<Statement> m_statement;
 
 public:
-    DefaultStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::unique_ptr<Statement>&& statement);
+    DefaultStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, Lexer::CTokenIterator defaultToken,
+                     Lexer::CTokenIterator colonToken, std::unique_ptr<Statement>&& statement);
+
+    [[nodiscard]] Lexer::CTokenIterator getDefaultToken() const;
+
+    [[nodiscard]] Lexer::CTokenIterator getColonToken() const;
 
     [[nodiscard]] const Statement& getStatement() const;
 };
@@ -1077,14 +1084,21 @@ public:
  */
 class CaseStatement final : public Node
 {
+    Lexer::CTokenIterator m_caseToken;
     ConstantExpression m_constantExpression;
+    Lexer::CTokenIterator m_colonToken;
     std::unique_ptr<Statement> m_statement;
 
 public:
-    CaseStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, ConstantExpression&& constantExpression,
+    CaseStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, Lexer::CTokenIterator caseToken,
+                  ConstantExpression&& constantExpression, Lexer::CTokenIterator colonToken,
                   std::unique_ptr<Statement>&& statement);
 
+    [[nodiscard]] Lexer::CTokenIterator getCaseToken() const;
+
     [[nodiscard]] const ConstantExpression& getConstantExpression() const;
+
+    [[nodiscard]] Lexer::CTokenIterator getColonToken() const;
 
     [[nodiscard]] const Statement& getStatement() const;
 };
@@ -1094,12 +1108,14 @@ public:
  */
 class LabelStatement final : public Node
 {
-    std::string_view m_identifier;
+    Lexer::CTokenIterator m_identifier;
     std::unique_ptr<Statement> m_statement;
 
 public:
-    LabelStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::string_view identifier,
+    LabelStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, Lexer::CTokenIterator identifier,
                    Statement&& statement);
+
+    [[nodiscard]] Lexer::CTokenIterator getIdentifierToken() const;
 
     [[nodiscard]] const Statement& getStatement() const;
 };
