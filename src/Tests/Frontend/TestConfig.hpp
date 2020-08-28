@@ -1,6 +1,6 @@
 #pragma once
 
-#include "catch.hpp"
+#include <catch.hpp>
 
 #include <llvm/ADT/APInt.h>
 #include <llvm/ADT/APSInt.h>

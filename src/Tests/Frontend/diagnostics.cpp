@@ -1,4 +1,4 @@
-#include "catch.hpp"
+#include <catch.hpp>
 
 #include <Frontend/Compiler/Diagnostic.hpp>
 #include <Frontend/Compiler/Lexer.hpp>
