@@ -1,7 +1,7 @@
 #include <Frontend/Common/Filesystem.hpp>
 #include <Frontend/Compiler/LanguageOptions.hpp>
 #include <Frontend/Compiler/Parser.hpp>
-#include <Frontend/Compiler/SemanticAnalysis.hpp>
+#include <Frontend/Compiler/Program.hpp>
 #include <Frontend/Preprocessor/Preprocessor.hpp>
 
 #include <cstdlib>
@@ -104,13 +104,12 @@ int main()
             std::cerr << "PP Token to C Tokens failed";
             return -1;
         }
-        auto pair = cld::Parser::buildTree(ctokens);
-        if (!pair.second)
+        auto tree = cld::Parser::buildTree(ctokens, &llvm::errs(), &errors);
+        if (errors)
         {
             std::cerr << "Parser failed";
             return -1;
         }
-        cld::Semantics::SemanticAnalysis analysis(ctokens, &llvm::errs(), &errors);
-        analysis.visit(pair.first);
+        cld::Semantics::analyse(tree, std::move(ctokens), &llvm::errs(), &errors);
     }
 }

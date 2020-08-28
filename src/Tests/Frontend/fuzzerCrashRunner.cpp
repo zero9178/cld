@@ -114,13 +114,13 @@ int main(int argc, char** argv)
         {
             return 0;
         }
-        auto pair = cld::Parser::buildTree(ctokens);
-        if (!pair.second)
+        auto tree = cld::Parser::buildTree(ctokens, &llvm::errs(), &errors);
+        if (errors)
         {
             return 0;
         }
         cld::Semantics::SemanticAnalysis analysis(ctokens);
-        analysis.visit(pair.first);
+        analysis.visit(tree);
         return 0;
     }
     else if (mode == "csmith")
@@ -149,14 +149,14 @@ int main(int argc, char** argv)
         {
             return -1;
         }
-        auto pair = cld::Parser::buildTree(ctokens);
-        if (!pair.second)
+        auto tree = cld::Parser::buildTree(ctokens, &llvm::errs(), &errors);
+        if (errors)
         {
             return -1;
         }
 
         cld::Semantics::SemanticAnalysis analysis(ctokens, &llvm::errs(), &errors);
-        analysis.visit(pair.first);
+        analysis.visit(tree);
         if (errors)
         {
             return -1;

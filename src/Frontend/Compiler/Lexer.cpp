@@ -1,12 +1,8 @@
 #include "Lexer.hpp"
 
-#include <llvm/ADT/SmallString.h>
 #include <llvm/Support/ConvertUTF.h>
 #include <llvm/Support/Error.h>
-#include <llvm/Support/Format.h>
-#include <llvm/Support/Unicode.h>
 #include <llvm/Support/UnicodeCharRanges.h>
-#include <llvm/Support/WithColor.h>
 
 #include <Frontend/Common/ScopeExit.hpp>
 #include <Frontend/Common/Text.hpp>
@@ -688,10 +684,10 @@ class Context : private cld::SourceInterface
     std::uint64_t& m_offset;
     std::vector<std::uint64_t> m_lineStarts;
     const IntervalMap& m_characterToSourceSpace;
-    bool m_errorsOccured = false;
+    bool m_errorsOccurred = false;
     std::optional<std::uint64_t> m_lastBlockCommentEndPos;
     cld::Source::File m_fakeFile;
-    cld::LanguageOptions m_languageOptions;
+    const cld::LanguageOptions& m_languageOptions;
 
     std::uint64_t getLineNumber(std::uint32_t, std::uint64_t offset) const noexcept override
     {
@@ -768,7 +764,7 @@ public:
     {
         if (diag.getSeverity() == cld::Severity::Error)
         {
-            m_errorsOccured = true;
+            m_errorsOccurred = true;
         }
         if (m_reporter)
         {
@@ -879,9 +875,9 @@ public:
         return view(tokenStartOffset, m_offset);
     }
 
-    bool isErrorsOccured() const
+    bool errorsOccurred() const
     {
-        return m_errorsOccured;
+        return m_errorsOccurred;
     }
 
     void setLastBlockCommentEndPos(std::uint64_t lastBlockCommentEndPos)
@@ -980,7 +976,7 @@ struct UniversalCharacter final
 {
     bool big;
     std::optional<std::variant<Text, PreprocessingNumber>> suspHolder{};
-    llvm::SmallString<8> characters{};
+    std::string characters{};
 
     std::pair<StateMachine, bool> advance(char c, Context& context);
 };
@@ -1278,7 +1274,7 @@ std::pair<StateMachine, bool> UniversalCharacter::advance(char c, Context& conte
         }
         context.push(result, result + 1, TokenType::Backslash);
         context.tokenStartOffset++;
-        return {Text{(big ? "U" : "u") + static_cast<std::string>(characters)}, false};
+        return {Text{(big ? "U" : "u") + characters}, false};
     }
 
     characters.push_back(c);
@@ -1290,8 +1286,7 @@ std::pair<StateMachine, bool> UniversalCharacter::advance(char c, Context& conte
     std::size_t ucStart = context.currentView().rfind('\\');
     CLD_ASSERT(ucStart != std::string_view::npos);
     ucStart += context.tokenStartOffset;
-    auto result = universalCharacterToValue({characters.data(), characters.size()}, ucStart,
-                                            std::pair{ucStart, context.getOffset()}, context);
+    auto result = universalCharacterToValue(characters, ucStart, std::pair{ucStart, context.getOffset()}, context);
     if (!result)
     {
         return {Start{}, true};
@@ -1323,7 +1318,7 @@ std::pair<StateMachine, bool> UniversalCharacter::advance(char c, Context& conte
                                [&] { cld::match(*suspHolder, [&](auto&& value) { value.advance(' ', context); }); });
             context.push(ucStart, ucStart + 1, TokenType::Backslash);
             context.tokenStartOffset++;
-            return {Text{(big ? "U" : "u") + static_cast<std::string>(characters)}, true};
+            return {Text{(big ? "U" : "u") + characters}, true};
         }
         else
         {
@@ -1834,7 +1829,7 @@ cld::PPSourceObject cld::Lexer::tokenize(std::string source, LanguageOptions lan
 
     if (errorsOccured)
     {
-        *errorsOccured = context.isErrorsOccured();
+        *errorsOccured = context.errorsOccurred();
     }
 
     return PPSourceObject(
@@ -1866,14 +1861,14 @@ struct ConversionContext
     llvm::raw_ostream* reporter;
     const cld::PPSourceInterface& sourceInterface;
     const cld::Lexer::PPToken& token;
-    bool* errorsOccured;
+    bool* errorsOccurred;
 
     template <class Diag, class Location, class... Args>
     void report(const Diag& diag, Location&& location, Args&&... args) const
     {
-        if (diag.getSeverity() == cld::Severity::Error && errorsOccured)
+        if (diag.getSeverity() == cld::Severity::Error && errorsOccurred)
         {
-            *errorsOccured = true;
+            *errorsOccurred = true;
         }
         if (reporter)
         {

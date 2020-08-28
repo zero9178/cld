@@ -18,14 +18,14 @@ cld::PPSourceObject sourceObject;
         sourceObject = cld::Lexer::tokenize(source, cld::LanguageOptions::native(), &ss); \
         ss.flush();                                                                       \
         REQUIRE(string.empty());                                                          \
-        auto tree = cld::PP::buildTree(sourceObject, &ss);                                \
+        auto file = cld::PP::buildTree(sourceObject, &ss);                                \
         CHECK_THAT(string, matches);                                                      \
         cld::PP::buildTree(sourceObject);                                                 \
         if (!string.empty())                                                              \
         {                                                                                 \
             llvm::errs() << '\n';                                                         \
         }                                                                                 \
-        return std::move(tree.first);                                                     \
+        return file;                                                                      \
     }()
 
 #define functionProduces(parser, source, offset, matches)                                           \

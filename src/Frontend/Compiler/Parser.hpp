@@ -144,11 +144,10 @@ public:
     void setBracketMax(std::uint64_t bracketMax);
 };
 
-std::pair<cld::Syntax::TranslationUnit, bool> buildTree(const CSourceObject& sourceObject,
-                                                        llvm::raw_ostream* reporter = &llvm::errs());
+Syntax::TranslationUnit buildTree(const CSourceObject& sourceObject, llvm::raw_ostream* reporter = &llvm::errs(),
+                                  bool* errors = nullptr);
 
-cld::Syntax::TranslationUnit parseTranslationUnit(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
-                                                  Context& context);
+Syntax::TranslationUnit parseTranslationUnit(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context);
 
 std::optional<Syntax::ExternalDeclaration> parseExternalDeclaration(Lexer::CTokenIterator& begin,
                                                                     Lexer::CTokenIterator end, Context& context);
@@ -191,7 +190,7 @@ std::optional<Syntax::EnumSpecifier> parseEnumSpecifier(Lexer::CTokenIterator& b
                                                         Context& context);
 
 std::optional<Syntax::CompoundStatement> parseCompoundStatement(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
-                                                                cld::Parser::Context& context, bool pushScope = true);
+                                                                Parser::Context& context, bool pushScope = true);
 
 std::optional<Syntax::CompoundItem> parseCompoundItem(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                       Context& context);
@@ -227,23 +226,22 @@ Syntax::Expression parseExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIt
 std::optional<Syntax::AssignmentExpression> parseAssignmentExpression(Lexer::CTokenIterator& begin,
                                                                       Lexer::CTokenIterator end, Context& context);
 
-std::optional<cld::Syntax::ConditionalExpression>
-    parseConditionalExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context);
+std::optional<Syntax::ConditionalExpression> parseConditionalExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context);
 
-std::optional<cld::Syntax::LogicalOrExpression> parseLogicalOrExpression(Lexer::CTokenIterator& begin,
-                                                                         Lexer::CTokenIterator end, Context& context);
+std::optional<Syntax::LogicalOrExpression> parseLogicalOrExpression(Lexer::CTokenIterator& begin,
+                                                                    Lexer::CTokenIterator end, Context& context);
 
-std::optional<cld::Syntax::LogicalAndExpression> parseLogicalAndExpression(Lexer::CTokenIterator& begin,
-                                                                           Lexer::CTokenIterator end, Context& context);
+std::optional<Syntax::LogicalAndExpression> parseLogicalAndExpression(Lexer::CTokenIterator& begin,
+                                                                      Lexer::CTokenIterator end, Context& context);
 
-std::optional<cld::Syntax::BitOrExpression> parseBitOrExpression(Lexer::CTokenIterator& begin,
-                                                                 Lexer::CTokenIterator end, Context& context);
+std::optional<Syntax::BitOrExpression> parseBitOrExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
+                                                            Context& context);
 
-std::optional<cld::Syntax::BitXorExpression> parseBitXorExpression(Lexer::CTokenIterator& begin,
-                                                                   Lexer::CTokenIterator end, Context& context);
+std::optional<Syntax::BitXorExpression> parseBitXorExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
+                                                              Context& context);
 
-std::optional<cld::Syntax::BitAndExpression> parseBitAndExpression(Lexer::CTokenIterator& begin,
-                                                                   Lexer::CTokenIterator end, Context& context);
+std::optional<Syntax::BitAndExpression> parseBitAndExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
+                                                              Context& context);
 
 std::optional<Syntax::EqualityExpression> parseEqualityExpression(Lexer::CTokenIterator& begin,
                                                                   Lexer::CTokenIterator end, Context& context);

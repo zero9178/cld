@@ -82,12 +82,16 @@ const cld::SourceInterface& cld::PP::Context::getSourceInterface() const
     return m_sourceInterface;
 }
 
-std::pair<cld::PP::File, bool> cld::PP::buildTree(const PPSourceObject& sourceObject, llvm::raw_ostream* reporter)
+cld::PP::File cld::PP::buildTree(const PPSourceObject& sourceObject, llvm::raw_ostream* reporter, bool* errors)
 {
     Context context(sourceObject, reporter);
     const auto* begin = sourceObject.data().data();
-    return {parseFile(begin, sourceObject.data().data() + sourceObject.data().size(), context),
-            context.getErrorCount() == 0};
+    auto file = parseFile(begin, sourceObject.data().data() + sourceObject.data().size(), context);
+    if (errors)
+    {
+        *errors = context.getErrorCount();
+    }
+    return file;
 }
 
 cld::PP::File cld::PP::parseFile(Lexer::PPTokenIterator& begin, Lexer::PPTokenIterator end, Context& context)

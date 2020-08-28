@@ -17,53 +17,23 @@ namespace Syntax
 {
 class Declarator;
 class Node;
+class TranslationUnit;
 } // namespace Syntax
 
 } // namespace cld
 
 namespace cld::Semantics
 {
-class SemanticAnalysis;
 
 class Type;
 
-class CompoundStatement;
+class StructDefinition;
 
-class LabelStatement;
+class UnionDefinition;
 
-class CaseStatement;
+class EnumDefinition;
 
-class DefaultStatement;
-
-class IfStatement;
-
-class SwitchStatement;
-
-class ForStatement;
-
-class HeadWhileStatement;
-
-class FootWhileStatement;
-
-class GotoStatement;
-
-class ContinueStatement;
-
-class BreakStatement;
-
-class ReturnStatement;
-
-class ExpressionStatement;
-
-using Statement =
-    std::variant<std::unique_ptr<ForStatement>, ReturnStatement, ExpressionStatement, IfStatement, CompoundStatement,
-                 std::unique_ptr<HeadWhileStatement>, std::unique_ptr<FootWhileStatement>, BreakStatement,
-                 ContinueStatement, std::unique_ptr<SwitchStatement>, std::unique_ptr<DefaultStatement>,
-                 std::unique_ptr<CaseStatement>, std::unique_ptr<GotoStatement>, std::unique_ptr<LabelStatement>>;
-
-class Declaration;
-
-class FunctionDefinition;
+class ProgramInterface;
 
 class PrimitiveType final
 {
@@ -151,12 +121,12 @@ public:
 
     [[nodiscard]] std::uint8_t getByteCount() const;
 
-    [[nodiscard]] std::size_t getSizeOf(const SemanticAnalysis&) const
+    [[nodiscard]] std::size_t getSizeOf(const ProgramInterface&) const
     {
         return getByteCount();
     }
 
-    [[nodiscard]] std::size_t getAlignOf(const SemanticAnalysis&) const
+    [[nodiscard]] std::size_t getAlignOf(const ProgramInterface&) const
     {
         return getByteCount();
     }
@@ -209,9 +179,9 @@ public:
         return m_static;
     }
 
-    [[nodiscard]] std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getSizeOf(const ProgramInterface& program) const;
 
-    [[nodiscard]] std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getAlignOf(const ProgramInterface& program) const;
 
     [[nodiscard]] bool operator==(const ArrayType& rhs) const;
 
@@ -238,12 +208,12 @@ public:
         return m_restricted;
     }
 
-    [[nodiscard]] std::size_t getSizeOf(const SemanticAnalysis&) const
+    [[nodiscard]] std::size_t getSizeOf(const ProgramInterface&) const
     {
         CLD_UNREACHABLE;
     }
 
-    [[nodiscard]] std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getAlignOf(const ProgramInterface& program) const;
 
     [[nodiscard]] bool operator==(const AbstractArrayType& rhs) const;
 
@@ -287,12 +257,12 @@ public:
         return m_expression;
     }
 
-    [[nodiscard]] std::size_t getSizeOf(const SemanticAnalysis&) const
+    [[nodiscard]] std::size_t getSizeOf(const ProgramInterface&) const
     {
         CLD_UNREACHABLE;
     }
 
-    [[nodiscard]] std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getAlignOf(const ProgramInterface& program) const;
 
     [[nodiscard]] bool operator==(const ValArrayType& rhs) const;
 
@@ -340,12 +310,12 @@ public:
         return m_isKandR;
     }
 
-    [[nodiscard]] std::size_t getSizeOf(const SemanticAnalysis&) const
+    [[nodiscard]] std::size_t getSizeOf(const ProgramInterface&) const
     {
         CLD_UNREACHABLE;
     }
 
-    [[nodiscard]] std::size_t getAlignOf(const SemanticAnalysis&) const
+    [[nodiscard]] std::size_t getAlignOf(const ProgramInterface&) const
     {
         CLD_UNREACHABLE;
     }
@@ -375,9 +345,9 @@ public:
         return m_scopeOrId;
     }
 
-    [[nodiscard]] std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getSizeOf(const ProgramInterface& program) const;
 
-    [[nodiscard]] std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getAlignOf(const ProgramInterface& program) const;
 
     [[nodiscard]] bool operator==(const StructType&) const
     {
@@ -410,9 +380,9 @@ public:
         return m_scopeOrId;
     }
 
-    [[nodiscard]] std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getSizeOf(const ProgramInterface& program) const;
 
-    [[nodiscard]] std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getAlignOf(const ProgramInterface& program) const;
 
     [[nodiscard]] bool operator==(const UnionType&) const
     {
@@ -462,9 +432,9 @@ public:
         return m_fields;
     }
 
-    [[nodiscard]] std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getSizeOf(const ProgramInterface& program) const;
 
-    [[nodiscard]] std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getAlignOf(const ProgramInterface& program) const;
 
     [[nodiscard]] bool operator==(const AnonymousStructType& rhs) const;
 
@@ -494,9 +464,9 @@ public:
         return m_fields;
     }
 
-    [[nodiscard]] std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getSizeOf(const ProgramInterface& program) const;
 
-    [[nodiscard]] std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getAlignOf(const ProgramInterface& program) const;
 
     [[nodiscard]] bool operator==(const AnonymousUnionType& rhs) const;
 
@@ -523,9 +493,9 @@ public:
         return m_scopeOrId;
     }
 
-    [[nodiscard]] std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getSizeOf(const ProgramInterface& program) const;
 
-    [[nodiscard]] std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getAlignOf(const ProgramInterface& program) const;
 
     [[nodiscard]] bool operator==(const EnumType&) const
     {
@@ -562,9 +532,9 @@ public:
         return *m_type;
     }
 
-    [[nodiscard]] std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getSizeOf(const ProgramInterface& program) const;
 
-    [[nodiscard]] std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getAlignOf(const ProgramInterface& program) const;
 };
 
 class PointerType final
@@ -587,9 +557,9 @@ public:
         return m_restricted;
     }
 
-    [[nodiscard]] std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getSizeOf(const ProgramInterface& program) const;
 
-    [[nodiscard]] std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getAlignOf(const ProgramInterface& program) const;
 
     [[nodiscard]] bool operator==(const PointerType& rhs) const;
 
@@ -660,9 +630,9 @@ public:
     }
 
     // Likely replaced with an interface soon?
-    [[nodiscard]] std::size_t getSizeOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getSizeOf(const ProgramInterface& program) const;
 
-    [[nodiscard]] std::size_t getAlignOf(const SemanticAnalysis& analysis) const;
+    [[nodiscard]] std::size_t getAlignOf(const ProgramInterface& program) const;
 };
 
 class Constant final
@@ -696,6 +666,10 @@ public:
         return m_valueEnd;
     }
 };
+
+class FunctionDefinition;
+
+class Declaration;
 
 class DeclarationRead final
 {
@@ -1334,91 +1308,6 @@ public:
 
 bool isStringLiteralExpr(const Expression& expression);
 
-class InitializerList final
-{
-public:
-    struct Initialization
-    {
-        std::vector<std::size_t> path;
-        Expression expression;
-    };
-
-private:
-    std::vector<Initialization> m_fields;
-
-public:
-    explicit InitializerList(std::vector<Initialization> fields) : m_fields(std::move(fields)) {}
-
-    [[nodiscard]] const std::vector<Initialization>& getFields() const &
-    {
-        return m_fields;
-    }
-
-    [[nodiscard]] std::vector<Initialization>&& getFields() &&
-    {
-        return std::move(m_fields);
-    }
-};
-
-enum class Linkage : std::uint8_t
-{
-    Internal,
-    External,
-    None
-};
-
-enum class Lifetime : std::uint8_t
-{
-    Automatic,
-    Static,
-    Register
-};
-
-class Declaration final
-{
-    Type m_type;
-    Linkage m_linkage;
-    Lifetime m_lifetime;
-    Lexer::CTokenIterator m_nameToken;
-    std::optional<Initializer> m_initializer;
-
-public:
-    Declaration(Type type, Linkage linkage, Lifetime lifetime, Lexer::CTokenIterator nameToken,
-                std::optional<Initializer> initializer = {})
-        : m_type(std::move(type)),
-          m_linkage(linkage),
-          m_lifetime(lifetime),
-          m_nameToken(nameToken),
-          m_initializer(std::move(initializer))
-    {
-    }
-
-    [[nodiscard]] const Type& getType() const
-    {
-        return m_type;
-    }
-
-    [[nodiscard]] Linkage getLinkage() const
-    {
-        return m_linkage;
-    }
-
-    [[nodiscard]] Lifetime getLifetime() const
-    {
-        return m_lifetime;
-    }
-
-    [[nodiscard]] Lexer::CTokenIterator getNameToken() const
-    {
-        return m_nameToken;
-    }
-
-    [[nodiscard]] const std::optional<Initializer>& getInitializer() const
-    {
-        return m_initializer;
-    }
-};
-
 class ReturnStatement final
 {
     std::optional<Expression> m_expression;
@@ -1444,6 +1333,75 @@ public:
         return m_expression;
     }
 };
+
+class CompoundStatement;
+
+class LabelStatement;
+
+class CaseStatement;
+
+class DefaultStatement;
+
+class IfStatement;
+
+class SwitchStatement;
+
+class ForStatement;
+
+class HeadWhileStatement;
+
+class FootWhileStatement;
+
+class GotoStatement final
+{
+    const LabelStatement* m_label;
+
+public:
+    explicit GotoStatement(const LabelStatement* label) : m_label(label) {}
+
+    const LabelStatement* getLabel() const
+    {
+        return m_label;
+    }
+};
+
+using BreakableStatements = std::variant<const ForStatement*, const FootWhileStatement * CLD_NON_NULL,
+                                         const HeadWhileStatement * CLD_NON_NULL, const SwitchStatement * CLD_NON_NULL>;
+
+class BreakStatement final
+{
+    BreakableStatements m_statement;
+
+public:
+    explicit BreakStatement(BreakableStatements statements) : m_statement(statements) {}
+
+    [[nodiscard]] const BreakableStatements& getBreakableStatement() const
+    {
+        return m_statement;
+    }
+};
+
+using LoopStatements =
+    std::variant<const ForStatement*, const FootWhileStatement * CLD_NON_NULL, const HeadWhileStatement * CLD_NON_NULL>;
+
+class ContinueStatement final
+{
+    LoopStatements m_loopStatement;
+
+public:
+    explicit ContinueStatement(LoopStatements loopStatement) : m_loopStatement(loopStatement) {}
+
+    [[nodiscard]] const LoopStatements& getLoopStatement() const
+    {
+        return m_loopStatement;
+    }
+};
+
+using Statement =
+    std::variant<std::unique_ptr<ForStatement>, ReturnStatement, ExpressionStatement, IfStatement, CompoundStatement,
+                 std::unique_ptr<HeadWhileStatement>, std::unique_ptr<FootWhileStatement>, BreakStatement,
+                 ContinueStatement, std::unique_ptr<SwitchStatement>, std::unique_ptr<DefaultStatement>,
+                 std::unique_ptr<CaseStatement>, std::unique_ptr<GotoStatement>, std::unique_ptr<LabelStatement>>;
 
 class IfStatement final
 {
@@ -1555,38 +1513,6 @@ public:
     }
 };
 
-using BreakableStatements = std::variant<const ForStatement*, const FootWhileStatement * CLD_NON_NULL,
-                                         const HeadWhileStatement * CLD_NON_NULL, const SwitchStatement * CLD_NON_NULL>;
-
-class BreakStatement final
-{
-    BreakableStatements m_statement;
-
-public:
-    explicit BreakStatement(BreakableStatements statements) : m_statement(statements) {}
-
-    [[nodiscard]] const BreakableStatements& getBreakableStatement() const
-    {
-        return m_statement;
-    }
-};
-
-using LoopStatements =
-    std::variant<const ForStatement*, const FootWhileStatement * CLD_NON_NULL, const HeadWhileStatement * CLD_NON_NULL>;
-
-class ContinueStatement final
-{
-    LoopStatements m_loopStatement;
-
-public:
-    explicit ContinueStatement(LoopStatements loopStatement) : m_loopStatement(loopStatement) {}
-
-    [[nodiscard]] const LoopStatements& getLoopStatement() const
-    {
-        return m_loopStatement;
-    }
-};
-
 class SwitchStatement final
 {
     Expression m_expression;
@@ -1689,19 +1615,6 @@ public:
     [[nodiscard]] const SwitchStatement& getSwitchStatement() const
     {
         return *m_switchStmt;
-    }
-};
-
-class GotoStatement final
-{
-    const LabelStatement* m_label;
-
-public:
-    explicit GotoStatement(const LabelStatement* label) : m_label(label) {}
-
-    const LabelStatement* getLabel() const
-    {
-        return m_label;
     }
 };
 
@@ -1829,6 +1742,91 @@ public:
     }
 };
 
+class InitializerList final
+{
+public:
+    struct Initialization
+    {
+        std::vector<std::size_t> path;
+        Expression expression;
+    };
+
+private:
+    std::vector<Initialization> m_fields;
+
+public:
+    explicit InitializerList(std::vector<Initialization> fields) : m_fields(std::move(fields)) {}
+
+    [[nodiscard]] const std::vector<Initialization>& getFields() const&
+    {
+        return m_fields;
+    }
+
+    [[nodiscard]] std::vector<Initialization>&& getFields() &&
+    {
+        return std::move(m_fields);
+    }
+};
+
+enum class Linkage : std::uint8_t
+{
+    Internal,
+    External,
+    None
+};
+
+enum class Lifetime : std::uint8_t
+{
+    Automatic,
+    Static,
+    Register
+};
+
+class Declaration final
+{
+    Type m_type;
+    Linkage m_linkage;
+    Lifetime m_lifetime;
+    Lexer::CTokenIterator m_nameToken;
+    std::optional<Initializer> m_initializer;
+
+public:
+    Declaration(Type type, Linkage linkage, Lifetime lifetime, Lexer::CTokenIterator nameToken,
+                std::optional<Initializer> initializer = {})
+        : m_type(std::move(type)),
+          m_linkage(linkage),
+          m_lifetime(lifetime),
+          m_nameToken(nameToken),
+          m_initializer(std::move(initializer))
+    {
+    }
+
+    [[nodiscard]] const Type& getType() const
+    {
+        return m_type;
+    }
+
+    [[nodiscard]] Linkage getLinkage() const
+    {
+        return m_linkage;
+    }
+
+    [[nodiscard]] Lifetime getLifetime() const
+    {
+        return m_lifetime;
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator getNameToken() const
+    {
+        return m_nameToken;
+    }
+
+    [[nodiscard]] const std::optional<Initializer>& getInitializer() const
+    {
+        return m_initializer;
+    }
+};
+
 class FunctionDefinition final
 {
     Type m_type;
@@ -1902,6 +1900,11 @@ public:
     }
 };
 
+class Program;
+
+Program analyse(const Syntax::TranslationUnit& parseTree, CSourceObject&& ctokens,
+                llvm::raw_ostream* reporter = &llvm::errs(), bool* errors = nullptr);
+
 Lexer::CTokenIterator declaratorToLoc(const cld::Syntax::Declarator& declarator);
 
 bool isVoid(const Type& type);
@@ -1923,6 +1926,7 @@ bool isBool(const Type& type);
 bool isCharType(const Type& type);
 
 bool isAggregate(const Type& type);
+
 } // namespace cld::Semantics
 
 namespace cld::diag

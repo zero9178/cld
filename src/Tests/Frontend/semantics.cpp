@@ -26,11 +26,11 @@ static std::pair<cld::Semantics::TranslationUnit, std::string>
     ctokens = cld::Lexer::toCTokens(tokens, &ss, &errors);
     UNSCOPED_INFO(storage);
     REQUIRE_FALSE(errors);
-    auto parsing = cld::Parser::buildTree(ctokens, &ss);
+    auto parsing = cld::Parser::buildTree(ctokens, &ss, &errors);
     UNSCOPED_INFO(storage);
-    REQUIRE(parsing.second);
+    REQUIRE_FALSE(errors);
     cld::Semantics::SemanticAnalysis analysis(ctokens, &ss);
-    auto semantics = analysis.visit(parsing.first);
+    auto semantics = analysis.visit(parsing);
     return {std::move(semantics), ss.str()};
 }
 

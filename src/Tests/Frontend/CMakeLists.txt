@@ -1,7 +1,7 @@
 
 add_executable(CompilerTests lexer.cpp parser.cpp main.cpp semantics.cpp constantevaluator.cpp preprocessor.cpp preprocessor_parser.cpp diagnostics.cpp TestConfig.cpp)
 target_link_libraries(CompilerTests Frontend)
-target_include_directories(CompilerTests PRIVATE .. ${PROJECT_SOURCE_DIR}/src)
+target_include_directories(CompilerTests PRIVATE ..)
 set_source_files_properties(main.cpp PROPERTIES COMPILE_DEFINITIONS CATCH_CONFIG_RUNNER SKIP_PRECOMPILE_HEADERS ON)
 if (CLD_USE_PCH)
     target_precompile_headers(CompilerTests PRIVATE <Frontend/Compiler/ErrorMessages.hpp> <catch.hpp>)

@@ -64,11 +64,11 @@ std::pair<cld::Semantics::ConstValue, std::string>
     ctokens = cld::Lexer::toCTokens(tokens, &ss, &errors);
     UNSCOPED_INFO(storage);
     REQUIRE_FALSE(errors);
-    auto parsing = cld::Parser::buildTree(ctokens, &ss);
+    auto parsing = cld::Parser::buildTree(ctokens, &ss, &errors);
     UNSCOPED_INFO(storage);
-    REQUIRE(parsing.second);
+    REQUIRE_FALSE(errors);
     cld::Semantics::SemanticAnalysis analysis(ctokens, &ss);
-    auto translationUnit = analysis.visit(parsing.first);
+    auto translationUnit = analysis.visit(parsing);
     REQUIRE_THAT(ss.str(), ProducesNoErrors());
     REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
         translationUnit.getGlobals().back()));

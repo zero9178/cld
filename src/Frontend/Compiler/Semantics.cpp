@@ -6,9 +6,8 @@
 #include <optional>
 #include <utility>
 
-#include "ErrorMessages.hpp"
+#include "Program.hpp"
 #include "SemanticAnalysis.hpp"
-#include "SemanticUtil.hpp"
 #include "Syntax.hpp"
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createPtrdiffT(bool isConst, bool isVolatile,
@@ -73,24 +72,24 @@ bool cld::Semantics::ArrayType::operator!=(const cld::Semantics::ArrayType& rhs)
     return !(rhs == *this);
 }
 
-std::size_t cld::Semantics::ArrayType::getSizeOf(const SemanticAnalysis& analysis) const
+std::size_t cld::Semantics::ArrayType::getSizeOf(const ProgramInterface& program) const
 {
-    return m_type->getSizeOf(analysis) * m_size;
+    return m_type->getSizeOf(program) * m_size;
 }
 
-std::size_t cld::Semantics::ArrayType::getAlignOf(const SemanticAnalysis& analysis) const
+std::size_t cld::Semantics::ArrayType::getAlignOf(const ProgramInterface& program) const
 {
-    return m_type->getSizeOf(analysis);
+    return m_type->getSizeOf(program);
 }
 
-std::size_t cld::Semantics::AbstractArrayType::getAlignOf(const SemanticAnalysis& analysis) const
+std::size_t cld::Semantics::AbstractArrayType::getAlignOf(const ProgramInterface& program) const
 {
-    return m_type->getAlignOf(analysis);
+    return m_type->getAlignOf(program);
 }
 
-std::size_t cld::Semantics::ValArrayType::getAlignOf(const SemanticAnalysis& analysis) const
+std::size_t cld::Semantics::ValArrayType::getAlignOf(const ProgramInterface& program) const
 {
-    return m_type->getAlignOf(analysis);
+    return m_type->getAlignOf(program);
 }
 
 bool cld::Semantics::Type::operator==(const cld::Semantics::Type& rhs) const
@@ -114,7 +113,7 @@ bool cld::Semantics::Type::operator!=(const cld::Semantics::Type& rhs) const
     return !(rhs == *this);
 }
 
-std::size_t cld::Semantics::Type::getSizeOf(const SemanticAnalysis& analysis) const
+std::size_t cld::Semantics::Type::getSizeOf(const ProgramInterface& program) const
 {
     return cld::match(m_type, [&](auto&& value) -> std::size_t {
         if constexpr (std::is_same_v<std::monostate, std::decay_t<decltype(value)>>)
@@ -123,12 +122,12 @@ std::size_t cld::Semantics::Type::getSizeOf(const SemanticAnalysis& analysis) co
         }
         else
         {
-            return value.getSizeOf(analysis);
+            return value.getSizeOf(program);
         }
     });
 }
 
-std::size_t cld::Semantics::Type::getAlignOf(const SemanticAnalysis& analysis) const
+std::size_t cld::Semantics::Type::getAlignOf(const ProgramInterface& program) const
 {
     return cld::match(m_type, [&](auto&& value) -> std::size_t {
         if constexpr (std::is_same_v<std::monostate, std::decay_t<decltype(value)>>)
@@ -137,7 +136,7 @@ std::size_t cld::Semantics::Type::getAlignOf(const SemanticAnalysis& analysis) c
         }
         else
         {
-            return value.getAlignOf(analysis);
+            return value.getAlignOf(program);
         }
     });
 }
@@ -164,14 +163,14 @@ bool cld::Semantics::PointerType::operator!=(const cld::Semantics::PointerType& 
     return !(rhs == *this);
 }
 
-std::size_t cld::Semantics::PointerType::getSizeOf(const SemanticAnalysis& analysis) const
+std::size_t cld::Semantics::PointerType::getSizeOf(const ProgramInterface& program) const
 {
-    return analysis.getLanguageOptions().sizeOfVoidStar;
+    return program.getLanguageOptions().sizeOfVoidStar;
 }
 
-std::size_t cld::Semantics::PointerType::getAlignOf(const SemanticAnalysis& analysis) const
+std::size_t cld::Semantics::PointerType::getAlignOf(const ProgramInterface& program) const
 {
-    return analysis.getLanguageOptions().sizeOfVoidStar;
+    return program.getLanguageOptions().sizeOfVoidStar;
 }
 
 cld::Semantics::EnumType::EnumType(std::string_view name, std::uint64_t scopeOrId)
@@ -185,18 +184,18 @@ cld::Semantics::Type cld::Semantics::EnumType::create(bool isConst, bool isVolat
     return cld::Semantics::Type(isConst, isVolatile, EnumType(name, scopeOrId));
 }
 
-std::size_t cld::Semantics::EnumType::getSizeOf(const SemanticAnalysis& analysis) const
+std::size_t cld::Semantics::EnumType::getSizeOf(const ProgramInterface& program) const
 {
-    auto* def = analysis.getEnumDefinition(m_name, m_scopeOrId);
+    auto* def = program.getEnumDefinition(m_name, m_scopeOrId);
     CLD_ASSERT(def);
-    return def->getType().getSizeOf(analysis);
+    return def->getType().getSizeOf(program);
 }
 
-std::size_t cld::Semantics::EnumType::getAlignOf(const SemanticAnalysis& analysis) const
+std::size_t cld::Semantics::EnumType::getAlignOf(const ProgramInterface& program) const
 {
-    auto* def = analysis.getEnumDefinition(m_name, m_scopeOrId);
+    auto* def = program.getEnumDefinition(m_name, m_scopeOrId);
     CLD_ASSERT(def);
-    return def->getType().getAlignOf(analysis);
+    return def->getType().getAlignOf(program);
 }
 
 cld::Semantics::PrimitiveType::PrimitiveType(bool isFloatingPoint, bool isSigned, std::uint8_t bitCount, Kind kind)
@@ -430,16 +429,16 @@ cld::Semantics::Type cld::Semantics::StructType::create(bool isConst, bool isVol
     return cld::Semantics::Type(isConst, isVolatile, StructType(name, scope));
 }
 
-std::size_t cld::Semantics::StructType::getSizeOf(const SemanticAnalysis& analysis) const
+std::size_t cld::Semantics::StructType::getSizeOf(const ProgramInterface& program) const
 {
-    auto* def = analysis.getStructDefinition(m_name, m_scopeOrId);
+    auto* def = program.getStructDefinition(m_name, m_scopeOrId);
     CLD_ASSERT(def);
     return def->getSizeOf();
 }
 
-std::size_t cld::Semantics::StructType::getAlignOf(const SemanticAnalysis& analysis) const
+std::size_t cld::Semantics::StructType::getAlignOf(const ProgramInterface& program) const
 {
-    auto* def = analysis.getStructDefinition(m_name, m_scopeOrId);
+    auto* def = program.getStructDefinition(m_name, m_scopeOrId);
     CLD_ASSERT(def);
     return def->getAlignOf();
 }
@@ -455,16 +454,16 @@ cld::Semantics::Type cld::Semantics::UnionType::create(bool isConst, bool isVola
     return cld::Semantics::Type(isConst, isVolatile, UnionType(name, scopeOrId));
 }
 
-std::size_t cld::Semantics::UnionType::getSizeOf(const SemanticAnalysis& analysis) const
+std::size_t cld::Semantics::UnionType::getSizeOf(const ProgramInterface& program) const
 {
-    auto* def = analysis.getUnionDefinition(m_name, m_scopeOrId);
+    auto* def = program.getUnionDefinition(m_name, m_scopeOrId);
     CLD_ASSERT(def);
     return def->getSizeOf();
 }
 
-std::size_t cld::Semantics::UnionType::getAlignOf(const SemanticAnalysis& analysis) const
+std::size_t cld::Semantics::UnionType::getAlignOf(const ProgramInterface& program) const
 {
-    auto* def = analysis.getUnionDefinition(m_name, m_scopeOrId);
+    auto* def = program.getUnionDefinition(m_name, m_scopeOrId);
     CLD_ASSERT(def);
     return def->getAlignOf();
 }
@@ -597,12 +596,12 @@ cld::Semantics::Type cld::Semantics::AnonymousStructType::create(bool isConst, b
     return cld::Semantics::Type(isConst, isVolatile, AnonymousStructType(id, std::move(fields), sizeOf, alignOf));
 }
 
-std::size_t cld::Semantics::AnonymousStructType::getSizeOf(const SemanticAnalysis&) const
+std::size_t cld::Semantics::AnonymousStructType::getSizeOf(const ProgramInterface&) const
 {
     return m_sizeOf;
 }
 
-std::size_t cld::Semantics::AnonymousStructType::getAlignOf(const SemanticAnalysis&) const
+std::size_t cld::Semantics::AnonymousStructType::getAlignOf(const ProgramInterface&) const
 {
     return m_alignOf;
 }
@@ -630,12 +629,12 @@ cld::Semantics::Type cld::Semantics::AnonymousUnionType::create(bool isConst, bo
     return cld::Semantics::Type(isConst, isVolatile, AnonymousUnionType(id, std::move(fields), sizeOf, alignOf));
 }
 
-std::size_t cld::Semantics::AnonymousUnionType::getSizeOf(const SemanticAnalysis&) const
+std::size_t cld::Semantics::AnonymousUnionType::getSizeOf(const ProgramInterface&) const
 {
     return m_sizeOf;
 }
 
-std::size_t cld::Semantics::AnonymousUnionType::getAlignOf(const SemanticAnalysis&) const
+std::size_t cld::Semantics::AnonymousUnionType::getAlignOf(const ProgramInterface&) const
 {
     return m_alignOf;
 }
@@ -661,14 +660,14 @@ cld::Semantics::Type cld::Semantics::AnonymousEnumType::create(bool isConst, boo
     return Type(isConst, isVolatile, AnonymousEnumType(id, std::make_shared<Type>(std::move(type))));
 }
 
-std::size_t cld::Semantics::AnonymousEnumType::getSizeOf(const SemanticAnalysis& analysis) const
+std::size_t cld::Semantics::AnonymousEnumType::getSizeOf(const ProgramInterface& program) const
 {
-    return m_type->getSizeOf(analysis);
+    return m_type->getSizeOf(program);
 }
 
-std::size_t cld::Semantics::AnonymousEnumType::getAlignOf(const SemanticAnalysis& analysis) const
+std::size_t cld::Semantics::AnonymousEnumType::getAlignOf(const ProgramInterface& program) const
 {
-    return m_type->getAlignOf(analysis);
+    return m_type->getAlignOf(program);
 }
 
 bool cld::Semantics::Field::operator==(const cld::Semantics::Field& rhs) const
@@ -1218,4 +1217,12 @@ cld::Semantics::DefaultStatement::DefaultStatement(Lexer::CTokenIterator default
 const cld::Semantics::Statement& cld::Semantics::DefaultStatement::getStatement() const
 {
     return *m_statement;
+}
+
+cld::Semantics::Program cld::Semantics::analyse(const Syntax::TranslationUnit& parseTree, CSourceObject&& ctokens,
+                                                llvm::raw_ostream* reporter, bool* errors)
+{
+    SemanticAnalysis analysis(ctokens, reporter, errors);
+    auto translationUnit = analysis.visit(parseTree);
+    return Program(std::move(translationUnit), std::move(ctokens), std::move(analysis));
 }

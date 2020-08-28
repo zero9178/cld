@@ -178,8 +178,6 @@ else ()
             )
 endif ()
 
-llvm_map_components_to_libnames(llvm_libs Core ExecutionEngine MC MCJIT Object OrcJit Option RuntimeDyld Support native)
-
 if (${CLD_BUILD_TESTS})
     if (CLD_FUZZER AND "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" AND NOT MINGW)
         add_compile_definitions(CLD_IN_FUZZER)
@@ -198,6 +196,7 @@ if (${CLD_BUILD_TESTS})
 endif ()
 
 add_subdirectory(src/Frontend)
+add_subdirectory(src/LLVMBackend)
 
 if (NOT CLD_FUZZER)
     #    add_executable(cld src/main.cpp)

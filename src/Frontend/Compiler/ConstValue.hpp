@@ -10,7 +10,7 @@
 namespace cld::Semantics
 {
 class Type;
-class SemanticAnalysis;
+class ProgramInterface;
 
 struct VoidStar final
 {
@@ -54,7 +54,7 @@ public:
 
     ConstValue bitwiseNegate(const LanguageOptions& options) const;
 
-    [[nodiscard]] ConstValue castTo(const Type& type, const SemanticAnalysis* analysis, const LanguageOptions& options,
+    [[nodiscard]] ConstValue castTo(const Type& type, const ProgramInterface* program, const LanguageOptions& options,
                                     Issue* issues = nullptr) const;
 
     ConstValue multiply(const ConstValue& rhs, const LanguageOptions& options, Issue* issues = nullptr) const;

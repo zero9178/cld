@@ -54,7 +54,7 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::bitwiseNegate(const Langu
 }
 
 cld::Semantics::ConstValue cld::Semantics::ConstValue::castTo(const cld::Semantics::Type& type,
-                                                              const SemanticAnalysis* analysis,
+                                                              const ProgramInterface* program,
                                                               const LanguageOptions& options, Issue* issues) const
 {
     if (issues)
@@ -72,7 +72,7 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::castTo(const cld::Semanti
                     {
                         CLD_UNREACHABLE;
                     }
-                    if (primitiveType.getBitCount() == 1)
+                    if (primitiveType.getKind() == PrimitiveType::Bool)
                     {
                         return toBool(options);
                     }
@@ -118,7 +118,7 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::castTo(const cld::Semanti
                         }
                         return {floating};
                     }
-                    if (primitiveType.getBitCount() == 1)
+                    if (primitiveType.getKind() == PrimitiveType::Bool)
                     {
                         return toBool(options);
                     }
@@ -154,7 +154,7 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::castTo(const cld::Semanti
                         result.convertFromAPInt(integer, integer.isSigned(), llvm::APFloat::rmNearestTiesToEven);
                         return {result};
                     }
-                    if (primitiveType.getBitCount() == 1)
+                    if (primitiveType.getKind() == PrimitiveType::Bool)
                     {
                         return toBool(options);
                     }
@@ -179,12 +179,11 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::castTo(const cld::Semanti
                     return {apsInt};
                 },
                 [&](const PointerType& pointerType) -> ConstValue {
-                    CLD_ASSERT(analysis);
-                    if (analysis->isCompleteType(pointerType.getElementType()))
+                    CLD_ASSERT(program);
+                    if (program->isCompleteType(pointerType.getElementType()))
                     {
-                        return {
-                            VoidStar{integer.getZExtValue(),
-                                     static_cast<std::uint32_t>(pointerType.getElementType().getSizeOf(*analysis))}};
+                        return {VoidStar{integer.getZExtValue(),
+                                         static_cast<std::uint32_t>(pointerType.getElementType().getSizeOf(*program))}};
                     }
                     else
                     {

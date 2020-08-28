@@ -31,7 +31,7 @@ public:
     const SourceInterface& getSourceInterface() const;
 };
 
-std::pair<File, bool> buildTree(const PPSourceObject& sourceObject, llvm::raw_ostream* reporter = &llvm::errs());
+File buildTree(const PPSourceObject& sourceObject, llvm::raw_ostream* reporter = &llvm::errs(), bool* errors = nullptr);
 
 File parseFile(Lexer::PPTokenIterator& begin, Lexer::PPTokenIterator end, Context& context);
 

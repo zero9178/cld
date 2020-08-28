@@ -6,13 +6,17 @@
 #include "ParserUtil.hpp"
 #include "SourceObject.hpp"
 
-std::pair<cld::Syntax::TranslationUnit, bool> cld::Parser::buildTree(const CSourceObject& sourceObject,
-                                                                     llvm::raw_ostream* reporter)
+cld::Syntax::TranslationUnit cld::Parser::buildTree(const CSourceObject& sourceObject, llvm::raw_ostream* reporter,
+                                                    bool* errors)
 {
     Context context(sourceObject, reporter);
     const auto* begin = sourceObject.data().data();
-    return {parseTranslationUnit(begin, sourceObject.data().data() + sourceObject.data().size(), context),
-            context.getCurrentErrorCount() == 0};
+    auto result = parseTranslationUnit(begin, sourceObject.data().data() + sourceObject.data().size(), context);
+    if (errors)
+    {
+        *errors = context.getCurrentErrorCount();
+    }
+    return result;
 }
 
 void cld::Parser::Context::addTypedef(std::string_view name, DeclarationLocation declarator)
