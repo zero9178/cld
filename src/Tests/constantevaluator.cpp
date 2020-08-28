@@ -14,13 +14,13 @@ using namespace cld::Warnings::Semantics;
 namespace
 {
 std::pair<cld::Semantics::ConstValue, std::string>
-    evaluateConstantExpression(std::string_view expression,
+    evaluateConstantExpression(std::string expression,
                                const cld::LanguageOptions& options = cld::LanguageOptions::native(),
                                cld::Semantics::SemanticAnalysis::Mode mode = cld::Semantics::SemanticAnalysis::Integer)
 {
     std::string storage;
     llvm::raw_string_ostream ss(storage);
-    auto tokens = cld::Lexer::tokenize(expression, options);
+    auto tokens = cld::Lexer::tokenize(std::move(expression), options);
     REQUIRE(!tokens.data().empty());
     auto ctokens = cld::Lexer::toCTokens(tokens);
     cld::Parser::Context context(ctokens, &ss);
@@ -47,14 +47,14 @@ std::pair<cld::Semantics::ConstValue, std::string>
 }
 
 std::pair<cld::Semantics::ConstValue, std::string>
-    evaluateProgram(std::string_view source, const cld::LanguageOptions& options = cld::LanguageOptions::native(),
+    evaluateProgram(std::string source, const cld::LanguageOptions& options = cld::LanguageOptions::native(),
                     cld::Semantics::SemanticAnalysis::Mode mode = cld::Semantics::SemanticAnalysis::Integer)
 {
     std::string storage;
     llvm::raw_string_ostream ss(storage);
     cld::PPSourceObject tokens;
     bool errors = false;
-    tokens = cld::Lexer::tokenize(source, options, &ss, &errors);
+    tokens = cld::Lexer::tokenize(std::move(source), options, &ss, &errors);
     UNSCOPED_INFO(storage);
     REQUIRE_FALSE(errors);
     tokens = cld::PP::preprocess(std::move(tokens), &ss, &errors);

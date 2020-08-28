@@ -48,7 +48,8 @@ int main(int argc, char** argv)
     if (mode == "lexer")
     {
         bool errors = false;
-        auto tokens = cld::Lexer::tokenize(input, cld::LanguageOptions::native(), &llvm::nulls(), &errors, filename);
+        auto tokens =
+            cld::Lexer::tokenize(std::move(input), cld::LanguageOptions::native(), &llvm::nulls(), &errors, filename);
         if (errors)
         {
             return 0;
@@ -58,7 +59,8 @@ int main(int argc, char** argv)
     else if (mode == "parser")
     {
         bool errors = false;
-        auto tokens = cld::Lexer::tokenize(input, cld::LanguageOptions::native(), &llvm::nulls(), &errors, filename);
+        auto tokens =
+            cld::Lexer::tokenize(std::move(input), cld::LanguageOptions::native(), &llvm::nulls(), &errors, filename);
         if (errors || tokens.data().empty())
         {
             return 0;
@@ -81,7 +83,8 @@ int main(int argc, char** argv)
     else if (mode == "ppparser")
     {
         bool errors;
-        auto tokens = cld::Lexer::tokenize(input, cld::LanguageOptions::native(), &llvm::nulls(), &errors, filename);
+        auto tokens =
+            cld::Lexer::tokenize(std::move(input), cld::LanguageOptions::native(), &llvm::nulls(), &errors, filename);
         if (errors || tokens.data().empty())
         {
             return 0;
@@ -96,7 +99,7 @@ int main(int argc, char** argv)
             options.includeDirectories.push_back(argv[i]);
         }
         bool errors = false;
-        auto pptokens = cld::Lexer::tokenize(input, options, &llvm::errs(), &errors, filename);
+        auto pptokens = cld::Lexer::tokenize(std::move(input), options, &llvm::errs(), &errors, filename);
         if (errors)
         {
             return 0;
@@ -131,7 +134,7 @@ int main(int argc, char** argv)
         }
         options.disabledWarnings.insert("macro-redefined");
         bool errors = false;
-        auto pptokens = cld::Lexer::tokenize(input, options, &llvm::errs(), &errors, filename);
+        auto pptokens = cld::Lexer::tokenize(std::move(input), options, &llvm::errs(), &errors, filename);
         if (errors)
         {
             return -1;

@@ -256,7 +256,8 @@ class Preprocessor final : private cld::PPSourceInterface
                 }
                 text += '\"';
                 bool errorsOccurred = false;
-                auto scratchPadPP = cld::Lexer::tokenize(text, m_options, m_reporter, &errorsOccurred, "<Strings>");
+                auto scratchPadPP =
+                    cld::Lexer::tokenize(std::move(text), m_options, m_reporter, &errorsOccurred, "<Strings>");
                 CLD_ASSERT(!errorsOccurred);
                 CLD_ASSERT(scratchPadPP.getFiles().size() == 1);
                 CLD_ASSERT(scratchPadPP.getFiles()[0].ppTokens.size() == 1);
@@ -446,7 +447,7 @@ class Preprocessor final : private cld::PPSourceInterface
                 std::memcpy(text.data() + lhsView.size(), rhsView.data(), rhsView.size());
             }
             bool errors = false;
-            auto scratchPadPP = cld::Lexer::tokenize(text, m_options, &llvm::nulls(), &errors, "<Pastings>");
+            auto scratchPadPP = cld::Lexer::tokenize(std::move(text), m_options, &llvm::nulls(), &errors, "<Pastings>");
             CLD_ASSERT(scratchPadPP.getFiles().size() == 1);
             if (errors || scratchPadPP.getFiles()[0].ppTokens.size() != 1)
             {
@@ -552,7 +553,7 @@ class Preprocessor final : private cld::PPSourceInterface
                 }
                 bool errorsOccurred = false;
                 auto scratchPadPP =
-                    cld::Lexer::tokenize(source, m_options, m_reporter, &errorsOccurred, "<Scratch Pad>");
+                    cld::Lexer::tokenize(std::move(source), m_options, m_reporter, &errorsOccurred, "<Scratch Pad>");
                 CLD_ASSERT(!errorsOccurred);
                 include(std::move(scratchPadPP));
             }
@@ -1111,7 +1112,8 @@ public:
         }
 
         bool errorsOccurred = false;
-        auto scratchPadPP = cld::Lexer::tokenize(scratchPadSource, options, report, &errorsOccurred, "<Scratch Pad>");
+        auto scratchPadPP =
+            cld::Lexer::tokenize(std::move(scratchPadSource), options, report, &errorsOccurred, "<Scratch Pad>");
         if (!errorsOccurred)
         {
             include(std::move(scratchPadPP));
@@ -1389,7 +1391,7 @@ public:
         resultPath = cld::fs::canonical(resultPath);
 
         bool errors = false;
-        auto newFile = cld::Lexer::tokenize(text, m_options, m_reporter, &errors, resultPath.u8string());
+        auto newFile = cld::Lexer::tokenize(std::move(text), m_options, m_reporter, &errors, resultPath.u8string());
         if (errors)
         {
             m_errorsOccurred = true;

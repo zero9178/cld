@@ -48,13 +48,13 @@ namespace
 //MSVC has a bug where it attempts to use the deleted copy constructor here. As a workaround we return straight
 //away and instead use a constructor to check for the errors
 
-[[nodiscard]] cld::CSourceObject lexes(std::string_view code,
+[[nodiscard]] cld::CSourceObject lexes(std::string code,
                                        const cld::LanguageOptions& options = cld::LanguageOptions::native())
 {
     std::string buffer;
     llvm::raw_string_ostream ss(buffer);
     bool errors;
-    auto result = cld::Lexer::tokenize(code, options, &ss, &errors);
+    auto result = cld::Lexer::tokenize(std::move(code), options, &ss, &errors);
     UNSCOPED_INFO(buffer);
     REQUIRE_FALSE(errors);
     auto tokens = cld::Lexer::toCTokens(result, &ss, &errors);
@@ -63,13 +63,13 @@ namespace
     return tokens;
 }
 
-[[nodiscard]] cld::PPSourceObject pplexes(std::string_view code,
+[[nodiscard]] cld::PPSourceObject pplexes(std::string code,
                                           const cld::LanguageOptions& options = cld::LanguageOptions::native())
 {
     std::string buffer;
     llvm::raw_string_ostream ss(buffer);
     bool errors;
-    auto tokens = cld::Lexer::tokenize(code, options, &ss, &errors);
+    auto tokens = cld::Lexer::tokenize(std::move(code), options, &ss, &errors);
     UNSCOPED_INFO(buffer);
     REQUIRE_FALSE(errors);
     return tokens;
@@ -1545,7 +1545,7 @@ TEST_CASE("Lexing Preprocessing numbers", "[lexer]")
         {
             DYNAMIC_SECTION(iter)
             {
-                auto result = pplexes(iter);
+                auto result = pplexes(cld::to_string(iter));
                 REQUIRE(result.data().size() == 1);
                 CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
                 CHECK(result.data()[0].getValue() == iter);

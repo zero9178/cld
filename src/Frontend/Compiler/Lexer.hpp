@@ -134,7 +134,7 @@ using TokenIterator = const TokenBase* CLD_NON_NULL;
 using CTokenIterator = const CToken* CLD_NON_NULL;
 using PPTokenIterator = const PPToken* CLD_NON_NULL;
 
-PPSourceObject tokenize(std::string_view source, LanguageOptions languageOptions = LanguageOptions::native(),
+PPSourceObject tokenize(std::string source, LanguageOptions languageOptions = LanguageOptions::native(),
                         llvm::raw_ostream* reporter = &llvm::errs(), bool* errorsOccured = nullptr,
                         std::string_view sourcePath = "<stdin>");
 

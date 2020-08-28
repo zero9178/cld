@@ -38,12 +38,12 @@ namespace
 {
 cld::SourceInterface* interface;
 
-[[nodiscard]] cld::Lexer::CTokenIterator lexes(std::string_view code,
+[[nodiscard]] cld::Lexer::CTokenIterator lexes(std::string code,
                                                const cld::LanguageOptions& options = cld::LanguageOptions::native())
 {
     std::string buffer;
     llvm::raw_string_ostream ss(buffer);
-    auto temp = cld::Lexer::tokenize(code, options, &ss);
+    auto temp = cld::Lexer::tokenize(std::move(code), options, &ss);
     UNSCOPED_INFO(buffer);
     REQUIRE(buffer.empty());
     static cld::CSourceObject csourceObject;
@@ -52,26 +52,26 @@ cld::SourceInterface* interface;
     return csourceObject.data().data();
 }
 
-[[nodiscard]] cld::Lexer::PPTokenIterator pplexes(std::string_view code,
+[[nodiscard]] cld::Lexer::PPTokenIterator pplexes(std::string code,
                                                   const cld::LanguageOptions& options = cld::LanguageOptions::native())
 {
     std::string buffer;
     llvm::raw_string_ostream ss(buffer);
     static cld::PPSourceObject ppsourceObject;
-    ppsourceObject = cld::Lexer::tokenize(code, options, &ss);
+    ppsourceObject = cld::Lexer::tokenize(std::move(code), options, &ss);
     UNSCOPED_INFO(buffer);
     REQUIRE(buffer.empty());
     interface = &ppsourceObject;
     return ppsourceObject.data().data();
 }
 
-[[nodiscard]] cld::Lexer::PPTokenIterator pp(std::string_view code,
+[[nodiscard]] cld::Lexer::PPTokenIterator pp(std::string code,
                                              const cld::LanguageOptions& options = cld::LanguageOptions::native())
 {
     std::string buffer;
     llvm::raw_string_ostream ss(buffer);
     static cld::PPSourceObject ppsourceObject;
-    ppsourceObject = cld::Lexer::tokenize(code, options, &ss);
+    ppsourceObject = cld::Lexer::tokenize(std::move(code), options, &ss);
     UNSCOPED_INFO(buffer);
     REQUIRE(buffer.empty());
     ppsourceObject = cld::PP::preprocess(std::move(ppsourceObject), &ss);

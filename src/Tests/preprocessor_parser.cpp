@@ -298,12 +298,12 @@ TEST_CASE("Parse Preprocessor if section", "[PPParse]")
 
 namespace
 {
-void parse(std::string_view source)
+void parse(std::string source)
 {
     std::string string;
     llvm::raw_string_ostream ss(string);
     cld::PPSourceObject tokens;
-    tokens = cld::Lexer::tokenize(std::string(source.begin(), source.end()), cld::LanguageOptions::native(), &ss);
+    tokens = cld::Lexer::tokenize(std::move(source), cld::LanguageOptions::native(), &ss);
     ss.flush();
     if (!string.empty() || tokens.data().empty())
     {

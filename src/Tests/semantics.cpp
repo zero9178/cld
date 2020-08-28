@@ -10,13 +10,13 @@
 #include "TestConfig.hpp"
 
 static std::pair<cld::Semantics::TranslationUnit, std::string>
-    generateSemantics(std::string_view source, const cld::LanguageOptions& options = cld::LanguageOptions::native())
+    generateSemantics(std::string source, const cld::LanguageOptions& options = cld::LanguageOptions::native())
 {
     std::string storage;
     llvm::raw_string_ostream ss(storage);
     cld::PPSourceObject tokens;
     bool errors = false;
-    tokens = cld::Lexer::tokenize(source, options, &ss, &errors);
+    tokens = cld::Lexer::tokenize(std::move(source), options, &ss, &errors);
     UNSCOPED_INFO(storage);
     REQUIRE_FALSE(errors);
     tokens = cld::PP::preprocess(std::move(tokens), &ss, &errors);
@@ -1460,12 +1460,11 @@ namespace
  * @param options Language options
  * @return Last expression in the function definition
  */
-const Expression& generateExpression(std::string_view source,
-                                     cld::LanguageOptions options = cld::LanguageOptions::native())
+const Expression& generateExpression(std::string source, cld::LanguageOptions options = cld::LanguageOptions::native())
 {
     static TranslationUnit translationUnit({});
     std::string errors;
-    std::tie(translationUnit, errors) = generateSemantics(source, options);
+    std::tie(translationUnit, errors) = generateSemantics(std::move(source), options);
     REQUIRE_THAT(errors, ProducesNoErrors());
     REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals().back()));
     auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals().back());

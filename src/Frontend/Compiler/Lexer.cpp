@@ -1590,7 +1590,7 @@ struct [[maybe_unused]] FirstArgOfMethod<R (*)(U, Args...) noexcept>
 
 constexpr static auto pattern = ctll::fixed_string{"(\\?\\?/|\\\\)[\n]|\\?\\?[=()'<!>\\-/]"};
 
-cld::PPSourceObject cld::Lexer::tokenize(std::string_view source, LanguageOptions languageOptions,
+cld::PPSourceObject cld::Lexer::tokenize(std::string source, LanguageOptions languageOptions,
                                          llvm::raw_ostream* reporter, bool* errorsOccured, std::string_view sourcePath)
 {
     if (errorsOccured)
@@ -1601,7 +1601,15 @@ cld::PPSourceObject cld::Lexer::tokenize(std::string_view source, LanguageOption
     constexpr static std::string_view UTF8_BOM = "\xEF\xBB\xBF";
     if (source.size() >= 3 && source.substr(0, 3) == UTF8_BOM)
     {
-        source.remove_prefix(3);
+        source = source.substr(3);
+    }
+
+    {
+        std::string::size_type pos = 0;
+        while ((pos = source.find("\r\n", pos)) != source.npos)
+        {
+            source.erase(pos, 1);
+        }
     }
 
     StateMachine stateMachine;
@@ -1831,7 +1839,7 @@ cld::PPSourceObject cld::Lexer::tokenize(std::string_view source, LanguageOption
 
     return PPSourceObject(
         context.getResult(),
-        {Source::File{to_string(sourcePath), to_string(source), std::move(starts), context.getResult()}},
+        {Source::File{to_string(sourcePath), std::move(source), std::move(starts), context.getResult()}},
         languageOptions, {}, {{std::move(characterToSourceSpace)}});
 }
 

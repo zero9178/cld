@@ -877,7 +877,7 @@ void parse(const std::string& source)
     std::string storage;
     llvm::raw_string_ostream ss(storage);
     bool errorsOccured = false;
-    auto tokens = cld::Lexer::tokenize(source, cld::LanguageOptions::native(), &ss, &errorsOccured);
+    auto tokens = cld::Lexer::tokenize(std::move(source), cld::LanguageOptions::native(), &ss, &errorsOccured);
     if (!ss.str().empty() || tokens.data().empty() || errorsOccured)
     {
         return;
