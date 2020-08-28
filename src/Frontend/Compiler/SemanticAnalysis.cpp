@@ -20,6 +20,10 @@ bool cld::Semantics::SemanticAnalysis::log(const Message& message)
     {
         *m_reporter << message;
     }
+    if (message.getSeverity() == Severity::Error && m_errors)
+    {
+        *m_errors = true;
+    }
     return message.getSeverity() != Severity::None;
 }
 
@@ -1375,7 +1379,7 @@ cld::Expected<cld::Semantics::ConstValue, std::vector<cld::Message>>
 
 cld::Semantics::ConstValue
     cld::Semantics::SemanticAnalysis::evaluate(const Expression& expression, Mode mode,
-                                               llvm::function_ref<void(const Message&)> logger) const
+                                               cld::function_ref<void(const Message&)> logger) const
 {
     auto typeCheck = [=](const Expression& exp, const ConstValue& value) {
         if (!value.isUndefined() && !isInteger(exp.getType()) && mode == Integer)
@@ -1630,13 +1634,13 @@ cld::Semantics::ConstValue
             switch (unaryOperator.getKind())
             {
                 case UnaryOperator::AddressOf:
+                case UnaryOperator::Dereference:
                     if (mode == Initialization)
                     {
                         return {AddressConstant{}};
                     }
                     [[fallthrough]]; // Although not fully correct it's practically not allowed due to yielding or using
                                      // pointer types. Therefore we fall through to give diagnostic
-                case UnaryOperator::Dereference:
                 case UnaryOperator::PostDecrement:
                 case UnaryOperator::PreIncrement:
                 case UnaryOperator::PreDecrement:
@@ -1673,8 +1677,7 @@ cld::Semantics::ConstValue
             {
                 return {};
             }
-            // TODO:
-            CLD_UNREACHABLE;
+            return {AddressConstant{}};
         },
         [&](const Conditional& conditional) -> ConstValue {
             auto boolean = evaluate(conditional.getBoolExpression(), mode, logger);

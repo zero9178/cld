@@ -1355,35 +1355,15 @@ TEST_CASE("Semantics type printing", "[semantics]")
     }
     SECTION("Pointers")
     {
-        std::string result = "void*";
-        auto ptrIsConst = GENERATE(false, true);
-        auto ptrIsVolatile = GENERATE(false, true);
-        auto ptrIsRestricted = GENERATE(false, true);
-        auto elemntIsConst = GENERATE(false, true);
-        auto elemntIsVolatile = GENERATE(false, true);
-        if (elemntIsVolatile)
         {
-            result = "volatile " + result;
+            CHECK(toStr(PointerType::create(
+                      false, false, false,
+                      PointerType::create(false, false, false,
+                                          PointerType::create(true, false, false,
+                                                              PrimitiveType::createShort(
+                                                                  false, false, cld::LanguageOptions::native())))))
+                  == "short *const **");
         }
-        if (elemntIsConst)
-        {
-            result = "const " + result;
-        }
-        if (ptrIsRestricted)
-        {
-            result += " restrict";
-        }
-        if (ptrIsConst)
-        {
-            result += " const";
-        }
-        if (ptrIsVolatile)
-        {
-            result += " volatile";
-        }
-        CHECK(toStr(PointerType::create(ptrIsConst, ptrIsVolatile, ptrIsRestricted,
-                                        PrimitiveType::createVoid(elemntIsConst, elemntIsVolatile)))
-              == result);
         CHECK(toStr(PointerType::create(
                   false, false, false,
                   ArrayType::create(false, false, false, false, PrimitiveType::createSignedChar(false, false), 5)))
@@ -1464,7 +1444,7 @@ TEST_CASE("Semantics type printing", "[semantics]")
                                                                   false, false, cld::LanguageOptions::native())))),
                                   {}, false, true))),
                       8)))
-              == "char*(*(**[][8])())[]");
+              == "char *(*(**[][8])())[]");
     }
 }
 
@@ -3363,19 +3343,19 @@ TEST_CASE("Semantics function call expression", "[semantics]")
                   "void foo(float* f) {\n"
                   " bar(f);\n"
                   "}",
-                  ProducesError(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_N, 1, "'int*'"));
+                  ProducesError(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_N, 1, "'int *'"));
     SEMA_PRODUCES("void bar(int*);\n"
                   "\n"
                   "void foo(const int* f) {\n"
                   " bar(f);\n"
                   "}",
-                  ProducesError(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_N, 1, "'int*'"));
+                  ProducesError(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_N, 1, "'int *'"));
     SEMA_PRODUCES("void bar(void*);\n"
                   "\n"
                   "void foo(const float* f) {\n"
                   " bar(f);\n"
                   "}",
-                  ProducesError(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_N, 1, "'void*'"));
+                  ProducesError(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_N, 1, "'void *'"));
     SEMA_PRODUCES("void bar(void*);\n"
                   "\n"
                   "void foo(void (*f)(int)) {\n"
@@ -3491,7 +3471,7 @@ TEST_CASE("Semantics simple initializer", "[semantics]")
                   ProducesError(EXPECTED_INITIALIZER_TO_BE_AN_ARITHMETIC_OR_POINTER_TYPE));
     SEMA_PRODUCES(
         "int* i = (const int*)5;",
-        ProducesError(CANNOT_INITIALIZE_VARIABLE_OF_TYPE_N_WITH_INCOMPATIBLE_TYPE_N, "'int*'", "'const int*'"));
+        ProducesError(CANNOT_INITIALIZE_VARIABLE_OF_TYPE_N_WITH_INCOMPATIBLE_TYPE_N, "'int *'", "'const int *'"));
     SEMA_PRODUCES("const int* i = 5.0;", ProducesError(EXPECTED_INITIALIZER_TO_BE_A_POINTER_TYPE));
     SEMA_PRODUCES("const int* i = 3;", ProducesError(EXPECTED_INITIALIZER_TO_BE_NULL));
     SEMA_PRODUCES("void foo(void);\n"

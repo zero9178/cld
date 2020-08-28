@@ -1,6 +1,6 @@
 #pragma once
 
-#include <llvm/ADT/STLExtras.h>
+#include <Frontend/Common/function_ref.hpp>
 
 #include <string_view>
 
@@ -11,10 +11,10 @@ namespace cld::Parser
 bool isAssignment(Lexer::TokenType type);
 
 bool expectIdentifier(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context,
-                      std::string_view& value, llvm::function_ref<Message()> additional = {});
+                      std::string_view& value, cld::function_ref<Message()> additional = {});
 
 bool expect(Lexer::TokenType expected, Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context,
-            llvm::function_ref<Message()> additional = {});
+            cld::function_ref<Message()> additional = {});
 
 constexpr Context::TokenBitSet firstPostfixSet = Context::fromTokenTypes(
     cld::Lexer::TokenType::Arrow, cld::Lexer::TokenType::Dot, cld::Lexer::TokenType::OpenSquareBracket,

@@ -3,7 +3,7 @@
 #include "ErrorMessages.hpp"
 
 bool cld::Parser::expectIdentifier(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context,
-                                   std::string_view& value, llvm::function_ref<Message()> additional)
+                                   std::string_view& value, cld::function_ref<Message()> additional)
 {
     if (begin == end || begin->getTokenType() != Lexer::TokenType::Identifier)
     {
@@ -29,7 +29,7 @@ bool cld::Parser::expectIdentifier(Lexer::CTokenIterator& begin, Lexer::CTokenIt
 }
 
 bool cld::Parser::expect(Lexer::TokenType expected, Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
-                         Context& context, llvm::function_ref<Message()> additional)
+                         Context& context, cld::function_ref<Message()> additional)
 {
     if (begin == end || begin->getTokenType() != expected)
     {

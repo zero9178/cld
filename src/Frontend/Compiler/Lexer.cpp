@@ -1,13 +1,14 @@
 #include "Lexer.hpp"
 
-#include <llvm/ADT/ScopeExit.h>
 #include <llvm/ADT/SmallString.h>
 #include <llvm/Support/ConvertUTF.h>
+#include <llvm/Support/Error.h>
 #include <llvm/Support/Format.h>
 #include <llvm/Support/Unicode.h>
 #include <llvm/Support/UnicodeCharRanges.h>
 #include <llvm/Support/WithColor.h>
 
+#include <Frontend/Common/ScopeExit.hpp>
 #include <Frontend/Common/Text.hpp>
 
 #include <algorithm>
@@ -808,7 +809,7 @@ public:
     template <class F>
     void withOffset(std::uint64_t offset, F&& f)
     {
-        auto exit = llvm::make_scope_exit([offset = m_offset, this]() { m_offset = offset; });
+        auto exit = cld::ScopeExit([offset = m_offset, this]() { m_offset = offset; });
         m_offset = offset;
         std::forward<F>(f)();
     }
@@ -1277,7 +1278,7 @@ std::pair<StateMachine, bool> UniversalCharacter::advance(char c, Context& conte
         }
         context.push(result, result + 1, TokenType::Backslash);
         context.tokenStartOffset++;
-        return {Text{((big ? "U" : "u") + characters).str()}, false};
+        return {Text{(big ? "U" : "u") + static_cast<std::string>(characters)}, false};
     }
 
     characters.push_back(c);
@@ -1322,7 +1323,7 @@ std::pair<StateMachine, bool> UniversalCharacter::advance(char c, Context& conte
                                [&] { cld::match(*suspHolder, [&](auto&& value) { value.advance(' ', context); }); });
             context.push(ucStart, ucStart + 1, TokenType::Backslash);
             context.tokenStartOffset++;
-            return {Text{((big ? "U" : "u") + characters).str()}, true};
+            return {Text{(big ? "U" : "u") + static_cast<std::string>(characters)}, true};
         }
         else
         {
@@ -2272,6 +2273,11 @@ std::optional<std::pair<CToken::ValueType, CToken::Type>>
             suffixBegin++;
         }
         const auto* prev = suffixBegin;
+        // The exponent of a hex floating point number is actually normal decimal digits not hex
+        if (isHex)
+        {
+            legalValues.resize(10);
+        }
         suffixBegin = std::find_if(suffixBegin, end, searchFunction);
         if (prev == suffixBegin)
         {
@@ -2330,7 +2336,7 @@ std::optional<std::pair<CToken::ValueType, CToken::Type>>
         std::string number(begin, suffixBegin);
         llvm::APInt test;
         llvm::StringRef(number).getAsInteger(0, test);
-        if (test.getBitWidth() > 64)
+        if (test.getActiveBits() > 64)
         {
             context.report(cld::Errors::Lexer::INTEGER_VALUE_TOO_BIG_TO_BE_REPRESENTABLE, beginLocation, context.token);
             return {};
@@ -2472,19 +2478,58 @@ std::optional<std::pair<CToken::ValueType, CToken::Type>>
         auto input = (*begin == '.' ? "0" : "") + std::string(begin, suffixBegin);
         if (suffix.empty())
         {
-            return {{llvm::APFloat(llvm::APFloat::IEEEdouble(), input), CToken::Type::Double}};
+            llvm::APFloat number(llvm::APFloat::IEEEdouble());
+            auto result = number.convertFromString(input, llvm::APFloat::rmNearestTiesToEven);
+            if (!result)
+            {
+                CLD_UNREACHABLE;
+            }
+            return {{std::move(number), CToken::Type::Double}};
         }
         else if (suffix == "f" || suffix == "F")
         {
-            return {{llvm::APFloat(llvm::APFloat::IEEEsingle(), input), CToken::Type::Float}};
+            llvm::APFloat number(llvm::APFloat::IEEEsingle());
+            auto result = number.convertFromString(input, llvm::APFloat::rmNearestTiesToEven);
+            if (!result)
+            {
+                CLD_UNREACHABLE;
+            }
+            return {{std::move(number), CToken::Type::Float}};
         }
         else if (suffix == "l" || suffix == "L")
         {
             switch (context.sourceInterface.getLanguageOptions().sizeOfLongDoubleBits)
             {
-                case 64: return {{llvm::APFloat(llvm::APFloat::IEEEdouble(), input), CToken::Type::LongDouble}};
-                case 80: return {{llvm::APFloat(llvm::APFloat::x87DoubleExtended(), input), CToken::Type::LongDouble}};
-                case 128: return {{llvm::APFloat(llvm::APFloat::IEEEquad(), input), CToken::Type::LongDouble}};
+                case 64:
+                {
+                    llvm::APFloat number(llvm::APFloat::IEEEdouble());
+                    auto result = number.convertFromString(input, llvm::APFloat::rmNearestTiesToEven);
+                    if (!result)
+                    {
+                        CLD_UNREACHABLE;
+                    }
+                    return {{std::move(number), CToken::Type::LongDouble}};
+                }
+                case 80:
+                {
+                    llvm::APFloat number(llvm::APFloat::x87DoubleExtended());
+                    auto result = number.convertFromString(input, llvm::APFloat::rmNearestTiesToEven);
+                    if (!result)
+                    {
+                        CLD_UNREACHABLE;
+                    }
+                    return {{std::move(number), CToken::Type::LongDouble}};
+                }
+                case 128:
+                {
+                    llvm::APFloat number(llvm::APFloat::IEEEquad());
+                    auto result = number.convertFromString(input, llvm::APFloat::rmNearestTiesToEven);
+                    if (!result)
+                    {
+                        CLD_UNREACHABLE;
+                    }
+                    return {{std::move(number), CToken::Type::LongDouble}};
+                }
                 default: CLD_UNREACHABLE;
             }
         }

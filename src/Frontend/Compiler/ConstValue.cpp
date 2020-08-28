@@ -467,12 +467,12 @@ std::string cld::Semantics::ConstValue::toString() const
         [](const llvm::APFloat& floating) -> std::string {
             llvm::SmallString<20> result;
             floating.toString(result);
-            return result.str();
+            return static_cast<std::string>(result);
         },
         [](const llvm::APSInt& integer) -> std::string {
             llvm::SmallString<20> result;
             integer.toString(result);
-            return result.str();
+            return static_cast<std::string>(result);
         },
         [](std::monostate) -> std::string { return "<undefined>"; },
         [](AddressConstant) -> std::string { return "<address>"; });

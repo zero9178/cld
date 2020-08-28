@@ -1,7 +1,8 @@
-#include <llvm/ADT/ScopeExit.h>
-#include <llvm/Support/FileSystem.h>
+
 #include <llvm/Support/Timer.h>
 
+#include <Frontend/Common/Filesystem.hpp>
+#include <Frontend/Common/ScopeExit.hpp>
 #include <Frontend/Compiler/Lexer.hpp>
 #include <Frontend/Compiler/Parser.hpp>
 #include <Frontend/Compiler/SemanticAnalysis.hpp>
@@ -11,6 +12,12 @@
 
 int main(int argc, char** argv)
 {
+#ifdef _MSC_VER
+    _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+    _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
+#endif
     if (argc < 2)
     {
         llvm::errs() << "Missing mode\n";
@@ -23,29 +30,18 @@ int main(int argc, char** argv)
         return -1;
     }
     std::string filename = argv[2];
-    std::uint64_t size;
-    auto error = llvm::sys::fs::file_size(filename, size);
-    if (error != std::error_code())
+    cld::fs::ifstream file(filename, std::ios_base::in | std::ios_base::ate | std::ios_base::binary);
+    if (!file.is_open())
     {
-        llvm::errs() << "Could not open or find file\n";
+        llvm::errs() << "Couldn't open file\n";
         return -1;
     }
-    auto result = llvm::sys::fs::openNativeFileForRead(filename);
-    if (!result)
-    {
-        llvm::errs() << "Could not open or find file\n";
-        return -1;
-    }
-    auto scopeExit = llvm::make_scope_exit([&] { llvm::sys::fs::closeFile(*result); });
-    std::string input(size, ' ');
-    std::size_t read = 0;
-    error = llvm::sys::fs::readNativeFile(*result, llvm::MutableArrayRef(input.data(), input.size()), &read);
-    if (error != std::error_code())
-    {
-        llvm::errs() << "Could not read file\n";
-        return -1;
-    }
-    assert(read == input.size());
+    std::uint64_t size = file.tellg();
+    file.seekg(0);
+    std::string input(size, '\0');
+    file.read(input.data(), size);
+
+    filename = (cld::fs::current_path() / filename).u8string();
 
     llvm::Timer timer(mode, "Time it took for the " + mode + " to finish");
     llvm::TimeRegion region(timer);
@@ -122,6 +118,46 @@ int main(int argc, char** argv)
         }
         cld::Semantics::SemanticAnalysis analysis(ctokens);
         analysis.visit(pair.first);
+        return 0;
+    }
+    else if (mode == "csmith")
+    {
+        auto options = cld::LanguageOptions::native();
+        options.additionalMacros.emplace_back("CSMITH_MINIMAL", "");
+        options.additionalMacros.emplace_back("STANDALONE", "");
+        for (int i = 3; i < argc; i++)
+        {
+            options.includeDirectories.push_back(argv[i]);
+        }
+        options.disabledWarnings.insert("macro-redefined");
+        bool errors = false;
+        auto pptokens = cld::Lexer::tokenize(input, options, &llvm::errs(), &errors, filename);
+        if (errors)
+        {
+            return -1;
+        }
+        pptokens = cld::PP::preprocess(std::move(pptokens), &llvm::errs(), &errors);
+        if (errors)
+        {
+            return -1;
+        }
+        auto ctokens = cld::Lexer::toCTokens(pptokens, &llvm::errs(), &errors);
+        if (errors)
+        {
+            return -1;
+        }
+        auto pair = cld::Parser::buildTree(ctokens);
+        if (!pair.second)
+        {
+            return -1;
+        }
+
+        cld::Semantics::SemanticAnalysis analysis(ctokens, &llvm::errs(), &errors);
+        analysis.visit(pair.first);
+        if (errors)
+        {
+            return -1;
+        }
         return 0;
     }
     else

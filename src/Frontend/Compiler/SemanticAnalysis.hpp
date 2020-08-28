@@ -1,9 +1,10 @@
 #pragma once
 
 #include <llvm/ADT/ArrayRef.h>
-#include <llvm/ADT/ScopeExit.h>
 
 #include <Frontend/Common/Expected.hpp>
+#include <Frontend/Common/ScopeExit.hpp>
+#include <Frontend/Common/function_ref.hpp>
 
 #include <functional>
 #include <unordered_map>
@@ -50,6 +51,7 @@ class SemanticAnalysis final
     };
     const SourceInterface& m_sourceInterface;
     llvm::raw_ostream* m_reporter;
+    bool* m_errors;
     std::function<bool(std::string_view)> m_definedCallback;
     struct Scope
     {
@@ -84,7 +86,7 @@ class SemanticAnalysis final
 
     [[nodiscard]] auto changeFunctionPrototypeScope(bool newValue)
     {
-        auto result = llvm::make_scope_exit([this, prev = m_inFunctionPrototype] { m_inFunctionPrototype = prev; });
+        auto result = cld::ScopeExit([this, prev = m_inFunctionPrototype] { m_inFunctionPrototype = prev; });
         m_inFunctionPrototype = newValue;
         return result;
     }
@@ -98,7 +100,7 @@ class SemanticAnalysis final
     {
         m_functionScopes.push_back({&functionDefinition, {}});
         m_currentFunctionScope = m_functionScopes.size() - 1;
-        return llvm::make_scope_exit([this] {
+        return cld::ScopeExit([this] {
             resolveGotos();
             m_currentFunctionScope = -1;
         });
@@ -122,14 +124,14 @@ class SemanticAnalysis final
     {
         m_scopes.push_back({m_currentScope, {}, {}});
         m_currentScope = m_scopes.size() - 1;
-        return llvm::make_scope_exit([this, scope = m_scopes.back().previousScope] { m_currentScope = scope; });
+        return cld::ScopeExit([this, scope = m_scopes.back().previousScope] { m_currentScope = scope; });
     }
 
     [[nodiscard]] auto pushLoop(LoopStatements loop)
     {
         m_loopStatements.push_back(loop);
         cld::match(loop, [&](auto&& value) { m_breakableStatements.emplace_back(value); });
-        return llvm::make_scope_exit([&] {
+        return cld::ScopeExit([&] {
             m_loopStatements.pop_back();
             m_breakableStatements.pop_back();
         });
@@ -139,7 +141,7 @@ class SemanticAnalysis final
     {
         m_breakableStatements.push_back(&switchStatement);
         m_switchStatements.push_back({&switchStatement, {}, nullptr});
-        return llvm::make_scope_exit([&] {
+        return cld::ScopeExit([&] {
             m_breakableStatements.pop_back();
             m_switchStatements.pop_back();
         });
@@ -256,7 +258,7 @@ public:
     };
 
 private:
-    ConstValue evaluate(const Expression& expression, Mode mode, llvm::function_ref<void(const Message&)> logger) const;
+    ConstValue evaluate(const Expression& expression, Mode mode, cld::function_ref<void(const Message&)> logger) const;
 
     template <class T>
     [[nodiscard]] const T* CLD_NULLABLE lookupType(std::string_view name) const
@@ -317,13 +319,13 @@ private:
     [[nodiscard]] bool isVariableLengthArray(const Type& type) const;
 
     bool doAssignmentLikeConstraints(const Type& lhsTyp, const Expression& rhsValue,
-                                     llvm::function_ref<void()> mustBeArithmetic,
-                                     llvm::function_ref<void()> mustBeArithmeticOrPointer,
-                                     llvm::function_ref<void()> incompleteType,
-                                     llvm::function_ref<void()> incompatibleTypes, llvm::function_ref<void()> notICE,
-                                     llvm::function_ref<void(const ConstValue&)> notNull,
-                                     llvm::function_ref<void()> mustBePointer,
-                                     llvm::function_ref<void()> voidFunctionPointers);
+                                     cld::function_ref<void()> mustBeArithmetic,
+                                     cld::function_ref<void()> mustBeArithmeticOrPointer,
+                                     cld::function_ref<void()> incompleteType,
+                                     cld::function_ref<void()> incompatibleTypes, cld::function_ref<void()> notICE,
+                                     cld::function_ref<void(const ConstValue&)> notNull,
+                                     cld::function_ref<void()> mustBePointer,
+                                     cld::function_ref<void()> voidFunctionPointers);
 
     Expression doSingleElementInitialization(const Syntax::Node& node, const Type& type, Expression&& expression,
                                              bool staticLifetime, std::size_t* size);
@@ -333,8 +335,11 @@ private:
 
 public:
     explicit SemanticAnalysis(const SourceInterface& sourceInterface, llvm::raw_ostream* reporter = &llvm::errs(),
-                              std::function<bool(std::string_view)> definedCallback = {})
-        : m_sourceInterface(sourceInterface), m_reporter(reporter), m_definedCallback(std::move(definedCallback))
+                              bool* errors = nullptr, std::function<bool(std::string_view)> definedCallback = {})
+        : m_sourceInterface(sourceInterface),
+          m_reporter(reporter),
+          m_errors(errors),
+          m_definedCallback(std::move(definedCallback))
     {
     }
 

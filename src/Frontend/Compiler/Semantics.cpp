@@ -728,19 +728,40 @@ std::string typeToString(const cld::Semantics::Type& arg)
                 auto curr = *maybeCurr;
                 while (auto* pointerType = std::get_if<PointerType>(&curr.get()))
                 {
-                    temp += "*";
                     if (pointerType->isRestricted())
                     {
-                        temp += " restrict";
+                        if (temp.empty())
+                        {
+                            temp = "restrict";
+                        }
+                        else
+                        {
+                            temp = "restrict " + temp;
+                        }
                     }
                     if (curr.isConst())
                     {
-                        temp += " const";
+                        if (temp.empty())
+                        {
+                            temp = "const";
+                        }
+                        else
+                        {
+                            temp = "const " + temp;
+                        }
                     }
-                    if (maybeCurr->isVolatile())
+                    if (curr.isVolatile())
                     {
-                        temp += " volatile";
+                        if (temp.empty())
+                        {
+                            temp = "volatile";
+                        }
+                        else
+                        {
+                            temp = "volatile " + temp;
+                        }
                     }
+                    temp = "*" + temp;
                     curr = pointerType->getElementType();
                 }
                 if (std::holds_alternative<AbstractArrayType>(curr.get())
@@ -752,7 +773,7 @@ std::string typeToString(const cld::Semantics::Type& arg)
                 }
                 else
                 {
-                    qualifiersAndSpecifiers = typeToString(curr) + temp;
+                    qualifiersAndSpecifiers = typeToString(curr) + " " + temp;
                     return {};
                 }
             },

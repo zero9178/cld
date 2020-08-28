@@ -1,6 +1,5 @@
 #include "catch.hpp"
 
-#include <llvm/ADT/ScopeExit.h>
 #include <llvm/Support/Format.h>
 
 #include <Frontend/Compiler/ErrorMessages.hpp>
@@ -58,11 +57,10 @@ namespace
     auto result = cld::Lexer::tokenize(code, options, &ss, &errors);
     UNSCOPED_INFO(buffer);
     REQUIRE_FALSE(errors);
-    auto exit = llvm::make_scope_exit([&]{
-      UNSCOPED_INFO(buffer);
-      REQUIRE_FALSE(errors);
-    });
-    return cld::Lexer::toCTokens(result, &ss, &errors);
+    auto tokens = cld::Lexer::toCTokens(result, &ss, &errors);
+    UNSCOPED_INFO(buffer);
+    REQUIRE_FALSE(errors);
+    return tokens;
 }
 
 [[nodiscard]] cld::PPSourceObject pplexes(std::string_view code,
@@ -71,11 +69,10 @@ namespace
     std::string buffer;
     llvm::raw_string_ostream ss(buffer);
     bool errors;
-    auto exit = llvm::make_scope_exit([&]{
-      UNSCOPED_INFO(buffer);
-      REQUIRE_FALSE(errors);
-    });
-    return cld::Lexer::tokenize(code, options, &ss, &errors);
+    auto tokens = cld::Lexer::tokenize(code, options, &ss, &errors);
+    UNSCOPED_INFO(buffer);
+    REQUIRE_FALSE(errors);
+    return tokens;
 }
 } // namespace
 
@@ -918,6 +915,14 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
             fp = std::get<llvm::APFloat>(result.data()[0].getValue());
             CHECK(llvm::APFloat::SemanticsToEnum(fp.getSemantics()) == llvm::APFloat::S_IEEEdouble);
             CHECK(fp.convertToDouble() == 0x0.DE488631p-8);
+
+            result = lexes("0x1p-100f");
+            REQUIRE(result.data().size() == 1);
+            CHECK(result.data()[0].getType() == cld::Lexer::CToken::Type::Float);
+            REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::Literal);
+            REQUIRE(std::holds_alternative<llvm::APFloat>(result.data()[0].getValue()));
+            fp = std::get<llvm::APFloat>(result.data()[0].getValue());
+            CHECK(llvm::APFloat::SemanticsToEnum(fp.getSemantics()) == llvm::APFloat::S_IEEEsingle);
         }
 
         LEXER_OUTPUTS_WITH("0x0.5", ProducesError(BINARY_FLOATING_POINT_MUST_CONTAIN_EXPONENT));
@@ -1030,6 +1035,7 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
     }
     SECTION("Too big")
     {
+        LEXER_OUTPUTS_WITH("9223372036854775807u", ProducesNoErrors());
         LEXER_OUTPUTS_WITH("18446744073709551618", ProducesError(INTEGER_VALUE_TOO_BIG_TO_BE_REPRESENTABLE));
         LEXER_OUTPUTS_WITH("0x1FFFFFFFFFFFFFFFF", ProducesError(INTEGER_VALUE_TOO_BIG_TO_BE_REPRESENTABLE));
         LEXER_OUTPUTS_WITH("077777777777777777777777", ProducesError(INTEGER_VALUE_TOO_BIG_TO_BE_REPRESENTABLE));

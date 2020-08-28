@@ -1,7 +1,5 @@
 #include "TestConfig.hpp"
 
-#include <llvm/ADT/ScopeExit.h>
-
 cld::Tests::FileScope::~FileScope()
 {
     cld::fs::remove(m_path);

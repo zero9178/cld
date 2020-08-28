@@ -43,6 +43,7 @@ struct LanguageOptions
     } sizeTType;
     std::vector<std::string> includeDirectories{};
     std::vector<std::string> includeQuoteDirectories{};
+    std::vector<std::pair<std::string, std::string>> additionalMacros{};
     std::unordered_set<std::string> disabledWarnings{};
 
     static LanguageOptions native(Language language = Language::C99);

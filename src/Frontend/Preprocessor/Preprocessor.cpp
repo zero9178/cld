@@ -1,8 +1,7 @@
 #include "Preprocessor.hpp"
 
-#include <llvm/ADT/ScopeExit.h>
-
 #include <Frontend/Common/Filesystem.hpp>
+#include <Frontend/Common/ScopeExit.hpp>
 #include <Frontend/Common/Text.hpp>
 #include <Frontend/Compiler/ErrorMessages.hpp>
 #include <Frontend/Compiler/Parser.hpp>
@@ -478,9 +477,8 @@ class Preprocessor final : private cld::PPSourceInterface
         }
     }
 
-    void macroSubstitute(std::vector<cld::Lexer::PPToken>&& tokens,
-                         llvm::function_ref<void(std::vector<cld::Lexer::PPToken>&&)> lineOutput,
-                         bool inIfExpression = false)
+    template <class F>
+    void macroSubstitute(std::vector<cld::Lexer::PPToken>&& tokens, F lineOutput, bool inIfExpression = false)
     {
         if (tokens.empty())
         {
@@ -517,7 +515,7 @@ class Preprocessor final : private cld::PPSourceInterface
             {
                 m_defines.erase(name);
                 m_visitingScratchPad = true;
-                auto scope = llvm::make_scope_exit([this] { m_visitingScratchPad = false; });
+                auto scope = cld::ScopeExit([this] { m_visitingScratchPad = false; });
                 const auto& range = m_files[fileId].lineAndFileMapping;
                 auto map = std::upper_bound(range.begin(), range.end(), line,
                                             [](auto line, const auto& tuple) { return line < std::get<0>(tuple); });
@@ -1003,10 +1001,15 @@ class Preprocessor final : private cld::PPSourceInterface
             m_errorsOccurred = true;
             return {};
         }
-        cld::Semantics::SemanticAnalysis analysis(*this, m_reporter, [this](std::string_view macro) {
+        cld::Semantics::SemanticAnalysis analysis(*this, m_reporter, &errorsOccurred, [this](std::string_view macro) {
             return macro == "__FILE__" || macro == "__LINE__" || m_defines.count(macro) != 0;
         });
         auto exp = analysis.visit(*tree);
+        if (errorsOccurred)
+        {
+            m_errorsOccurred = true;
+            return {};
+        }
         auto value = analysis.evaluateConstantExpression(exp);
         if (!value)
         {
@@ -1102,11 +1105,17 @@ public:
         scratchPadSource += "#define __STDC_HOSTED__ 0\n";
         scratchPadSource += "#define __STDC_MB_MIGHT_NEQ_WC__ 1\n";
         scratchPadSource += "#define __STDC_VERSION__ 199901L\n";
+        for (auto& [name, def] : options.additionalMacros)
+        {
+            scratchPadSource += "#define " + name + " " + def + "\n";
+        }
 
         bool errorsOccurred = false;
         auto scratchPadPP = cld::Lexer::tokenize(scratchPadSource, options, report, &errorsOccurred, "<Scratch Pad>");
-        CLD_ASSERT(!errorsOccurred);
-        include(std::move(scratchPadPP));
+        if (!errorsOccurred)
+        {
+            include(std::move(scratchPadPP));
+        }
         m_visitingScratchPad = false;
     }
 
@@ -1138,7 +1147,7 @@ public:
     void include(cld::PPSourceObject&& sourceObject,
                  std::optional<std::pair<std::uint32_t, std::uint64_t>> includePos = {})
     {
-        auto scope = llvm::make_scope_exit([prev = m_currentFile, this] { m_currentFile = prev; });
+        auto scope = cld::ScopeExit([prev = m_currentFile, this] { m_currentFile = prev; });
         CLD_ASSERT(sourceObject.getFiles().size() == 1);
         for (auto& iter : sourceObject.getFiles())
         {

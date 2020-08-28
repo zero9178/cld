@@ -10,3 +10,6 @@ set_source_files_properties(main.cpp PROPERTIES COMPILE_DEFINITIONS CATCH_CONFIG
 
 add_executable(fuzzerCrashRunner fuzzerCrashRunner.cpp)
 target_link_libraries(fuzzerCrashRunner Frontend)
+
+add_executable(csmithRunner csmithRunner.cpp)
+target_link_libraries(csmithRunner Frontend)

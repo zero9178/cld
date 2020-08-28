@@ -208,18 +208,18 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                 cld::match(parentheses.getDeclarator().getDirectDeclarator(), self);
             },
             [&](auto&& self, const Syntax::DirectDeclaratorNoStaticOrAsterisk& noStaticOrAsterisk) {
-                auto scope = llvm::make_scope_exit([&] { cld::match(noStaticOrAsterisk.getDirectDeclarator(), self); });
+                auto scope = cld::ScopeExit([&] { cld::match(noStaticOrAsterisk.getDirectDeclarator(), self); });
                 handleArray(type, noStaticOrAsterisk.getTypeQualifiers(),
                             noStaticOrAsterisk.getAssignmentExpression().get(), false, false,
                             noStaticOrAsterisk.getDirectDeclarator());
             },
             [&](auto&& self, const Syntax::DirectDeclaratorStatic& declaratorStatic) {
-                auto scope = llvm::make_scope_exit([&] { cld::match(declaratorStatic.getDirectDeclarator(), self); });
+                auto scope = cld::ScopeExit([&] { cld::match(declaratorStatic.getDirectDeclarator(), self); });
                 handleArray(type, declaratorStatic.getTypeQualifiers(), &declaratorStatic.getAssignmentExpression(),
                             true, false, declaratorStatic.getDirectDeclarator());
             },
             [&](auto&& self, const Syntax::DirectDeclaratorAsterisk& asterisk) {
-                auto scope = llvm::make_scope_exit([&] { cld::match(asterisk.getDirectDeclarator(), self); });
+                auto scope = cld::ScopeExit([&] { cld::match(asterisk.getDirectDeclarator(), self); });
                 if (!m_inFunctionPrototype)
                 {
                     type = Type{};
@@ -229,7 +229,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                 handleArray(type, asterisk.getTypeQualifiers(), nullptr, false, true, asterisk.getDirectDeclarator());
             },
             [&](auto&& self, const Syntax::DirectDeclaratorParenthesesIdentifiers& identifiers) {
-                auto scope = llvm::make_scope_exit([&] { cld::match(identifiers.getDirectDeclarator(), self); });
+                auto scope = cld::ScopeExit([&] { cld::match(identifiers.getDirectDeclarator(), self); });
                 std::optional<decltype(pushScope())> scope2;
                 if (isFunctionPrototype)
                 {
@@ -367,7 +367,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                 type = FunctionType::create(std::move(type), std::move(parameters), false, true);
             },
             [&](auto&& self, const Syntax::DirectDeclaratorParenthesesParameters& parameterList) {
-                auto scope = llvm::make_scope_exit([&] { cld::match(parameterList.getDirectDeclarator(), self); });
+                auto scope = cld::ScopeExit([&] { cld::match(parameterList.getDirectDeclarator(), self); });
                 std::optional<decltype(pushScope())> scope2;
                 if (isFunctionPrototype)
                 {
@@ -418,7 +418,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                 }
             },
             [&](auto&& self, const Syntax::DirectAbstractDeclaratorAsterisk& asterisk) {
-                auto scope = llvm::make_scope_exit([&] {
+                auto scope = cld::ScopeExit([&] {
                     if (asterisk.getDirectAbstractDeclarator())
                     {
                         cld::match(*asterisk.getDirectAbstractDeclarator(), self);
@@ -440,7 +440,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                 }
             },
             [&](auto&& self, const Syntax::DirectAbstractDeclaratorAssignmentExpression& expression) {
-                auto scope = llvm::make_scope_exit([&] {
+                auto scope = cld::ScopeExit([&] {
                     if (expression.getDirectAbstractDeclarator())
                     {
                         cld::match(*expression.getDirectAbstractDeclarator(), self);
@@ -458,7 +458,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                 }
             },
             [&](auto&& self, const Syntax::DirectAbstractDeclaratorParameterTypeList& parameterTypeList) {
-                auto scope = llvm::make_scope_exit([&] {
+                auto scope = cld::ScopeExit([&] {
                     if (parameterTypeList.getDirectAbstractDeclarator())
                     {
                         cld::match(*parameterTypeList.getDirectAbstractDeclarator(), self);

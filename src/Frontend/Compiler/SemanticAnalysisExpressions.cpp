@@ -114,11 +114,11 @@ bool cld::Semantics::SemanticAnalysis::isConst(const Type& type) const
 }
 
 bool cld::Semantics::SemanticAnalysis::doAssignmentLikeConstraints(
-    const Type& lhsType, const Expression& rhsValue, llvm::function_ref<void()> mustBeArithmetic,
-    llvm::function_ref<void()> mustBeArithmeticOrPointer, llvm::function_ref<void()> incompleteType,
-    llvm::function_ref<void()> incompatibleTypes, llvm::function_ref<void()> notICE,
-    llvm::function_ref<void(const ConstValue&)> notNull, llvm::function_ref<void()> mustBePointer,
-    llvm::function_ref<void()> voidFunctionPointers)
+    const Type& lhsType, const Expression& rhsValue, cld::function_ref<void()> mustBeArithmetic,
+    cld::function_ref<void()> mustBeArithmeticOrPointer, cld::function_ref<void()> incompleteType,
+    cld::function_ref<void()> incompatibleTypes, cld::function_ref<void()> notICE,
+    cld::function_ref<void(const ConstValue&)> notNull, cld::function_ref<void()> mustBePointer,
+    cld::function_ref<void()> voidFunctionPointers)
 {
     if (isArithmetic(lhsType))
     {

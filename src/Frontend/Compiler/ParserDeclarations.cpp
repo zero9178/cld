@@ -1,8 +1,6 @@
 #include "Parser.hpp"
 
-#include <llvm/ADT/ScopeExit.h>
-
-#include <Frontend/Compiler/Semantics.hpp>
+#include <Frontend/Common/ScopeExit.hpp>
 
 #include <algorithm>
 #include <unordered_set>
@@ -10,6 +8,7 @@
 #include "ErrorMessages.hpp"
 #include "ParserUtil.hpp"
 #include "SemanticUtil.hpp"
+#include "Semantics.hpp"
 
 using namespace cld::Syntax;
 
@@ -941,7 +940,7 @@ std::optional<cld::Syntax::DirectDeclarator>
             {
                 auto scope = context.parenthesesEntered(begin);
                 const auto* openPpos = begin;
-                auto checkForClose = std::optional{llvm::make_scope_exit([&] {
+                auto checkForClose = std::optional{cld::ScopeExit([&] {
                     if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context, [&] {
                             return Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos);
                         }))
@@ -1021,7 +1020,7 @@ std::optional<cld::Syntax::DirectDeclarator>
             {
                 auto scope = context.squareBracketEntered(begin);
                 const auto* openPpos = begin;
-                auto checkForClose = std::optional{llvm::make_scope_exit([&] {
+                auto checkForClose = std::optional{cld::ScopeExit([&] {
                     if (!expect(Lexer::TokenType::CloseSquareBracket, begin, end, context, [&] {
                             return Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos);
                         }))
@@ -1385,7 +1384,7 @@ std::optional<cld::Syntax::DirectAbstractDeclarator>
             {
                 auto scope = context.parenthesesEntered(begin);
                 const auto* openPpos = begin;
-                auto closeParenth = std::optional{llvm::make_scope_exit([&] {
+                auto closeParenth = std::optional{cld::ScopeExit([&] {
                     if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context, [&] {
                             return Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos);
                         }))
@@ -1429,7 +1428,7 @@ std::optional<cld::Syntax::DirectAbstractDeclarator>
             {
                 auto scope = context.squareBracketEntered(begin);
                 const auto* openPpos = begin;
-                auto closeParenth = std::optional{llvm::make_scope_exit([&] {
+                auto closeParenth = std::optional{cld::ScopeExit([&] {
                     if (!expect(Lexer::TokenType::CloseSquareBracket, begin, end, context, [&] {
                             return Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos);
                         }))

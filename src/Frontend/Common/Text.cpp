@@ -134,5 +134,5 @@ std::string cld::to_string(const llvm::APFloat& apFloat)
 {
     llvm::SmallString<25> number;
     apFloat.toString(number, 0, 3, false);
-    return number.str();
+    return static_cast<std::string>(number);
 }
