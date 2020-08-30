@@ -249,7 +249,7 @@ private:
         return declaratorsToTypeImpl(std::move(temp), &declarator, declarations, inFunctionDefinition);
     }
 
-    bool doAssignmentLikeConstraints(const Type& lhsTyp, const Expression& rhsValue,
+    bool doAssignmentLikeConstraints(const Type& lhsTyp, Expression& rhsValue,
                                      cld::function_ref<void()> mustBeArithmetic,
                                      cld::function_ref<void()> mustBeArithmeticOrPointer,
                                      cld::function_ref<void()> incompleteType,

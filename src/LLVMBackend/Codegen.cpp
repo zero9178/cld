@@ -301,6 +301,7 @@ public:
             auto* ft = llvm::cast<llvm::FunctionType>(visit(functionDefinition.getType()));
             function = llvm::Function::Create(ft, linkageType, -1,
                                               llvm::StringRef{functionDefinition.getNameToken()->getText()}, &m_module);
+            m_lvalues.emplace(&functionDefinition, function);
         }
         auto* bb = llvm::BasicBlock::Create(m_module.getContext(), "entry", function);
         m_builder.SetInsertPoint(bb);
@@ -471,6 +472,11 @@ public:
                     auto* zero = llvm::ConstantInt::get(m_builder.getIntPtrTy(m_module.getDataLayout()), 0);
                     return m_builder.CreateInBoundsGEP(value, {zero, zero});
                 }
+                else if (std::holds_alternative<cld::Semantics::FunctionType>(
+                             conversion.getExpression().getType().get()))
+                {
+                    return value;
+                }
                 else
                 {
                     return m_builder.CreateLoad(value->getType()->getPointerElementType(), value,
@@ -483,38 +489,52 @@ public:
                 return m_builder.CreateIntCast(value, visit(expression.getType()),
                                                cld::get<cld::Semantics::PrimitiveType>(prevType.get()).isSigned());
             }
+            case cld::Semantics::Conversion::Implicit:
+            {
+                auto& prevType = conversion.getExpression().getType();
+                auto& newType = expression.getType();
+                if (std::holds_alternative<cld::Semantics::PointerType>(newType.get()))
+                {
+                    if (cld::Semantics::isInteger(prevType))
+                    {
+                        return m_builder.CreateIntToPtr(value, visit(newType));
+                    }
+                    return m_builder.CreatePointerCast(value, visit(newType));
+                }
+                [[fallthrough]];
+            }
             case cld::Semantics::Conversion::ArithmeticConversion:
             {
                 auto& prevType = conversion.getExpression().getType();
-                auto& newType = conversion.getExpression().getType();
+                auto& newType = expression.getType();
                 if (cld::Semantics::isInteger(prevType) && cld::Semantics::isInteger(newType))
                 {
-                    return m_builder.CreateIntCast(value, visit(expression.getType()),
+                    return m_builder.CreateIntCast(value, visit(newType),
                                                    cld::get<cld::Semantics::PrimitiveType>(prevType.get()).isSigned());
                 }
                 if (cld::Semantics::isInteger(prevType))
                 {
                     if (cld::get<cld::Semantics::PrimitiveType>(prevType.get()).isSigned())
                     {
-                        return m_builder.CreateSIToFP(value, visit(expression.getType()));
+                        return m_builder.CreateSIToFP(value, visit(newType));
                     }
                     else
                     {
-                        return m_builder.CreateUIToFP(value, visit(expression.getType()));
+                        return m_builder.CreateUIToFP(value, visit(newType));
                     }
                 }
                 if (cld::Semantics::isInteger(newType))
                 {
                     if (cld::get<cld::Semantics::PrimitiveType>(newType.get()).isSigned())
                     {
-                        return m_builder.CreateFPToSI(value, visit(expression.getType()));
+                        return m_builder.CreateFPToSI(value, visit(newType));
                     }
                     else
                     {
-                        return m_builder.CreateFPToUI(value, visit(expression.getType()));
+                        return m_builder.CreateFPToUI(value, visit(newType));
                     }
                 }
-                return m_builder.CreateFPCast(value, visit(expression.getType()));
+                return m_builder.CreateFPCast(value, visit(newType));
             }
             case cld::Semantics::Conversion::DefaultArgumentPromotion:
             {

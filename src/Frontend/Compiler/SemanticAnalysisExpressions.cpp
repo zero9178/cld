@@ -112,7 +112,7 @@ bool cld::Semantics::SemanticAnalysis::isConst(const Type& type) const
 }
 
 bool cld::Semantics::SemanticAnalysis::doAssignmentLikeConstraints(
-    const Type& lhsType, const Expression& rhsValue, cld::function_ref<void()> mustBeArithmetic,
+    const Type& lhsType, Expression& rhsValue, cld::function_ref<void()> mustBeArithmetic,
     cld::function_ref<void()> mustBeArithmeticOrPointer, cld::function_ref<void()> incompleteType,
     cld::function_ref<void()> incompatibleTypes, cld::function_ref<void()> notICE,
     cld::function_ref<void(const ConstValue&)> notNull, cld::function_ref<void()> mustBePointer,
@@ -132,6 +132,11 @@ bool cld::Semantics::SemanticAnalysis::doAssignmentLikeConstraints(
         {
             mustBeArithmeticOrPointer();
             return false;
+        }
+        if (lhsType != rhsValue.getType())
+        {
+            rhsValue = Expression(removeQualifiers(lhsType), ValueCategory::Rvalue,
+                                  Conversion(Conversion::Implicit, std::make_unique<Expression>(std::move(rhsValue))));
         }
         return true;
     }
@@ -171,6 +176,8 @@ bool cld::Semantics::SemanticAnalysis::doAssignmentLikeConstraints(
             notNull(*constant);
             return false;
         }
+        rhsValue = Expression(removeQualifiers(lhsType), ValueCategory::Rvalue,
+                              Conversion(Conversion::Implicit, std::make_unique<Expression>(std::move(rhsValue))));
         return true;
     }
 
@@ -202,6 +209,8 @@ bool cld::Semantics::SemanticAnalysis::doAssignmentLikeConstraints(
             incompatibleTypes();
             return false;
         }
+        rhsValue = Expression(removeQualifiers(lhsType), ValueCategory::Rvalue,
+                              Conversion(Conversion::Implicit, std::make_unique<Expression>(std::move(rhsValue))));
         return true;
     }
 
@@ -215,6 +224,11 @@ bool cld::Semantics::SemanticAnalysis::doAssignmentLikeConstraints(
     {
         incompatibleTypes();
         return false;
+    }
+    if (removeQualifiers(lhsElementType) != removeQualifiers(rhsElementType))
+    {
+        rhsValue = Expression(removeQualifiers(lhsType), ValueCategory::Rvalue,
+                              Conversion(Conversion::Implicit, std::make_unique<Expression>(std::move(rhsValue))));
     }
     return true;
 }

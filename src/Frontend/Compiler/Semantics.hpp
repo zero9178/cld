@@ -724,6 +724,7 @@ public:
         IntegerPromotion,
         ArithmeticConversion,
         DefaultArgumentPromotion,
+        Implicit,
     };
 
 private:

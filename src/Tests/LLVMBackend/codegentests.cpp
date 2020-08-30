@@ -555,7 +555,19 @@ TEST_CASE("LLVM codegen expressions", "[LLVM]")
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
             REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
-            CHECK(cld::Tests::computeInJIT<void*(void)>(std::move(module), "foo") != nullptr);
+            CHECK(cld::Tests::computeInJIT<void*()>(std::move(module), "foo") != nullptr);
+        }
+        SECTION("Function")
+        {
+            auto program = generateProgram("void bar(void) {return;}\n"
+                                           "\n"
+                                           "void (*foo(void))(void) {\n"
+                                           "return bar;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<void (*())()>(std::move(module), "foo") != nullptr);
         }
     }
     SECTION("Multiply")
@@ -572,7 +584,7 @@ TEST_CASE("LLVM codegen expressions", "[LLVM]")
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
             REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
-            CHECK(cld::Tests::computeInJIT<int(void)>(std::move(module), "foo") == 15);
+            CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "foo") == 15);
         }
     }
 }
