@@ -454,6 +454,14 @@ constexpr size_t getIndex(const std::variant<Ts...>&) noexcept
     return r;
 }
 
+template <class... Args>
+constexpr std::size_t hashCombine(const Args&... args)
+{
+    std::size_t seed = 0;
+    ((seed ^= std::hash<std::decay_t<Args>>{}(args) + 0x9e3779b9 + (seed << 6) + (seed >> 2)), ...);
+    return seed;
+}
+
 template <class T, typename = void>
 struct IsTupleLike : std::false_type
 {

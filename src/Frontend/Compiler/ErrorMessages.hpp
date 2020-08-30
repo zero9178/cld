@@ -153,6 +153,8 @@ CREATE_ERROR(DECLARING_TYPEDEFS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR,
 
 CREATE_ERROR(TYPEDEF_DECLARATION_DOES_NOT_HAVE_A_NAME, "Typedef declaration does not have a name", Underline<0>);
 
+CREATE_ERROR(STATIC_VARIABLE_N_REDEFINED_WITHOUT_STATIC, "Static variable %0 redefined without static", Underline<0>);
+
 // Arrays
 
 CREATE_ERROR(ARRAY_ELEMENT_TYPE_MUST_NOT_BE_A_FUNCTION, "Array element type must not be a function type",
@@ -567,6 +569,9 @@ CREATE_ERROR(CANNOT_INITIALIZE_VARIABLE_LENGTH_ARRAY_TYPE, "Cannot initialize va
              Annotate<0, 1>);
 
 CREATE_ERROR(CANNOT_INITIALIZE_FLEXIBLE_ARRAY_MEMBER, "Cannot initialize flexible array member", Underline<0>);
+
+CREATE_ERROR(CANNOT_INITIALIZE_STATIC_OR_EXTERN_VARIABLE_AT_BLOCK_SCOPE,
+             "Cannot initialize static or extern variable at block scope", Underline<0>);
 
 CREATE_ERROR(NO_MORE_SUB_OBJECTS_TO_INITIALIZE, "No more sub objects to initialize", Underline<0>);
 

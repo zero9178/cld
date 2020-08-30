@@ -67,14 +67,15 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(Type& type,
             [&](const std::unique_ptr<cld::Syntax::AbstractDeclarator>& ptr) {
                 return declaratorsToType(iter.declarationSpecifiers, ptr.get());
             });
-        if (isVoid(paramType) && !std::holds_alternative<std::unique_ptr<cld::Syntax::Declarator>>(iter.declarator)
+        if (isVoid(paramType) && !paramType.isConst() && !paramType.isVolatile()
+            && !std::holds_alternative<std::unique_ptr<cld::Syntax::Declarator>>(iter.declarator)
             && !cld::get<std::unique_ptr<cld::Syntax::AbstractDeclarator>>(iter.declarator)
             && parameterTypeList->getParameters().size() == 1 && !parameterTypeList->hasEllipse())
         {
             type = FunctionType::create(std::move(type), {}, false, false);
             return;
         }
-        if (isVoid(removeQualifiers(paramType)))
+        if (isVoid(paramType))
         {
             log(Errors::Semantics::VOID_TYPE_NOT_ALLOWED_AS_FUNCTION_PARAMETER.args(
                 iter.declarationSpecifiers, m_sourceInterface, iter.declarationSpecifiers));
@@ -736,21 +737,26 @@ cld::Semantics::Type
                     value = result->toUInt();
                 }
                 std::string_view fieldName = declarator ? declaratorToLoc(*declarator)->getText() : "";
-                fields.push_back({std::make_shared<Type>(std::move(type)), fieldName, value});
+                fields.push_back(
+                    {std::make_shared<Type>(std::move(type)), fieldName, value, static_cast<std::size_t>(-1)});
             }
         }
         std::size_t currentSize = 0, currentAlignment = 0;
+        std::vector<Type> layout;
         if (!structOrUnion->isUnion())
         {
             for (auto iter = fields.begin(); iter != fields.end();)
             {
                 if (iter->type->isUndefined())
                 {
+                    iter->layoutIndex = layout.size();
+                    layout.push_back(*iter->type);
                     iter++;
                     continue;
                 }
                 if (iter + 1 == fields.end() && std::holds_alternative<AbstractArrayType>(iter->type->get()))
                 {
+                    // TODO: I don't think this should be part of the layout but I am not sure?
                     break;
                 }
                 if (!iter->bitFieldSize)
@@ -764,24 +770,29 @@ cld::Semantics::Type
                     }
                     auto subSize = iter->type->getSizeOf(*this);
                     currentSize += subSize;
+                    iter->layoutIndex = layout.size();
+                    layout.push_back(*iter->type);
                     iter++;
                     continue;
                 }
                 bool lastWasZero = false;
                 std::uint64_t storageLeft = 0;
                 std::uint64_t prevSize = 0;
-                for (; iter != fields.end() && iter->bitFieldSize; iter++)
+                for (; iter != fields.end() && iter->bitFieldSize;)
                 {
                     if (*iter->bitFieldSize == 0)
                     {
                         lastWasZero = true;
+                        iter = fields.erase(iter);
                         continue;
                     }
+                    iter->layoutIndex = layout.size();
                     std::size_t size = iter->type->getSizeOf(*this);
                     if (!lastWasZero && storageLeft > *iter->bitFieldSize
                         && (!m_sourceInterface.getLanguageOptions().discreteBitfields || prevSize == size))
                     {
                         storageLeft -= *iter->bitFieldSize;
+                        iter++;
                         continue;
                     }
                     lastWasZero = false;
@@ -795,6 +806,8 @@ cld::Semantics::Type
                     }
                     prevSize = size;
                     storageLeft = cld::get<PrimitiveType>(iter->type->get()).getBitCount() - *iter->bitFieldSize;
+                    layout.push_back(*iter->type);
+                    iter++;
                 }
                 currentSize += prevSize;
             }
@@ -838,7 +851,7 @@ cld::Semantics::Type
                 return UnionType::create(isConst, isVolatile, structOrUnion->getIdentifierLoc()->getText(),
                                          m_unionDefinitions.size() - 1);
             }
-            m_structDefinitions.emplace_back(name, std::move(fields), currentSize, currentAlignment);
+            m_structDefinitions.emplace_back(name, std::move(fields), std::move(layout), currentSize, currentAlignment);
             if (definitionIsValid)
             {
                 getCurrentScope().types.insert_or_assign(
@@ -859,7 +872,7 @@ cld::Semantics::Type
         {
             return AnonymousStructType::create(isConst, isVolatile,
                                                reinterpret_cast<std::uintptr_t>(structOrUnion->begin()),
-                                               std::move(fields), currentSize, currentAlignment);
+                                               std::move(fields), std::move(layout), currentSize, currentAlignment);
         }
     }
     CLD_ASSERT(std::holds_alternative<std::unique_ptr<Syntax::EnumSpecifier>>(typeSpec[0]->getVariant()));

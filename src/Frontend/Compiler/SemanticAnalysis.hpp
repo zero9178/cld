@@ -77,7 +77,8 @@ class SemanticAnalysis final : public ProgramInterface
 
     [[nodiscard]] auto pushScope()
     {
-        m_scopes.push_back({m_currentScope, {}, {}});
+        m_scopes[m_currentScope].subScopes.push_back(m_scopes.size());
+        m_scopes.push_back({m_currentScope, {}, {}, {}});
         m_currentScope = m_scopes.size() - 1;
         return cld::ScopeExit([this, scope = m_scopes.back().previousScope] { m_currentScope = scope; });
     }
@@ -165,8 +166,6 @@ class SemanticAnalysis final : public ProgramInterface
 
     Type integerPromotion(const Type& type) const;
 
-    Type adjustParameterType(const Type& type) const;
-
     Type compositeType(const Type& lhs, const Type& rhs) const;
 
     static Expression lvalueConversion(Expression expression);
@@ -249,10 +248,6 @@ private:
                        });
         return declaratorsToTypeImpl(std::move(temp), &declarator, declarations, inFunctionDefinition);
     }
-
-    [[nodiscard]] bool isVariablyModified(const Type& type) const;
-
-    [[nodiscard]] bool isVariableLengthArray(const Type& type) const;
 
     bool doAssignmentLikeConstraints(const Type& lhsTyp, const Expression& rhsValue,
                                      cld::function_ref<void()> mustBeArithmetic,

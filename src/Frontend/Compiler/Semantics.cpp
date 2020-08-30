@@ -8,6 +8,7 @@
 
 #include "Program.hpp"
 #include "SemanticAnalysis.hpp"
+#include "SemanticUtil.hpp"
 #include "Syntax.hpp"
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createPtrdiffT(bool isConst, bool isVolatile,
@@ -482,7 +483,7 @@ bool cld::Semantics::isStringLiteralExpr(const Expression& expression)
 bool cld::Semantics::isVoid(const cld::Semantics::Type& type)
 {
     auto* primitive = std::get_if<PrimitiveType>(&type.get());
-    if (!primitive || type.isConst() || type.isVolatile())
+    if (!primitive)
     {
         return false;
     }
@@ -554,6 +555,20 @@ bool cld::Semantics::isAggregate(const Type& type)
     return isRecord(type) || isArray(type);
 }
 
+bool cld::Semantics::isVariablyModified(const Type& type)
+{
+    auto typeVisitor = RecursiveVisitor(type, TYPE_NEXT_FN);
+    return std::any_of(typeVisitor.begin(), typeVisitor.end(),
+                       [](const Type& type) { return std::holds_alternative<ValArrayType>(type.get()); });
+}
+
+bool cld::Semantics::isVariableLengthArray(const Type& type)
+{
+    auto typeVisitor = RecursiveVisitor(type, ARRAY_TYPE_NEXT_FN);
+    return std::any_of(typeVisitor.begin(), typeVisitor.end(),
+                       [](const Type& type) { return std::holds_alternative<ValArrayType>(type.get()); });
+}
+
 cld::Semantics::TranslationUnit::TranslationUnit(std::vector<TranslationUnit::Variant> globals)
     : m_globals(std::move(globals))
 {
@@ -590,10 +605,11 @@ bool cld::Semantics::AnonymousStructType::operator!=(const cld::Semantics::Anony
 }
 
 cld::Semantics::Type cld::Semantics::AnonymousStructType::create(bool isConst, bool isVolatile, std::uint64_t id,
-                                                                 std::vector<Field> fields, std::uint32_t sizeOf,
-                                                                 std::uint32_t alignOf)
+                                                                 std::vector<Field> fields, std::vector<Type> layout,
+                                                                 std::uint32_t sizeOf, std::uint32_t alignOf)
 {
-    return cld::Semantics::Type(isConst, isVolatile, AnonymousStructType(id, std::move(fields), sizeOf, alignOf));
+    return cld::Semantics::Type(isConst, isVolatile,
+                                AnonymousStructType(id, std::move(fields), std::move(layout), sizeOf, alignOf));
 }
 
 std::size_t cld::Semantics::AnonymousStructType::getSizeOf(const ProgramInterface&) const
@@ -1217,6 +1233,33 @@ cld::Semantics::DefaultStatement::DefaultStatement(Lexer::CTokenIterator default
 const cld::Semantics::Statement& cld::Semantics::DefaultStatement::getStatement() const
 {
     return *m_statement;
+}
+
+cld::Semantics::Type cld::Semantics::adjustParameterType(const cld::Semantics::Type& type)
+{
+    if (isArray(type))
+    {
+        auto elementType = cld::match(type.get(), [](auto&& value) -> Type {
+            using T = std::decay_t<decltype(value)>;
+            if constexpr (std::is_same_v<ArrayType,
+                                         T> || std::is_same_v<AbstractArrayType, T> || std::is_same_v<ValArrayType, T>)
+            {
+                return value.getType();
+            }
+            CLD_UNREACHABLE;
+        });
+        bool restrict = cld::match(type.get(), [](auto&& value) -> bool {
+            using T = std::decay_t<decltype(value)>;
+            if constexpr (std::is_same_v<ArrayType,
+                                         T> || std::is_same_v<AbstractArrayType, T> || std::is_same_v<ValArrayType, T>)
+            {
+                return value.isRestricted();
+            }
+            CLD_UNREACHABLE;
+        });
+        return PointerType::create(type.isConst(), type.isVolatile(), restrict, std::move(elementType));
+    }
+    return type;
 }
 
 cld::Semantics::Program cld::Semantics::analyse(const Syntax::TranslationUnit& parseTree, CSourceObject&& ctokens,

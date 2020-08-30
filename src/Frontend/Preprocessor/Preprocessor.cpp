@@ -53,7 +53,7 @@ class Preprocessor final : private cld::PPSourceInterface
     {
         std::size_t operator()(const std::pair<std::uint64_t, std::uint32_t>& pair) const noexcept
         {
-            return std::hash<std::uint64_t>()(pair.first) ^ (std::hash<std::uint32_t>()(pair.second) << 1);
+            return cld::hashCombine(pair.first, pair.second);
         }
     };
 
@@ -117,7 +117,7 @@ class Preprocessor final : private cld::PPSourceInterface
     {
         std::size_t operator()(const cld::Lexer::PPToken* ptr) const noexcept
         {
-            return std::hash<std::uint64_t>()(ptr->getOffset()) ^ (std::hash<std::uint32_t>()(ptr->getFileId()) << 1);
+            return cld::hashCombine(ptr->getOffset(), ptr->getFileId());
         }
     };
 

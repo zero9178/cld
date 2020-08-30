@@ -101,11 +101,9 @@ bool cld::Semantics::SemanticAnalysis::isConst(const Type& type) const
         return false;
     }
     auto fields = getFields(type);
-    for (auto& [type, name, size] : fields)
+    for (auto& iter : fields)
     {
-        (void)name;
-        (void)size;
-        if (isConst(*type))
+        if (isConst(*iter.type))
         {
             return true;
         }
@@ -189,9 +187,9 @@ bool cld::Semantics::SemanticAnalysis::doAssignmentLikeConstraints(
 
     auto& lhsElementType = cld::get<PointerType>(lhsType.get()).getElementType();
     auto& rhsElementType = cld::get<PointerType>(rhsValue.getType().get()).getElementType();
-    if (isVoid(removeQualifiers(lhsElementType)) != isVoid(removeQualifiers(rhsElementType)))
+    if (isVoid(lhsElementType) != isVoid(rhsElementType))
     {
-        bool leftIsVoid = isVoid(removeQualifiers(lhsElementType));
+        bool leftIsVoid = isVoid(lhsElementType);
         auto& nonVoidType = leftIsVoid ? rhsElementType : lhsElementType;
         if (std::holds_alternative<FunctionType>(nonVoidType.get()))
         {
@@ -279,7 +277,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                             rhsValue, m_sourceInterface, *token, rhsValue));
                     },
                     [&, token = token] {
-                        if (isVoid(removeQualifiers(cld::get<PointerType>(lhsValue.getType().get()).getElementType())))
+                        if (isVoid(cld::get<PointerType>(lhsValue.getType().get()).getElementType()))
                         {
                             log(Errors::Semantics::CANNOT_ASSIGN_FUNCTION_POINTER_TO_VOID_POINTER.args(
                                 lhsValue, m_sourceInterface, lhsValue, *token, rhsValue));
@@ -893,7 +891,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                             expression, m_sourceInterface, i + 1, expression));
                     },
                     [&] {
-                        if (isVoid(removeQualifiers(cld::get<PointerType>(paramType.get()).getElementType())))
+                        if (isVoid(cld::get<PointerType>(paramType.get()).getElementType()))
                         {
                             log(Errors::Semantics::CANNOT_PASS_FUNCTION_POINTER_TO_VOID_POINTER_PARAMETER.args(
                                 expression, m_sourceInterface, expression));
@@ -1246,7 +1244,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                 return Expression(node);
             }
             value = lvalueConversion(std::move(value));
-            if (!isScalar(type) && !isVoid(removeQualifiers(type)))
+            if (!isScalar(type) && !isVoid(type))
             {
                 log(Errors::Semantics::TYPE_IN_CAST_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
                     cast.typeName, m_sourceInterface, cast.typeName, type));
@@ -2245,7 +2243,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::doSingleElementInit
                                                                                   expression));
         },
         [&] {
-            if (isVoid(removeQualifiers(cld::get<PointerType>(type.get()).getElementType())))
+            if (isVoid(cld::get<PointerType>(type.get()).getElementType()))
             {
                 log(Errors::Semantics::CANNOT_INITIALIZE_VOID_POINTER_WITH_FUNCTION_POINTER.args(
                     expression, m_sourceInterface, expression));

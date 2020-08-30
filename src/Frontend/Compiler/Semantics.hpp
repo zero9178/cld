@@ -400,6 +400,7 @@ struct Field
     std::shared_ptr<const Type> type;
     std::string_view name;
     std::optional<std::uint8_t> bitFieldSize;
+    std::size_t layoutIndex;
 
     [[nodiscard]] bool operator==(const Field& rhs) const;
 
@@ -410,17 +411,19 @@ class AnonymousStructType final
 {
     std::uint64_t m_id;
     std::vector<Field> m_fields;
+    std::vector<Type> m_layout;
     std::uint32_t m_sizeOf;
     std::uint32_t m_alignOf;
 
-    AnonymousStructType(std::uint64_t id, std::vector<Field>&& fields, std::uint32_t sizeOf, std::uint32_t alignOf)
-        : m_id(id), m_fields(std::move(fields)), m_sizeOf(sizeOf), m_alignOf(alignOf)
+    AnonymousStructType(std::uint64_t id, std::vector<Field>&& fields, std::vector<Type>&& layout, std::uint32_t sizeOf,
+                        std::uint32_t alignOf)
+        : m_id(id), m_fields(std::move(fields)), m_layout(std::move(layout)), m_sizeOf(sizeOf), m_alignOf(alignOf)
     {
     }
 
 public:
-    static Type create(bool isConst, bool isVolatile, std::uint64_t id, std::vector<Field> fields, std::uint32_t sizeOf,
-                       std::uint32_t alignOf);
+    static Type create(bool isConst, bool isVolatile, std::uint64_t id, std::vector<Field> fields,
+                       std::vector<Type> layout, std::uint32_t sizeOf, std::uint32_t alignOf);
 
     [[nodiscard]] std::uint64_t getId() const
     {
@@ -430,6 +433,11 @@ public:
     [[nodiscard]] const std::vector<Field>& getFields() const
     {
         return m_fields;
+    }
+
+    [[nodiscard]] const std::vector<Type>& getLayout() const
+    {
+        return m_layout;
     }
 
     [[nodiscard]] std::size_t getSizeOf(const ProgramInterface& program) const;
@@ -1431,10 +1439,14 @@ public:
     using Variant = std::variant<Statement, std::unique_ptr<Declaration>, std::shared_ptr<const Expression>>;
 
 private:
+    std::int64_t m_scope;
     std::vector<Variant> m_compoundItems;
 
 public:
-    explicit CompoundStatement(std::vector<Variant>&& compoundItems) : m_compoundItems(std::move(compoundItems)) {}
+    CompoundStatement(std::int64_t scope, std::vector<Variant>&& compoundItems)
+        : m_scope(scope), m_compoundItems(std::move(compoundItems))
+    {
+    }
 
     CompoundStatement(const CompoundStatement&) = delete;
     CompoundStatement& operator=(const CompoundStatement&) = delete;
@@ -1445,6 +1457,11 @@ public:
     [[nodiscard]] const std::vector<Variant>& getCompoundItems() const
     {
         return m_compoundItems;
+    }
+
+    [[nodiscard]] std::int64_t getScope() const
+    {
+        return m_scope;
     }
 };
 
@@ -1651,31 +1668,38 @@ class StructDefinition
 {
     std::string_view m_name;
     std::vector<Field> m_fields;
+    std::vector<Type> m_layout;
     std::uint64_t m_sizeOf;
     std::uint64_t m_alignOf;
 
 public:
-    StructDefinition(std::string_view name, std::vector<Field>&& fields, std::uint64_t sizeOf, std::uint64_t alignOf)
-        : m_name(name), m_fields(std::move(fields)), m_sizeOf(sizeOf), m_alignOf(alignOf)
+    StructDefinition(std::string_view name, std::vector<Field> fields, std::vector<Type> layout, std::uint64_t sizeOf,
+                     std::uint64_t alignOf)
+        : m_name(name), m_fields(std::move(fields)), m_layout(std::move(layout)), m_sizeOf(sizeOf), m_alignOf(alignOf)
     {
     }
 
-    std::string_view getName() const
+    [[nodiscard]] std::string_view getName() const
     {
         return m_name;
     }
 
-    const std::vector<Field>& getFields() const
+    [[nodiscard]] const std::vector<Field>& getFields() const
     {
         return m_fields;
     }
 
-    std::uint64_t getSizeOf() const
+    [[nodiscard]] const std::vector<Type>& getLayout() const
+    {
+        return m_layout;
+    }
+
+    [[nodiscard]] std::uint64_t getSizeOf() const
     {
         return m_sizeOf;
     }
 
-    std::uint64_t getAlignOf() const
+    [[nodiscard]] std::uint64_t getAlignOf() const
     {
         return m_alignOf;
     }
@@ -1784,19 +1808,30 @@ enum class Lifetime : std::uint8_t
 
 class Declaration final
 {
+public:
+    enum Kind
+    {
+        DeclarationOnly,
+        TentativeDefinition,
+        Definition
+    };
+
+private:
     Type m_type;
     Linkage m_linkage;
     Lifetime m_lifetime;
     Lexer::CTokenIterator m_nameToken;
+    Kind m_kind;
     std::optional<Initializer> m_initializer;
 
 public:
-    Declaration(Type type, Linkage linkage, Lifetime lifetime, Lexer::CTokenIterator nameToken,
+    Declaration(Type type, Linkage linkage, Lifetime lifetime, Lexer::CTokenIterator nameToken, Kind kind,
                 std::optional<Initializer> initializer = {})
         : m_type(std::move(type)),
           m_linkage(linkage),
           m_lifetime(lifetime),
           m_nameToken(nameToken),
+          m_kind(kind),
           m_initializer(std::move(initializer))
     {
     }
@@ -1819,6 +1854,11 @@ public:
     [[nodiscard]] Lexer::CTokenIterator getNameToken() const
     {
         return m_nameToken;
+    }
+
+    [[nodiscard]] Kind getKind() const
+    {
+        return m_kind;
     }
 
     [[nodiscard]] const std::optional<Initializer>& getInitializer() const
@@ -1905,27 +1945,33 @@ class Program;
 Program analyse(const Syntax::TranslationUnit& parseTree, CSourceObject&& ctokens,
                 llvm::raw_ostream* reporter = &llvm::errs(), bool* errors = nullptr);
 
-Lexer::CTokenIterator declaratorToLoc(const cld::Syntax::Declarator& declarator);
+[[nodiscard]] Lexer::CTokenIterator declaratorToLoc(const cld::Syntax::Declarator& declarator);
 
-bool isVoid(const Type& type);
+[[nodiscard]] bool isVoid(const Type& type);
 
-bool isArray(const Type& type);
+[[nodiscard]] bool isArray(const Type& type);
 
-const Type& getArrayElementType(const Type& type);
+[[nodiscard]] const Type& getArrayElementType(const Type& type);
 
-bool isInteger(const Type& type);
+[[nodiscard]] Type adjustParameterType(const Type& type);
 
-bool isArithmetic(const Type& type);
+[[nodiscard]] bool isInteger(const Type& type);
 
-bool isScalar(const Type& type);
+[[nodiscard]] bool isArithmetic(const Type& type);
 
-bool isRecord(const Type& type);
+[[nodiscard]] bool isScalar(const Type& type);
 
-bool isBool(const Type& type);
+[[nodiscard]] bool isRecord(const Type& type);
 
-bool isCharType(const Type& type);
+[[nodiscard]] bool isBool(const Type& type);
 
-bool isAggregate(const Type& type);
+[[nodiscard]] bool isCharType(const Type& type);
+
+[[nodiscard]] bool isAggregate(const Type& type);
+
+[[nodiscard]] bool isVariablyModified(const Type& type);
+
+[[nodiscard]] bool isVariableLengthArray(const Type& type);
 
 } // namespace cld::Semantics
 

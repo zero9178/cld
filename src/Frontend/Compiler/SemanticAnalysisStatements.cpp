@@ -7,7 +7,7 @@ cld::Semantics::ReturnStatement cld::Semantics::SemanticAnalysis::visit(const Sy
     auto& ft = cld::get<FunctionType>(getCurrentFunctionScope()->currentFunction->getType().get());
     if (!node.getExpression())
     {
-        if (!isVoid(removeQualifiers(ft.getReturnType())))
+        if (!isVoid(ft.getReturnType()))
         {
             log(Errors::Semantics::CANNOT_RETURN_NO_VALUE_FROM_FUNCTION_N_WITH_RETURN_TYPE_N.args(
                 node, m_sourceInterface, *getCurrentFunctionScope()->currentFunction->getNameToken(),
@@ -15,7 +15,7 @@ cld::Semantics::ReturnStatement cld::Semantics::SemanticAnalysis::visit(const Sy
         }
         return ReturnStatement({});
     }
-    if (isVoid(removeQualifiers(ft.getReturnType())))
+    if (isVoid(ft.getReturnType()))
     {
         log(Errors::Semantics::CANNOT_RETURN_VALUE_FROM_FUNCTION_N_WITH_VOID_RETURN_TYPE.args(
             node, m_sourceInterface, *getCurrentFunctionScope()->currentFunction->getNameToken(), node));
@@ -49,7 +49,7 @@ cld::Semantics::ReturnStatement cld::Semantics::SemanticAnalysis::visit(const Sy
                                                                                    *node.begin(), value));
         },
         [&] {
-            if (isVoid(removeQualifiers(ft.getReturnType())))
+            if (isVoid(ft.getReturnType()))
             {
                 log(Errors::Semantics::CANNOT_RETURN_FUNCTION_POINTER_WITH_VOID_POINTER_RETURN_TYPE.args(
                     value, m_sourceInterface, *node.begin(), value));

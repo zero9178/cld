@@ -5,3 +5,4 @@ if (MSVC AND ("${CLD_SANITIZER}" MATCHES ".*address.*"))
 endif ()
 
 add_subdirectory(Frontend)
+add_subdirectory(LLVMBackend)

@@ -86,7 +86,8 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
     }
 
     auto& ft = cld::get<FunctionType>(type.get());
-    if (!isVoid(ft.getReturnType()) && !isCompleteType(ft.getReturnType()))
+    if (!(isVoid(ft.getReturnType()) && !ft.getReturnType().isConst() && !ft.getReturnType().isVolatile())
+        && !isCompleteType(ft.getReturnType()))
     {
         log(Errors::Semantics::RETURN_TYPE_OF_FUNCTION_DEFINITION_MUST_BE_A_COMPLETE_TYPE.args(
             node.getDeclarationSpecifiers(), m_sourceInterface, node.getDeclarationSpecifiers()));
@@ -165,8 +166,8 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
                 }
             }
             auto paramType = ft.getArguments()[i].first;
-            auto& ptr = parameterDeclarations.emplace_back(
-                std::make_unique<Declaration>(std::move(paramType), Linkage::None, lifetime, loc));
+            auto& ptr = parameterDeclarations.emplace_back(std::make_unique<Declaration>(
+                std::move(paramType), Linkage::None, lifetime, loc, Declaration::Kind::Definition));
             auto [prev, notRedefined] =
                 getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, ptr.get()}});
             if (!notRedefined)
@@ -212,8 +213,8 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
                 {
                     continue;
                 }
-                auto& ptr = parameterDeclarations.emplace_back(
-                    std::make_unique<Declaration>(result->second, Linkage::None, lifetime, loc));
+                auto& ptr = parameterDeclarations.emplace_back(std::make_unique<Declaration>(
+                    result->second, Linkage::None, lifetime, loc, Declaration::Kind::Definition));
                 getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, ptr.get()}});
                 // Don't check for duplicates again. We already did that when processing the identifier list
             }
@@ -234,7 +235,7 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
             (storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Static ? Linkage::Internal :
                                                                                               Linkage::External) :
             Linkage::External,
-        CompoundStatement({}))));
+        CompoundStatement(m_currentScope, {}))));
     // We are currently in block scope. Functions are always at file scope though so we can't use getCurrentScope
     auto [prev, notRedefinition] =
         m_scopes[0].declarations.insert({loc->getText(), DeclarationInScope{loc, ptr.get()}});
@@ -299,6 +300,9 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
             }
         }
     }
+    // C99 6.7§2:
+    // A declaration shall declare at least a declarator (other than the parameters of a function or
+    // the members of a structure or union), a tag, or the members of an enumeration
     if (node.getInitDeclarators().empty())
     {
         bool declaresSomething = std::any_of(
@@ -358,7 +362,8 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                     *loc, m_sourceInterface, *loc));
                 continue;
             }
-            auto declaration = std::make_unique<Declaration>(std::move(result), linkage, lifetime, loc);
+            auto declaration = std::make_unique<Declaration>(std::move(result), linkage, lifetime, loc,
+                                                             Declaration::Kind::DeclarationOnly);
             auto [prev, notRedefinition] =
                 getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, declaration.get()}});
             if (!notRedefinition)
@@ -380,7 +385,8 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                 {
                     auto& otherType = cld::get<const Declaration*>(prev->second.declared)->getType();
                     auto composite = compositeType(otherType, declaration->getType());
-                    *declaration = Declaration(std::move(composite), linkage, lifetime, loc);
+                    *declaration =
+                        Declaration(std::move(composite), linkage, lifetime, loc, Declaration::Kind::DeclarationOnly);
                     prev.value().declared = declaration.get();
                     decls.push_back(std::move(declaration));
                 }
@@ -405,10 +411,16 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                 }
             }
             bool errors = false;
+            // C99 6.2.2§5:
+            // If the declaration of an identifier for an object has file scope and no storage-class specifier,
+            // its linkage is external.
             Linkage linkage = m_currentScope == 0 ? Linkage::External : Linkage::None;
             Lifetime lifetime = m_currentScope == 0 ? Lifetime::Static : Lifetime::Automatic;
             if (storageClassSpecifier && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Static)
             {
+                // C99 6.2.2§3:
+                // If the declaration of a file scope identifier for an object or a function contains the storage-
+                // class specifier static, the identifier has internal linkage
                 if (m_currentScope == 0)
                 {
                     linkage = Linkage::Internal;
@@ -421,22 +433,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                 linkage = Linkage::External;
                 lifetime = Lifetime::Static;
             }
-            if (linkage == Linkage::None && !isCompleteType(result)
-                && !(std::holds_alternative<AbstractArrayType>(result.get()) && initializer)
-                && !(storageClassSpecifier
-                     && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Typedef))
-            {
-                log(Errors::Semantics::DECLARATION_MUST_HAVE_A_COMPLETE_TYPE.args(*loc, m_sourceInterface, *loc,
-                                                                                  result));
-                errors = true;
-            }
-            else if (isVoid(removeQualifiers(result))
-                     && !(storageClassSpecifier
-                          && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Typedef))
-            {
-                log(Errors::Semantics::DECLARATION_MUST_NOT_BE_VOID.args(*loc, m_sourceInterface, *loc));
-                errors = true;
-            }
+
             if (isVariablyModified(result))
             {
                 if (m_currentScope == 0)
@@ -587,16 +584,56 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                     *loc, m_sourceInterface, *loc));
                 continue;
             }
-            auto declaration = std::make_unique<Declaration>(std::move(result), linkage, lifetime, loc);
+            Declaration::Kind kind;
+            // C99 6.8.2§1:
+            // If the declaration of an identifier for an object has file scope and an initializer, the
+            // declaration is an external definition for the identifier.
+            if (m_currentScope == 0 && initializer
+                && (!storageClassSpecifier || *storageClassSpecifier != Syntax::StorageClassSpecifier::Extern))
+            {
+                kind = Declaration::Definition;
+            }
+            else if (m_currentScope == 0
+                     && (!storageClassSpecifier || *storageClassSpecifier == Syntax::StorageClassSpecifier::Static))
+            {
+                // C99 6.9.2§2:
+                // A declaration of an identifier for an object that has file scope without an initializer, and
+                // without a storage-class specifier or with the storage-class specifier static, constitutes a
+                // tentative definition
+                kind = Declaration::TentativeDefinition;
+            }
+            else if (storageClassSpecifier && *storageClassSpecifier == Syntax::StorageClassSpecifier::Extern)
+            {
+                kind = Declaration::DeclarationOnly;
+            }
+            else
+            {
+                kind = Declaration::Definition;
+            }
+
+            auto declaration = std::make_unique<Declaration>(std::move(result), linkage, lifetime, loc, kind);
             auto [prev, notRedefinition] =
                 getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, declaration.get()}});
             if (!notRedefinition)
             {
                 if (!std::holds_alternative<const Declaration*>(prev->second.declared)
-                    || (declaration->getLinkage() == Linkage::None
-                        && cld::get<const Declaration*>(prev->second.declared)->getLinkage() == Linkage::None)
+                    // C99 6.7§3:
+                    // If an identifier has no linkage, there shall be no more than one declaration of the identifier
+                    // (in a declarator or type specifier) with the same scope and in the same name space, except
+                    // for tags as specified in 6.7.2.3.
+                    || cld::get<const Declaration*>(prev->second.declared)->getLinkage() == Linkage::None
+                    || declaration->getLinkage() == Linkage::None
+                    // C99 6.7§2:
+                    // All declarations in the same scope that refer to the same object or function shall specify
+                    // compatible types.
                     || !typesAreCompatible(declaration->getType(),
-                                           cld::get<const Declaration*>(prev->second.declared)->getType()))
+                                           cld::get<const Declaration*>(prev->second.declared)->getType())
+                    // C99 6.9§3:
+                    // There shall be no more than one external definition for each identifier declared with
+                    // internal linkage in a translation unit.
+                    || (m_currentScope == 0 && (kind == Declaration::Definition && linkage == Linkage::Internal)
+                        && (cld::get<const Declaration*>(prev->second.declared)->getKind() == Declaration::Definition
+                            && cld::get<const Declaration*>(prev->second.declared)->getLinkage() == Linkage::Internal)))
                 {
                     log(Errors::REDEFINITION_OF_SYMBOL_N.args(*loc, m_sourceInterface, *loc));
                     log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
@@ -604,14 +641,49 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                 }
                 else
                 {
-                    auto& otherType = cld::get<const Declaration*>(prev->second.declared)->getType();
-                    auto composite = compositeType(otherType, declaration->getType());
-                    *declaration = Declaration(std::move(composite), linkage, lifetime, loc);
+                    auto& prevDecl = cld::get<const Declaration*>(prev->second.declared);
+                    auto composite = compositeType(prevDecl->getType(), declaration->getType());
+                    // C99 6.2.2§4:
+                    // For an identifier declared with the storage-class specifier extern in a scope in which a
+                    // prior declaration of that identifier is visible, if the prior declaration specifies internal or
+                    // external linkage, the linkage of the identifier at the later declaration is the same as the
+                    // linkage specified at the prior declaration. If no prior declaration is visible, or if the prior
+                    // declaration specifies no linkage, then the identifier has external linkage.
+                    if (storageClassSpecifier && *storageClassSpecifier == Syntax::StorageClassSpecifier::Extern
+                        && prevDecl->getLinkage() != Linkage::None)
+                    {
+                        linkage = prevDecl->getLinkage();
+                    }
+                    else if (linkage != Linkage::Internal && prevDecl->getLinkage() == Linkage::Internal)
+                    {
+                        // C99 6.2.2§7:
+                        // If, within a translation unit, the same identifier appears with both internal and external
+                        // linkage, the behavior is undefined.
+
+                        // We error like clang does, will allow the composite type to be formed with internal linkage
+                        // tho
+                        log(Errors::Semantics::STATIC_VARIABLE_N_REDEFINED_WITHOUT_STATIC.args(*loc, m_sourceInterface,
+                                                                                               *loc));
+                        log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
+                                                                 *prev->second.identifier));
+                        linkage = Linkage::Internal;
+                    }
+                    *declaration =
+                        Declaration(std::move(composite), linkage, lifetime, loc, std::max(prevDecl->getKind(), kind));
                     prev.value().declared = declaration.get();
                 }
             }
+
             if (initializer)
             {
+                // C99 6.7.5$5:
+                // If the declaration of an identifier has block scope, and the identifier has external or
+                // internal linkage, the declaration shall have no initializer for the identifier.
+                if (m_currentScope != 0 && linkage != Linkage::None)
+                {
+                    log(Errors::Semantics::CANNOT_INITIALIZE_STATIC_OR_EXTERN_VARIABLE_AT_BLOCK_SCOPE.args(
+                        *loc, m_sourceInterface, *loc));
+                }
                 if (isVariableLengthArray(declaration->getType()))
                 {
                     log(Errors::Semantics::CANNOT_INITIALIZE_VARIABLE_LENGTH_ARRAY_TYPE.args(
@@ -631,16 +703,33 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                                                      cld::get<AbstractArrayType>(prevType.get()).isRestricted(), false,
                                                      cld::get<AbstractArrayType>(prevType.get()).getType(), size);
                     }
-                    *declaration = Declaration(std::move(prevType), linkage, lifetime, loc, std::move(expr));
+                    *declaration = Declaration(std::move(prevType), linkage, lifetime, loc, kind, std::move(expr));
                     m_inStaticInitializer = false;
                 }
             }
-            else if (std::holds_alternative<AbstractArrayType>(declaration->getType().get())
-                     && linkage == Linkage::None)
+
+            // C99 6.7§7:
+            // If an identifier for an object is declared with no linkage, the type for the object shall be
+            // complete by the end of its declarator, or by the end of its init-declarator if it has an
+            // initializer;
+            //
+            // C99 6.9.2§3:
+            // If the declaration of an identifier for an object is a tentative definition and has internal
+            // linkage, the declared type shall not be an incomplete type.
+            if (linkage == Linkage::None
+                || (kind == Declaration::Kind::TentativeDefinition && linkage == Linkage::Internal))
             {
-                log(Errors::Semantics::DECLARATION_MUST_HAVE_A_COMPLETE_TYPE.args(*loc, m_sourceInterface, *loc,
-                                                                                  declaration->getType()));
+                if (isVoid(declaration->getType()))
+                {
+                    log(Errors::Semantics::DECLARATION_MUST_NOT_BE_VOID.args(*loc, m_sourceInterface, *loc));
+                }
+                else if (!isCompleteType(declaration->getType()))
+                {
+                    log(Errors::Semantics::DECLARATION_MUST_HAVE_A_COMPLETE_TYPE.args(*loc, m_sourceInterface, *loc,
+                                                                                      declaration->getType()));
+                }
             }
+
             decls.push_back(std::move(declaration));
         }
     }
@@ -661,7 +750,7 @@ cld::Semantics::CompoundStatement cld::Semantics::SemanticAnalysis::visit(const 
         auto tmp = visit(iter);
         result.insert(result.end(), std::move_iterator(tmp.begin()), std::move_iterator(tmp.end()));
     }
-    return CompoundStatement(std::move(result));
+    return CompoundStatement(m_currentScope, std::move(result));
 }
 
 std::vector<cld::Semantics::CompoundStatement::Variant>
@@ -1003,33 +1092,6 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::integerPromotion(const Ty
     return type;
 }
 
-cld::Semantics::Type cld::Semantics::SemanticAnalysis::adjustParameterType(const cld::Semantics::Type& type) const
-{
-    if (isArray(type))
-    {
-        auto elementType = cld::match(type.get(), [](auto&& value) -> Type {
-            using T = std::decay_t<decltype(value)>;
-            if constexpr (std::is_same_v<ArrayType,
-                                         T> || std::is_same_v<AbstractArrayType, T> || std::is_same_v<ValArrayType, T>)
-            {
-                return value.getType();
-            }
-            CLD_UNREACHABLE;
-        });
-        bool restrict = cld::match(type.get(), [](auto&& value) -> bool {
-            using T = std::decay_t<decltype(value)>;
-            if constexpr (std::is_same_v<ArrayType,
-                                         T> || std::is_same_v<AbstractArrayType, T> || std::is_same_v<ValArrayType, T>)
-            {
-                return value.isRestricted();
-            }
-            CLD_UNREACHABLE;
-        });
-        return PointerType::create(type.isConst(), type.isVolatile(), restrict, std::move(elementType));
-    }
-    return type;
-}
-
 cld::Semantics::Type cld::Semantics::SemanticAnalysis::compositeType(const cld::Semantics::Type& lhs,
                                                                      const cld::Semantics::Type& rhs) const
 {
@@ -1110,20 +1172,6 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::compositeType(const cld::
                                                  cld::get<PointerType>(rhs.get()).getElementType()));
     }
     return rhs;
-}
-
-bool cld::Semantics::SemanticAnalysis::isVariablyModified(const cld::Semantics::Type& type) const
-{
-    auto typeVisitor = RecursiveVisitor(type, TYPE_NEXT_FN);
-    return std::any_of(typeVisitor.begin(), typeVisitor.end(),
-                       [](const Type& type) { return std::holds_alternative<ValArrayType>(type.get()); });
-}
-
-bool cld::Semantics::SemanticAnalysis::isVariableLengthArray(const cld::Semantics::Type& type) const
-{
-    auto typeVisitor = RecursiveVisitor(type, ARRAY_TYPE_NEXT_FN);
-    return std::any_of(typeVisitor.begin(), typeVisitor.end(),
-                       [](const Type& type) { return std::holds_alternative<ValArrayType>(type.get()); });
 }
 
 bool cld::Semantics::SemanticAnalysis::hasFlexibleArrayMember(const Type& type) const

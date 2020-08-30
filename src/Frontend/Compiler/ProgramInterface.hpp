@@ -47,12 +47,13 @@ public:
     struct Scope
     {
         std::int64_t previousScope;
+        std::vector<std::int64_t> subScopes;
         tsl::ordered_map<std::string_view, DeclarationInScope> declarations;
         std::unordered_map<std::string_view, TagTypeInScope> types;
     };
 
 protected:
-    std::vector<Scope> m_scopes = {Scope{-1, {}, {}}};
+    std::vector<Scope> m_scopes = {Scope{-1, {}, {}, {}}};
     std::vector<StructDefinition> m_structDefinitions;
     std::vector<UnionDefinition> m_unionDefinitions;
     std::vector<EnumDefinition> m_enumDefinitions;
@@ -109,6 +110,11 @@ public:
 
     const UnionDefinition* CLD_NULLABLE getUnionDefinition(std::string_view name, std::uint64_t scopeOrId,
                                                            std::uint64_t* idOut = nullptr) const;
+
+    const std::vector<Scope>& getScopes() const
+    {
+        return m_scopes;
+    }
 };
 
 } // namespace cld::Semantics

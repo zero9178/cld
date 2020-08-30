@@ -1171,9 +1171,19 @@ inline bool operator==(const StorageClassSpecifier& storageClassSpecifier, Stora
     return specifier == storageClassSpecifier.getSpecifier();
 }
 
+inline bool operator!=(const StorageClassSpecifier& storageClassSpecifier, StorageClassSpecifier::Specifiers specifier)
+{
+    return !(specifier == storageClassSpecifier.getSpecifier());
+}
+
 inline bool operator==(StorageClassSpecifier::Specifiers specifier, const StorageClassSpecifier& storageClassSpecifier)
 {
     return specifier == storageClassSpecifier.getSpecifier();
+}
+
+inline bool operator!=(StorageClassSpecifier::Specifiers specifier, const StorageClassSpecifier& storageClassSpecifier)
+{
+    return !(specifier == storageClassSpecifier.getSpecifier());
 }
 
 /**

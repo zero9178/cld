@@ -80,14 +80,89 @@ TEST_CASE("Semantics declarations", "[semantics]")
     {
         SECTION("External linkage")
         {
-            auto [translationUnit, errors] = generateSemantics("extern int i;");
-            REQUIRE_THAT(errors, ProducesNothing());
-            REQUIRE(translationUnit.getGlobals().size() == 1);
+            SECTION("Simple")
+            {
+                auto [translationUnit, errors] = generateSemantics("extern int i;");
+                REQUIRE_THAT(errors, ProducesNoErrors());
+                REQUIRE(translationUnit.getGlobals().size() == 1);
+                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
+                    translationUnit.getGlobals()[0]));
+                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+                CHECK(decl->getLinkage() == cld::Semantics::Linkage::External);
+                CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
+                CHECK(decl->getKind() == cld::Semantics::Declaration::Kind::DeclarationOnly);
+            }
+            SECTION("With init")
+            {
+                auto [translationUnit, errors] = generateSemantics("extern int i = 5;");
+                REQUIRE_THAT(errors, ProducesNoErrors());
+                REQUIRE(translationUnit.getGlobals().size() == 1);
+                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
+                    translationUnit.getGlobals()[0]));
+                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+                CHECK(decl->getLinkage() == cld::Semantics::Linkage::External);
+                CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
+                CHECK(decl->getKind() == cld::Semantics::Declaration::Kind::DeclarationOnly);
+            }
+            SEMA_PRODUCES("void foo(void) {\n"
+                          " extern int i = 0;\n"
+                          "}",
+                          ProducesError(CANNOT_INITIALIZE_STATIC_OR_EXTERN_VARIABLE_AT_BLOCK_SCOPE));
+        }
+        SECTION("Prior internal linkage overwrites external")
+        {
+            auto [translationUnit, errors] = generateSemantics("static int i;\n"
+                                                               "extern int i;");
+            REQUIRE_THAT(errors, ProducesNoErrors());
+            REQUIRE(translationUnit.getGlobals().size() == 2);
             REQUIRE(
-                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
-            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
-            CHECK(decl->getLinkage() == cld::Semantics::Linkage::External);
+                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[1]));
+            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[1]);
+            CHECK(decl->getLinkage() == cld::Semantics::Linkage::Internal);
             CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
+            CHECK(decl->getKind() == cld::Semantics::Declaration::Kind::TentativeDefinition);
+            SEMA_PRODUCES("static int i;\n"
+                          "int i;",
+                          ProducesError(STATIC_VARIABLE_N_REDEFINED_WITHOUT_STATIC, "'i'"));
+        }
+        SECTION("External definitions with static linkage")
+        {
+            SECTION("Tentative definition")
+            {
+                auto [translationUnit, errors] = generateSemantics("static int i;");
+                REQUIRE_THAT(errors, ProducesNoErrors());
+                REQUIRE(translationUnit.getGlobals().size() == 1);
+                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
+                    translationUnit.getGlobals()[0]));
+                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+                CHECK(decl->getLinkage() == cld::Semantics::Linkage::Internal);
+                CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
+                CHECK(decl->getKind() == cld::Semantics::Declaration::Kind::TentativeDefinition);
+            }
+            SECTION("Definition")
+            {
+                auto [translationUnit, errors] = generateSemantics("static int i = 0;");
+                REQUIRE_THAT(errors, ProducesNoErrors());
+                REQUIRE(translationUnit.getGlobals().size() == 1);
+                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
+                    translationUnit.getGlobals()[0]));
+                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+                CHECK(decl->getLinkage() == cld::Semantics::Linkage::Internal);
+                CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
+                CHECK(decl->getKind() == cld::Semantics::Declaration::Kind::Definition);
+            }
+            SEMA_PRODUCES("static int i;\n"
+                          "static int i;",
+                          ProducesNoErrors());
+            SEMA_PRODUCES("static int i;\n"
+                          "static int i = 0;",
+                          ProducesNoErrors());
+            SEMA_PRODUCES("static int i;\n"
+                          "static int i = 0;",
+                          ProducesNoErrors());
+            SEMA_PRODUCES("static int i = 0;\n"
+                          "static int i = 0;",
+                          ProducesError(REDEFINITION_OF_SYMBOL_N, "'i'"));
         }
         SECTION("Objects at function or block scope are None by default")
         {
@@ -383,7 +458,10 @@ TEST_CASE("Semantics primitive declarations", "[semantics]")
             text += "volatile ";
         }
         text += " i;";
-        SEMA_PRODUCES(text, ProducesError(DECLARATION_MUST_NOT_BE_VOID));
+        SEMA_PRODUCES("void foo(void) {\n" + text
+                          + "\n"
+                            "}",
+                      ProducesError(DECLARATION_MUST_NOT_BE_VOID));
     }
     auto options = cld::LanguageOptions::native();
     std::vector<std::pair<cld::Semantics::Type, std::vector<std::string_view>>> table = {
