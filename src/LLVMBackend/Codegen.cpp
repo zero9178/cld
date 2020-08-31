@@ -375,20 +375,6 @@ public:
                 visit(cld::get<cld::Semantics::Statement>(iter));
             }
         }
-        //        for (auto& [name, decl] : m_programInterface.getScopes()[compoundStatement.getScope()].declarations)
-        //        {
-        //            if (std::holds_alternative<const cld::Semantics::Declaration*>(decl.declared))
-        //            {
-        //                const auto* var = cld::get<const cld::Semantics::Declaration*>(decl.declared);
-        //                auto result = m_lvalues.find(var);
-        //                CLD_ASSERT(result != m_lvalues.end());
-        //                auto* size = llvm::ConstantInt::get(visit(cld::Semantics::PrimitiveType::createSizeT(
-        //                                                        false, false,
-        //                                                        m_programInterface.getLanguageOptions())),
-        //                                                    var->getType().getSizeOf(m_programInterface));
-        //                m_builder.CreateLifetimeEnd(result->second, llvm::cast<llvm::ConstantInt>(size));
-        //            }
-        //        }
     }
 
     void visit(const cld::Semantics::Statement& statement)
@@ -671,7 +657,153 @@ public:
 
     llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::Cast& constant) {}
 
-    llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::UnaryOperator& constant) {}
+    llvm::Value* visit(const cld::Semantics::Expression&, const cld::Semantics::UnaryOperator& unaryOperator)
+    {
+        auto* value = visit(unaryOperator.getOperand());
+        switch (unaryOperator.getKind())
+        {
+            case cld::Semantics::UnaryOperator::AddressOf:
+            case cld::Semantics::UnaryOperator::Dereference:
+                // The difference between address of and dereference is that an lvalue conversion follows a dereference
+                return value;
+            case cld::Semantics::UnaryOperator::PostIncrement:
+            {
+                auto* prev = m_builder.CreateLoad(value, unaryOperator.getOperand().getType().isVolatile());
+                if (cld::Semantics::isInteger(unaryOperator.getOperand().getType()))
+                {
+                    if (cld::get<cld::Semantics::PrimitiveType>(unaryOperator.getOperand().getType().get()).isSigned())
+                    {
+                        auto* result = m_builder.CreateNSWAdd(prev, llvm::ConstantInt::get(prev->getType(), 1));
+                        m_builder.CreateStore(value, result);
+                    }
+                    else
+                    {
+                        auto* result = m_builder.CreateAdd(prev, llvm::ConstantInt::get(prev->getType(), 1));
+                        m_builder.CreateStore(value, result);
+                    }
+                }
+                else if (!std::holds_alternative<cld::Semantics::PointerType>(
+                             unaryOperator.getOperand().getType().get()))
+                {
+                    auto* result = m_builder.CreateFAdd(prev, llvm::ConstantFP::get(prev->getType(), 1));
+                    m_builder.CreateStore(value, result);
+                }
+                else
+                {
+                    // TODO:
+                }
+                return prev;
+            }
+            case cld::Semantics::UnaryOperator::PostDecrement:
+            {
+                auto* prev = m_builder.CreateLoad(value, unaryOperator.getOperand().getType().isVolatile());
+                if (cld::Semantics::isInteger(unaryOperator.getOperand().getType()))
+                {
+                    if (cld::get<cld::Semantics::PrimitiveType>(unaryOperator.getOperand().getType().get()).isSigned())
+                    {
+                        auto* result = m_builder.CreateNSWSub(prev, llvm::ConstantInt::get(prev->getType(), 1));
+                        m_builder.CreateStore(value, result);
+                    }
+                    else
+                    {
+                        auto* result = m_builder.CreateSub(prev, llvm::ConstantInt::get(prev->getType(), 1));
+                        m_builder.CreateStore(value, result);
+                    }
+                }
+                else if (!std::holds_alternative<cld::Semantics::PointerType>(
+                             unaryOperator.getOperand().getType().get()))
+                {
+                    auto* result = m_builder.CreateFSub(prev, llvm::ConstantFP::get(prev->getType(), 1));
+                    m_builder.CreateStore(value, result);
+                }
+                else
+                {
+                    // TODO:
+                }
+                return prev;
+            }
+            case cld::Semantics::UnaryOperator::PreIncrement:
+            {
+                llvm::Value* result = nullptr;
+                auto* prev = m_builder.CreateLoad(value, unaryOperator.getOperand().getType().isVolatile());
+                if (cld::Semantics::isInteger(unaryOperator.getOperand().getType()))
+                {
+                    if (cld::get<cld::Semantics::PrimitiveType>(unaryOperator.getOperand().getType().get()).isSigned())
+                    {
+                        result = m_builder.CreateNSWAdd(prev, llvm::ConstantInt::get(prev->getType(), 1));
+                        m_builder.CreateStore(value, result);
+                    }
+                    else
+                    {
+                        result = m_builder.CreateAdd(prev, llvm::ConstantInt::get(prev->getType(), 1));
+                        m_builder.CreateStore(value, result);
+                    }
+                }
+                else if (!std::holds_alternative<cld::Semantics::PointerType>(
+                             unaryOperator.getOperand().getType().get()))
+                {
+                    result = m_builder.CreateFAdd(prev, llvm::ConstantFP::get(prev->getType(), 1));
+                    m_builder.CreateStore(value, result);
+                }
+                else
+                {
+                    // TODO:
+                }
+                return result;
+            }
+            case cld::Semantics::UnaryOperator::PreDecrement:
+            {
+                llvm::Value* result = nullptr;
+                auto* prev = m_builder.CreateLoad(value, unaryOperator.getOperand().getType().isVolatile());
+                if (cld::Semantics::isInteger(unaryOperator.getOperand().getType()))
+                {
+                    if (cld::get<cld::Semantics::PrimitiveType>(unaryOperator.getOperand().getType().get()).isSigned())
+                    {
+                        result = m_builder.CreateNSWSub(prev, llvm::ConstantInt::get(prev->getType(), 1));
+                        m_builder.CreateStore(value, result);
+                    }
+                    else
+                    {
+                        result = m_builder.CreateSub(prev, llvm::ConstantInt::get(prev->getType(), 1));
+                        m_builder.CreateStore(value, result);
+                    }
+                }
+                else if (!std::holds_alternative<cld::Semantics::PointerType>(
+                             unaryOperator.getOperand().getType().get()))
+                {
+                    result = m_builder.CreateFSub(prev, llvm::ConstantFP::get(prev->getType(), 1));
+                    m_builder.CreateStore(value, result);
+                }
+                else
+                {
+                    // TODO:
+                }
+                return result;
+            }
+            case cld::Semantics::UnaryOperator::Plus: return value;
+            case cld::Semantics::UnaryOperator::Minus:
+            {
+                if (cld::Semantics::isInteger(unaryOperator.getOperand().getType()))
+                {
+                    if (cld::get<cld::Semantics::PrimitiveType>(unaryOperator.getOperand().getType().get()).isSigned())
+                    {
+                        return m_builder.CreateNSWNeg(value);
+                    }
+                    else
+                    {
+                        return m_builder.CreateNeg(value);
+                    }
+                }
+                else
+                {
+                    return m_builder.CreateFNeg(value);
+                }
+            }
+            case cld::Semantics::UnaryOperator::BooleanNegate: break;
+            case cld::Semantics::UnaryOperator::BitwiseNegate: return m_builder.CreateNot(value);
+        }
+        CLD_UNREACHABLE;
+    }
 
     llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::SizeofOperator& constant) {}
 
@@ -681,7 +813,7 @@ public:
 
     llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::Conditional& constant) {}
 
-    llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::Assignment& assignment)
+    llvm::Value* visit(const cld::Semantics::Expression&, const cld::Semantics::Assignment& assignment)
     {
         auto* lhs = visit(assignment.getLeftExpression());
         auto* rhs = visit(assignment.getRightExpression());
@@ -691,7 +823,14 @@ public:
                                     assignment.getLeftExpression().getType().isVolatile());
     }
 
-    llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::CommaExpression& constant) {}
+    llvm::Value* visit(const cld::Semantics::Expression&, const cld::Semantics::CommaExpression& commaExpression)
+    {
+        for (auto& iter : commaExpression.getCommaExpressions())
+        {
+            visit(iter.first);
+        }
+        return visit(commaExpression.getLastExpression());
+    }
 
     llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::CallExpression& constant) {}
 

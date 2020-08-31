@@ -570,6 +570,35 @@ TEST_CASE("LLVM codegen expressions", "[LLVM]")
             CHECK(cld::Tests::computeInJIT<void (*())()>(std::move(module), "foo") != nullptr);
         }
     }
+    SECTION("Unary")
+    {
+        SECTION("Address of")
+        {
+            auto program = generateProgram("int* foo(void) {\n"
+                                           "int i;\n"
+                                           "return &i;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int*(void)>(std::move(module), "foo") != nullptr);
+        }
+        SECTION("Dereference")
+        {
+            auto program = generateProgram("int foo(void) {\n"
+                                           "int i,f;\n"
+                                           "i = 5,f = 13;\n"
+                                           "int* iPtr;\n"
+                                           "iPtr = &i;\n"
+                                           "*iPtr = *iPtr + f;\n"
+                                           "return i;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int(void)>(std::move(module), "foo") == 18);
+        }
+    }
     SECTION("Multiply")
     {
         SECTION("Integers")
