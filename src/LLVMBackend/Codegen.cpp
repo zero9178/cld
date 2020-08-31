@@ -93,7 +93,7 @@ public:
                         return m_builder.getIntNTy(m_sourceInterface.getLanguageOptions().sizeOfInt * 8);
                     case cld::Semantics::PrimitiveType::Long:
                     case cld::Semantics::PrimitiveType::UnsignedLong:
-                        return m_builder.getIntNTy(m_sourceInterface.getLanguageOptions().sizeOfInt * 8);
+                        return m_builder.getIntNTy(m_sourceInterface.getLanguageOptions().sizeOfLong * 8);
                     case cld::Semantics::PrimitiveType::UnsignedLongLong:
                     case cld::Semantics::PrimitiveType::LongLong: return m_builder.getInt64Ty();
                     case cld::Semantics::PrimitiveType::Float: return m_builder.getFloatTy();
@@ -250,8 +250,8 @@ public:
         if (std::holds_alternative<cld::Semantics::FunctionType>(declaration.getType().get()))
         {
             auto* ft = llvm::cast<llvm::FunctionType>(visit(declaration.getType()));
-            auto* function = llvm::Function::Create(ft, linkageType, -1,
-                                                    llvm::StringRef{declaration.getNameToken()->getText()}, &m_module);
+            auto* function =
+                llvm::Function::Create(ft, linkageType, -1, declaration.getNameToken()->getText().data(), &m_module);
             m_lvalues.emplace(&declaration, function);
             return;
         }
@@ -276,7 +276,7 @@ public:
 
             auto* global = new llvm::GlobalVariable(
                 m_module, type, declaration.getType().isConst() && linkageType != llvm::GlobalValue::CommonLinkage,
-                linkageType, constant, llvm::StringRef{declaration.getNameToken()->getText()});
+                linkageType, constant, declaration.getNameToken()->getText().data());
             global->setAlignment(llvm::MaybeAlign(declaration.getType().getAlignOf(m_programInterface)));
             m_lvalues.emplace(&declaration, global);
             return;
@@ -288,7 +288,7 @@ public:
 
     void visit(const cld::Semantics::FunctionDefinition& functionDefinition)
     {
-        auto* function = m_module.getFunction(functionDefinition.getNameToken()->getText());
+        auto* function = m_module.getFunction(functionDefinition.getNameToken()->getText().data());
         if (!function)
         {
             llvm::Function::LinkageTypes linkageType;
@@ -299,8 +299,8 @@ public:
                 case cld::Semantics::Linkage::None: CLD_UNREACHABLE;
             }
             auto* ft = llvm::cast<llvm::FunctionType>(visit(functionDefinition.getType()));
-            function = llvm::Function::Create(ft, linkageType, -1,
-                                              llvm::StringRef{functionDefinition.getNameToken()->getText()}, &m_module);
+            function = llvm::Function::Create(ft, linkageType, -1, functionDefinition.getNameToken()->getText().data(),
+                                              &m_module);
             m_lvalues.emplace(&functionDefinition, function);
         }
         auto* bb = llvm::BasicBlock::Create(m_module.getContext(), "entry", function);
@@ -362,9 +362,10 @@ public:
                 }
                 else
                 {
-                    auto* size = llvm::ConstantInt::get(visit(cld::Semantics::PrimitiveType::createSizeT(
-                                                            false, false, m_programInterface.getLanguageOptions())),
-                                                        decl->getType().getSizeOf(m_programInterface));
+                    visit(cld::Semantics::PrimitiveType::createSizeT(false, false,
+                                                                     m_programInterface.getLanguageOptions()));
+                    auto* size =
+                        llvm::ConstantInt::get(m_builder.getInt64Ty(), decl->getType().getSizeOf(m_programInterface));
                     m_builder.CreateLifetimeStart(result->second, llvm::cast<llvm::ConstantInt>(size));
                 }
                 // TODO: Initializer
