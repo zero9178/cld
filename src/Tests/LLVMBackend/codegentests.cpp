@@ -7,6 +7,8 @@
 
 #include "Common.hpp"
 
+using namespace Catch::Matchers;
+
 TEST_CASE("LLVM codegen functions", "[LLVM]")
 {
     llvm::LLVMContext context;
@@ -528,77 +530,422 @@ TEST_CASE("LLVM codegen types", "[LLVM]")
     }
 }
 
-TEST_CASE("LLVM codegen expressions", "[LLVM]")
+TEST_CASE("LLVM codegen unary expressions", "[LLVM]")
 {
     llvm::LLVMContext context;
     auto module = std::make_unique<llvm::Module>("", context);
-    SECTION("Lvalue conversion")
+    SECTION("Address of")
     {
-        SECTION("Primitives")
+        auto program = generateProgram("int* foo(void) {\n"
+                                       "int i;\n"
+                                       "return &i;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int*(void)>(std::move(module), "foo") != nullptr);
+    }
+    SECTION("Dereference")
+    {
+        auto program = generateProgram("int foo(void) {\n"
+                                       "int i,f;\n"
+                                       "i = 5,f = 13;\n"
+                                       "int* iPtr;\n"
+                                       "iPtr = &i;\n"
+                                       "*iPtr = *iPtr + f;\n"
+                                       "return i;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int(void)>(std::move(module), "foo") == 18);
+    }
+    SECTION("Post increment")
+    {
+        SECTION("Integers")
         {
-            auto program = generateProgram("int foo(void) {\n"
-                                           "int r;\n"
-                                           "r = 5;\n"
-                                           "return r;\n"
+            SECTION("Signed")
+            {
+                auto program = generateProgram("int foo(void) {\n"
+                                               "int i;\n"
+                                               "i = 5;\n"
+                                               "return i++;\n"
+                                               "}");
+                cld::CGLLVM::generateLLVM(*module, program);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                CHECK(cld::Tests::computeInJIT<int(void)>(std::move(module), "foo") == 5);
+            }
+            SECTION("Unsigned")
+            {
+                auto program = generateProgram("int foo(void) {\n"
+                                               "unsigned int i;\n"
+                                               "i = 5;\n"
+                                               "return i++;\n"
+                                               "}");
+                cld::CGLLVM::generateLLVM(*module, program);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                CHECK(cld::Tests::computeInJIT<int(void)>(std::move(module), "foo") == 5);
+            }
+        }
+        SECTION("Floating point")
+        {
+            auto program = generateProgram("float foo(void) {\n"
+                                           "float i;\n"
+                                           "i = 5;\n"
+                                           "return i++;\n"
                                            "}");
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
             REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
-            CHECK(cld::Tests::computeInJIT<int(void)>(std::move(module), "foo") == 5);
+            CHECK(cld::Tests::computeInJIT<float(void)>(std::move(module), "foo") == 5.0f);
         }
-        SECTION("Array")
+    }
+    SECTION("Post decrement")
+    {
+        SECTION("Integers")
         {
-            auto program = generateProgram("void* foo(void) {\n"
-                                           "int r[3];\n"
-                                           "return r;\n"
+            SECTION("Signed")
+            {
+                auto program = generateProgram("int foo(void) {\n"
+                                               "int i;\n"
+                                               "i = 5;\n"
+                                               "return i--;\n"
+                                               "}");
+                cld::CGLLVM::generateLLVM(*module, program);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                CHECK(cld::Tests::computeInJIT<int(void)>(std::move(module), "foo") == 5);
+            }
+            SECTION("Unsigned")
+            {
+                auto program = generateProgram("int foo(void) {\n"
+                                               "unsigned int i;\n"
+                                               "i = 5;\n"
+                                               "return i--;\n"
+                                               "}");
+                cld::CGLLVM::generateLLVM(*module, program);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                CHECK(cld::Tests::computeInJIT<int(void)>(std::move(module), "foo") == 5);
+            }
+        }
+        SECTION("Floating point")
+        {
+            auto program = generateProgram("float foo(void) {\n"
+                                           "float i;\n"
+                                           "i = 5;\n"
+                                           "return i--;\n"
                                            "}");
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
             REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
-            CHECK(cld::Tests::computeInJIT<void*()>(std::move(module), "foo") != nullptr);
+            CHECK(cld::Tests::computeInJIT<float(void)>(std::move(module), "foo") == 5.0f);
         }
-        SECTION("Function")
+    }
+    SECTION("Pre increment")
+    {
+        SECTION("Integers")
         {
-            auto program = generateProgram("void bar(void) {return;}\n"
+            SECTION("Signed")
+            {
+                auto program = generateProgram("int foo(void) {\n"
+                                               "int i;\n"
+                                               "i = 5;\n"
+                                               "return ++i;\n"
+                                               "}");
+                cld::CGLLVM::generateLLVM(*module, program);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                CHECK(cld::Tests::computeInJIT<int(void)>(std::move(module), "foo") == 6);
+            }
+            SECTION("Unsigned")
+            {
+                auto program = generateProgram("int foo(void) {\n"
+                                               "unsigned int i;\n"
+                                               "i = 5;\n"
+                                               "return ++i;\n"
+                                               "}");
+                cld::CGLLVM::generateLLVM(*module, program);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                CHECK(cld::Tests::computeInJIT<int(void)>(std::move(module), "foo") == 6);
+            }
+        }
+        SECTION("Floating point")
+        {
+            auto program = generateProgram("float foo(void) {\n"
+                                           "float i;\n"
+                                           "i = 5;\n"
+                                           "return ++i;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<float(void)>(std::move(module), "foo") == 6.0f);
+        }
+    }
+    SECTION("Pre decrement")
+    {
+        SECTION("Integers")
+        {
+            SECTION("Signed")
+            {
+                auto program = generateProgram("int foo(void) {\n"
+                                               "int i;\n"
+                                               "i = 5;\n"
+                                               "return --i;\n"
+                                               "}");
+                cld::CGLLVM::generateLLVM(*module, program);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                CHECK(cld::Tests::computeInJIT<int(void)>(std::move(module), "foo") == 4);
+            }
+            SECTION("Unsigned")
+            {
+                auto program = generateProgram("int foo(void) {\n"
+                                               "unsigned int i;\n"
+                                               "i = 5;\n"
+                                               "return --i;\n"
+                                               "}");
+                cld::CGLLVM::generateLLVM(*module, program);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                CHECK(cld::Tests::computeInJIT<int(void)>(std::move(module), "foo") == 4);
+            }
+        }
+        SECTION("Floating point")
+        {
+            auto program = generateProgram("float foo(void) {\n"
+                                           "float i;\n"
+                                           "i = 5;\n"
+                                           "return --i;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<float(void)>(std::move(module), "foo") == 4.0f);
+        }
+    }
+    SECTION("Minus")
+    {
+        SECTION("Integers")
+        {
+            SECTION("Signed")
+            {
+                auto program = generateProgram("int foo(void) {\n"
+                                               "int i;\n"
+                                               "i = 5;\n"
+                                               "return -i;\n"
+                                               "}");
+                cld::CGLLVM::generateLLVM(*module, program);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                CHECK(cld::Tests::computeInJIT<int(void)>(std::move(module), "foo") == -5);
+            }
+            SECTION("Unsigned")
+            {
+                auto program = generateProgram("unsigned int foo(void) {\n"
+                                               "unsigned int i;\n"
+                                               "i = 5;\n"
+                                               "return -i;\n"
+                                               "}");
+                cld::CGLLVM::generateLLVM(*module, program);
+                CAPTURE(*module);
+                CHECK(cld::Tests::computeInJIT<unsigned int(void)>(std::move(module), "foo")
+                      == static_cast<unsigned int>(-5));
+            }
+        }
+        SECTION("Floating point")
+        {
+            auto program = generateProgram("float foo(void) {\n"
+                                           "float i;\n"
+                                           "i = 5;\n"
+                                           "return -i;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<float(void)>(std::move(module), "foo") == -5);
+        }
+    }
+    SECTION("Negate")
+    {
+        auto program = generateProgram("unsigned int foo(void) {\n"
+                                       "unsigned int i;\n"
+                                       "i = 5;\n"
+                                       "return ~i;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        CHECK(cld::Tests::computeInJIT<unsigned int(void)>(std::move(module), "foo") == ~5u);
+    }
+}
+
+TEST_CASE("LLVM codegen member access", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    auto module = std::make_unique<llvm::Module>("", context);
+    SECTION("Struct")
+    {
+        SECTION("Simple struct")
+        {
+            auto program = generateProgram("typedef struct Point {\n"
+                                           "float x,y;\n"
+                                           "} Point;\n"
                                            "\n"
-                                           "void (*foo(void))(void) {\n"
-                                           "return bar;\n"
+                                           "float foo(void) {\n"
+                                           "    Point point;\n"
+                                           "    point.x = 5;\n"
+                                           "    point.y = 3;\n"
+                                           "    return point.x + point.y;\n"
                                            "}");
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
             REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
-            CHECK(cld::Tests::computeInJIT<void (*())()>(std::move(module), "foo") != nullptr);
+            CHECK(cld::Tests::computeInJIT<float(void)>(std::move(module), "foo") == 8.0f);
+        }
+        SECTION("Simple anonymous struct")
+        {
+            auto program = generateProgram("typedef struct{\n"
+                                           "float x,y;\n"
+                                           "} Point;\n"
+                                           "\n"
+                                           "float foo(void) {\n"
+                                           "    Point point;\n"
+                                           "    point.x = 5;\n"
+                                           "    point.y = 3;\n"
+                                           "    return point.x + point.y;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<float(void)>(std::move(module), "foo") == 8.0f);
+        }
+        SECTION("Bitfield")
+        {
+            auto program = generateProgram("struct A {\n"
+                                           "unsigned int f:13,r:13;\n"
+                                           "};\n"
+                                           "\n"
+                                           "int foo(void) {\n"
+                                           "struct A a;\n"
+                                           "a.r = 0xFFFF;\n"
+                                           "return a.r;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int(void)>(std::move(module), "foo") == 0x1FFF);
+        }
+        SECTION("As pointer")
+        {
+            SECTION("Simple struct")
+            {
+                auto program = generateProgram("typedef struct Point {\n"
+                                               "float x,y;\n"
+                                               "} Point;\n"
+                                               "\n"
+                                               "float foo(void) {\n"
+                                               "    Point point;\n"
+                                               "    Point* ptr;\n"
+                                               "    ptr = &point;"
+                                               "    ptr->x = 5;\n"
+                                               "    ptr->y = 3;\n"
+                                               "    return ptr->x + ptr->y;\n"
+                                               "}");
+                cld::CGLLVM::generateLLVM(*module, program);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                CHECK(cld::Tests::computeInJIT<float(void)>(std::move(module), "foo") == 8.0f);
+            }
+            SECTION("Simple anonymous struct")
+            {
+                auto program = generateProgram("typedef struct{\n"
+                                               "float x,y;\n"
+                                               "} Point;\n"
+                                               "\n"
+                                               "float foo(void) {\n"
+                                               "    Point point;\n"
+                                               "    Point* ptr;\n"
+                                               "    ptr = &point;"
+                                               "    ptr->x = 5;\n"
+                                               "    ptr->y = 3;\n"
+                                               "    return ptr->x + ptr->y;\n"
+                                               "}");
+                cld::CGLLVM::generateLLVM(*module, program);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                CHECK(cld::Tests::computeInJIT<float(void)>(std::move(module), "foo") == 8.0f);
+            }
+            SECTION("Bitfield")
+            {
+                auto program = generateProgram("struct A {\n"
+                                               "unsigned int f:13,r:13;\n"
+                                               "};\n"
+                                               "\n"
+                                               "int foo(void) {\n"
+                                               "struct A a;\n"
+                                               "struct A* ptr;\n"
+                                               "ptr = &a;\n"
+                                               "ptr->r = 0xFFFF;\n"
+                                               "return ptr->r;\n"
+                                               "}");
+                cld::CGLLVM::generateLLVM(*module, program);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                CHECK(cld::Tests::computeInJIT<int(void)>(std::move(module), "foo") == 0x1FFF);
+            }
         }
     }
-    SECTION("Unary")
+}
+
+TEST_CASE("LLVM codegen lvalues", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    auto module = std::make_unique<llvm::Module>("", context);
+    SECTION("Primitives")
     {
-        SECTION("Address of")
-        {
-            auto program = generateProgram("int* foo(void) {\n"
-                                           "int i;\n"
-                                           "return &i;\n"
-                                           "}");
-            cld::CGLLVM::generateLLVM(*module, program);
-            CAPTURE(*module);
-            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
-            CHECK(cld::Tests::computeInJIT<int*(void)>(std::move(module), "foo") != nullptr);
-        }
-        SECTION("Dereference")
-        {
-            auto program = generateProgram("int foo(void) {\n"
-                                           "int i,f;\n"
-                                           "i = 5,f = 13;\n"
-                                           "int* iPtr;\n"
-                                           "iPtr = &i;\n"
-                                           "*iPtr = *iPtr + f;\n"
-                                           "return i;\n"
-                                           "}");
-            cld::CGLLVM::generateLLVM(*module, program);
-            CAPTURE(*module);
-            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
-            CHECK(cld::Tests::computeInJIT<int(void)>(std::move(module), "foo") == 18);
-        }
+        auto program = generateProgram("int foo(void) {\n"
+                                       "int r;\n"
+                                       "r = 5;\n"
+                                       "return r;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int(void)>(std::move(module), "foo") == 5);
     }
+    SECTION("Array")
+    {
+        auto program = generateProgram("void* foo(void) {\n"
+                                       "int r[3];\n"
+                                       "return r;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<void*()>(std::move(module), "foo") != nullptr);
+    }
+    SECTION("Function")
+    {
+        auto program = generateProgram("void bar(void) {return;}\n"
+                                       "\n"
+                                       "void (*foo(void))(void) {\n"
+                                       "return bar;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<void (*())()>(std::move(module), "foo") != nullptr);
+    }
+}
+
+TEST_CASE("LLVM codegen binary expressions", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    auto module = std::make_unique<llvm::Module>("", context);
     SECTION("Multiply")
     {
         SECTION("Integers")

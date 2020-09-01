@@ -80,7 +80,38 @@ auto computeInJIT(std::unique_ptr<llvm::Module>&& module, std::string_view funct
         return result;
     }
 }
+
+class ContainsIR : public Catch::MatcherBase<llvm::Module>
+{
+    std::string m_pattern;
+
+public:
+    explicit ContainsIR(std::string pattern) : m_pattern(std::move(pattern)) {}
+
+    bool match(const llvm::Module&) const override
+    {
+        return false;
+    }
+
+protected:
+    std::string describe() const override
+    {
+        return std::string();
+    }
+};
+
+inline std::string printModule(const llvm::Module& arg)
+{
+    std::string s;
+    llvm::raw_string_ostream ss(s);
+    arg.print(ss, nullptr);
+    ss.flush();
+    return s;
+}
+
 } // namespace cld::Tests
+
+using namespace cld::Tests;
 
 namespace Catch
 {

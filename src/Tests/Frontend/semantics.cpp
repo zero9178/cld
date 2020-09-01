@@ -2,6 +2,7 @@
 
 #include <Frontend/Compiler/ErrorMessages.hpp>
 #include <Frontend/Compiler/Parser.hpp>
+#include <Frontend/Compiler/Program.hpp>
 #include <Frontend/Compiler/SemanticAnalysis.hpp>
 #include <Frontend/Compiler/SourceObject.hpp>
 
@@ -812,13 +813,13 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
         CHECK(anon.getFields()[0].name == "i");
         CHECK(*anon.getFields()[0].type
               == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-        CHECK_FALSE(anon.getFields()[0].bitFieldSize);
+        CHECK_FALSE(anon.getFields()[0].bitFieldBounds);
         CHECK(anon.getFields()[1].name == "f");
         CHECK(*anon.getFields()[1].type == cld::Semantics::PrimitiveType::createFloat(false, false));
-        CHECK_FALSE(anon.getFields()[1].bitFieldSize);
+        CHECK_FALSE(anon.getFields()[1].bitFieldBounds);
         CHECK(anon.getFields()[2].name == "r");
         CHECK(*anon.getFields()[2].type == cld::Semantics::PrimitiveType::createFloat(false, false));
-        CHECK_FALSE(anon.getFields()[2].bitFieldSize);
+        CHECK_FALSE(anon.getFields()[2].bitFieldBounds);
     }
     SECTION("Anonymous union")
     {
@@ -834,13 +835,13 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
         CHECK(anon.getFields()[0].name == "i");
         CHECK(*anon.getFields()[0].type
               == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-        CHECK_FALSE(anon.getFields()[0].bitFieldSize);
+        CHECK_FALSE(anon.getFields()[0].bitFieldBounds);
         CHECK(anon.getFields()[1].name == "f");
         CHECK(*anon.getFields()[1].type == cld::Semantics::PrimitiveType::createFloat(false, false));
-        CHECK_FALSE(anon.getFields()[1].bitFieldSize);
+        CHECK_FALSE(anon.getFields()[1].bitFieldBounds);
         CHECK(anon.getFields()[2].name == "r");
         CHECK(*anon.getFields()[2].type == cld::Semantics::PrimitiveType::createFloat(false, false));
-        CHECK_FALSE(anon.getFields()[2].bitFieldSize);
+        CHECK_FALSE(anon.getFields()[2].bitFieldBounds);
     }
     SECTION("Flexible array member")
     {
@@ -909,7 +910,6 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
             }
             SECTION("System V bitfields")
             {
-                // Windows uses discrete bitfields
                 auto [translationUnit, errors] = generateSemantics("struct A\n"
                                                                    "{\n"
                                                                    "    int a : 8;\n"
@@ -931,6 +931,55 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
                 auto& array = cld::get<cld::Semantics::ArrayType>(decl->getType().get());
                 CHECK(array.getSize() == 4);
             }
+        }
+        SECTION("Layout and bounds")
+        {
+            std::string_view source = "struct A\n"
+                                      "{\n"
+                                      "    int a : 8;\n"
+                                      "    int b : 3;\n"
+                                      "    int c : 1;\n"
+                                      "    int d : 1;\n"
+                                      "    int e : 1;\n"
+                                      "    _Bool f : 1;\n"
+                                      "};";
+            bool errors = false;
+            auto tokens = cld::Lexer::tokenize(cld::to_string(source), x64windowsMsvc, &llvm::errs(), &errors);
+            REQUIRE_FALSE(errors);
+            auto ctokens = cld::Lexer::toCTokens(tokens, &llvm::errs(), &errors);
+            REQUIRE_FALSE(errors);
+            auto tree = cld::Parser::buildTree(ctokens, &llvm::errs(), &errors);
+            REQUIRE_FALSE(errors);
+            auto program = cld::Semantics::analyse(tree, std::move(ctokens), &llvm::errs(), &errors);
+            REQUIRE_FALSE(errors);
+            auto* structDef = program.getStructDefinition("A", 0);
+            REQUIRE(structDef);
+            REQUIRE(structDef->getFields().size() == 6);
+            CHECK(structDef->getLayout().size() == 2);
+
+            CHECK(structDef->getFields()[0].layoutIndex == 0);
+            REQUIRE(structDef->getFields()[0].bitFieldBounds);
+            CHECK(*structDef->getFields()[0].bitFieldBounds == std::pair{0u, 8u});
+
+            CHECK(structDef->getFields()[1].layoutIndex == 0);
+            REQUIRE(structDef->getFields()[1].bitFieldBounds);
+            CHECK(*structDef->getFields()[1].bitFieldBounds == std::pair{8u, 11u});
+
+            CHECK(structDef->getFields()[2].layoutIndex == 0);
+            REQUIRE(structDef->getFields()[2].bitFieldBounds);
+            CHECK(*structDef->getFields()[2].bitFieldBounds == std::pair{11u, 12u});
+
+            CHECK(structDef->getFields()[3].layoutIndex == 0);
+            REQUIRE(structDef->getFields()[3].bitFieldBounds);
+            CHECK(*structDef->getFields()[3].bitFieldBounds == std::pair{12u, 13u});
+
+            CHECK(structDef->getFields()[4].layoutIndex == 0);
+            REQUIRE(structDef->getFields()[4].bitFieldBounds);
+            CHECK(*structDef->getFields()[4].bitFieldBounds == std::pair{13u, 14u});
+
+            CHECK(structDef->getFields()[5].layoutIndex == 1);
+            REQUIRE(structDef->getFields()[5].bitFieldBounds);
+            CHECK(*structDef->getFields()[5].bitFieldBounds == std::pair{0u, 1u});
         }
         SEMA_PRODUCES("struct A {\n"
                       " float i :5;\n"

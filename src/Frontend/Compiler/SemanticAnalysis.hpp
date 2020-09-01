@@ -182,10 +182,6 @@ class SemanticAnalysis final : public ProgramInterface
 
     void arithmeticConversion(Type& lhs, Expression& rhs) const;
 
-    llvm::ArrayRef<Field> getFields(const Type& recordType) const;
-
-    bool isBitfieldAccess(const Expression& expression) const;
-
     bool isModifiableLValue(const Expression& expression) const;
 
     bool isConst(const Type& type) const;

@@ -1,6 +1,8 @@
 
 #pragma once
 
+#include <llvm/ADT/ArrayRef.h>
+
 #include <unordered_map>
 
 #include <tsl/ordered_map.h>
@@ -110,6 +112,10 @@ public:
 
     const UnionDefinition* CLD_NULLABLE getUnionDefinition(std::string_view name, std::uint64_t scopeOrId,
                                                            std::uint64_t* idOut = nullptr) const;
+
+    llvm::ArrayRef<Field> getFields(const Type& recordType) const;
+
+    bool isBitfieldAccess(const Expression& expression) const;
 
     const std::vector<Scope>& getScopes() const
     {

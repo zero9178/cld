@@ -523,9 +523,17 @@ bool cld::Semantics::isScalar(const Type& type)
 
 bool cld::Semantics::isRecord(const cld::Semantics::Type& type)
 {
-    return std::holds_alternative<StructType>(type.get()) || std::holds_alternative<UnionType>(type.get())
-           || std::holds_alternative<AnonymousStructType>(type.get())
-           || std::holds_alternative<AnonymousUnionType>(type.get());
+    return isUnion(type) || isStruct(type);
+}
+
+bool cld::Semantics::isStruct(const cld::Semantics::Type& type)
+{
+    return std::holds_alternative<StructType>(type.get()) || std::holds_alternative<AnonymousStructType>(type.get());
+}
+
+bool cld::Semantics::isUnion(const cld::Semantics::Type& type)
+{
+    return std::holds_alternative<UnionType>(type.get()) || std::holds_alternative<AnonymousUnionType>(type.get());
 }
 
 bool cld::Semantics::isBool(const cld::Semantics::Type& type)
@@ -688,7 +696,7 @@ std::size_t cld::Semantics::AnonymousEnumType::getAlignOf(const ProgramInterface
 
 bool cld::Semantics::Field::operator==(const cld::Semantics::Field& rhs) const
 {
-    return std::tie(type, name, bitFieldSize) == std::tie(rhs.type, rhs.name, rhs.bitFieldSize);
+    return std::tie(type, name, bitFieldBounds) == std::tie(rhs.type, rhs.name, rhs.bitFieldBounds);
 }
 
 bool cld::Semantics::Field::operator!=(const cld::Semantics::Field& rhs) const

@@ -460,7 +460,8 @@ public:
                     return m_builder.CreateInBoundsGEP(value, {zero, zero});
                 }
                 else if (std::holds_alternative<cld::Semantics::FunctionType>(
-                             conversion.getExpression().getType().get()))
+                             conversion.getExpression().getType().get())
+                         || m_programInterface.isBitfieldAccess(conversion.getExpression()))
                 {
                     return value;
                 }
@@ -536,7 +537,57 @@ public:
         }
     }
 
-    llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::MemberAccess& constant) {}
+    llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::MemberAccess& memberAccess)
+    {
+        auto* value = visit(memberAccess.getRecordExpression());
+        auto& type =
+            std::holds_alternative<cld::Semantics::PointerType>(memberAccess.getRecordExpression().getType().get()) ?
+                cld::get<cld::Semantics::PointerType>(memberAccess.getRecordExpression().getType().get())
+                    .getElementType() :
+                memberAccess.getRecordExpression().getType();
+        if (std::holds_alternative<cld::Semantics::PointerType>(memberAccess.getRecordExpression().getType().get()))
+        {
+            value = m_builder.CreateLoad(value, memberAccess.getRecordExpression().getType().isVolatile());
+        }
+        if (cld::Semantics::isStruct(type))
+        {
+            auto index = memberAccess.getMemberIndex();
+            llvm::ArrayRef<cld::Semantics::Field> fields;
+            if (std::holds_alternative<cld::Semantics::StructType>(type.get()))
+            {
+                auto& structType = cld::get<cld::Semantics::StructType>(type.get());
+                auto* structDef =
+                    m_programInterface.getStructDefinition(structType.getName(), structType.getScopeOrId());
+                CLD_ASSERT(structDef);
+                fields = structDef->getFields();
+            }
+            else if (std::holds_alternative<cld::Semantics::AnonymousStructType>(type.get()))
+            {
+                auto& structType = cld::get<cld::Semantics::AnonymousStructType>(type.get());
+                fields = structType.getFields();
+            }
+            auto* zero = m_builder.getInt64(0);
+            auto* member = m_builder.getInt32(fields[index].layoutIndex);
+            if (!fields[index].bitFieldBounds)
+            {
+                return m_builder.CreateInBoundsGEP(value, {zero, member});
+            }
+            auto* field = m_builder.CreateInBoundsGEP(value, {zero, member});
+            auto* loaded = m_builder.CreateLoad(field, expression.getType().isVolatile());
+            auto upLeft = loaded->getType()->getPrimitiveSizeInBits() - fields[index].bitFieldBounds->second;
+            auto* shl = m_builder.CreateShl(loaded, llvm::ConstantInt::get(loaded->getType(), upLeft));
+            auto* shrConstant = llvm::ConstantInt::get(loaded->getType(), upLeft + fields[index].bitFieldBounds->first);
+            if (cld::get<cld::Semantics::PrimitiveType>(expression.getType().get()).isSigned())
+            {
+                return m_builder.CreateAShr(shl, shrConstant);
+            }
+            else
+            {
+                return m_builder.CreateLShr(shl, shrConstant);
+            }
+        }
+        CLD_UNREACHABLE;
+    }
 
     llvm::Value* visit(const cld::Semantics::Expression&, const cld::Semantics::BinaryOperator& binaryExpression)
     {
@@ -674,19 +725,19 @@ public:
                     if (cld::get<cld::Semantics::PrimitiveType>(unaryOperator.getOperand().getType().get()).isSigned())
                     {
                         auto* result = m_builder.CreateNSWAdd(prev, llvm::ConstantInt::get(prev->getType(), 1));
-                        m_builder.CreateStore(value, result);
+                        m_builder.CreateStore(result, value);
                     }
                     else
                     {
                         auto* result = m_builder.CreateAdd(prev, llvm::ConstantInt::get(prev->getType(), 1));
-                        m_builder.CreateStore(value, result);
+                        m_builder.CreateStore(result, value);
                     }
                 }
                 else if (!std::holds_alternative<cld::Semantics::PointerType>(
                              unaryOperator.getOperand().getType().get()))
                 {
                     auto* result = m_builder.CreateFAdd(prev, llvm::ConstantFP::get(prev->getType(), 1));
-                    m_builder.CreateStore(value, result);
+                    m_builder.CreateStore(result, value);
                 }
                 else
                 {
@@ -702,19 +753,19 @@ public:
                     if (cld::get<cld::Semantics::PrimitiveType>(unaryOperator.getOperand().getType().get()).isSigned())
                     {
                         auto* result = m_builder.CreateNSWSub(prev, llvm::ConstantInt::get(prev->getType(), 1));
-                        m_builder.CreateStore(value, result);
+                        m_builder.CreateStore(result, value);
                     }
                     else
                     {
                         auto* result = m_builder.CreateSub(prev, llvm::ConstantInt::get(prev->getType(), 1));
-                        m_builder.CreateStore(value, result);
+                        m_builder.CreateStore(result, value);
                     }
                 }
                 else if (!std::holds_alternative<cld::Semantics::PointerType>(
                              unaryOperator.getOperand().getType().get()))
                 {
                     auto* result = m_builder.CreateFSub(prev, llvm::ConstantFP::get(prev->getType(), 1));
-                    m_builder.CreateStore(value, result);
+                    m_builder.CreateStore(result, value);
                 }
                 else
                 {
@@ -731,19 +782,19 @@ public:
                     if (cld::get<cld::Semantics::PrimitiveType>(unaryOperator.getOperand().getType().get()).isSigned())
                     {
                         result = m_builder.CreateNSWAdd(prev, llvm::ConstantInt::get(prev->getType(), 1));
-                        m_builder.CreateStore(value, result);
+                        m_builder.CreateStore(result, value);
                     }
                     else
                     {
                         result = m_builder.CreateAdd(prev, llvm::ConstantInt::get(prev->getType(), 1));
-                        m_builder.CreateStore(value, result);
+                        m_builder.CreateStore(result, value);
                     }
                 }
                 else if (!std::holds_alternative<cld::Semantics::PointerType>(
                              unaryOperator.getOperand().getType().get()))
                 {
                     result = m_builder.CreateFAdd(prev, llvm::ConstantFP::get(prev->getType(), 1));
-                    m_builder.CreateStore(value, result);
+                    m_builder.CreateStore(result, value);
                 }
                 else
                 {
@@ -760,19 +811,19 @@ public:
                     if (cld::get<cld::Semantics::PrimitiveType>(unaryOperator.getOperand().getType().get()).isSigned())
                     {
                         result = m_builder.CreateNSWSub(prev, llvm::ConstantInt::get(prev->getType(), 1));
-                        m_builder.CreateStore(value, result);
+                        m_builder.CreateStore(result, value);
                     }
                     else
                     {
                         result = m_builder.CreateSub(prev, llvm::ConstantInt::get(prev->getType(), 1));
-                        m_builder.CreateStore(value, result);
+                        m_builder.CreateStore(result, value);
                     }
                 }
                 else if (!std::holds_alternative<cld::Semantics::PointerType>(
                              unaryOperator.getOperand().getType().get()))
                 {
                     result = m_builder.CreateFSub(prev, llvm::ConstantFP::get(prev->getType(), 1));
-                    m_builder.CreateStore(value, result);
+                    m_builder.CreateStore(result, value);
                 }
                 else
                 {
@@ -815,12 +866,40 @@ public:
 
     llvm::Value* visit(const cld::Semantics::Expression&, const cld::Semantics::Assignment& assignment)
     {
-        auto* lhs = visit(assignment.getLeftExpression());
-        auto* rhs = visit(assignment.getRightExpression());
         // TODO: Special cases
-        m_builder.CreateStore(rhs, lhs, assignment.getLeftExpression().getType().isVolatile());
-        return m_builder.CreateLoad(lhs->getType()->getPointerElementType(), lhs,
-                                    assignment.getLeftExpression().getType().isVolatile());
+        if (!m_programInterface.isBitfieldAccess(assignment.getLeftExpression()))
+        {
+            auto* lhs = visit(assignment.getLeftExpression());
+            auto* rhs = visit(assignment.getRightExpression());
+            m_builder.CreateStore(rhs, lhs, assignment.getLeftExpression().getType().isVolatile());
+            return m_builder.CreateLoad(lhs->getType()->getPointerElementType(), lhs,
+                                        assignment.getLeftExpression().getType().isVolatile());
+        }
+        auto& memberAccess = cld::get<cld::Semantics::MemberAccess>(assignment.getLeftExpression().get());
+        auto* lhsRecord = visit(memberAccess.getRecordExpression());
+        auto& type =
+            std::holds_alternative<cld::Semantics::PointerType>(memberAccess.getRecordExpression().getType().get()) ?
+                cld::get<cld::Semantics::PointerType>(memberAccess.getRecordExpression().getType().get())
+                    .getElementType() :
+                memberAccess.getRecordExpression().getType();
+        if (std::holds_alternative<cld::Semantics::PointerType>(memberAccess.getRecordExpression().getType().get()))
+        {
+            lhsRecord = m_builder.CreateLoad(lhsRecord, memberAccess.getRecordExpression().getType().isVolatile());
+        }
+        auto* rhsValue = visit(assignment.getRightExpression());
+
+        auto& field = m_programInterface.getFields(type)[memberAccess.getMemberIndex()];
+        auto* zero = m_builder.getInt64(0);
+        auto* member = m_builder.getInt32(field.layoutIndex);
+        auto* fieldPtr = m_builder.CreateInBoundsGEP(lhsRecord, {zero, member});
+        auto* loaded = m_builder.CreateLoad(fieldPtr, type.isVolatile());
+        auto size = field.bitFieldBounds->second - field.bitFieldBounds->first;
+        rhsValue = m_builder.CreateAnd(rhsValue, llvm::ConstantInt::get(rhsValue->getType(), (1u << size) - 1));
+        rhsValue =
+            m_builder.CreateShl(rhsValue, llvm::ConstantInt::get(rhsValue->getType(), field.bitFieldBounds->first));
+        auto* result = m_builder.CreateOr(loaded, rhsValue);
+        m_builder.CreateStore(result, fieldPtr, type.isVolatile());
+        return m_builder.CreateLoad(fieldPtr, type.isVolatile());
     }
 
     llvm::Value* visit(const cld::Semantics::Expression&, const cld::Semantics::CommaExpression& commaExpression)

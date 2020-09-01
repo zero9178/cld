@@ -672,7 +672,7 @@ cld::Semantics::Type
                     }
                     type = Type{};
                 }
-                std::optional<std::uint8_t> value;
+                std::optional<std::pair<std::uint32_t, std::uint32_t>> value;
                 if (size)
                 {
                     bool hadValidType = true;
@@ -734,7 +734,7 @@ cld::Semantics::Type
                         log(Errors::Semantics::BITFIELD_WITH_SIZE_ZERO_MAY_NOT_HAVE_A_NAME.args(
                             *declarator, m_sourceInterface, *declarator));
                     }
-                    value = result->toUInt();
+                    value.emplace(0, result->toUInt());
                 }
                 std::string_view fieldName = declarator ? declaratorToLoc(*declarator)->getText() : "";
                 fields.push_back(
@@ -759,7 +759,7 @@ cld::Semantics::Type
                     // TODO: I don't think this should be part of the layout but I am not sure?
                     break;
                 }
-                if (!iter->bitFieldSize)
+                if (!iter->bitFieldBounds)
                 {
                     auto alignment = iter->type->getAlignOf(*this);
                     currentAlignment = std::max(currentAlignment, alignment);
@@ -778,20 +778,23 @@ cld::Semantics::Type
                 bool lastWasZero = false;
                 std::uint64_t storageLeft = 0;
                 std::uint64_t prevSize = 0;
-                for (; iter != fields.end() && iter->bitFieldSize;)
+                std::uint64_t used = 0;
+                for (; iter != fields.end() && iter->bitFieldBounds;)
                 {
-                    if (*iter->bitFieldSize == 0)
+                    if (iter->bitFieldBounds->second == 0)
                     {
                         lastWasZero = true;
                         iter = fields.erase(iter);
                         continue;
                     }
-                    iter->layoutIndex = layout.size();
                     std::size_t size = iter->type->getSizeOf(*this);
-                    if (!lastWasZero && storageLeft > *iter->bitFieldSize
+                    if (!lastWasZero && storageLeft > iter->bitFieldBounds->second
                         && (!m_sourceInterface.getLanguageOptions().discreteBitfields || prevSize == size))
                     {
-                        storageLeft -= *iter->bitFieldSize;
+                        iter->layoutIndex = layout.size() - 1;
+                        storageLeft -= iter->bitFieldBounds->second;
+                        iter->bitFieldBounds.emplace(used, used + iter->bitFieldBounds->second);
+                        used = iter->bitFieldBounds->second;
                         iter++;
                         continue;
                     }
@@ -805,7 +808,11 @@ cld::Semantics::Type
                         currentSize += alignment - rest;
                     }
                     prevSize = size;
-                    storageLeft = cld::get<PrimitiveType>(iter->type->get()).getBitCount() - *iter->bitFieldSize;
+                    storageLeft =
+                        cld::get<PrimitiveType>(iter->type->get()).getBitCount() - iter->bitFieldBounds->second;
+                    used = iter->bitFieldBounds->second;
+                    iter->bitFieldBounds.emplace(0, used);
+                    iter->layoutIndex = layout.size();
                     layout.push_back(*iter->type);
                     iter++;
                 }

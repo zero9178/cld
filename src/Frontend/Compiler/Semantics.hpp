@@ -399,7 +399,7 @@ struct Field
 {
     std::shared_ptr<const Type> type;
     std::string_view name;
-    std::optional<std::uint8_t> bitFieldSize;
+    std::optional<std::pair<std::uint32_t, std::uint32_t>> bitFieldBounds;
     std::size_t layoutIndex;
 
     [[nodiscard]] bool operator==(const Field& rhs) const;
@@ -1963,6 +1963,10 @@ Program analyse(const Syntax::TranslationUnit& parseTree, CSourceObject&& ctoken
 [[nodiscard]] bool isScalar(const Type& type);
 
 [[nodiscard]] bool isRecord(const Type& type);
+
+[[nodiscard]] bool isStruct(const Type& type);
+
+[[nodiscard]] bool isUnion(const Type& type);
 
 [[nodiscard]] bool isBool(const Type& type);
 

@@ -17,49 +17,6 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::removeQualifiers(Type typ
     return type;
 }
 
-llvm::ArrayRef<cld::Semantics::Field>
-    cld::Semantics::SemanticAnalysis::getFields(const cld::Semantics::Type& recordType) const
-{
-    if (std::holds_alternative<AnonymousUnionType>(recordType.get()))
-    {
-        return cld::get<AnonymousUnionType>(recordType.get()).getFields();
-    }
-    if (std::holds_alternative<AnonymousStructType>(recordType.get()))
-    {
-        return cld::get<AnonymousStructType>(recordType.get()).getFields();
-    }
-    if (std::holds_alternative<StructType>(recordType.get()))
-    {
-        auto& structType = cld::get<StructType>(recordType.get());
-        auto* structDef = getStructDefinition(structType.getName(), structType.getScopeOrId());
-        CLD_ASSERT(structDef);
-        return structDef->getFields();
-    }
-    if (std::holds_alternative<UnionType>(recordType.get()))
-    {
-        auto& unionType = cld::get<UnionType>(recordType.get());
-        auto* unionDef = getUnionDefinition(unionType.getName(), unionType.getScopeOrId());
-        CLD_ASSERT(unionDef);
-        return unionDef->getFields();
-    }
-    CLD_UNREACHABLE;
-}
-
-bool cld::Semantics::SemanticAnalysis::isBitfieldAccess(const Expression& expression) const
-{
-    if (!std::holds_alternative<MemberAccess>(expression.get()))
-    {
-        return false;
-    }
-    auto& mem = cld::get<MemberAccess>(expression.get());
-    auto& expr = mem.getRecordExpression();
-    auto& recordType = std::holds_alternative<PointerType>(expr.getType().get()) ?
-                           cld::get<PointerType>(expr.getType().get()).getElementType() :
-                           expr.getType();
-    auto fields = getFields(recordType);
-    return static_cast<bool>(fields[mem.getMemberIndex()].bitFieldSize);
-}
-
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::Expression& node)
 {
     if (node.getOptionalAssignmentExpressions().empty())
