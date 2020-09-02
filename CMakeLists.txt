@@ -9,18 +9,22 @@ endif ()
 
 cmake_policy(SET CMP0069 NEW)
 
-project(cld CXX)
-set(CMAKE_CXX_STANDARD 17)
-option(CLD_BUILD_TESTS "Build tests" ON)
-option(CLD_ENABLE_ASSERTS "Enable asserts in Release mode" ${CLD_FUZZER})
-
-if (CLD_ENABLE_ASSERTS)
-    add_compile_definitions(CLD_USE_ASSERTS)
-endif ()
-
 set(DEFAULT_CLD_USE_EXCEPTIONS ON)
 if (MSVC AND CLD_FUZZER)
     set(DEFAULT_CLD_USE_EXCEPTIONS OFF)
+endif ()
+
+project(cld CXX)
+set(CMAKE_CXX_STANDARD 17)
+option(CLD_BUILD_TESTS "Build tests" ON)
+option(CLD_FUZZER "Build compiler with libfuzzer instrumentation and fuzzers" OFF)
+option(CLD_ENABLE_ASSERTS "Enable asserts in Release mode" ${CLD_FUZZER})
+option(CLD_USE_EXCEPTIONS "Use exceptions" "${DEFAULT_CLD_USE_EXCEPTIONS}")
+option(CLD_COVERAGE "Compile with coverage" OFF)
+option(CLD_DEFAULT_TARGET "Default compiler target" "")
+
+if (CLD_ENABLE_ASSERTS)
+    add_compile_definitions(CLD_USE_ASSERTS)
 endif ()
 
 if (DEFINED CLD_SANITIZER)
@@ -35,7 +39,6 @@ if (DEFINED CLD_SANITIZER)
     endif ()
 endif ()
 
-option(CLD_USE_EXCEPTIONS "Use exceptions" "${DEFAULT_CLD_USE_EXCEPTIONS}")
 
 if (WIN32)
     if (NOT MSVC)
@@ -68,8 +71,6 @@ if (NOT LLVM_ENABLE_RTTI)
     endif ()
 endif ()
 
-
-option(CLD_COVERAGE "Compile with coverage" OFF)
 if (CLD_COVERAGE)
     message(STATUS "Compiling with Coverage")
     if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
@@ -190,13 +191,14 @@ if (${CLD_BUILD_TESTS})
         else ()
             set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-omit-frame-pointer -fsanitize=fuzzer-no-link,undefined,address -fno-sanitize-recover=all")
         endif ()
-        add_subdirectory(src/Fuzzer)
+        add_subdirectory(src/cld/Fuzzer)
     endif ()
-    add_subdirectory(src/Tests)
+    add_subdirectory(src/cld/Tests)
 endif ()
 
-add_subdirectory(src/Frontend)
-add_subdirectory(src/LLVMBackend)
+add_subdirectory(src/cld/Common)
+add_subdirectory(src/cld/Frontend)
+add_subdirectory(src/cld/LLVMBackend)
 
 if (NOT CLD_FUZZER)
     #    add_executable(cld src/main.cpp)
