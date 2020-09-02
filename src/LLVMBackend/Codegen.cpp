@@ -549,44 +549,38 @@ public:
         {
             value = m_builder.CreateLoad(value, memberAccess.getRecordExpression().getType().isVolatile());
         }
+        auto index = memberAccess.getMemberIndex();
+        llvm::ArrayRef<cld::Semantics::Field> fields = m_programInterface.getFields(type);
+
+        llvm::Value* field = nullptr;
         if (cld::Semantics::isStruct(type))
         {
-            auto index = memberAccess.getMemberIndex();
-            llvm::ArrayRef<cld::Semantics::Field> fields;
-            if (std::holds_alternative<cld::Semantics::StructType>(type.get()))
-            {
-                auto& structType = cld::get<cld::Semantics::StructType>(type.get());
-                auto* structDef =
-                    m_programInterface.getStructDefinition(structType.getName(), structType.getScopeOrId());
-                CLD_ASSERT(structDef);
-                fields = structDef->getFields();
-            }
-            else if (std::holds_alternative<cld::Semantics::AnonymousStructType>(type.get()))
-            {
-                auto& structType = cld::get<cld::Semantics::AnonymousStructType>(type.get());
-                fields = structType.getFields();
-            }
             auto* zero = m_builder.getInt64(0);
             auto* member = m_builder.getInt32(fields[index].layoutIndex);
-            if (!fields[index].bitFieldBounds)
-            {
-                return m_builder.CreateInBoundsGEP(value, {zero, member});
-            }
-            auto* field = m_builder.CreateInBoundsGEP(value, {zero, member});
-            auto* loaded = m_builder.CreateLoad(field, expression.getType().isVolatile());
-            auto upLeft = loaded->getType()->getPrimitiveSizeInBits() - fields[index].bitFieldBounds->second;
-            auto* shl = m_builder.CreateShl(loaded, llvm::ConstantInt::get(loaded->getType(), upLeft));
-            auto* shrConstant = llvm::ConstantInt::get(loaded->getType(), upLeft + fields[index].bitFieldBounds->first);
-            if (cld::get<cld::Semantics::PrimitiveType>(expression.getType().get()).isSigned())
-            {
-                return m_builder.CreateAShr(shl, shrConstant);
-            }
-            else
-            {
-                return m_builder.CreateLShr(shl, shrConstant);
-            }
+            field = m_builder.CreateInBoundsGEP(value, {zero, member});
         }
-        CLD_UNREACHABLE;
+        else
+        {
+            auto* destTy = visit(*fields[index].type);
+            field = m_builder.CreateBitCast(value, llvm::PointerType::getUnqual(destTy));
+        }
+        if (!fields[index].bitFieldBounds)
+        {
+            return field;
+        }
+
+        auto* loaded = m_builder.CreateLoad(field, expression.getType().isVolatile());
+        auto upLeft = loaded->getType()->getPrimitiveSizeInBits() - fields[index].bitFieldBounds->second;
+        auto* shl = m_builder.CreateShl(loaded, llvm::ConstantInt::get(loaded->getType(), upLeft));
+        auto* shrConstant = llvm::ConstantInt::get(loaded->getType(), upLeft + fields[index].bitFieldBounds->first);
+        if (cld::get<cld::Semantics::PrimitiveType>(expression.getType().get()).isSigned())
+        {
+            return m_builder.CreateAShr(shl, shrConstant);
+        }
+        else
+        {
+            return m_builder.CreateLShr(shl, shrConstant);
+        }
     }
 
     llvm::Value* visit(const cld::Semantics::Expression&, const cld::Semantics::BinaryOperator& binaryExpression)
@@ -858,8 +852,26 @@ public:
 
     llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::SizeofOperator& constant) {}
 
-    llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::SubscriptOperator& constant)
+    llvm::Value* visit(const cld::Semantics::Expression&, const cld::Semantics::SubscriptOperator& subscriptOperator)
     {
+        auto* lhs = visit(subscriptOperator.getLeftExpression());
+        auto* rhs = visit(subscriptOperator.getRightExpression());
+        if (rhs->getType()->isIntegerTy())
+        {
+            rhs = m_builder.CreateIntCast(
+                rhs, m_builder.getInt64Ty(),
+                cld::get<cld::Semantics::PrimitiveType>(subscriptOperator.getRightExpression().getType().get())
+                    .isSigned());
+            return m_builder.CreateGEP(lhs, rhs);
+        }
+        else
+        {
+            lhs = m_builder.CreateIntCast(
+                lhs, m_builder.getInt64Ty(),
+                cld::get<cld::Semantics::PrimitiveType>(subscriptOperator.getLeftExpression().getType().get())
+                    .isSigned());
+            return m_builder.CreateGEP(rhs, lhs);
+        }
     }
 
     llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::Conditional& constant) {}
@@ -889,9 +901,19 @@ public:
         auto* rhsValue = visit(assignment.getRightExpression());
 
         auto& field = m_programInterface.getFields(type)[memberAccess.getMemberIndex()];
-        auto* zero = m_builder.getInt64(0);
-        auto* member = m_builder.getInt32(field.layoutIndex);
-        auto* fieldPtr = m_builder.CreateInBoundsGEP(lhsRecord, {zero, member});
+        llvm::Value* fieldPtr = nullptr;
+
+        if (cld::Semantics::isStruct(type))
+        {
+            auto* zero = m_builder.getInt64(0);
+            auto* member = m_builder.getInt32(field.layoutIndex);
+            fieldPtr = m_builder.CreateInBoundsGEP(lhsRecord, {zero, member});
+        }
+        else
+        {
+            fieldPtr = m_builder.CreateBitCast(lhsRecord, llvm::PointerType::getUnqual(visit(*field.type)));
+        }
+
         auto* loaded = m_builder.CreateLoad(fieldPtr, type.isVolatile());
         auto size = field.bitFieldBounds->second - field.bitFieldBounds->first;
         rhsValue = m_builder.CreateAnd(rhsValue, llvm::ConstantInt::get(rhsValue->getType(), (1u << size) - 1));

@@ -899,6 +899,118 @@ TEST_CASE("LLVM codegen member access", "[LLVM]")
             }
         }
     }
+    SECTION("Union")
+    {
+        SECTION("Simple Union")
+        {
+            auto program = generateProgram("typedef union U {\n"
+                                           "float x;\n"
+                                           "char storage[sizeof(float)];\n"
+                                           "} U;\n"
+                                           "\n"
+                                           "char foo(void) {\n"
+                                           "    U u;\n"
+                                           "    u.x = 5;\n"
+                                           "    return u.storage[3];\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<char(void)>(std::move(module), "foo") > 0);
+        }
+        SECTION("Simple anonymous union")
+        {
+            auto program = generateProgram("typedef union {\n"
+                                           "float x;\n"
+                                           "char storage[sizeof(float)];\n"
+                                           "} U;\n"
+                                           "\n"
+                                           "char foo(void) {\n"
+                                           "    U u;\n"
+                                           "    u.x = 5;\n"
+                                           "    return u.storage[3];\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<char(void)>(std::move(module), "foo") > 0);
+        }
+        SECTION("Bitfield")
+        {
+            auto program = generateProgram("union A {\n"
+                                           "unsigned int f:13,r:13;\n"
+                                           "};\n"
+                                           "\n"
+                                           "int foo(void) {\n"
+                                           "union A a;\n"
+                                           "a.r = 0xFFFF;\n"
+                                           "return a.r;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int(void)>(std::move(module), "foo") == 0x1FFF);
+        }
+        SECTION("As pointer")
+        {
+            SECTION("Simple Union")
+            {
+                auto program = generateProgram("typedef union U {\n"
+                                               "float x;\n"
+                                               "char storage[sizeof(float)];\n"
+                                               "} U;\n"
+                                               "\n"
+                                               "char foo(void) {\n"
+                                               "    U u;\n"
+                                               "    U* ptr;\n"
+                                               "    ptr = &u;\n"
+                                               "    ptr->x = 5;\n"
+                                               "    return ptr->storage[3];\n"
+                                               "}");
+                cld::CGLLVM::generateLLVM(*module, program);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                CHECK(cld::Tests::computeInJIT<char(void)>(std::move(module), "foo") > 0);
+            }
+            SECTION("Simple anonymous union")
+            {
+                auto program = generateProgram("typedef union {\n"
+                                               "float x;\n"
+                                               "char storage[sizeof(float)];\n"
+                                               "} U;\n"
+                                               "\n"
+                                               "char foo(void) {\n"
+                                               "    U u;\n"
+                                               "    U* ptr;\n"
+                                               "    ptr = &u;\n"
+                                               "    ptr->x = 5;\n"
+                                               "    return ptr->storage[3];\n"
+                                               "}");
+                cld::CGLLVM::generateLLVM(*module, program);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                CHECK(cld::Tests::computeInJIT<char(void)>(std::move(module), "foo") > 0);
+            }
+            SECTION("Bitfield")
+            {
+                auto program = generateProgram("union A {\n"
+                                               "unsigned int f:13,r:13;\n"
+                                               "};\n"
+                                               "\n"
+                                               "int foo(void) {\n"
+                                               "union A a;\n"
+                                               "union A* ptr;\n"
+                                               "ptr = &a;\n"
+                                               "ptr->r = 0xFFFF;\n"
+                                               "return ptr->r;\n"
+                                               "}");
+                cld::CGLLVM::generateLLVM(*module, program);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                CHECK(cld::Tests::computeInJIT<int(void)>(std::move(module), "foo") == 0x1FFF);
+            }
+        }
+    }
 }
 
 TEST_CASE("LLVM codegen lvalues", "[LLVM]")
