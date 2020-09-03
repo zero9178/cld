@@ -65,6 +65,20 @@ class CodeGenerator final
                      const cld::Semantics::AnonymousStructType * CLD_NON_NULL>,
         llvm::Type*>
         m_types;
+
+    struct ABITransformations
+    {
+        enum Change
+        {
+            Unchanged,
+            IntegerRegister,
+            PointerToTemporary
+        };
+        Change returnType;
+        std::vector<Change> arguments;
+    };
+
+    std::unordered_map<const llvm::FunctionType*, ABITransformations> m_functionABITransformations;
     llvm::IRBuilder<> m_builder{m_module.getContext()};
     llvm::DIBuilder m_debugInfo{m_module};
 
@@ -85,27 +99,49 @@ class CodeGenerator final
         }
     }
 
-    void applyPlatformABI(llvm::Type*& returnType, std::vector<llvm::Type*>& arguments)
+    ABITransformations applyPlatformABI(llvm::Type*& returnType, std::vector<llvm::Type*>& arguments)
     {
+        ABITransformations transformations;
+        transformations.returnType = ABITransformations::Unchanged;
+        transformations.arguments.resize(arguments.size(), ABITransformations::Unchanged);
         if (m_triple.getPlatform() == cld::Platform::Windows && m_triple.getArchitecture() == cld::Architecture::x86_64)
         {
-            for (auto& iter : arguments)
+            for (auto iter = arguments.begin(); iter != arguments.end(); iter++)
             {
-                if (!iter->isStructTy() && !iter->isX86_FP80Ty())
+                if (!(*iter)->isStructTy() && !(*iter)->isX86_FP80Ty())
                 {
                     continue;
                 }
-                std::uint32_t size = m_module.getDataLayout().getTypeAllocSizeInBits(iter);
+                std::uint32_t size = m_module.getDataLayout().getTypeAllocSizeInBits(*iter);
                 if (m_module.getDataLayout().isLegalInteger(size))
                 {
-                    iter = m_builder.getIntNTy(size);
+                    transformations.arguments[iter - arguments.begin()] = ABITransformations::IntegerRegister;
+                    *iter = m_builder.getIntNTy(size);
                 }
                 else
                 {
-                    iter = llvm::PointerType::getUnqual(iter);
+                    transformations.arguments[iter - arguments.begin()] = ABITransformations::PointerToTemporary;
+                    *iter = llvm::PointerType::getUnqual(*iter);
                 }
             }
+            if (returnType->isVoidTy())
+            {
+                return transformations;
+            }
+            std::uint32_t size = m_module.getDataLayout().getTypeAllocSizeInBits(returnType);
+            if (m_module.getDataLayout().isLegalInteger(size) && returnType->isStructTy())
+            {
+                transformations.returnType = ABITransformations::IntegerRegister;
+                returnType = m_builder.getIntNTy(size);
+            }
+            else if (!m_module.getDataLayout().isLegalInteger(size))
+            {
+                transformations.returnType = ABITransformations::PointerToTemporary;
+                arguments.insert(arguments.begin(), llvm::PointerType::getUnqual(returnType));
+                returnType = m_builder.getVoidTy();
+            }
         }
+        return transformations;
     }
 
 public:
@@ -142,7 +178,8 @@ public:
             llvm::errs() << "Target lookup failed with error: " << error;
             return;
         }
-        auto* machine = targetM->createTargetMachine(module.getTargetTriple(), "generic", "", {}, {});
+        auto machine = std::unique_ptr<llvm::TargetMachine>(
+            targetM->createTargetMachine(module.getTargetTriple(), "generic", "", {}, {}));
         module.setDataLayout(machine->createDataLayout());
     }
 
@@ -195,8 +232,10 @@ public:
                     (void)name;
                     args.push_back(visit(cld::Semantics::adjustParameterType(type)));
                 }
-                applyPlatformABI(returnType, args);
-                return llvm::FunctionType::get(returnType, args, functionType.isLastVararg());
+                auto transformation = applyPlatformABI(returnType, args);
+                auto* ft = llvm::FunctionType::get(returnType, args, functionType.isLastVararg());
+                m_functionABITransformations.emplace(ft, transformation);
+                return ft;
             },
             [&](const cld::Semantics::PointerType& pointerType) -> llvm::Type* {
                 if (cld::Semantics::isVoid(pointerType.getElementType()))
@@ -378,7 +417,34 @@ public:
         }
         auto* bb = llvm::BasicBlock::Create(m_module.getContext(), "entry", function);
         m_builder.SetInsertPoint(bb);
-        // TODO: params
+        auto transformations = m_functionABITransformations.find(function->getFunctionType());
+        CLD_ASSERT(transformations != m_functionABITransformations.end());
+        std::size_t argStart = 0;
+        if (transformations->second.returnType == ABITransformations::PointerToTemporary)
+        {
+            function->addAttribute(1, llvm::Attribute::StructRet);
+            function->addAttribute(1, llvm::Attribute::NoAlias);
+            argStart = 1;
+        }
+        for (std::size_t i = argStart; i < function->arg_size(); i++)
+        {
+            if (transformations->second.arguments[i - argStart] == ABITransformations::PointerToTemporary)
+            {
+                continue;
+            }
+            auto& paramDecl = functionDefinition.getParameterDeclarations()[i - argStart];
+            auto* operand = function->getArg(i);
+            if (transformations->second.arguments[i - argStart] == ABITransformations::Unchanged)
+            {
+                auto* var = m_builder.CreateAlloca(operand->getType());
+                var->setAlignment(llvm::Align(paramDecl->getType().getAlignOf(m_programInterface)));
+                m_lvalues.emplace(paramDecl.get(), var);
+                continue;
+            }
+            auto* var = m_builder.CreateAlloca(visit(paramDecl->getType()));
+            var->setAlignment(llvm::Align(paramDecl->getType().getAlignOf(m_programInterface)));
+            m_lvalues.emplace(paramDecl.get(), var);
+        }
 
         cld::YComb{[&](auto&& self, std::int64_t scope) -> void {
             auto& decls = m_programInterface.getScopes()[scope];
@@ -400,7 +466,27 @@ public:
             }
         }}(functionDefinition.getCompoundStatement().getScope());
 
+        for (std::size_t i = argStart; i < function->arg_size(); i++)
+        {
+            if (transformations->second.arguments[i - argStart] == ABITransformations::PointerToTemporary)
+            {
+                continue;
+            }
+            auto& paramDecl = functionDefinition.getParameterDeclarations()[i - argStart];
+            auto* operand = function->getArg(i);
+            auto* alloc = m_lvalues[paramDecl.get()];
+            if (transformations->second.arguments[i - argStart] == ABITransformations::Unchanged)
+            {
+                m_builder.CreateStore(operand, alloc, paramDecl->getType().isVolatile());
+                continue;
+            }
+            auto* cast = m_builder.CreateBitCast(alloc, llvm::PointerType::getUnqual(operand->getType()));
+            m_builder.CreateAlignedStore(operand, cast, llvm::cast<llvm::AllocaInst>(alloc)->getAlign(),
+                                         paramDecl->getType().isVolatile());
+        }
+
         visit(functionDefinition.getCompoundStatement());
+        m_builder.ClearInsertionPoint();
     }
 
     void visit(const cld::Semantics::CompoundStatement& compoundStatement)
@@ -453,25 +539,72 @@ public:
     void visit(const cld::Semantics::Statement& statement)
     {
         cld::match(
-            statement, [](const auto&) { CLD_UNREACHABLE; },
+            statement,
+            [&](const auto& statement) {
+                using T = std::decay_t<decltype(statement)>;
+                if constexpr (cld::IsUniquePtr<T>{})
+                {
+                    visit(*statement);
+                }
+                else
+                {
+                    visit(statement);
+                }
+            },
             [&](const cld::Semantics::ExpressionStatement& expressionStatement) {
                 if (!expressionStatement.getExpression())
                 {
                     return;
                 }
                 visit(*expressionStatement.getExpression());
-            },
-            [&](const cld::Semantics::ReturnStatement& returnStatement) {
-                if (!returnStatement.getExpression())
-                {
-                    m_builder.CreateRetVoid();
-                }
-                else
-                {
-                    m_builder.CreateRet(visit(*returnStatement.getExpression()));
-                }
             });
     }
+
+    void visit(const cld::Semantics::ReturnStatement& returnStatement)
+    {
+        if (!returnStatement.getExpression())
+        {
+            m_builder.CreateRetVoid();
+        }
+        else
+        {
+            auto* function = m_builder.GetInsertBlock()->getParent();
+            auto transformation = m_functionABITransformations.find(function->getFunctionType());
+            CLD_ASSERT(transformation != m_functionABITransformations.end());
+            if (transformation->second.returnType == ABITransformations::PointerToTemporary)
+            {
+                auto* value = visit(*returnStatement.getExpression());
+                m_builder.CreateStore(value, function->getArg(0));
+                m_builder.CreateRetVoid();
+            }
+            else
+            {
+                m_builder.CreateRet(visit(*returnStatement.getExpression()));
+            }
+        }
+    }
+
+    void visit(const cld::Semantics::ForStatement& forStatement) {}
+
+    void visit(const cld::Semantics::IfStatement& ifStatement) {}
+
+    void visit(const cld::Semantics::HeadWhileStatement& headWhileStatement) {}
+
+    void visit(const cld::Semantics::FootWhileStatement& footWhileStatement) {}
+
+    void visit(const cld::Semantics::BreakStatement& breakStatement) {}
+
+    void visit(const cld::Semantics::ContinueStatement& continueStatement) {}
+
+    void visit(const cld::Semantics::SwitchStatement& switchStatement) {}
+
+    void visit(const cld::Semantics::DefaultStatement& defaultStatement) {}
+
+    void visit(const cld::Semantics::CaseStatement& caseStatement) {}
+
+    void visit(const cld::Semantics::GotoStatement& gotoStatement) {}
+
+    void visit(const cld::Semantics::LabelStatement& labelStatement) {}
 
     llvm::Value* visit(const cld::Semantics::Expression& expression)
     {
@@ -920,9 +1053,9 @@ public:
             case cld::Semantics::UnaryOperator::BooleanNegate:
             {
                 auto* boolean = toBool(value);
-                boolean = m_builder.CreateNot(value);
-                return m_builder.CreateZExt(value, visit(cld::Semantics::PrimitiveType::createInt(
-                                                       false, false, m_sourceInterface.getLanguageOptions())));
+                boolean = m_builder.CreateNot(boolean);
+                return m_builder.CreateZExt(boolean, visit(cld::Semantics::PrimitiveType::createInt(
+                                                         false, false, m_sourceInterface.getLanguageOptions())));
             }
             case cld::Semantics::UnaryOperator::BitwiseNegate: return m_builder.CreateNot(value);
         }

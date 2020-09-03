@@ -83,7 +83,7 @@ cld::LanguageOptions cld::LanguageOptions::fromTriple(Triple triple, Language la
     }
     options.sizeOfShort = 2;
     options.sizeOfInt = 4;
-    if (triple.getPlatform() == Platform ::Windows)
+    if (triple.getPlatform() == Platform ::Windows || triple.getArchitecture() == Architecture::x86)
     {
         options.sizeOfLong = 4;
     }

@@ -2223,18 +2223,27 @@ TEST_CASE("Semantics unary expressions", "[semantics]")
     }
     SECTION("Logical negate")
     {
-        auto& exp = generateExpression("void foo(short i) {\n"
-                                       "!i;\n"
-                                       "}");
-        CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-        REQUIRE(std::holds_alternative<UnaryOperator>(exp.get()));
-        CHECK(cld::get<UnaryOperator>(exp.get()).getKind() == UnaryOperator::BooleanNegate);
+        SECTION("Integer")
+        {
+            auto& exp = generateExpression("void foo(short i) {\n"
+                                           "!i;\n"
+                                           "}");
+            CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
+            CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            REQUIRE(std::holds_alternative<UnaryOperator>(exp.get()));
+            CHECK(cld::get<UnaryOperator>(exp.get()).getKind() == UnaryOperator::BooleanNegate);
+        }
+        SECTION("Pointer")
+        {
+            auto& exp = generateExpression("void foo(int* i) {\n"
+                                           "!i;\n"
+                                           "}");
+            CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
+            CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            REQUIRE(std::holds_alternative<UnaryOperator>(exp.get()));
+            CHECK(cld::get<UnaryOperator>(exp.get()).getKind() == UnaryOperator::BooleanNegate);
+        }
         SEMA_PRODUCES("void foo(float i) {\n"
-                      "!i;\n"
-                      "}",
-                      ProducesNoErrors());
-        SEMA_PRODUCES("void foo(int* i) {\n"
                       "!i;\n"
                       "}",
                       ProducesNoErrors());

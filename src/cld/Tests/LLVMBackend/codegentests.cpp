@@ -31,7 +31,7 @@ TEST_CASE("LLVM codegen functions", "[LLVM]")
 TEST_CASE("LLVM codegen cdecl", "[LLVM]")
 {
     llvm::LLVMContext context;
-    llvm::Module module("", context);
+    auto module = std::make_unique<llvm::Module>("", context);
     SECTION("x64 Windows")
     {
         SECTION("Arguments")
@@ -43,10 +43,10 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                                                           "};\n"
                                                           "void foo(struct R);",
                                                           x64windowsGnu);
-                cld::CGLLVM::generateLLVM(module, program, x64windowsGnu);
-                CAPTURE(module);
-                REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
-                auto* function = module.getFunction("foo");
+                cld::CGLLVM::generateLLVM(*module, program, x64windowsGnu);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                auto* function = module->getFunction("foo");
                 REQUIRE(function);
                 REQUIRE(function->arg_size() == 1);
                 CHECK(function->getArg(0)->getType() == llvm::IntegerType::getIntNTy(context, 8));
@@ -58,10 +58,10 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                                                           "};\n"
                                                           "void foo(struct R);",
                                                           x64windowsGnu);
-                cld::CGLLVM::generateLLVM(module, program, x64windowsGnu);
-                CAPTURE(module);
-                REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
-                auto* function = module.getFunction("foo");
+                cld::CGLLVM::generateLLVM(*module, program, x64windowsGnu);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                auto* function = module->getFunction("foo");
                 REQUIRE(function);
                 REQUIRE(function->arg_size() == 1);
                 CHECK(function->getArg(0)->getType() == llvm::IntegerType::getIntNTy(context, 16));
@@ -73,10 +73,10 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                                                           "};\n"
                                                           "void foo(struct R);",
                                                           x64windowsGnu);
-                cld::CGLLVM::generateLLVM(module, program, x64windowsGnu);
-                CAPTURE(module);
-                REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
-                auto* function = module.getFunction("foo");
+                cld::CGLLVM::generateLLVM(*module, program, x64windowsGnu);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                auto* function = module->getFunction("foo");
                 REQUIRE(function);
                 REQUIRE(function->arg_size() == 1);
                 CHECK(function->getArg(0)->getType() == llvm::IntegerType::getIntNTy(context, 32));
@@ -89,10 +89,10 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                                                           "};\n"
                                                           "void foo(struct R);",
                                                           x64windowsGnu);
-                cld::CGLLVM::generateLLVM(module, program, x64windowsGnu);
-                CAPTURE(module);
-                REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
-                auto* function = module.getFunction("foo");
+                cld::CGLLVM::generateLLVM(*module, program, x64windowsGnu);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                auto* function = module->getFunction("foo");
                 REQUIRE(function);
                 REQUIRE(function->arg_size() == 1);
                 CHECK(function->getArg(0)->getType() == llvm::IntegerType::getIntNTy(context, 64));
@@ -104,10 +104,10 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                                                           "};\n"
                                                           "void foo(struct R);",
                                                           x64windowsGnu);
-                cld::CGLLVM::generateLLVM(module, program, x64windowsGnu);
-                CAPTURE(module);
-                REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
-                auto* function = module.getFunction("foo");
+                cld::CGLLVM::generateLLVM(*module, program, x64windowsGnu);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                auto* function = module->getFunction("foo");
                 REQUIRE(function);
                 REQUIRE(function->getArg(0)->getType()->isPointerTy());
                 CHECK(function->getArg(0)->getType()->getPointerElementType()->isStructTy());
@@ -120,10 +120,10 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                                                           "};\n"
                                                           "void foo(struct R);",
                                                           x64windowsGnu);
-                cld::CGLLVM::generateLLVM(module, program, x64windowsGnu);
-                CAPTURE(module);
-                REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
-                auto* function = module.getFunction("foo");
+                cld::CGLLVM::generateLLVM(*module, program, x64windowsGnu);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                auto* function = module->getFunction("foo");
                 REQUIRE(function);
                 REQUIRE(function->arg_size() == 1);
                 REQUIRE(function->getArg(0)->getType()->isPointerTy());
@@ -134,10 +134,10 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                 SECTION("GNU")
                 {
                     auto program = generateProgramWithOptions("void foo(long double);", x64windowsGnu);
-                    cld::CGLLVM::generateLLVM(module, program, x64windowsGnu);
-                    CAPTURE(module);
-                    REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
-                    auto* function = module.getFunction("foo");
+                    cld::CGLLVM::generateLLVM(*module, program, x64windowsGnu);
+                    CAPTURE(*module);
+                    REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                    auto* function = module->getFunction("foo");
                     REQUIRE(function);
                     REQUIRE(function->arg_size() == 1);
                     REQUIRE(function->getArg(0)->getType()->isPointerTy());
@@ -146,16 +146,148 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                 SECTION("MSVC")
                 {
                     auto program = generateProgramWithOptions("void foo(long double);", x64windowsMsvc);
-                    cld::CGLLVM::generateLLVM(module, program, x64windowsMsvc);
-                    CAPTURE(module);
-                    REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
-                    auto* function = module.getFunction("foo");
+                    cld::CGLLVM::generateLLVM(*module, program, x64windowsMsvc);
+                    CAPTURE(*module);
+                    REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                    auto* function = module->getFunction("foo");
                     REQUIRE(function);
                     REQUIRE(function->arg_size() == 1);
                     CHECK(function->getArg(0)->getType()->isDoubleTy());
                 }
             }
         }
+        SECTION("Return type")
+        {
+            SECTION("8")
+            {
+                auto program = generateProgramWithOptions("struct R {\n"
+                                                          "char c;\n"
+                                                          "};\n"
+                                                          "struct R foo(void);",
+                                                          x64windowsGnu);
+                cld::CGLLVM::generateLLVM(*module, program, x64windowsGnu);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                auto* function = module->getFunction("foo");
+                REQUIRE(function);
+                CHECK(function->arg_size() == 0);
+                CHECK(function->getReturnType()->isIntegerTy(8));
+            }
+            SECTION("16")
+            {
+                auto program = generateProgramWithOptions("struct R {\n"
+                                                          "char c;\n"
+                                                          "_Bool r;\n"
+                                                          "};\n"
+                                                          "struct R foo(void);",
+                                                          x64windowsGnu);
+                cld::CGLLVM::generateLLVM(*module, program, x64windowsGnu);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                auto* function = module->getFunction("foo");
+                REQUIRE(function);
+                CHECK(function->arg_size() == 0);
+                CHECK(function->getReturnType()->isIntegerTy(16));
+            }
+            SECTION("32")
+            {
+                auto program = generateProgramWithOptions("struct R {\n"
+                                                          "float f;\n"
+                                                          "};\n"
+                                                          "struct R foo(void);",
+                                                          x64windowsGnu);
+                cld::CGLLVM::generateLLVM(*module, program, x64windowsGnu);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                auto* function = module->getFunction("foo");
+                REQUIRE(function);
+                CHECK(function->arg_size() == 0);
+                CHECK(function->getReturnType()->isIntegerTy(32));
+            }
+            SECTION("64")
+            {
+                auto program = generateProgramWithOptions("struct R {\n"
+                                                          "char c[2];\n"
+                                                          "short r;\n"
+                                                          "float f;\n"
+                                                          "};\n"
+                                                          "struct R foo(void);",
+                                                          x64windowsGnu);
+                cld::CGLLVM::generateLLVM(*module, program, x64windowsGnu);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                auto* function = module->getFunction("foo");
+                REQUIRE(function);
+                CHECK(function->arg_size() == 0);
+                CHECK(function->getReturnType()->isIntegerTy(64));
+            }
+            SECTION("> 64")
+            {
+                auto program = generateProgramWithOptions("long double foo(void);", x64windowsGnu);
+                cld::CGLLVM::generateLLVM(*module, program, x64windowsGnu);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                auto* function = module->getFunction("foo");
+                REQUIRE(function);
+                CHECK(function->getReturnType()->isVoidTy());
+                REQUIRE(function->arg_size() == 1);
+                REQUIRE(function->getArg(0)->getType()->isPointerTy());
+                CHECK(function->getArg(0)->getType()->getPointerElementType()->isX86_FP80Ty());
+            }
+            SECTION("Not power of 2")
+            {
+                auto program = generateProgramWithOptions("struct R {\n"
+                                                          "short r[3];\n"
+                                                          "};\n"
+                                                          "struct R foo(void);",
+                                                          x64windowsGnu);
+                cld::CGLLVM::generateLLVM(*module, program, x64windowsGnu);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                auto* function = module->getFunction("foo");
+                REQUIRE(function);
+                CHECK(function->getReturnType()->isVoidTy());
+                REQUIRE(function->arg_size() == 1);
+                REQUIRE(function->getArg(0)->getType()->isPointerTy());
+                CHECK(function->getArg(0)->getType()->getPointerElementType()->isStructTy());
+            }
+        }
+#ifdef _WIN64
+        SECTION("Execution")
+        {
+            struct R
+            {
+                short r[3];
+            };
+            struct Input
+            {
+                short f;
+                unsigned char c[2];
+            };
+            auto program = generateProgram("struct R {\n"
+                                           "short r[3];\n"
+                                           "};\n"
+                                           "struct Input {\n"
+                                           "short f;\n"
+                                           "unsigned char c[2];\n"
+                                           "};\n"
+                                           "struct R foo(struct Input i) {\n"
+                                           "struct R r;\n"
+                                           "r.r[0] = i.f;\n"
+                                           "r.r[1] = i.c[0] + i.c[1];\n"
+                                           "r.r[2] = i.c[0] - i.c[1];\n"
+                                           "return r;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            Input input = {72, {'5', '0'}};
+            auto result = computeInJIT<R(Input)>(std::move(module), "foo", input);
+            CHECK(result.r[0] == 72);
+            CHECK(result.r[1] == '5' + '0');
+            CHECK(result.r[2] == 5);
+        }
+#endif
     }
 }
 

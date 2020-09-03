@@ -1040,10 +1040,14 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Asterisk:
         {
             value = lvalueConversion(std::move(value));
-            if (!std::holds_alternative<PointerType>(value.getType().get()))
+            if (!value.getType().isUndefined() && !std::holds_alternative<PointerType>(value.getType().get()))
             {
                 log(Errors::Semantics::CANNOT_DEREFERENCE_NON_POINTER_TYPE_N.args(
                     *node.getUnaryToken(), m_sourceInterface, *node.getUnaryToken(), value));
+                return Expression(node);
+            }
+            else if (value.getType().isUndefined())
+            {
                 return Expression(node);
             }
             auto elementType = cld::get<PointerType>(value.getType().get()).getElementType();
@@ -1055,7 +1059,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Plus:
         {
             value = integerPromotion(std::move(value));
-            if (!isArithmetic(value.getType()))
+            if (!value.getType().isUndefined() && !isArithmetic(value.getType()))
             {
                 log(Errors::Semantics::OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE.args(
                     *node.getUnaryToken(), m_sourceInterface, *node.getUnaryToken(), value));
@@ -1073,7 +1077,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::BitNot:
         {
             value = integerPromotion(std::move(value));
-            if (!isInteger(value.getType()))
+            if (!value.getType().isUndefined() && !isInteger(value.getType()))
             {
                 log(Errors::Semantics::OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE.args(
                     *node.getUnaryToken(), m_sourceInterface, *node.getUnaryToken(), value));
@@ -1087,14 +1091,15 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::LogicalNot:
         {
             value = integerPromotion(std::move(value));
-            if (!isScalar(value.getType()))
+            if (!value.getType().isUndefined() && !isScalar(value.getType()))
             {
                 log(Errors::Semantics::OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
                     *node.getUnaryToken(), m_sourceInterface, *node.getUnaryToken(), value));
-                return Expression(node);
+                return Expression(PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions()),
+                                  ValueCategory::Rvalue, {});
             }
-            auto type = value.getType();
-            return Expression(std::move(type), ValueCategory::Rvalue,
+            return Expression(PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions()),
+                              ValueCategory::Rvalue,
                               UnaryOperator(UnaryOperator::BooleanNegate, node.getUnaryToken(),
                                             std::make_unique<Expression>(std::move(value))));
         }
