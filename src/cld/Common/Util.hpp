@@ -462,6 +462,15 @@ constexpr std::size_t hashCombine(const Args&... args)
     return seed;
 }
 
+template <class... Args>
+constexpr std::size_t rawHashCombine(Args... args)
+{
+    static_assert((std::is_integral_v<Args> && ...));
+    std::size_t seed = 0;
+    ((seed ^= args + 0x9e3779b9 + (seed << 6) + (seed >> 2)), ...);
+    return seed;
+}
+
 template <class T, typename = void>
 struct IsTupleLike : std::false_type
 {

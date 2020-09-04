@@ -9,45 +9,6 @@
 #include <cld/Common/Filesystem.hpp>
 #include <cld/Frontend/Compiler/Program.hpp>
 
-namespace std
-{
-template <>
-struct hash<const cld::Semantics::StructType*>
-{
-    std::size_t operator()(const cld::Semantics::StructType* structType)
-    {
-        return cld::hashCombine(structType->getScopeOrId(), structType->getName());
-    }
-};
-
-template <>
-struct hash<const cld::Semantics::UnionType*>
-{
-    std::size_t operator()(const cld::Semantics::UnionType* unionType)
-    {
-        return cld::hashCombine(unionType->getScopeOrId(), unionType->getName());
-    }
-};
-
-template <>
-struct hash<const cld::Semantics::AnonymousStructType*>
-{
-    std::size_t operator()(const cld::Semantics::AnonymousStructType* structType)
-    {
-        return std::hash<std::uint64_t>{}(structType->getId());
-    }
-};
-
-template <>
-struct hash<const cld::Semantics::AnonymousUnionType*>
-{
-    std::size_t operator()(const cld::Semantics::AnonymousUnionType* unionType)
-    {
-        return std::hash<std::uint64_t>{}(unionType->getId());
-    }
-};
-} // namespace std
-
 namespace
 {
 class CodeGenerator final
@@ -59,12 +20,65 @@ class CodeGenerator final
     // void* for now although strictly speaking the pointers can only be const Declaration* or const FunctionDefinition*
     // but hashing the variant seems overkill? I am not sure
     std::unordered_map<const void*, llvm::Value * CLD_NON_NULL> m_lvalues;
-    std::unordered_map<
-        std::variant<const cld::Semantics::StructType * CLD_NON_NULL, const cld::Semantics::UnionType * CLD_NON_NULL,
-                     const cld::Semantics::AnonymousUnionType * CLD_NON_NULL,
-                     const cld::Semantics::AnonymousStructType * CLD_NON_NULL>,
-        llvm::Type*>
-        m_types;
+
+    using TypeVariantKey = std::variant<cld::Semantics::StructType, cld::Semantics::UnionType,
+                                        cld::Semantics::AnonymousUnionType, cld::Semantics::AnonymousStructType>;
+
+    struct TypeHasher
+    {
+        std::size_t operator()(const TypeVariantKey& variant) const noexcept
+        {
+            return cld::rawHashCombine(std::hash<std::size_t>{}(variant.index()),
+                                       cld::match(
+                                           variant,
+                                           [](const cld::Semantics::StructType& structType) -> std::size_t {
+                                               return cld::hashCombine(structType.getScopeOrId(), structType.getName());
+                                           },
+                                           [](const cld::Semantics::UnionType& unionType) -> std::size_t {
+                                               return cld::hashCombine(unionType.getScopeOrId(), unionType.getName());
+                                           },
+                                           [](const cld::Semantics::AnonymousStructType& structType) -> std::size_t {
+                                               return std::hash<std::uint64_t>{}(structType.getId());
+                                           },
+                                           [](const cld::Semantics::AnonymousUnionType& unionType) -> std::size_t {
+                                               return std::hash<std::uint64_t>{}(unionType.getId());
+                                           }));
+        }
+    };
+
+    struct TypeEqual
+    {
+        const cld::Semantics::ProgramInterface& programInterface;
+
+        bool operator()(const TypeVariantKey& lhs, const TypeVariantKey& rhs) const noexcept
+        {
+            if (lhs.index() != rhs.index())
+            {
+                return false;
+            }
+            return cld::match(lhs, [this, &rhs](const auto& value) -> bool {
+                using T = std::decay_t<decltype(value)>;
+                if constexpr (std::is_same_v<cld::Semantics::StructType, T>)
+                {
+                    auto& other = cld::get<T>(rhs);
+                    return programInterface.getStructDefinition(value.getName(), value.getScopeOrId())
+                           == programInterface.getStructDefinition(other.getName(), other.getScopeOrId());
+                }
+                else if constexpr (std::is_same_v<cld::Semantics::UnionType, T>)
+                {
+                    auto& other = cld::get<T>(rhs);
+                    return programInterface.getUnionDefinition(value.getName(), value.getScopeOrId())
+                           == programInterface.getUnionDefinition(other.getName(), other.getScopeOrId());
+                }
+                else
+                {
+                    return value == cld::get<T>(rhs);
+                }
+            });
+        }
+    };
+
+    std::unordered_map<TypeVariantKey, llvm::Type*, TypeHasher, TypeEqual> m_types{0, {}, {m_programInterface}};
 
     struct ABITransformations
     {
@@ -72,7 +86,8 @@ class CodeGenerator final
         {
             Unchanged,
             IntegerRegister,
-            PointerToTemporary
+            PointerToTemporary,
+            OnStack,
         };
         Change returnType;
         std::vector<Change> arguments;
@@ -97,6 +112,33 @@ class CodeGenerator final
         {
             return m_builder.CreateFCmpUNE(value, llvm::ConstantFP::get(value->getType(), 0));
         }
+    }
+
+    std::vector<llvm::Type*> flatten(llvm::Type* type)
+    {
+        std::vector<llvm::Type*> result;
+        if (type->isStructTy())
+        {
+            for (std::size_t i = 0; i < type->getStructNumElements(); i++)
+            {
+                auto* element = type->getStructElementType(i);
+                auto temp = flatten(element);
+                result.insert(result.end(), temp.begin(), temp.end());
+            }
+        }
+        else if (type->isArrayTy())
+        {
+            auto temp = flatten(type->getArrayElementType());
+            for (std::size_t i = 0; i < type->getArrayNumElements(); i++)
+            {
+                result.insert(result.end(), temp.begin(), temp.end());
+            }
+        }
+        else
+        {
+            result.emplace_back(type);
+        }
+        return result;
     }
 
     ABITransformations applyPlatformABI(llvm::Type*& returnType, std::vector<llvm::Type*>& arguments)
@@ -135,6 +177,39 @@ class CodeGenerator final
                 returnType = m_builder.getIntNTy(size);
             }
             else if (!m_module.getDataLayout().isLegalInteger(size))
+            {
+                transformations.returnType = ABITransformations::PointerToTemporary;
+                arguments.insert(arguments.begin(), llvm::PointerType::getUnqual(returnType));
+                returnType = m_builder.getVoidTy();
+            }
+        }
+        else if (m_triple.getArchitecture() == cld::Architecture::x86_64)
+        {
+            constexpr std::uint8_t availableIntegerRegisters = 4;
+            constexpr std::uint8_t availableFloatingPointRegisters = 8;
+            std::uint8_t takenIntegerRegisters = 0;
+            std::uint8_t takenFloatingPointRegisters = 0;
+            for (auto iter = arguments.begin(); iter != arguments.end(); iter++)
+            {
+                std::uint32_t size = m_module.getDataLayout().getTypeAllocSizeInBits(returnType);
+                if (size > 128)
+                {
+                    transformations.arguments[iter - arguments.begin()] = ABITransformations::OnStack;
+                    continue;
+                }
+                auto flat = flatten(*iter);
+            }
+            if (returnType->isVoidTy())
+            {
+                return transformations;
+            }
+            else if (!returnType->isStructTy())
+            {
+                return transformations;
+            }
+
+            std::uint32_t size = m_module.getDataLayout().getTypeAllocSizeInBits(returnType);
+            if (m_module.getDataLayout().getLargestLegalIntTypeSizeInBits() < size)
             {
                 transformations.returnType = ABITransformations::PointerToTemporary;
                 arguments.insert(arguments.begin(), llvm::PointerType::getUnqual(returnType));
@@ -246,7 +321,7 @@ public:
                 return llvm::PointerType::getUnqual(elementType);
             },
             [&](const cld::Semantics::StructType& structType) -> llvm::Type* {
-                auto result = m_types.find(&structType);
+                auto result = m_types.find(structType);
                 if (result != m_types.end())
                 {
                     return result->second;
@@ -255,8 +330,8 @@ public:
                     m_programInterface.getStructDefinition(structType.getName(), structType.getScopeOrId());
                 if (!structDef)
                 {
-                    auto* type = llvm::StructType::get(m_module.getContext());
-                    m_types.insert({&structType, type});
+                    auto* type = llvm::StructType::create(m_module.getContext(), structType.getName().data());
+                    m_types.insert({structType, type});
                     return type;
                 }
                 std::vector<llvm::Type*> fields;
@@ -264,12 +339,12 @@ public:
                 {
                     fields.push_back(visit(iter));
                 }
-                auto* type = llvm::StructType::get(m_module.getContext(), fields);
-                m_types.insert({&structType, type});
+                auto* type = llvm::StructType::create(m_module.getContext(), fields, structType.getName().data());
+                m_types.insert({structType, type});
                 return type;
             },
             [&](const cld::Semantics::UnionType& unionType) -> llvm::Type* {
-                auto result = m_types.find(&unionType);
+                auto result = m_types.find(unionType);
                 if (result != m_types.end())
                 {
                     return result->second;
@@ -278,7 +353,7 @@ public:
                 if (!unionDef)
                 {
                     auto* type = llvm::StructType::get(m_module.getContext());
-                    m_types.insert({&unionType, type});
+                    m_types.insert({unionType, type});
                     return type;
                 }
                 auto largestField = std::max_element(
@@ -287,11 +362,11 @@ public:
                         return lhs.type->getSizeOf(m_programInterface) < rhs.type->getSizeOf(m_programInterface);
                     });
                 auto* type = llvm::StructType::get(m_module.getContext(), llvm::ArrayRef(visit(*largestField->type)));
-                m_types.insert({&unionType, type});
+                m_types.insert({unionType, type});
                 return type;
             },
             [&](const cld::Semantics::AnonymousStructType& structType) -> llvm::Type* {
-                auto result = m_types.find(&structType);
+                auto result = m_types.find(structType);
                 if (result != m_types.end())
                 {
                     return result->second;
@@ -302,11 +377,11 @@ public:
                     fields.push_back(visit(iter));
                 }
                 auto* type = llvm::StructType::get(m_module.getContext(), fields);
-                m_types.insert({&structType, type});
+                m_types.insert({structType, type});
                 return type;
             },
             [&](const cld::Semantics::AnonymousUnionType& unionType) -> llvm::Type* {
-                auto result = m_types.find(&unionType);
+                auto result = m_types.find(unionType);
                 if (result != m_types.end())
                 {
                     return result->second;
@@ -317,7 +392,7 @@ public:
                         return lhs.type->getSizeOf(m_programInterface) < rhs.type->getSizeOf(m_programInterface);
                     });
                 auto* type = llvm::StructType::get(m_module.getContext(), llvm::ArrayRef(visit(*largestField->type)));
-                m_types.insert({&unionType, type});
+                m_types.insert({unionType, type});
                 return type;
             },
             [&](const cld::Semantics::AbstractArrayType&) -> llvm::Type* { CLD_UNREACHABLE; },
