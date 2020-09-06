@@ -343,6 +343,7 @@ class CodeGenerator final
                 }
                 else
                 {
+                    auto* prevReturnType = returnType;
                     auto [temp, firstType, secondType] =
                         flattenSingleArg(returnType, takenIntegerRegisters, takenFloatingPointRegisters);
                     if (secondType)
@@ -353,7 +354,7 @@ class CodeGenerator final
                     {
                         returnType = firstType;
                     }
-                    if (returnType->isStructTy())
+                    if (prevReturnType->isStructTy())
                     {
                         transformations.returnType = ABITransformations::Flattened;
                     }
@@ -1124,14 +1125,41 @@ public:
                 {
                     if (cld::Semantics::isInteger(binaryExpression.getLeftExpression().getType()))
                     {
-                        return m_builder.CreateNSWAdd(lhs, rhs);
+                        if (!cld::get<cld::Semantics::PrimitiveType>(
+                                 binaryExpression.getLeftExpression().getType().get())
+                                 .isSigned())
+                        {
+                            return m_builder.CreateNSWAdd(lhs, rhs);
+                        }
+                        else
+                        {
+                            return m_builder.CreateAdd(lhs, rhs);
+                        }
                     }
                     else
                     {
                         return m_builder.CreateFAdd(lhs, rhs);
                     }
                 }
-                // TODO: Pointer arithmetic
+                else
+                {
+                    if (lhs->getType()->isPointerTy())
+                    {
+                        rhs = m_builder.CreateIntCast(rhs, m_builder.getInt64Ty(),
+                                                      cld::get<cld::Semantics::PrimitiveType>(
+                                                          binaryExpression.getRightExpression().getType().get())
+                                                          .isSigned());
+                        return m_builder.CreateGEP(lhs, rhs);
+                    }
+                    else
+                    {
+                        lhs = m_builder.CreateIntCast(lhs, m_builder.getInt64Ty(),
+                                                      cld::get<cld::Semantics::PrimitiveType>(
+                                                          binaryExpression.getLeftExpression().getType().get())
+                                                          .isSigned());
+                        return m_builder.CreateGEP(rhs, lhs);
+                    }
+                }
             }
             case cld::Semantics::BinaryOperator::Subtraction:
             {
@@ -1140,14 +1168,43 @@ public:
                 {
                     if (cld::Semantics::isInteger(binaryExpression.getLeftExpression().getType()))
                     {
-                        return m_builder.CreateNSWSub(lhs, rhs);
+                        if (!cld::get<cld::Semantics::PrimitiveType>(
+                                 binaryExpression.getLeftExpression().getType().get())
+                                 .isSigned())
+                        {
+                            return m_builder.CreateNSWSub(lhs, rhs);
+                        }
+                        else
+                        {
+                            return m_builder.CreateSub(lhs, rhs);
+                        }
                     }
                     else
                     {
                         return m_builder.CreateFSub(lhs, rhs);
                     }
                 }
-                // TODO: Pointer arithmetic
+                else
+                {
+                    if (lhs->getType()->isPointerTy())
+                    {
+                        rhs = m_builder.CreateNeg(rhs);
+                        rhs = m_builder.CreateIntCast(rhs, m_builder.getInt64Ty(),
+                                                      cld::get<cld::Semantics::PrimitiveType>(
+                                                          binaryExpression.getRightExpression().getType().get())
+                                                          .isSigned());
+                        return m_builder.CreateGEP(lhs, rhs);
+                    }
+                    else
+                    {
+                        lhs = m_builder.CreateNeg(lhs);
+                        lhs = m_builder.CreateIntCast(lhs, m_builder.getInt64Ty(),
+                                                      cld::get<cld::Semantics::PrimitiveType>(
+                                                          binaryExpression.getLeftExpression().getType().get())
+                                                          .isSigned());
+                        return m_builder.CreateGEP(rhs, lhs);
+                    }
+                }
             }
             case cld::Semantics::BinaryOperator::Multiply:
             {
@@ -1263,7 +1320,8 @@ public:
                 }
                 else
                 {
-                    // TODO:
+                    auto* result = m_builder.CreateGEP(prev, m_builder.getInt32(1));
+                    m_builder.CreateStore(result, value);
                 }
                 return prev;
             }
@@ -1291,7 +1349,8 @@ public:
                 }
                 else
                 {
-                    // TODO:
+                    auto* result = m_builder.CreateGEP(prev, m_builder.getInt32(-1));
+                    m_builder.CreateStore(result, value);
                 }
                 return prev;
             }
@@ -1320,7 +1379,8 @@ public:
                 }
                 else
                 {
-                    // TODO:
+                    result = m_builder.CreateGEP(prev, m_builder.getInt32(1));
+                    m_builder.CreateStore(result, value);
                 }
                 return result;
             }
@@ -1349,7 +1409,8 @@ public:
                 }
                 else
                 {
-                    // TODO:
+                    result = m_builder.CreateGEP(prev, m_builder.getInt32(-1));
+                    m_builder.CreateStore(result, value);
                 }
                 return result;
             }

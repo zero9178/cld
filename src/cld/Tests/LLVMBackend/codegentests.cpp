@@ -1128,6 +1128,21 @@ TEST_CASE("LLVM codegen unary expressions", "[LLVM]")
             REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
             CHECK(cld::Tests::computeInJIT<float(void)>(std::move(module), "foo") == 5.0f);
         }
+        SECTION("Pointers")
+        {
+            auto program = generateProgram("float foo(void) {\n"
+                                           "float array[2];\n"
+                                           "array[0] = 1;\n"
+                                           "array[1] = 2;\n"
+                                           "float* pointer;\n"
+                                           "pointer = array;\n"
+                                           "return *(pointer++);\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<float(void)>(std::move(module), "foo") == 1.0f);
+        }
     }
     SECTION("Post decrement")
     {
@@ -1169,6 +1184,22 @@ TEST_CASE("LLVM codegen unary expressions", "[LLVM]")
             CAPTURE(*module);
             REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
             CHECK(cld::Tests::computeInJIT<float(void)>(std::move(module), "foo") == 5.0f);
+        }
+        SECTION("Pointers")
+        {
+            auto program = generateProgram("float foo(void) {\n"
+                                           "float array[2];\n"
+                                           "array[0] = 1;\n"
+                                           "array[1] = 2;\n"
+                                           "float* pointer;\n"
+                                           "pointer = array;\n"
+                                           "pointer++;\n"
+                                           "return *(pointer--);\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<float(void)>(std::move(module), "foo") == 2.0f);
         }
     }
     SECTION("Pre increment")
@@ -1212,6 +1243,21 @@ TEST_CASE("LLVM codegen unary expressions", "[LLVM]")
             REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
             CHECK(cld::Tests::computeInJIT<float(void)>(std::move(module), "foo") == 6.0f);
         }
+        SECTION("Pointers")
+        {
+            auto program = generateProgram("float foo(void) {\n"
+                                           "float array[2];\n"
+                                           "array[0] = 1;\n"
+                                           "array[1] = 2;\n"
+                                           "float* pointer;\n"
+                                           "pointer = array;\n"
+                                           "return *(++pointer);\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<float(void)>(std::move(module), "foo") == 2.0f);
+        }
     }
     SECTION("Pre decrement")
     {
@@ -1253,6 +1299,22 @@ TEST_CASE("LLVM codegen unary expressions", "[LLVM]")
             CAPTURE(*module);
             REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
             CHECK(cld::Tests::computeInJIT<float(void)>(std::move(module), "foo") == 4.0f);
+        }
+        SECTION("Pointers")
+        {
+            auto program = generateProgram("float foo(void) {\n"
+                                           "float array[2];\n"
+                                           "array[0] = 1;\n"
+                                           "array[1] = 2;\n"
+                                           "float* pointer;\n"
+                                           "pointer = array;\n"
+                                           "pointer++;\n"
+                                           "return *(--pointer);\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<float(void)>(std::move(module), "foo") == 1.0f);
         }
     }
     SECTION("Minus")
@@ -1652,21 +1714,95 @@ TEST_CASE("LLVM codegen binary expressions", "[LLVM]")
 {
     llvm::LLVMContext context;
     auto module = std::make_unique<llvm::Module>("", context);
+    SECTION("Addition")
+    {
+        SECTION("Integers")
+        {
+            auto program = generateProgram("int add(int r,int f) {\n"
+                                           "return r + f;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int(int, int)>(std::move(module), "add", 5, 10) == 15);
+        }
+        SECTION("Floating point type")
+        {
+            auto program = generateProgram("float add(float r,float f) {\n"
+                                           "return r + f;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<float(float, float)>(std::move(module), "add", 5, 10) == 15);
+        }
+        SECTION("Pointer types")
+        {
+            auto program = generateProgram("float add(float* r,int f) {\n"
+                                           "return *(r + f);\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            std::array<float, 2> a = {1, 2};
+            CHECK(cld::Tests::computeInJIT<float(float*, int)>(std::move(module), "add", a.data(), 1) == 2);
+        }
+    }
+    SECTION("Subtraction")
+    {
+        SECTION("Integers")
+        {
+            auto program = generateProgram("int sub(int r,int f) {\n"
+                                           "return r - f;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int(int, int)>(std::move(module), "sub", 10, 5) == 5);
+        }
+        SECTION("Floating point type")
+        {
+            auto program = generateProgram("float sub(float r,float f) {\n"
+                                           "return r - f;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<float(float, float)>(std::move(module), "sub", 5, 10) == -5.0);
+        }
+        SECTION("Pointer types")
+        {
+            auto program = generateProgram("float sub(float* r,int f) {\n"
+                                           "return *(r - f);\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            std::array<float, 2> a = {1, 2};
+            CHECK(cld::Tests::computeInJIT<float(float*, int)>(std::move(module), "sub", a.data() + 2, 1) == 2);
+        }
+    }
     SECTION("Multiply")
     {
         SECTION("Integers")
         {
-            auto program = generateProgram("int foo(void) {\n"
-                                           "int r;\n"
-                                           "r = 5;\n"
-                                           "int f;\n"
-                                           "f = 3;\n"
+            auto program = generateProgram("int mul(int r,int f) {\n"
                                            "return r * f;\n"
                                            "}");
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
             REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
-            CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "foo") == 15);
+            CHECK(cld::Tests::computeInJIT<int(int, int)>(std::move(module), "mul", 3, 5) == 15);
+        }
+        SECTION("Floats")
+        {
+            auto program = generateProgram("float mul(float r,float f) {\n"
+                                           "return r * f;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<float(float, float)>(std::move(module), "mul", 3, 5) == 15);
         }
     }
 }
