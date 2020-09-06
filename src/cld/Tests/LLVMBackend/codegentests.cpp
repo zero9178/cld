@@ -26,6 +26,27 @@ TEST_CASE("LLVM codegen functions", "[LLVM]")
         CHECK(function->getReturnType()->isVoidTy());
         CHECK(function->getNumOperands() == 0);
     }
+    SECTION("Signed type")
+    {
+        auto program = generateProgram("char f0(void){ return 0;}\n"
+                                       "short f1(void){return 0;}\n"
+                                       "int f2(void){return 0;}\n");
+        cld::CGLLVM::generateLLVM(module, program);
+        CAPTURE(module);
+        REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
+        auto* function = module.getFunction("f0");
+        REQUIRE(function);
+        CHECK(function->getReturnType()->isIntegerTy());
+        CHECK(function->hasAttribute(0, llvm::Attribute::SExt));
+        function = module.getFunction("f1");
+        REQUIRE(function);
+        CHECK(function->getReturnType()->isIntegerTy());
+        CHECK(function->hasAttribute(0, llvm::Attribute::SExt));
+        function = module.getFunction("f2");
+        REQUIRE(function);
+        CHECK(function->getReturnType()->isIntegerTy());
+        CHECK(function->hasAttribute(0, llvm::Attribute::SExt));
+    }
 }
 
 TEST_CASE("LLVM codegen cdecl", "[LLVM]")
@@ -233,6 +254,8 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                 REQUIRE(function->arg_size() == 1);
                 REQUIRE(function->getArg(0)->getType()->isPointerTy());
                 CHECK(function->getArg(0)->getType()->getPointerElementType()->isX86_FP80Ty());
+                CHECK(function->hasAttribute(1, llvm::Attribute::StructRet));
+                CHECK(function->hasAttribute(1, llvm::Attribute::NoAlias));
             }
             SECTION("Not power of 2")
             {
@@ -250,11 +273,13 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                 REQUIRE(function->arg_size() == 1);
                 REQUIRE(function->getArg(0)->getType()->isPointerTy());
                 CHECK(function->getArg(0)->getType()->getPointerElementType()->isStructTy());
+                CHECK(function->hasAttribute(1, llvm::Attribute::StructRet));
+                CHECK(function->hasAttribute(1, llvm::Attribute::NoAlias));
             }
         }
-#ifdef _WIN64
         SECTION("Execution")
         {
+#ifdef _WIN64
             struct R
             {
                 short r[3];
@@ -286,12 +311,246 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
             CHECK(result.r[0] == 72);
             CHECK(result.r[1] == '5' + '0');
             CHECK(result.r[2] == 5);
-        }
 #endif
+        }
     }
     SECTION("x64 Unix")
     {
-
+        SECTION("Arguments")
+        {
+            SECTION("> 128")
+            {
+                auto program = generateProgramWithOptions("struct R {\n"
+                                                          "int r[5];\n"
+                                                          "};\n"
+                                                          "void foo(struct R);",
+                                                          x64linux);
+                cld::CGLLVM::generateLLVM(*module, program, x64linux);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                auto* function = module->getFunction("foo");
+                REQUIRE(function);
+                CHECK(function->getReturnType()->isVoidTy());
+                REQUIRE(function->arg_size() == 1);
+                REQUIRE(function->getArg(0)->getType()->isPointerTy());
+                CHECK(function->getArg(0)->getType()->getPointerElementType()->isStructTy());
+                CHECK(function->hasAttribute(1, llvm::Attribute::ByVal));
+                CHECK(function->hasAttribute(1, llvm::Attribute::Alignment));
+                CHECK(function->getAttribute(1, llvm::Attribute::Alignment).getValueAsInt() == 8);
+            }
+            SECTION("Fits in integers")
+            {
+                SECTION("64")
+                {
+                    auto program = generateProgramWithOptions("struct R {\n"
+                                                              "int r[2];\n"
+                                                              "};\n"
+                                                              "void foo(struct R);",
+                                                              x64linux);
+                    cld::CGLLVM::generateLLVM(*module, program, x64linux);
+                    CAPTURE(*module);
+                    REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                    auto* function = module->getFunction("foo");
+                    REQUIRE(function);
+                    CHECK(function->getReturnType()->isVoidTy());
+                    REQUIRE(function->arg_size() == 1);
+                    CHECK(function->getArg(0)->getType()->isIntegerTy(64));
+                }
+                SECTION("128")
+                {
+                    auto program = generateProgramWithOptions("struct R {\n"
+                                                              "int r[4];\n"
+                                                              "};\n"
+                                                              "void foo(struct R);",
+                                                              x64linux);
+                    cld::CGLLVM::generateLLVM(*module, program, x64linux);
+                    CAPTURE(*module);
+                    REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                    auto* function = module->getFunction("foo");
+                    REQUIRE(function);
+                    CHECK(function->getReturnType()->isVoidTy());
+                    REQUIRE(function->arg_size() == 2);
+                    CHECK(function->getArg(0)->getType()->isIntegerTy(64));
+                    CHECK(function->getArg(1)->getType()->isIntegerTy(64));
+                }
+            }
+            SECTION("Integer mixed with floats")
+            {
+                auto program = generateProgramWithOptions("struct R {\n"
+                                                          "int r;\n"
+                                                          "float f;\n"
+                                                          "};\n"
+                                                          "void foo(struct R);",
+                                                          x64linux);
+                cld::CGLLVM::generateLLVM(*module, program, x64linux);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                auto* function = module->getFunction("foo");
+                REQUIRE(function);
+                CHECK(function->getReturnType()->isVoidTy());
+                REQUIRE(function->arg_size() == 1);
+                CHECK(function->getArg(0)->getType()->isIntegerTy(64));
+            }
+            SECTION("Two floats are squeezed into one xmm")
+            {
+                auto program = generateProgramWithOptions("struct R {\n"
+                                                          "float r;\n"
+                                                          "float f;\n"
+                                                          "};\n"
+                                                          "void foo(struct R);",
+                                                          x64linux);
+                cld::CGLLVM::generateLLVM(*module, program, x64linux);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                auto* function = module->getFunction("foo");
+                REQUIRE(function);
+                CHECK(function->getReturnType()->isVoidTy());
+                REQUIRE(function->arg_size() == 1);
+                REQUIRE(llvm::isa<llvm::FixedVectorType>(function->getArg(0)->getType()));
+                auto* vector = llvm::cast<llvm::FixedVectorType>(function->getArg(0)->getType());
+                CHECK(vector->getNumElements() == 2);
+                CHECK(vector->getElementType()->isFloatTy());
+            }
+            SECTION("Normal register passing")
+            {
+                auto program = generateProgramWithOptions("struct R {\n"
+                                                          "char c;\n"
+                                                          "double d;\n"
+                                                          "};\n"
+                                                          "void foo(struct R);",
+                                                          x64linux);
+                cld::CGLLVM::generateLLVM(*module, program, x64linux);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                auto* function = module->getFunction("foo");
+                REQUIRE(function);
+                CHECK(function->getReturnType()->isVoidTy());
+                REQUIRE(function->arg_size() == 2);
+                CHECK(function->getArg(0)->getType()->isIntegerTy(8));
+                CHECK(function->getArg(1)->getType()->isDoubleTy());
+            }
+            SECTION("Not enough integer registers")
+            {
+                auto program = generateProgramWithOptions("struct R {\n"
+                                                          "long c[2];\n"
+                                                          "};\n"
+                                                          "void foo(struct R,struct R,long,struct R,float,long);",
+                                                          x64linux);
+                cld::CGLLVM::generateLLVM(*module, program, x64linux);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                auto* function = module->getFunction("foo");
+                REQUIRE(function);
+                CHECK(function->getReturnType()->isVoidTy());
+                REQUIRE(function->arg_size() == 8);
+                CHECK(function->getArg(0)->getType()->isIntegerTy(64));
+                CHECK(function->getArg(1)->getType()->isIntegerTy(64));
+                CHECK(function->getArg(2)->getType()->isIntegerTy(64));
+                CHECK(function->getArg(3)->getType()->isIntegerTy(64));
+                CHECK(function->getArg(4)->getType()->isIntegerTy(64));
+                REQUIRE(function->getArg(5)->getType()->isPointerTy());
+                CHECK(function->getArg(5)->getType()->getPointerElementType()->isStructTy());
+                CHECK(function->hasAttribute(6, llvm::Attribute::ByVal));
+                CHECK(function->getArg(6)->getType()->isFloatTy());
+                CHECK(function->getArg(7)->getType()->isIntegerTy(64));
+            }
+        }
+        SECTION("Return type")
+        {
+            SECTION("Normal register passing")
+            {
+                auto program = generateProgramWithOptions("struct R {\n"
+                                                          "char c;\n"
+                                                          "double d;\n"
+                                                          "};\n"
+                                                          "struct R foo(void);",
+                                                          x64linux);
+                cld::CGLLVM::generateLLVM(*module, program, x64linux);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                auto* function = module->getFunction("foo");
+                REQUIRE(function);
+                REQUIRE(function->getReturnType()->isStructTy());
+                REQUIRE(function->getReturnType()->getStructNumElements() == 2);
+                CHECK(function->getReturnType()->getStructElementType(0)->isIntegerTy(8));
+                CHECK(function->getReturnType()->getStructElementType(1)->isDoubleTy());
+                CHECK(function->arg_size() == 0);
+            }
+            SECTION("Two floats are squeezed into one xmm")
+            {
+                auto program = generateProgramWithOptions("struct R {\n"
+                                                          "float r;\n"
+                                                          "float f;\n"
+                                                          "};\n"
+                                                          "struct R foo(void);",
+                                                          x64linux);
+                cld::CGLLVM::generateLLVM(*module, program, x64linux);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                auto* function = module->getFunction("foo");
+                REQUIRE(function);
+                CHECK(function->arg_size() == 0);
+                REQUIRE(llvm::isa<llvm::FixedVectorType>(function->getReturnType()));
+                auto* vector = llvm::cast<llvm::FixedVectorType>(function->getReturnType());
+                CHECK(vector->getNumElements() == 2);
+                CHECK(vector->getElementType()->isFloatTy());
+            }
+            SECTION("> 128")
+            {
+                auto program = generateProgramWithOptions("struct R {\n"
+                                                          "int r[5];\n"
+                                                          "};\n"
+                                                          "struct R foo(void);",
+                                                          x64linux);
+                cld::CGLLVM::generateLLVM(*module, program, x64linux);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                auto* function = module->getFunction("foo");
+                REQUIRE(function);
+                CHECK(function->getReturnType()->isVoidTy());
+                REQUIRE(function->arg_size() == 1);
+                REQUIRE(function->getArg(0)->getType()->isPointerTy());
+                CHECK(function->getArg(0)->getType()->getPointerElementType()->isStructTy());
+                CHECK(function->hasAttribute(1, llvm::Attribute::StructRet));
+                CHECK(function->hasAttribute(1, llvm::Attribute::NoAlias));
+            }
+        }
+        SECTION("Execution")
+        {
+#if (defined(__unix__) || defined(__APPLE__)) && defined(__x86_64__)
+            struct R
+            {
+                short r[3];
+            };
+            struct Input
+            {
+                double f;
+                unsigned char c[2];
+            };
+            auto program = generateProgram("struct R {\n"
+                                           "short r[3];\n"
+                                           "};\n"
+                                           "struct Input {\n"
+                                           "double f;\n"
+                                           "unsigned char c[2];\n"
+                                           "};\n"
+                                           "struct R foo(struct Input i) {\n"
+                                           "struct R r;\n"
+                                           "r.r[0] = i.f;\n"
+                                           "r.r[1] = i.c[0] + i.c[1];\n"
+                                           "r.r[2] = i.c[0] - i.c[1];\n"
+                                           "return r;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            Input input = {72, {'5', '0'}};
+            auto result = computeInJIT<R(Input)>(std::move(module), "foo", input);
+            CHECK(result.r[0] == 72);
+            CHECK(result.r[1] == '5' + '0');
+            CHECK(result.r[2] == 5);
+#endif
+        }
     }
 }
 
