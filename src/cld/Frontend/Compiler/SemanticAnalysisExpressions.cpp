@@ -1095,9 +1095,9 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
             {
                 log(Errors::Semantics::OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
                     *node.getUnaryToken(), m_sourceInterface, *node.getUnaryToken(), value));
-                return Expression(PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions()),
-                                  ValueCategory::Rvalue, {});
             }
+            value = Expression(PrimitiveType::createUnderlineBool(false, false), ValueCategory::Rvalue,
+                               Conversion(Conversion::Implicit, std::make_unique<Expression>(std::move(value))));
             return Expression(PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions()),
                               ValueCategory::Rvalue,
                               UnaryOperator(UnaryOperator::BooleanNegate, node.getUnaryToken(),
@@ -1800,6 +1800,10 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::doLogicOperators(Ex
         log(Errors::Semantics::RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
             rhs, m_sourceInterface, *token, rhs));
     }
+    lhs = Expression(PrimitiveType::createUnderlineBool(false, false), ValueCategory::Rvalue,
+                     Conversion(Conversion::Implicit, std::make_unique<Expression>(std::move(lhs))));
+    rhs = Expression(PrimitiveType::createUnderlineBool(false, false), ValueCategory::Rvalue,
+                     Conversion(Conversion::Implicit, std::make_unique<Expression>(std::move(rhs))));
     return Expression(PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions()),
                       ValueCategory::Rvalue,
                       BinaryOperator(std::make_unique<Expression>(std::move(lhs)), kind, token,

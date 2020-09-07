@@ -11,6 +11,8 @@
 #include <cld/Frontend/Compiler/Semantics.hpp>
 #include <cld/Frontend/Preprocessor/Preprocessor.hpp>
 
+#include <regex>
+
 #define generateProgram(str)                                                                                 \
     [](std::string source) {                                                                                 \
         bool errors = false;                                                                                 \
@@ -81,25 +83,6 @@ auto computeInJIT(std::unique_ptr<llvm::Module>&& module, std::string_view funct
     }
 }
 
-class ContainsIR : public Catch::MatcherBase<llvm::Module>
-{
-    std::string m_pattern;
-
-public:
-    explicit ContainsIR(std::string pattern) : m_pattern(std::move(pattern)) {}
-
-    bool match(const llvm::Module&) const override
-    {
-        return false;
-    }
-
-protected:
-    std::string describe() const override
-    {
-        return std::string();
-    }
-};
-
 inline std::string printModule(const llvm::Module& arg)
 {
     std::string s;
@@ -108,6 +91,28 @@ inline std::string printModule(const llvm::Module& arg)
     ss.flush();
     return s;
 }
+
+class ContainsIR : public Catch::MatcherBase<llvm::Module>
+{
+    std::string m_pattern;
+
+public:
+    explicit ContainsIR(std::string pattern) : m_pattern("(.*)" + pattern + "(.*|\n|$)") {}
+
+    bool match(const llvm::Module& module) const override
+    {
+        auto string = printModule(module);
+        std::regex pattern(m_pattern);
+        auto result = std::regex_search(string, pattern);
+        return result;
+    }
+
+protected:
+    std::string describe() const override
+    {
+        return " contains " + m_pattern;
+    }
+};
 
 } // namespace cld::Tests
 

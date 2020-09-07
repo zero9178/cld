@@ -1338,6 +1338,13 @@ cld::Semantics::ConstValue
                     conversion.getExpression(), m_sourceInterface, conversion.getExpression()));
                 return {};
             }
+            else if (conversion.getKind() == Conversion::Implicit)
+            {
+                if (!typeCheck(conversion.getExpression(), exp))
+                {
+                    return {};
+                }
+            }
             return exp.castTo(expression.getType(), this, m_sourceInterface.getLanguageOptions());
         },
         [&](const BinaryOperator& binaryOperator) -> ConstValue {

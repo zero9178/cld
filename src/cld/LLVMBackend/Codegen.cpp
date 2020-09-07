@@ -816,7 +816,6 @@ public:
                     continue;
                 }
                 // TODO: Evaluate val array expression
-                // visit(var);
             }
         }
         for (auto& iter : compoundStatement.getCompoundItems())
@@ -1010,6 +1009,10 @@ public:
             {
                 auto& prevType = conversion.getExpression().getType();
                 auto& newType = expression.getType();
+                if (cld::Semantics::isBool(newType))
+                {
+                    return m_builder.CreateIntCast(toBool(value), visit(newType), false);
+                }
                 if (std::holds_alternative<cld::Semantics::PointerType>(newType.get()))
                 {
                     if (cld::Semantics::isInteger(prevType))
@@ -1045,6 +1048,10 @@ public:
                     if (cld::get<cld::Semantics::PrimitiveType>(newType.get()).isSigned())
                     {
                         return m_builder.CreateFPToSI(value, visit(newType));
+                    }
+                    else if (std::holds_alternative<cld::Semantics::PointerType>(newType.get()))
+                    {
+                        return m_builder.CreatePtrToInt(value, visit(newType));
                     }
                     else
                     {
@@ -1115,11 +1122,11 @@ public:
     llvm::Value* visit(const cld::Semantics::Expression&, const cld::Semantics::BinaryOperator& binaryExpression)
     {
         auto* lhs = visit(binaryExpression.getLeftExpression());
-        auto* rhs = visit(binaryExpression.getRightExpression());
         switch (binaryExpression.getKind())
         {
             case cld::Semantics::BinaryOperator::Addition:
             {
+                auto* rhs = visit(binaryExpression.getRightExpression());
                 if (cld::Semantics::isArithmetic(binaryExpression.getLeftExpression().getType())
                     && cld::Semantics::isArithmetic(binaryExpression.getLeftExpression().getType()))
                 {
@@ -1163,6 +1170,7 @@ public:
             }
             case cld::Semantics::BinaryOperator::Subtraction:
             {
+                auto* rhs = visit(binaryExpression.getRightExpression());
                 if (cld::Semantics::isArithmetic(binaryExpression.getLeftExpression().getType())
                     && cld::Semantics::isArithmetic(binaryExpression.getLeftExpression().getType()))
                 {
@@ -1188,26 +1196,41 @@ public:
                 {
                     if (lhs->getType()->isPointerTy())
                     {
-                        rhs = m_builder.CreateNeg(rhs);
-                        rhs = m_builder.CreateIntCast(rhs, m_builder.getInt64Ty(),
-                                                      cld::get<cld::Semantics::PrimitiveType>(
-                                                          binaryExpression.getRightExpression().getType().get())
-                                                          .isSigned());
-                        return m_builder.CreateGEP(lhs, rhs);
+                        if (rhs->getType()->isIntegerTy())
+                        {
+                            rhs = m_builder.CreateNeg(rhs);
+                            rhs = m_builder.CreateIntCast(rhs, m_builder.getInt64Ty(),
+                                                          cld::get<cld::Semantics::PrimitiveType>(
+                                                              binaryExpression.getRightExpression().getType().get())
+                                                              .isSigned());
+                            return m_builder.CreateGEP(lhs, rhs);
+                        }
+                        else
+                        {
+                            return m_builder.CreatePtrDiff(lhs, rhs);
+                        }
                     }
                     else
                     {
-                        lhs = m_builder.CreateNeg(lhs);
-                        lhs = m_builder.CreateIntCast(lhs, m_builder.getInt64Ty(),
-                                                      cld::get<cld::Semantics::PrimitiveType>(
-                                                          binaryExpression.getLeftExpression().getType().get())
-                                                          .isSigned());
-                        return m_builder.CreateGEP(rhs, lhs);
+                        if (rhs->getType()->isIntegerTy())
+                        {
+                            lhs = m_builder.CreateNeg(lhs);
+                            lhs = m_builder.CreateIntCast(lhs, m_builder.getInt64Ty(),
+                                                          cld::get<cld::Semantics::PrimitiveType>(
+                                                              binaryExpression.getLeftExpression().getType().get())
+                                                              .isSigned());
+                            return m_builder.CreateGEP(rhs, lhs);
+                        }
+                        else
+                        {
+                            return m_builder.CreatePtrDiff(lhs, rhs);
+                        }
                     }
                 }
             }
             case cld::Semantics::BinaryOperator::Multiply:
             {
+                auto* rhs = visit(binaryExpression.getRightExpression());
                 if (cld::Semantics::isInteger(binaryExpression.getLeftExpression().getType()))
                 {
                     return m_builder.CreateNSWMul(lhs, rhs);
@@ -1219,6 +1242,7 @@ public:
             }
             case cld::Semantics::BinaryOperator::Divide:
             {
+                auto* rhs = visit(binaryExpression.getRightExpression());
                 if (cld::Semantics::isInteger(binaryExpression.getLeftExpression().getType()))
                 {
                     if (cld::get<cld::Semantics::PrimitiveType>(binaryExpression.getLeftExpression().getType().get())
@@ -1233,11 +1257,12 @@ public:
                 }
                 else
                 {
-                    return m_builder.CreateFMul(lhs, rhs);
+                    return m_builder.CreateFDiv(lhs, rhs);
                 }
             }
             case cld::Semantics::BinaryOperator::Modulo:
             {
+                auto* rhs = visit(binaryExpression.getRightExpression());
                 if (cld::get<cld::Semantics::PrimitiveType>(binaryExpression.getLeftExpression().getType().get())
                         .isSigned())
                 {
@@ -1250,6 +1275,7 @@ public:
             }
             case cld::Semantics::BinaryOperator::LeftShift:
             {
+                auto* rhs = visit(binaryExpression.getRightExpression());
                 if (lhs->getType() != rhs->getType())
                 {
                     rhs = m_builder.CreateIntCast(
@@ -1257,10 +1283,11 @@ public:
                         cld::get<cld::Semantics::PrimitiveType>(binaryExpression.getRightExpression().getType().get())
                             .isSigned());
                 }
-                return m_builder.CreateShl(lhs, rhs, "", false, true);
+                return m_builder.CreateShl(lhs, rhs);
             }
             case cld::Semantics::BinaryOperator::RightShift:
             {
+                auto* rhs = visit(binaryExpression.getRightExpression());
                 if (lhs->getType() != rhs->getType())
                 {
                     rhs = m_builder.CreateIntCast(
@@ -1270,22 +1297,218 @@ public:
                 }
                 return m_builder.CreateAShr(lhs, rhs);
             }
-            case cld::Semantics::BinaryOperator::LessThan: break;
-            case cld::Semantics::BinaryOperator::GreaterThan: break;
-            case cld::Semantics::BinaryOperator::LessOrEqual: break;
-            case cld::Semantics::BinaryOperator::GreaterOrEqual: break;
-            case cld::Semantics::BinaryOperator::Equal: break;
-            case cld::Semantics::BinaryOperator::NotEqual: break;
-            case cld::Semantics::BinaryOperator::BitOr: return m_builder.CreateOr(lhs, rhs);
-            case cld::Semantics::BinaryOperator::BitAnd: return m_builder.CreateAnd(lhs, rhs);
-            case cld::Semantics::BinaryOperator::BitXor: return m_builder.CreateXor(lhs, rhs);
-            case cld::Semantics::BinaryOperator::LogicAnd: break;
-            case cld::Semantics::BinaryOperator::LogicOr: break;
+            case cld::Semantics::BinaryOperator::GreaterThan:
+            case cld::Semantics::BinaryOperator::LessOrEqual:
+            case cld::Semantics::BinaryOperator::GreaterOrEqual:
+            case cld::Semantics::BinaryOperator::Equal:
+            case cld::Semantics::BinaryOperator::NotEqual:
+            case cld::Semantics::BinaryOperator::LessThan:
+            {
+                auto* rhs = visit(binaryExpression.getRightExpression());
+                llvm::CmpInst::Predicate predicate;
+                bool fp = cld::Semantics::isArithmetic(binaryExpression.getLeftExpression().getType())
+                          && !cld::Semantics::isInteger(binaryExpression.getLeftExpression().getType());
+                bool isSigned =
+                    cld::Semantics::isInteger(binaryExpression.getLeftExpression().getType())
+                    && cld::get<cld::Semantics::PrimitiveType>(binaryExpression.getLeftExpression().getType().get())
+                           .isSigned();
+                switch (binaryExpression.getKind())
+                {
+                    case cld::Semantics::BinaryOperator::GreaterThan:
+                        if (fp)
+                        {
+                            predicate = llvm::CmpInst::FCMP_UGT;
+                        }
+                        else if (isSigned)
+                        {
+                            predicate = llvm::CmpInst::ICMP_SGT;
+                        }
+                        else
+                        {
+                            predicate = llvm::CmpInst::ICMP_UGT;
+                        }
+                        break;
+                    case cld::Semantics::BinaryOperator::LessOrEqual:
+                        if (fp)
+                        {
+                            predicate = llvm::CmpInst::FCMP_ULE;
+                        }
+                        else if (isSigned)
+                        {
+                            predicate = llvm::CmpInst::ICMP_SLE;
+                        }
+                        else
+                        {
+                            predicate = llvm::CmpInst::ICMP_ULE;
+                        }
+                        break;
+                    case cld::Semantics::BinaryOperator::GreaterOrEqual:
+                        if (fp)
+                        {
+                            predicate = llvm::CmpInst::FCMP_UGE;
+                        }
+                        else if (isSigned)
+                        {
+                            predicate = llvm::CmpInst::ICMP_SGE;
+                        }
+                        else
+                        {
+                            predicate = llvm::CmpInst::ICMP_UGE;
+                        }
+                        break;
+                    case cld::Semantics::BinaryOperator::Equal:
+                        if (fp)
+                        {
+                            predicate = llvm::CmpInst::FCMP_UEQ;
+                        }
+                        else
+                        {
+                            predicate = llvm::CmpInst::ICMP_EQ;
+                        }
+                        break;
+                    case cld::Semantics::BinaryOperator::NotEqual:
+                        if (fp)
+                        {
+                            predicate = llvm::CmpInst::FCMP_UGT;
+                        }
+                        else
+                        {
+                            predicate = llvm::CmpInst::ICMP_NE;
+                        }
+                        break;
+                    case cld::Semantics::BinaryOperator::LessThan:
+                        if (fp)
+                        {
+                            predicate = llvm::CmpInst::FCMP_ULT;
+                        }
+                        else if (isSigned)
+                        {
+                            predicate = llvm::CmpInst::ICMP_SLT;
+                        }
+                        else
+                        {
+                            predicate = llvm::CmpInst::ICMP_ULT;
+                        }
+                        break;
+                    default: CLD_UNREACHABLE;
+                }
+                auto* value = m_builder.CreateCmp(predicate, lhs, rhs);
+                return m_builder.CreateZExt(value, visit(cld::Semantics::PrimitiveType::createInt(
+                                                       false, false, m_sourceInterface.getLanguageOptions())));
+            }
+            case cld::Semantics::BinaryOperator::BitOr:
+            {
+                auto* rhs = visit(binaryExpression.getRightExpression());
+                return m_builder.CreateOr(lhs, rhs);
+            }
+            case cld::Semantics::BinaryOperator::BitAnd:
+            {
+                auto* rhs = visit(binaryExpression.getRightExpression());
+                return m_builder.CreateAnd(lhs, rhs);
+            }
+            case cld::Semantics::BinaryOperator::BitXor:
+            {
+                auto* rhs = visit(binaryExpression.getRightExpression());
+                return m_builder.CreateXor(lhs, rhs);
+            }
+            case cld::Semantics::BinaryOperator::LogicAnd:
+            {
+                lhs = m_builder.CreateTrunc(lhs, m_builder.getInt1Ty());
+                auto* falseBranch =
+                    llvm::BasicBlock::Create(m_module.getContext(), "", m_builder.GetInsertBlock()->getParent());
+                auto* trueBranch =
+                    llvm::BasicBlock::Create(m_module.getContext(), "", m_builder.GetInsertBlock()->getParent());
+                auto* continueBranch =
+                    llvm::BasicBlock::Create(m_module.getContext(), "", m_builder.GetInsertBlock()->getParent());
+                m_builder.CreateCondBr(lhs, trueBranch, falseBranch);
+                m_builder.SetInsertPoint(trueBranch);
+                auto* rhs = visit(binaryExpression.getRightExpression());
+                rhs = m_builder.CreateTrunc(rhs, m_builder.getInt1Ty());
+                m_builder.CreateBr(continueBranch);
+                m_builder.SetInsertPoint(falseBranch);
+                m_builder.CreateBr(continueBranch);
+                m_builder.SetInsertPoint(continueBranch);
+                auto* phi = m_builder.CreatePHI(m_builder.getInt1Ty(), 2);
+                phi->addIncoming(lhs, falseBranch);
+                phi->addIncoming(rhs, trueBranch);
+                return m_builder.CreateZExt(phi, m_builder.getInt32Ty());
+            }
+            case cld::Semantics::BinaryOperator::LogicOr:
+            {
+                lhs = m_builder.CreateTrunc(lhs, m_builder.getInt1Ty());
+                auto* falseBranch =
+                    llvm::BasicBlock::Create(m_module.getContext(), "", m_builder.GetInsertBlock()->getParent());
+                auto* trueBranch =
+                    llvm::BasicBlock::Create(m_module.getContext(), "", m_builder.GetInsertBlock()->getParent());
+                auto* continueBranch =
+                    llvm::BasicBlock::Create(m_module.getContext(), "", m_builder.GetInsertBlock()->getParent());
+                m_builder.CreateCondBr(lhs, trueBranch, falseBranch);
+                m_builder.SetInsertPoint(falseBranch);
+                auto* rhs = visit(binaryExpression.getRightExpression());
+                rhs = m_builder.CreateTrunc(rhs, m_builder.getInt1Ty());
+                m_builder.CreateBr(continueBranch);
+                m_builder.SetInsertPoint(trueBranch);
+                m_builder.CreateBr(continueBranch);
+                m_builder.SetInsertPoint(continueBranch);
+                auto* phi = m_builder.CreatePHI(m_builder.getInt1Ty(), 2);
+                phi->addIncoming(lhs, trueBranch);
+                phi->addIncoming(rhs, falseBranch);
+                return m_builder.CreateZExt(phi, m_builder.getInt32Ty());
+            }
         }
         CLD_UNREACHABLE;
     }
 
-    llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::Cast& constant) {}
+    llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::Cast& cast)
+    {
+        auto* value = visit(cast.getExpression());
+        auto& prevType = cast.getExpression().getType();
+        auto& newType = expression.getType();
+        if (std::holds_alternative<cld::Semantics::PointerType>(newType.get()))
+        {
+            if (cld::Semantics::isInteger(prevType))
+            {
+                return m_builder.CreateIntToPtr(value, visit(newType));
+            }
+            return m_builder.CreatePointerCast(value, visit(newType));
+        }
+        if (cld::Semantics::isBool(newType))
+        {
+            return m_builder.CreateIntCast(toBool(value), visit(newType), false);
+        }
+        if (cld::Semantics::isInteger(prevType) && cld::Semantics::isInteger(newType))
+        {
+            return m_builder.CreateIntCast(value, visit(newType),
+                                           cld::get<cld::Semantics::PrimitiveType>(prevType.get()).isSigned());
+        }
+        if (cld::Semantics::isInteger(prevType))
+        {
+            if (cld::get<cld::Semantics::PrimitiveType>(prevType.get()).isSigned())
+            {
+                return m_builder.CreateSIToFP(value, visit(newType));
+            }
+            else
+            {
+                return m_builder.CreateUIToFP(value, visit(newType));
+            }
+        }
+        if (cld::Semantics::isInteger(newType))
+        {
+            if (cld::get<cld::Semantics::PrimitiveType>(newType.get()).isSigned())
+            {
+                return m_builder.CreateFPToSI(value, visit(newType));
+            }
+            else if (std::holds_alternative<cld::Semantics::PointerType>(newType.get()))
+            {
+                return m_builder.CreatePtrToInt(value, visit(newType));
+            }
+            else
+            {
+                return m_builder.CreateFPToUI(value, visit(newType));
+            }
+        }
+        return m_builder.CreateFPCast(value, visit(newType));
+    }
 
     llvm::Value* visit(const cld::Semantics::Expression&, const cld::Semantics::UnaryOperator& unaryOperator)
     {
@@ -1435,17 +1658,26 @@ public:
             }
             case cld::Semantics::UnaryOperator::BooleanNegate:
             {
-                auto* boolean = toBool(value);
-                boolean = m_builder.CreateNot(boolean);
-                return m_builder.CreateZExt(boolean, visit(cld::Semantics::PrimitiveType::createInt(
-                                                         false, false, m_sourceInterface.getLanguageOptions())));
+                value = m_builder.CreateNot(m_builder.CreateTrunc(value, m_builder.getInt1Ty()));
+                return m_builder.CreateZExt(value, visit(cld::Semantics::PrimitiveType::createInt(
+                                                       false, false, m_sourceInterface.getLanguageOptions())));
             }
             case cld::Semantics::UnaryOperator::BitwiseNegate: return m_builder.CreateNot(value);
         }
         CLD_UNREACHABLE;
     }
 
-    llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::SizeofOperator& constant) {}
+    llvm::Value* visit(const cld::Semantics::Expression&, const cld::Semantics::SizeofOperator& sizeofOperator)
+    {
+        if (sizeofOperator.getSize())
+        {
+            auto* type = visit(
+                cld::Semantics::PrimitiveType::createSizeT(false, false, m_programInterface.getLanguageOptions()));
+            return llvm::ConstantInt::get(type, *sizeofOperator.getSize());
+        }
+        // TODO:
+        CLD_UNREACHABLE;
+    }
 
     llvm::Value* visit(const cld::Semantics::Expression&, const cld::Semantics::SubscriptOperator& subscriptOperator)
     {
@@ -1469,11 +1701,28 @@ public:
         }
     }
 
-    llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::Conditional& constant) {}
+    llvm::Value* visit(const cld::Semantics::Expression&, const cld::Semantics::Conditional& conditional)
+    {
+        auto* boolean = visit(conditional.getBoolExpression());
+        boolean = m_builder.CreateTrunc(boolean, m_builder.getInt1Ty());
+        auto* trueBranch = llvm::BasicBlock::Create(m_builder.getContext());
+        auto* falseBranch = llvm::BasicBlock::Create(m_builder.getContext());
+        auto* contBr = llvm::BasicBlock::Create(m_builder.getContext());
+        m_builder.CreateCondBr(boolean, trueBranch, falseBranch);
+        m_builder.SetInsertPoint(trueBranch);
+        auto* trueValue = visit(conditional.getTrueExpression());
+        m_builder.CreateBr(contBr);
+        m_builder.SetInsertPoint(falseBranch);
+        auto* falseValue = visit(conditional.getFalseExpression());
+        m_builder.CreateBr(contBr);
+        auto* phi = m_builder.CreatePHI(trueValue->getType(), 2);
+        phi->addIncoming(trueValue, trueBranch);
+        phi->addIncoming(falseValue, falseBranch);
+        return phi;
+    }
 
     llvm::Value* visit(const cld::Semantics::Expression&, const cld::Semantics::Assignment& assignment)
     {
-        // TODO: Special cases
         if (!m_programInterface.isBitfieldAccess(assignment.getLeftExpression()))
         {
             auto* lhs = visit(assignment.getLeftExpression());
@@ -1528,9 +1777,12 @@ public:
         return visit(commaExpression.getLastExpression());
     }
 
-    llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::CallExpression& constant) {}
+    llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::CallExpression& call) {}
 
-    llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::CompoundLiteral& constant) {}
+    llvm::Value* visit(const cld::Semantics::Expression& expression,
+                       const cld::Semantics::CompoundLiteral& compoundLiteral)
+    {
+    }
 };
 } // namespace
 
