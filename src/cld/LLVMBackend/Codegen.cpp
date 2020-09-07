@@ -1045,13 +1045,13 @@ public:
                 }
                 if (cld::Semantics::isInteger(newType))
                 {
-                    if (cld::get<cld::Semantics::PrimitiveType>(newType.get()).isSigned())
-                    {
-                        return m_builder.CreateFPToSI(value, visit(newType));
-                    }
-                    else if (std::holds_alternative<cld::Semantics::PointerType>(newType.get()))
+                    if (std::holds_alternative<cld::Semantics::PointerType>(prevType.get()))
                     {
                         return m_builder.CreatePtrToInt(value, visit(newType));
+                    }
+                    else if (cld::get<cld::Semantics::PrimitiveType>(newType.get()).isSigned())
+                    {
+                        return m_builder.CreateFPToSI(value, visit(newType));
                     }
                     else
                     {
@@ -1494,13 +1494,13 @@ public:
         }
         if (cld::Semantics::isInteger(newType))
         {
-            if (cld::get<cld::Semantics::PrimitiveType>(newType.get()).isSigned())
-            {
-                return m_builder.CreateFPToSI(value, visit(newType));
-            }
-            else if (std::holds_alternative<cld::Semantics::PointerType>(newType.get()))
+            if (std::holds_alternative<cld::Semantics::PointerType>(prevType.get()))
             {
                 return m_builder.CreatePtrToInt(value, visit(newType));
+            }
+            else if (cld::get<cld::Semantics::PrimitiveType>(newType.get()).isSigned())
+            {
+                return m_builder.CreateFPToSI(value, visit(newType));
             }
             else
             {

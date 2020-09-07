@@ -2143,3 +2143,136 @@ TEST_CASE("LLVM codegen binary expressions", "[LLVM]")
         }
     }
 }
+
+TEST_CASE("LLVM codegen casts", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    auto module = std::make_unique<llvm::Module>("", context);
+    SECTION("Integer to pointer")
+    {
+        auto program = generateProgram("int* bool(int i) {\n"
+                                       "return (int*)i;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int*(int)>(std::move(module), "bool", 5) == (int*)5);
+    }
+    SECTION("Pointer to pointer")
+    {
+        auto program = generateProgram("int* bool(float* i) {\n"
+                                       "return (int*)i;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int*(float*)>(std::move(module), "bool", (float*)5) == (int*)5);
+    }
+    SECTION("Int to bool")
+    {
+        auto program = generateProgram("int bool(int i) {\n"
+                                       "return (_Bool)i;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int(int)>(std::move(module), "bool", 5) == 1);
+    }
+    SECTION("Float to bool")
+    {
+        auto program = generateProgram("int bool(float i) {\n"
+                                       "return (_Bool)i;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int(float)>(std::move(module), "bool", 0) == 0);
+    }
+    SECTION("Pointer to bool")
+    {
+        auto program = generateProgram("int bool(float* i) {\n"
+                                       "return (_Bool)i;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        float f;
+        CHECK(cld::Tests::computeInJIT<int(float*)>(std::move(module), "bool", &f) == 1);
+    }
+    SECTION("Int to int")
+    {
+        auto program = generateProgram("long bool(char i) {\n"
+                                       "return (long)i;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<long(char)>(std::move(module), "bool", 3) == 3);
+    }
+    SECTION("Int to float")
+    {
+        SECTION("Signed")
+        {
+            auto program = generateProgram("float bool(int i) {\n"
+                                           "return (float)i;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<float(int)>(std::move(module), "bool", -3) == -3.0f);
+        }
+        SECTION("Unsigned")
+        {
+            auto program = generateProgram("float bool(unsigned i) {\n"
+                                           "return (float)i;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<float(unsigned int)>(std::move(module), "bool", 3) == 3.0f);
+        }
+    }
+    SECTION("Float to int")
+    {
+        SECTION("Signed")
+        {
+            auto program = generateProgram("int bool(float i) {\n"
+                                           "return (int)i;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int(float)>(std::move(module), "bool", -3.534) == -3);
+        }
+        SECTION("Unsigned")
+        {
+            auto program = generateProgram("unsigned bool(float i) {\n"
+                                           "return (unsigned)i;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<unsigned(float)>(std::move(module), "bool", 3.534) == 3);
+        }
+    }
+    SECTION("Pointer to int")
+    {
+        auto program = generateProgram("long bool(int* i) {\n"
+                                       "return (long)i;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<long(int*)>(std::move(module), "bool", (int*)5) == 5);
+    }
+    SECTION("Floating point cast")
+    {
+        auto program = generateProgram("double bool(float i) {\n"
+                                       "return (double)i;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<double(float)>(std::move(module), "bool", 5.0) == 5.0);
+    }
+}
