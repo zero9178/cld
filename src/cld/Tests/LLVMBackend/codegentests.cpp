@@ -4,7 +4,10 @@
 
 #include <cld/LLVMBackend/Codegen.hpp>
 
+#include <numeric>
+
 #include <TestTargets.hpp>
+#include <stdarg.h>
 
 #include "Common.hpp"
 
@@ -2311,116 +2314,361 @@ TEST_CASE("LLVM codegen conditional expressions", "[LLVM]")
     }
 }
 
+namespace
+{
+void varargTest1(int* success, ...)
+{
+    struct R
+    {
+        int c;
+        float f;
+    };
+
+    va_list args;
+    va_start(args, success);
+    auto r = va_arg(args, R);
+    if (r.c == 5 && r.f == 3)
+    {
+        *success = true;
+    }
+    va_end(args);
+}
+
+void varargTest2(int* success, ...)
+{
+    struct R
+    {
+        float f[2];
+        double r;
+    };
+    va_list args;
+    va_start(args, success);
+    auto r = va_arg(args, R);
+    va_end(args);
+    if (r.r == 3.5 && r.f[0] == 3456.34f && r.f[1] == 4356.2134f)
+    {
+        *success = true;
+    }
+}
+
+void varargTest3(int* success, ...)
+{
+    struct R
+    {
+        float f[8];
+    };
+    va_list args;
+    va_start(args, success);
+    auto r = va_arg(args, R);
+    va_end(args);
+    for (std::size_t i = 0; i < 8; i++)
+    {
+        if (r.f[i] != i)
+        {
+            return;
+        }
+    }
+    *success = true;
+}
+} // namespace
+
 TEST_CASE("LLVM codegen function call", "[LLVM]")
 {
     // This test case uses lambdas which according to the C++ standard don't have C linkage but Compilers allow it
     // so we'll use it anyways
     llvm::LLVMContext context;
     auto module = std::make_unique<llvm::Module>("", context);
-    SECTION("Passing in struct of size 64")
+    SECTION("Functions without prototypes")
     {
-        struct R
+        SECTION("Passing in struct of size 64")
         {
-            int c;
-            float f;
-        };
-        auto program = generateProgram("struct R {\n"
-                                       "int c;\n"
-                                       "float f;\n"
-                                       "};\n"
-                                       "\n"
-                                       "void function(void (*toCall)(struct R,int* i),int* success) {\n"
-                                       "struct R r;\n"
-                                       "r.c = 5;\n"
-                                       "r.f = 3;\n"
-                                       "toCall(r,success);\n"
-                                       "return;"
-                                       "}");
-        cld::CGLLVM::generateLLVM(*module, program);
-        CAPTURE(*module);
-        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
-        auto* func = +[](struct R r, int* success) {
-            if (r.c == 5 && r.f == 3)
+            struct R
             {
-                *success = true;
-            }
-        };
-        int success = 0;
-        cld::Tests::computeInJIT<void(void (*)(R, int*), int*)>(std::move(module), "function", func, &success);
-        CHECK(success);
-    }
-    SECTION("Passing in struct of size 128")
-    {
-        struct R
-        {
-            float f[2];
-            double r;
-        };
-        auto program = generateProgram("struct R {\n"
-                                       "float f[2];\n"
-                                       "double r;\n"
-                                       "};\n"
-                                       "\n"
-                                       "void function(void (*toCall)(struct R,int* i),int* success) {\n"
-                                       "struct R r;\n"
-                                       "r.r = 3.5;\n"
-                                       "r.f[0] = 3456.34;\n"
-                                       "r.f[1] = 4356.2134;\n"
-                                       "toCall(r,success);\n"
-                                       "return;"
-                                       "}");
-        cld::CGLLVM::generateLLVM(*module, program);
-        CAPTURE(*module);
-        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
-        auto* func = +[](struct R r, int* success) {
-            if (r.r == 3.5 && r.f[0] == 3456.34f && r.f[1] == 4356.2134f)
-            {
-                *success = true;
-            }
-        };
-        int success = 0;
-        cld::Tests::computeInJIT<void(void (*)(R, int*), int*)>(std::move(module), "function", func, &success);
-        CHECK(success);
-    }
-    SECTION("Passing in large struct")
-    {
-        struct R
-        {
-            float f[8];
-        };
-        auto program = generateProgram("struct R {\n"
-                                       "float f[8];\n"
-                                       "};\n"
-                                       "\n"
-                                       "void function(void (*toCall)(struct R,int* i),int* success) {\n"
-                                       "struct R r;\n"
-                                       "r.f[0] = 0;\n"
-                                       "r.f[1] = 1;\n"
-                                       "r.f[2] = 2;\n"
-                                       "r.f[3] = 3;\n"
-                                       "r.f[4] = 4;\n"
-                                       "r.f[5] = 5;\n"
-                                       "r.f[6] = 6;\n"
-                                       "r.f[7] = 7;\n"
-                                       "toCall(r,success);\n"
-                                       "return;\n"
-                                       "}");
-        cld::CGLLVM::generateLLVM(*module, program);
-        CAPTURE(*module);
-        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
-        auto* func = +[](struct R r, int* success) {
-            for (std::size_t i = 0; i < 8; i++)
-            {
-                if (r.f[i] != i)
+                int c;
+                float f;
+            };
+            auto program = generateProgram("struct R {\n"
+                                           "int c;\n"
+                                           "float f;\n"
+                                           "};\n"
+                                           "\n"
+                                           "void function(void (*toCall)(),int* success) {\n"
+                                           "struct R r;\n"
+                                           "r.c = 5;\n"
+                                           "r.f = 3;\n"
+                                           "toCall(r,success);\n"
+                                           "return;"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            auto* func = +[](struct R r, int* success) {
+                if (r.c == 5 && r.f == 3)
                 {
-                    return;
+                    *success = true;
                 }
-            }
-            *success = true;
-        };
-        int success = 0;
-        cld::Tests::computeInJIT<void(void (*)(R, int*), int*)>(std::move(module), "function", func, &success);
-        CHECK(success);
+            };
+            int success = 0;
+            cld::Tests::computeInJIT<void(void (*)(R, int*), int*)>(std::move(module), "function", func, &success);
+            CHECK(success);
+        }
+        SECTION("Passing in struct of size 128")
+        {
+            struct R
+            {
+                float f[2];
+                double r;
+            };
+            auto program = generateProgram("struct R {\n"
+                                           "float f[2];\n"
+                                           "double r;\n"
+                                           "};\n"
+                                           "\n"
+                                           "void function(void (*toCall)(),int* success) {\n"
+                                           "struct R r;\n"
+                                           "r.r = 3.5;\n"
+                                           "r.f[0] = 3456.34;\n"
+                                           "r.f[1] = 4356.2134;\n"
+                                           "toCall(r,success);\n"
+                                           "return;"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            auto* func = +[](struct R r, int* success) {
+                if (r.r == 3.5 && r.f[0] == 3456.34f && r.f[1] == 4356.2134f)
+                {
+                    *success = true;
+                }
+            };
+            int success = 0;
+            cld::Tests::computeInJIT<void(void (*)(R, int*), int*)>(std::move(module), "function", func, &success);
+            CHECK(success);
+        }
+        SECTION("Passing in large struct")
+        {
+            struct R
+            {
+                float f[8];
+            };
+            auto program = generateProgram("struct R {\n"
+                                           "float f[8];\n"
+                                           "};\n"
+                                           "\n"
+                                           "void function(void (*toCall)(),int* success) {\n"
+                                           "struct R r;\n"
+                                           "r.f[0] = 0;\n"
+                                           "r.f[1] = 1;\n"
+                                           "r.f[2] = 2;\n"
+                                           "r.f[3] = 3;\n"
+                                           "r.f[4] = 4;\n"
+                                           "r.f[5] = 5;\n"
+                                           "r.f[6] = 6;\n"
+                                           "r.f[7] = 7;\n"
+                                           "toCall(r,success);\n"
+                                           "return;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            auto* func = +[](struct R r, int* success) {
+                for (std::size_t i = 0; i < 8; i++)
+                {
+                    if (r.f[i] != i)
+                    {
+                        return;
+                    }
+                }
+                *success = true;
+            };
+            int success = 0;
+            cld::Tests::computeInJIT<void(void (*)(R, int*), int*)>(std::move(module), "function", func, &success);
+            CHECK(success);
+        }
+    }
+    SECTION("Functions with vararg")
+    {
+        SECTION("Passing in struct of size 64")
+        {
+            auto program = generateProgram("struct R {\n"
+                                           "int c;\n"
+                                           "float f;\n"
+                                           "};\n"
+                                           "\n"
+                                           "void function(void (*toCall)(int*,...),int* success) {\n"
+                                           "struct R r;\n"
+                                           "r.c = 5;\n"
+                                           "r.f = 3;\n"
+                                           "toCall(success,r);\n"
+                                           "return;"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+
+            int success = 0;
+            cld::Tests::computeInJIT<void(void (*)(int*, ...), int*)>(std::move(module), "function", varargTest1,
+                                                                      &success);
+            CHECK(success);
+        }
+        SECTION("Passing in struct of size 128")
+        {
+            auto program = generateProgram("struct R {\n"
+                                           "float f[2];\n"
+                                           "double r;\n"
+                                           "};\n"
+                                           "\n"
+                                           "void function(void (*toCall)(int*,...),int* success) {\n"
+                                           "struct R r;\n"
+                                           "r.r = 3.5;\n"
+                                           "r.f[0] = 3456.34;\n"
+                                           "r.f[1] = 4356.2134;\n"
+                                           "toCall(success,r);\n"
+                                           "return;"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            int success = 0;
+            cld::Tests::computeInJIT<void(void (*)(int*, ...), int*)>(std::move(module), "function", varargTest2,
+                                                                      &success);
+            CHECK(success);
+        }
+        SECTION("Passing in large struct")
+        {
+            auto program = generateProgram("struct R {\n"
+                                           "float f[8];\n"
+                                           "};\n"
+                                           "\n"
+                                           "void function(void (*toCall)(int*,...),int* success) {\n"
+                                           "struct R r;\n"
+                                           "r.f[0] = 0;\n"
+                                           "r.f[1] = 1;\n"
+                                           "r.f[2] = 2;\n"
+                                           "r.f[3] = 3;\n"
+                                           "r.f[4] = 4;\n"
+                                           "r.f[5] = 5;\n"
+                                           "r.f[6] = 6;\n"
+                                           "r.f[7] = 7;\n"
+                                           "toCall(success,r);\n"
+                                           "return;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            int success = 0;
+            cld::Tests::computeInJIT<void(void (*)(int*, ...), int*)>(std::move(module), "function", varargTest3,
+                                                                      &success);
+            CHECK(success);
+        }
+    }
+    SECTION("Functions with prototypes")
+    {
+        SECTION("Passing in struct of size 64")
+        {
+            struct R
+            {
+                int c;
+                float f;
+            };
+            auto program = generateProgram("struct R {\n"
+                                           "int c;\n"
+                                           "float f;\n"
+                                           "};\n"
+                                           "\n"
+                                           "void function(void (*toCall)(struct R,int* i),int* success) {\n"
+                                           "struct R r;\n"
+                                           "r.c = 5;\n"
+                                           "r.f = 3;\n"
+                                           "toCall(r,success);\n"
+                                           "return;"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            auto* func = +[](struct R r, int* success) {
+                if (r.c == 5 && r.f == 3)
+                {
+                    *success = true;
+                }
+            };
+            int success = 0;
+            cld::Tests::computeInJIT<void(void (*)(R, int*), int*)>(std::move(module), "function", func, &success);
+            CHECK(success);
+        }
+        SECTION("Passing in struct of size 128")
+        {
+            struct R
+            {
+                float f[2];
+                double r;
+            };
+            auto program = generateProgram("struct R {\n"
+                                           "float f[2];\n"
+                                           "double r;\n"
+                                           "};\n"
+                                           "\n"
+                                           "void function(void (*toCall)(struct R,int* i),int* success) {\n"
+                                           "struct R r;\n"
+                                           "r.r = 3.5;\n"
+                                           "r.f[0] = 3456.34;\n"
+                                           "r.f[1] = 4356.2134;\n"
+                                           "toCall(r,success);\n"
+                                           "return;"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            auto* func = +[](struct R r, int* success) {
+                if (r.r == 3.5 && r.f[0] == 3456.34f && r.f[1] == 4356.2134f)
+                {
+                    *success = true;
+                }
+            };
+            int success = 0;
+            cld::Tests::computeInJIT<void(void (*)(R, int*), int*)>(std::move(module), "function", func, &success);
+            CHECK(success);
+        }
+        SECTION("Passing in large struct")
+        {
+            struct R
+            {
+                float f[8];
+            };
+            auto program = generateProgram("struct R {\n"
+                                           "float f[8];\n"
+                                           "};\n"
+                                           "\n"
+                                           "void function(void (*toCall)(struct R,int* i),int* success) {\n"
+                                           "struct R r;\n"
+                                           "r.f[0] = 0;\n"
+                                           "r.f[1] = 1;\n"
+                                           "r.f[2] = 2;\n"
+                                           "r.f[3] = 3;\n"
+                                           "r.f[4] = 4;\n"
+                                           "r.f[5] = 5;\n"
+                                           "r.f[6] = 6;\n"
+                                           "r.f[7] = 7;\n"
+                                           "toCall(r,success);\n"
+                                           "return;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            auto* func = +[](struct R r, int* success) {
+                for (std::size_t i = 0; i < 8; i++)
+                {
+                    if (r.f[i] != i)
+                    {
+                        return;
+                    }
+                }
+                *success = true;
+            };
+            int success = 0;
+            cld::Tests::computeInJIT<void(void (*)(R, int*), int*)>(std::move(module), "function", func, &success);
+            CHECK(success);
+        }
     }
     SECTION("Returning struct of size 64")
     {

@@ -1782,9 +1782,26 @@ public:
     {
         // TODO: K&R
         auto* function = visit(call.getFunctionExpression());
+        auto cldFt = cld::get<cld::Semantics::FunctionType>(
+            cld::get<cld::Semantics::PointerType>(call.getFunctionExpression().getType().get()).getElementType().get());
         auto* ft = llvm::cast<llvm::FunctionType>(function->getType()->getPointerElementType());
         auto transformation = m_functionABITransformations.find(ft);
         CLD_ASSERT(transformation != m_functionABITransformations.end());
+        bool isKandR = cldFt.isKandR();
+        if (isKandR || cldFt.isLastVararg())
+        {
+            std::vector<std::pair<cld::Semantics::Type, std::string_view>> arguments;
+            for (auto& iter : call.getArgumentExpressions())
+            {
+                arguments.emplace_back(iter.getType(), "");
+            }
+            auto callerFt =
+                cld::Semantics::FunctionType::create(cldFt.getReturnType(), std::move(arguments), false, false);
+            ft = llvm::cast<llvm::FunctionType>(visit(callerFt));
+            transformation = m_functionABITransformations.find(ft);
+            CLD_ASSERT(transformation != m_functionABITransformations.end());
+            cldFt = cld::get<cld::Semantics::FunctionType>(callerFt.get());
+        }
 
         std::size_t llvmFnI = 0;
         std::vector<llvm::Value*> arguments;
@@ -1889,12 +1906,14 @@ public:
             load->eraseFromParent();
             llvmFnI += multiIndex.size;
         }
-        auto* result = m_builder.CreateCall(ft, function, arguments);
-        applyFunctionAttributes(*result, ft,
-                                cld::get<cld::Semantics::FunctionType>(
-                                    cld::get<cld::Semantics::PointerType>(call.getFunctionExpression().getType().get())
-                                        .getElementType()
-                                        .get()));
+        if (isKandR)
+        {
+            function = m_builder.CreateBitCast(function, llvm::PointerType::getUnqual(ft));
+        }
+        auto* result = m_builder.CreateCall(
+            isKandR ? ft : llvm::cast<llvm::FunctionType>(function->getType()->getPointerElementType()), function,
+            arguments);
+        applyFunctionAttributes(*result, ft, cldFt);
         switch (transformation->second.returnType)
         {
             case ABITransformations::Unchanged: return result;
