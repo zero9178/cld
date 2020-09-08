@@ -95,8 +95,8 @@ class CodeGenerator final
             std::size_t size;
         };
         using Variant = std::variant<Change, MultipleArgs>;
-        Change returnType;
-        std::vector<Variant> arguments;
+        Change returnType;              // Never OnStack
+        std::vector<Variant> arguments; // Never Flattened
     };
 
     std::unordered_map<const llvm::FunctionType*, ABITransformations> m_functionABITransformations;
@@ -179,7 +179,7 @@ class CodeGenerator final
                     }
                     size += alignment - rest;
                 }
-                if ((*iter)->isIntegerTy())
+                if ((*iter)->isIntOrPtrTy())
                 {
                     encounteredInteger = true;
                 }
@@ -199,7 +199,8 @@ class CodeGenerator final
                 // it's gotta go into a integer register
                 if (takenIntegerRegisters >= availableIntegerRegisters)
                 {
-                    return {ABITransformations::OnStack, type, nullptr};
+                    return {type->isStructTy() ? ABITransformations::OnStack : ABITransformations::Unchanged, type,
+                            nullptr};
                 }
                 else
                 {
@@ -208,7 +209,14 @@ class CodeGenerator final
                     {
                         dest = ABITransformations::MultipleArgs{};
                     }
-                    ret[retIndex++] = m_builder.getIntNTy(size * 8);
+                    if (type->isStructTy())
+                    {
+                        ret[retIndex++] = m_builder.getIntNTy(size * 8);
+                    }
+                    else
+                    {
+                        ret[retIndex++] = type;
+                    }
                     if (std::holds_alternative<ABITransformations::MultipleArgs>(dest))
                     {
                         cld::get<ABITransformations::MultipleArgs>(dest).size++;
@@ -222,7 +230,8 @@ class CodeGenerator final
                 // a vector in LLVM IR
                 if (takenFloatingPointRegisters >= availableFloatingPointRegisters)
                 {
-                    return {ABITransformations::OnStack, type, nullptr};
+                    return {type->isStructTy() ? ABITransformations::OnStack : ABITransformations::Unchanged, type,
+                            nullptr};
                 }
                 takenFloatingPointRegisters++;
                 if (!std::holds_alternative<ABITransformations::MultipleArgs>(dest))
@@ -239,7 +248,8 @@ class CodeGenerator final
             // encounteredInteger branch above
             if (takenFloatingPointRegisters >= availableFloatingPointRegisters)
             {
-                return {ABITransformations::OnStack, type, nullptr};
+                return {type->isStructTy() ? ABITransformations::OnStack : ABITransformations::Unchanged, type,
+                        nullptr};
             }
             takenFloatingPointRegisters++;
             if (type->isStructTy() && !std::holds_alternative<ABITransformations::MultipleArgs>(dest))
@@ -316,7 +326,7 @@ class CodeGenerator final
                 std::pair<llvm::Type*, llvm::Type*> types;
                 std::tie(dest, types.first, types.second) =
                     flattenSingleArg(*arg, takenIntegerRegisters, takenFloatingPointRegisters);
-                if ((*arg)->isStructTy() && std::holds_alternative<ABITransformations::Change>(dest)
+                if (std::holds_alternative<ABITransformations::Change>(dest)
                     && cld::get<ABITransformations::Change>(dest) == ABITransformations::OnStack)
                 {
                     *arg = llvm::PointerType::getUnqual(*arg);
@@ -365,26 +375,28 @@ class CodeGenerator final
         return transformations;
     }
 
-    void applyFunctionAttributes(llvm::Function* function, const cld::Semantics::FunctionType& ft,
+    template <class T>
+    void applyFunctionAttributes(T& attributeApply, llvm::FunctionType* CLD_NON_NULL functionType,
+                                 const cld::Semantics::FunctionType& ft,
                                  const std::vector<std::unique_ptr<cld::Semantics::Declaration>>* paramDecls = nullptr)
     {
-        auto transformations = m_functionABITransformations.find(function->getFunctionType());
+        auto transformations = m_functionABITransformations.find(functionType);
         CLD_ASSERT(transformations != m_functionABITransformations.end());
         std::size_t argStart = 0;
         if (transformations->second.returnType == ABITransformations::PointerToTemporary)
         {
-            function->addAttribute(1, llvm::Attribute::StructRet);
-            function->addAttribute(1, llvm::Attribute::NoAlias);
+            attributeApply.addAttribute(1, llvm::Attribute::StructRet);
+            attributeApply.addAttribute(1, llvm::Attribute::NoAlias);
             argStart = 1;
         }
         else if (transformations->second.returnType == ABITransformations::Unchanged
                  && cld::Semantics::isInteger(ft.getReturnType())
                  && cld::get<cld::Semantics::PrimitiveType>(ft.getReturnType().get()).isSigned())
         {
-            function->addAttribute(0, llvm::Attribute::SExt);
+            attributeApply.addAttribute(0, llvm::Attribute::SExt);
         }
         std::size_t origArgI = 0;
-        for (std::size_t i = argStart; i < function->arg_size(); origArgI++)
+        for (std::size_t i = argStart; i < functionType->getNumParams(); origArgI++)
         {
             auto& argument = transformations->second.arguments[origArgI];
             if (std::holds_alternative<ABITransformations::Change>(argument))
@@ -395,17 +407,18 @@ class CodeGenerator final
                     auto& arg = ft.getArguments()[origArgI].first;
                     if (cld::Semantics::isInteger(arg) && cld::get<cld::Semantics::PrimitiveType>(arg.get()).isSigned())
                     {
-                        function->addParamAttr(i, llvm::Attribute::SExt);
+                        attributeApply.addParamAttr(i, llvm::Attribute::SExt);
                     }
                 }
-                else if (change == ABITransformations::OnStack && function->getArg(i)->getType()->isPointerTy())
+                else if (change == ABITransformations::OnStack)
                 {
-                    function->addParamAttr(
+                    attributeApply.addParamAttr(
                         i, llvm::Attribute::getWithByValType(m_builder.getContext(),
-                                                             function->getArg(i)->getType()->getPointerElementType()));
-                    function->addParamAttr(i, llvm::Attribute::getWithAlignment(
-                                                  m_builder.getContext(),
-                                                  llvm::Align(m_module.getDataLayout().getPointerABIAlignment(0))));
+                                                             functionType->getParamType(i)->getPointerElementType()));
+                    attributeApply.addParamAttr(
+                        i,
+                        llvm::Attribute::getWithAlignment(
+                            m_builder.getContext(), llvm::Align(m_module.getDataLayout().getPointerABIAlignment(0))));
                     i++;
                     continue;
                 }
@@ -415,11 +428,11 @@ class CodeGenerator final
                     continue;
                 }
                 auto& paramDecl = (*paramDecls)[origArgI];
-                auto* operand = function->getArg(i);
+                auto* operand = functionType->getParamType(i);
                 i++;
                 if (change == ABITransformations::Unchanged)
                 {
-                    auto* var = m_builder.CreateAlloca(operand->getType());
+                    auto* var = m_builder.CreateAlloca(operand);
                     var->setAlignment(llvm::Align(paramDecl->getType().getAlignOf(m_programInterface)));
                     m_lvalues.emplace(paramDecl.get(), var);
                     continue;
@@ -664,7 +677,7 @@ public:
             auto* ft = llvm::cast<llvm::FunctionType>(visit(declaration.getType()));
             auto* function =
                 llvm::Function::Create(ft, linkageType, -1, declaration.getNameToken()->getText().data(), &m_module);
-            applyFunctionAttributes(function, cld::get<cld::Semantics::FunctionType>(declaration.getType().get()));
+            applyFunctionAttributes(*function, ft, cld::get<cld::Semantics::FunctionType>(declaration.getType().get()));
             m_lvalues.emplace(&declaration, function);
             return function;
         }
@@ -708,8 +721,7 @@ public:
         else
         {
             visit(cld::Semantics::PrimitiveType::createSizeT(false, false, m_programInterface.getLanguageOptions()));
-            auto* size =
-                llvm::ConstantInt::get(m_builder.getInt64Ty(), declaration.getType().getSizeOf(m_programInterface));
+            auto* size = m_builder.getInt64(declaration.getType().getSizeOf(m_programInterface));
             m_builder.CreateLifetimeStart(var, llvm::cast<llvm::ConstantInt>(size));
         }
         return var;
@@ -736,7 +748,8 @@ public:
         m_builder.SetInsertPoint(bb);
 
         auto& ft = cld::get<cld::Semantics::FunctionType>(functionDefinition.getType().get());
-        applyFunctionAttributes(function, ft, &functionDefinition.getParameterDeclarations());
+        applyFunctionAttributes(*function, function->getFunctionType(), ft,
+                                &functionDefinition.getParameterDeclarations());
         auto transformations = m_functionABITransformations.find(function->getFunctionType());
         CLD_ASSERT(transformations != m_functionABITransformations.end());
         if (transformations->second.returnType == ABITransformations::Flattened)
@@ -762,8 +775,7 @@ public:
                 auto* operand = function->getArg(i);
                 i++;
                 auto change = cld::get<ABITransformations::Change>(transformations->second.arguments[origArgI]);
-                if (change == ABITransformations::PointerToTemporary
-                    || (change == ABITransformations::OnStack && function->getArg(i)->getType()->isPointerTy()))
+                if (change == ABITransformations::PointerToTemporary || change == ABITransformations::OnStack)
                 {
                     m_lvalues[paramDecl.get()] = operand;
                     continue;
@@ -848,7 +860,12 @@ public:
                 {
                     return;
                 }
-                visit(*expressionStatement.getExpression());
+                auto* instr = visit(*expressionStatement.getExpression());
+                if (llvm::isa<llvm::Instruction>(instr) && instr->getNumUses() == 0
+                    && !llvm::cast<llvm::Instruction>(instr)->mayHaveSideEffects())
+                {
+                    llvm::cast<llvm::Instruction>(instr)->eraseFromParent();
+                }
             });
     }
 
@@ -1751,12 +1768,150 @@ public:
     {
         for (auto& iter : commaExpression.getCommaExpressions())
         {
-            visit(iter.first);
+            auto* instr = visit(iter.first);
+            if (llvm::isa<llvm::Instruction>(instr) && instr->getNumUses() == 0
+                && !llvm::cast<llvm::Instruction>(instr)->mayHaveSideEffects())
+            {
+                llvm::cast<llvm::Instruction>(instr)->eraseFromParent();
+            }
         }
         return visit(commaExpression.getLastExpression());
     }
 
-    llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::CallExpression& call) {}
+    llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::CallExpression& call)
+    {
+        // TODO: K&R
+        auto* function = visit(call.getFunctionExpression());
+        auto* ft = llvm::cast<llvm::FunctionType>(function->getType()->getPointerElementType());
+        auto transformation = m_functionABITransformations.find(ft);
+        CLD_ASSERT(transformation != m_functionABITransformations.end());
+
+        std::size_t llvmFnI = 0;
+        std::vector<llvm::Value*> arguments;
+        llvm::AllocaInst* returnSlot = nullptr;
+        if (transformation->second.returnType == ABITransformations::PointerToTemporary)
+        {
+            llvmFnI = 1;
+            llvm::IRBuilder<> temp(&m_builder.GetInsertBlock()->getParent()->getEntryBlock(),
+                                   m_builder.GetInsertBlock()->getParent()->getEntryBlock().begin());
+            returnSlot = temp.CreateAlloca(ft->getParamType(0)->getPointerElementType());
+            returnSlot->setAlignment(llvm::Align(expression.getType().getAlignOf(m_programInterface)));
+            m_builder.CreateLifetimeStart(returnSlot,
+                                          m_builder.getInt64(expression.getType().getSizeOf(m_programInterface)));
+            arguments.emplace_back(returnSlot);
+        }
+        else if (transformation->second.returnType == ABITransformations::Flattened
+                 || transformation->second.returnType == ABITransformations::IntegerRegister)
+        {
+            llvm::IRBuilder<> temp(&m_builder.GetInsertBlock()->getParent()->getEntryBlock(),
+                                   m_builder.GetInsertBlock()->getParent()->getEntryBlock().begin());
+            returnSlot = temp.CreateAlloca(visit(expression.getType()));
+            returnSlot->setAlignment(llvm::Align(expression.getType().getAlignOf(m_programInterface)));
+            m_builder.CreateLifetimeStart(returnSlot,
+                                          m_builder.getInt64(expression.getType().getSizeOf(m_programInterface)));
+        }
+
+        for (auto iter = call.getArgumentExpressions().begin(); iter != call.getArgumentExpressions().end(); iter++)
+        {
+            const std::size_t currentIndex = iter - call.getArgumentExpressions().begin();
+            auto* value = visit(*iter);
+            if (std::holds_alternative<ABITransformations::Change>(transformation->second.arguments[currentIndex]))
+            {
+                llvmFnI++;
+                auto change = cld::get<ABITransformations::Change>(transformation->second.arguments[currentIndex]);
+                if (change == ABITransformations::Unchanged)
+                {
+                    arguments.emplace_back(value);
+                    continue;
+                }
+                if (change == ABITransformations::OnStack)
+                {
+                    // structs rvalues don't exist in LLVM IR so this should be sound?
+                    auto* load = llvm::cast<llvm::LoadInst>(value);
+                    arguments.emplace_back(load->getPointerOperand());
+                    load->eraseFromParent();
+                    continue;
+                }
+                if (change == ABITransformations::PointerToTemporary)
+                {
+                    llvm::IRBuilder<> temp(&m_builder.GetInsertBlock()->getParent()->getEntryBlock(),
+                                           m_builder.GetInsertBlock()->getParent()->getEntryBlock().begin());
+                    auto* ret = temp.CreateAlloca(value->getType());
+                    ret->setAlignment(llvm::Align(iter->getType().getAlignOf(m_programInterface)));
+                    m_builder.CreateLifetimeStart(ret,
+                                                  m_builder.getInt64(iter->getType().getSizeOf(m_programInterface)));
+                    if (value->getType()->isX86_FP80Ty())
+                    {
+                        m_builder.CreateStore(value, ret);
+                    }
+                    else
+                    {
+                        auto* load = llvm::cast<llvm::LoadInst>(value);
+                        m_builder.CreateMemCpy(ret, llvm::MaybeAlign(), load->getPointerOperand(), llvm::MaybeAlign(),
+                                               iter->getType().getSizeOf(m_programInterface));
+                        load->eraseFromParent();
+                    }
+                    arguments.emplace_back(ret);
+                    continue;
+                }
+                // Integer register
+                auto* load = llvm::cast<llvm::LoadInst>(value);
+                auto* integer = m_builder.CreateBitCast(
+                    load->getPointerOperand(), llvm::PointerType::getUnqual(m_builder.getIntNTy(
+                                                   m_module.getDataLayout().getTypeAllocSizeInBits(load->getType()))));
+                arguments.emplace_back(m_builder.CreateLoad(integer, load->isVolatile()));
+                load->eraseFromParent();
+                continue;
+            }
+            auto* load = llvm::cast<llvm::LoadInst>(value);
+            auto& multiIndex =
+                cld::get<ABITransformations::MultipleArgs>(transformation->second.arguments[currentIndex]);
+            if (multiIndex.size == 1)
+            {
+                auto* paramType = ft->getParamType(llvmFnI);
+                auto* cast =
+                    m_builder.CreateBitCast(load->getPointerOperand(), llvm::PointerType::getUnqual(paramType));
+                arguments.emplace_back(m_builder.CreateLoad(cast, load->isVolatile()));
+            }
+            else
+            {
+                CLD_ASSERT(multiIndex.size == 2);
+                auto* firstType = ft->getParamType(llvmFnI);
+                auto* secondType = ft->getParamType(llvmFnI + 1);
+                auto* cast =
+                    m_builder.CreateBitCast(load->getPointerOperand(),
+                                            llvm::PointerType::getUnqual(llvm::StructType::get(firstType, secondType)));
+                auto* firstValue = m_builder.CreateInBoundsGEP(cast, {m_builder.getInt64(0), m_builder.getInt32(0)});
+                auto* secondValue = m_builder.CreateInBoundsGEP(cast, {m_builder.getInt64(0), m_builder.getInt32(1)});
+                arguments.emplace_back(m_builder.CreateLoad(firstValue, load->isVolatile()));
+                arguments.emplace_back(m_builder.CreateLoad(secondValue, load->isVolatile()));
+            }
+            load->eraseFromParent();
+            llvmFnI += multiIndex.size;
+        }
+        auto* result = m_builder.CreateCall(ft, function, arguments);
+        applyFunctionAttributes(*result, ft,
+                                cld::get<cld::Semantics::FunctionType>(
+                                    cld::get<cld::Semantics::PointerType>(call.getFunctionExpression().getType().get())
+                                        .getElementType()
+                                        .get()));
+        switch (transformation->second.returnType)
+        {
+            case ABITransformations::Unchanged: return result;
+            case ABITransformations::PointerToTemporary:
+            {
+                return m_builder.CreateLoad(returnSlot);
+            }
+            case ABITransformations::IntegerRegister:
+            case ABITransformations::Flattened:
+            {
+                auto* cast = m_builder.CreateBitCast(returnSlot, llvm::PointerType::getUnqual(ft->getReturnType()));
+                m_builder.CreateStore(result, cast);
+                return m_builder.CreateLoad(returnSlot);
+            }
+            default: CLD_UNREACHABLE;
+        }
+    }
 
     llvm::Value* visit(const cld::Semantics::Expression& expression,
                        const cld::Semantics::CompoundLiteral& compoundLiteral)

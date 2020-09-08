@@ -168,15 +168,17 @@ class SemanticAnalysis final : public ProgramInterface
 
     Type compositeType(const Type& lhs, const Type& rhs) const;
 
-    static Expression lvalueConversion(Expression expression);
+    static Expression lvalueConversion(Expression&& expression);
 
     static Type lvalueConversion(Type type);
 
     static Type removeQualifiers(Type type);
 
-    Expression defaultArgumentPromotion(Expression type) const;
+    Expression defaultArgumentPromotion(Expression&& type) const;
 
-    Expression integerPromotion(Expression expression) const;
+    Expression integerPromotion(Expression&& expression) const;
+
+    static Expression toBool(Expression&& expression);
 
     void arithmeticConversion(Expression& lhs, Expression& rhs) const;
 
