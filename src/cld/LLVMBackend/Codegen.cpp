@@ -752,7 +752,8 @@ public:
                                 &functionDefinition.getParameterDeclarations());
         auto transformations = m_functionABITransformations.find(function->getFunctionType());
         CLD_ASSERT(transformations != m_functionABITransformations.end());
-        if (transformations->second.returnType == ABITransformations::Flattened)
+        if (transformations->second.returnType == ABITransformations::Flattened
+            || transformations->second.returnType == ABITransformations::IntegerRegister)
         {
             m_returnSlot = m_builder.CreateAlloca(function->getReturnType());
         }
@@ -886,7 +887,8 @@ public:
             m_builder.CreateStore(value, function->getArg(0));
             m_builder.CreateRetVoid();
         }
-        else if (transformation->second.returnType == ABITransformations::Flattened)
+        else if (transformation->second.returnType == ABITransformations::Flattened
+                 || transformation->second.returnType == ABITransformations::IntegerRegister)
         {
             auto* bitCast = m_builder.CreateBitCast(m_returnSlot, llvm::PointerType::getUnqual(value->getType()));
             m_builder.CreateStore(value, bitCast);
@@ -1078,6 +1080,14 @@ public:
         {
             value = m_builder.CreateLoad(value, memberAccess.getRecordExpression().getType().isVolatile());
         }
+        else if (std::holds_alternative<cld::Semantics::CallExpression>(memberAccess.getRecordExpression().get()))
+        {
+            // Struct access is only ever allowed on pointers or lvalue except if it's the return value of a function
+            // then it's also allowed to be an rvalue
+            auto* load = llvm::cast<llvm::LoadInst>(value);
+            value = load->getPointerOperand();
+            load->eraseFromParent();
+        }
         auto index = memberAccess.getMemberIndex();
         llvm::ArrayRef<cld::Semantics::Field> fields = m_programInterface.getFields(type);
 
@@ -1095,6 +1105,13 @@ public:
         }
         if (!fields[index].bitFieldBounds)
         {
+            // If the record expression is the return value of a function and this is a dot access not arrow access
+            // we must load because an rvalue is returned and no lvalue conversion will load for us
+            if (!std::holds_alternative<cld::Semantics::PointerType>(memberAccess.getRecordExpression().getType().get())
+                && std::holds_alternative<cld::Semantics::CallExpression>(memberAccess.getRecordExpression().get()))
+            {
+                return m_builder.CreateLoad(field, type.isVolatile());
+            }
             return field;
         }
 
@@ -1780,7 +1797,6 @@ public:
 
     llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::CallExpression& call)
     {
-        // TODO: K&R
         auto* function = visit(call.getFunctionExpression());
         auto cldFt = cld::get<cld::Semantics::FunctionType>(
             cld::get<cld::Semantics::PointerType>(call.getFunctionExpression().getType().get()).getElementType().get());

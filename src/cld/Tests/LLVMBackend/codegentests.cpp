@@ -1680,6 +1680,27 @@ TEST_CASE("LLVM codegen member access", "[LLVM]")
             }
         }
     }
+    SECTION("From function return")
+    {
+        auto program = generateProgram("typedef struct Point {\n"
+                                       "float x,y;\n"
+                                       "} Point;\n"
+                                       "\n"
+                                       "Point getPoint(void) {\n"
+                                       "Point p;\n"
+                                       "p.x = 5;\n"
+                                       "p.y = 3;\n"
+                                       "return p;\n"
+                                       "}\n"
+                                       "\n"
+                                       "float foo(void) {\n"
+                                       "return getPoint().x + getPoint().y;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<float(void)>(std::move(module), "foo") == 8.0f);
+    }
 }
 
 TEST_CASE("LLVM codegen lvalues", "[LLVM]")
