@@ -71,6 +71,7 @@ cld::Semantics::IfStatement cld::Semantics::SemanticAnalysis::visit(const Syntax
         log(Errors::Semantics::CONTROLLING_EXPRESSION_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
             value, m_sourceInterface, value));
     }
+    value = toBool(std::move(value));
     auto trueBranch = visit(node.getBranch());
     if (!node.getElseBranch())
     {
@@ -130,7 +131,7 @@ std::unique_ptr<cld::Semantics::ForStatement> cld::Semantics::SemanticAnalysis::
             log(Errors::Semantics::CONTROLLING_EXPRESSION_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
                 result, m_sourceInterface, result));
         }
-        controlling = std::move(result);
+        controlling = toBool(std::move(result));
     }
 
     std::optional<Expression> iteration;
@@ -160,7 +161,7 @@ std::unique_ptr<cld::Semantics::HeadWhileStatement>
     auto loop = std::make_unique<HeadWhileStatement>(Expression(node), Statement{});
     auto loopGuard = pushLoop(loop.get());
     auto statement = visit(node.getStatement());
-    *loop = HeadWhileStatement(std::move(expression), std::move(statement));
+    *loop = HeadWhileStatement(toBool(std::move(expression)), std::move(statement));
     return loop;
 }
 
@@ -176,7 +177,7 @@ std::unique_ptr<cld::Semantics::FootWhileStatement>
         log(Errors::Semantics::CONTROLLING_EXPRESSION_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
             expression, m_sourceInterface, expression));
     }
-    *loop = FootWhileStatement(std::move(statement), std::move(expression));
+    *loop = FootWhileStatement(std::move(statement), toBool(std::move(expression)));
     return loop;
 }
 

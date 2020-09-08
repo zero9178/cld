@@ -2319,7 +2319,7 @@ TEST_CASE("LLVM codegen conditional expressions", "[LLVM]")
         CHECK(first == 1);
         CHECK(second == 0);
     }
-    SECTION("True")
+    SECTION("False")
     {
         auto program = generateProgram("void or(unsigned value,unsigned* true,unsigned int* false) {\n"
                                        "value ? ++*true : ++*false;\n"
@@ -2744,5 +2744,83 @@ TEST_CASE("LLVM codegen function call", "[LLVM]")
             return r;
         };
         CHECK(cld::Tests::computeInJIT<int(R(*)())>(std::move(module), "function", func) == 1);
+    }
+}
+
+TEST_CASE("LLVM codegen if statement", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    auto module = std::make_unique<llvm::Module>("", context);
+    SECTION("if")
+    {
+        SECTION("True")
+        {
+            auto program = generateProgram("void or(unsigned value,unsigned* true) {\n"
+                                           "if(value) {\n"
+                                           "++*true;\n"
+                                           "}\n"
+                                           "return;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            unsigned first = 0;
+            cld::Tests::computeInJIT<void(unsigned, unsigned*)>(std::move(module), "or", 1, &first);
+            CHECK(first == 1);
+        }
+        SECTION("False")
+        {
+            auto program = generateProgram("void or(unsigned value,unsigned* true) {\n"
+                                           "if(value) {\n"
+                                           "++*true;\n"
+                                           "}\n"
+                                           "return;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            unsigned first = 0;
+            cld::Tests::computeInJIT<void(unsigned, unsigned*)>(std::move(module), "or", 0, &first);
+            CHECK(first == 0);
+        }
+    }
+    SECTION("if else")
+    {
+        SECTION("True")
+        {
+            auto program = generateProgram("void or(unsigned value,unsigned* true,unsigned int* false) {\n"
+                                           "if(value) {\n"
+                                           "++*true;\n"
+                                           "} else {\n"
+                                           "++*false;\n"
+                                           "}"
+                                           "return;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            unsigned first = 0, second = 0;
+            cld::Tests::computeInJIT<void(unsigned, unsigned*, unsigned*)>(std::move(module), "or", 1, &first, &second);
+            CHECK(first == 1);
+            CHECK(second == 0);
+        }
+        SECTION("False")
+        {
+            auto program = generateProgram("void or(unsigned value,unsigned* true,unsigned int* false) {\n"
+                                           "if(value) {\n"
+                                           "++*true;\n"
+                                           "} else {\n"
+                                           "++*false;\n"
+                                           "}"
+                                           "return;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            unsigned first = 0, second = 0;
+            cld::Tests::computeInJIT<void(unsigned, unsigned*, unsigned*)>(std::move(module), "or", 0, &first, &second);
+            CHECK(first == 0);
+            CHECK(second == 1);
+        }
     }
 }

@@ -100,6 +100,16 @@ class CodeGenerator final
     };
 
     std::unordered_map<const llvm::FunctionType*, ABITransformations> m_functionABITransformations;
+    std::unordered_map<cld::Semantics::LoopStatements, llvm::BasicBlock*> m_continueTargets;
+    std::unordered_map<cld::Semantics::BreakableStatements, llvm::BasicBlock*> m_breakTargets;
+    std::unordered_map<const cld::Semantics::LabelStatement*, llvm::BasicBlock*> m_labels;
+    struct Switch
+    {
+        std::unordered_map<const cld::Semantics::CaseStatement*, llvm::BasicBlock*> cases;
+        llvm::BasicBlock* defaultBlock;
+    };
+    std::unordered_map<const cld::Semantics::SwitchStatement*, Switch> m_switches;
+
     llvm::IRBuilder<> m_builder{m_module.getContext()};
     llvm::Value* m_returnSlot = nullptr;
     llvm::DIBuilder m_debugInfo{m_module};
@@ -901,27 +911,191 @@ public:
         }
     }
 
-    void visit(const cld::Semantics::ForStatement& forStatement) {}
+    void visit(const cld::Semantics::ForStatement& forStatement)
+    {
+        cld::match(
+            forStatement.getInitial(), [](std::monostate) {},
+            [&](const std::vector<std::unique_ptr<cld::Semantics::Declaration>>& declaration) {
+                for (auto& iter : declaration)
+                {
+                    visit(*iter);
+                }
+            },
+            [&](const cld::Semantics::Expression& expression) { visit(expression); });
+        auto* controlling =
+            llvm::BasicBlock::Create(m_module.getContext(), "", m_builder.GetInsertBlock()->getParent());
+        m_builder.SetInsertPoint(controlling);
+        auto* body = llvm::BasicBlock::Create(m_module.getContext(), "", m_builder.GetInsertBlock()->getParent());
+        llvm::BasicBlock* contBlock =
+            llvm::BasicBlock::Create(m_module.getContext(), "", m_builder.GetInsertBlock()->getParent());
+        m_breakTargets[&forStatement] = contBlock;
+        if (forStatement.getControlling())
+        {
+            auto* value = visit(*forStatement.getControlling());
+            value = m_builder.CreateTrunc(value, m_builder.getInt1Ty());
+            m_builder.CreateCondBr(value, body, contBlock);
+        }
+        m_builder.SetInsertPoint(body);
+        auto* iteration =
+            forStatement.getIteration() ?
+                llvm::BasicBlock::Create(m_module.getContext(), "", m_builder.GetInsertBlock()->getParent()) :
+                controlling;
+        m_continueTargets[&forStatement] = iteration;
+        visit(forStatement.getStatement());
+        m_builder.CreateBr(iteration);
+        if (forStatement.getIteration())
+        {
+            m_builder.SetInsertPoint(iteration);
+            visit(*forStatement.getIteration());
+            m_builder.CreateBr(controlling);
+        }
+        if (contBlock)
+        {
+            m_builder.SetInsertPoint(contBlock);
+        }
+    }
 
-    void visit(const cld::Semantics::IfStatement& ifStatement) {}
+    void visit(const cld::Semantics::IfStatement& ifStatement)
+    {
+        // TODO: CFG analysis
+        auto* expression = visit(ifStatement.getExpression());
+        expression = m_builder.CreateTrunc(expression, m_builder.getInt1Ty());
+        auto* trueBranch = llvm::BasicBlock::Create(m_module.getContext(), "", m_builder.GetInsertBlock()->getParent());
+        if (!ifStatement.getFalseBranch())
+        {
+            auto* contBranch =
+                llvm::BasicBlock::Create(m_module.getContext(), "", m_builder.GetInsertBlock()->getParent());
+            m_builder.CreateCondBr(expression, trueBranch, contBranch);
+            m_builder.SetInsertPoint(trueBranch);
+            visit(ifStatement.getTrueBranch());
+            m_builder.CreateBr(contBranch);
+            m_builder.SetInsertPoint(contBranch);
+            return;
+        }
+        auto* falseBranch =
+            llvm::BasicBlock::Create(m_module.getContext(), "", m_builder.GetInsertBlock()->getParent());
+        auto* contBranch = llvm::BasicBlock::Create(m_module.getContext(), "", m_builder.GetInsertBlock()->getParent());
+        m_builder.CreateCondBr(expression, trueBranch, falseBranch);
+        m_builder.SetInsertPoint(trueBranch);
+        visit(ifStatement.getTrueBranch());
+        m_builder.CreateBr(contBranch);
+        m_builder.SetInsertPoint(falseBranch);
+        visit(*ifStatement.getFalseBranch());
+        m_builder.CreateBr(contBranch);
+        m_builder.SetInsertPoint(contBranch);
+    }
 
-    void visit(const cld::Semantics::HeadWhileStatement& headWhileStatement) {}
+    void visit(const cld::Semantics::HeadWhileStatement& headWhileStatement)
+    {
+        auto* controlling =
+            llvm::BasicBlock::Create(m_module.getContext(), "", m_builder.GetInsertBlock()->getParent());
+        m_continueTargets[&headWhileStatement] = controlling;
+        m_builder.SetInsertPoint(controlling);
+        auto* expression = visit(headWhileStatement.getExpression());
+        expression = m_builder.CreateTrunc(expression, m_builder.getInt1Ty());
+        auto* contBlock = llvm::BasicBlock::Create(m_module.getContext(), "", m_builder.GetInsertBlock()->getParent());
+        auto* body = llvm::BasicBlock::Create(m_module.getContext(), "", m_builder.GetInsertBlock()->getParent());
+        m_builder.CreateCondBr(expression, body, contBlock);
+        m_builder.SetInsertPoint(body);
+        m_breakTargets[&headWhileStatement] = contBlock;
+        visit(headWhileStatement.getStatement());
+        m_builder.CreateBr(controlling);
+        m_builder.SetInsertPoint(contBlock);
+    }
 
-    void visit(const cld::Semantics::FootWhileStatement& footWhileStatement) {}
+    void visit(const cld::Semantics::FootWhileStatement& footWhileStatement)
+    {
+        auto* controlling =
+            llvm::BasicBlock::Create(m_module.getContext(), "", m_builder.GetInsertBlock()->getParent());
+        auto* contBlock = llvm::BasicBlock::Create(m_module.getContext(), "", m_builder.GetInsertBlock()->getParent());
+        auto* body = llvm::BasicBlock::Create(m_module.getContext(), "", m_builder.GetInsertBlock()->getParent());
+        m_continueTargets[&footWhileStatement] = controlling;
+        m_breakTargets[&footWhileStatement] = contBlock;
+        m_builder.SetInsertPoint(body);
+        visit(footWhileStatement.getStatement());
+        m_builder.CreateBr(controlling);
+        m_builder.SetInsertPoint(controlling);
+        auto* expression = visit(footWhileStatement.getExpression());
+        expression = m_builder.CreateTrunc(expression, m_builder.getInt1Ty());
+        m_builder.CreateCondBr(expression, body, contBlock);
+        m_builder.SetInsertPoint(contBlock);
+    }
 
-    void visit(const cld::Semantics::BreakStatement& breakStatement) {}
+    void visit(const cld::Semantics::BreakStatement& breakStatement)
+    {
+        m_builder.CreateBr(m_breakTargets[breakStatement.getBreakableStatement()]);
+    }
 
-    void visit(const cld::Semantics::ContinueStatement& continueStatement) {}
+    void visit(const cld::Semantics::ContinueStatement& continueStatement)
+    {
+        m_builder.CreateBr(m_continueTargets[continueStatement.getLoopStatement()]);
+    }
 
-    void visit(const cld::Semantics::SwitchStatement& switchStatement) {}
+    void visit(const cld::Semantics::SwitchStatement& switchStatement)
+    {
+        auto* expression = visit(switchStatement.getExpression());
+        auto& switchData = m_switches[&switchStatement];
+        auto* contBlock = llvm::BasicBlock::Create(m_module.getContext(), "", m_builder.GetInsertBlock()->getParent());
+        if (switchStatement.getDefaultStatement())
+        {
+            switchData.defaultBlock =
+                llvm::BasicBlock::Create(m_module.getContext(), "", m_builder.GetInsertBlock()->getParent());
+        }
+        auto* switchStmt = m_builder.CreateSwitch(
+            expression, switchData.defaultBlock ? switchData.defaultBlock : contBlock, switchData.cases.size());
+        for (auto& [value, theCase] : switchStatement.getCases())
+        {
+            auto iter = switchData.cases.emplace(
+                theCase, llvm::BasicBlock::Create(m_module.getContext(), "", m_builder.GetInsertBlock()->getParent()));
+            switchStmt->addCase(llvm::cast<llvm::ConstantInt>(llvm::ConstantInt::get(expression->getType(), value)),
+                                iter.first->second);
+        }
+        visit(switchStatement.getStatement());
+        m_builder.CreateBr(contBlock);
+        m_builder.SetInsertPoint(contBlock);
+    }
 
-    void visit(const cld::Semantics::DefaultStatement& defaultStatement) {}
+    void visit(const cld::Semantics::DefaultStatement& defaultStatement)
+    {
+        auto& switchData = m_switches[&defaultStatement.getSwitchStatement()];
+        auto* bb = switchData.defaultBlock;
+        m_builder.CreateBr(bb);
+        m_builder.SetInsertPoint(bb);
+        visit(defaultStatement.getStatement());
+    }
 
-    void visit(const cld::Semantics::CaseStatement& caseStatement) {}
+    void visit(const cld::Semantics::CaseStatement& caseStatement)
+    {
+        auto& switchData = m_switches[&caseStatement.getSwitchStatement()];
+        auto* bb = switchData.cases[&caseStatement];
+        m_builder.CreateBr(bb);
+        m_builder.SetInsertPoint(bb);
+        visit(caseStatement.getStatement());
+    }
 
-    void visit(const cld::Semantics::GotoStatement& gotoStatement) {}
+    void visit(const cld::Semantics::GotoStatement& gotoStatement)
+    {
+        auto* bb = m_labels[gotoStatement.getLabel()];
+        if (!bb)
+        {
+            bb = m_labels[gotoStatement.getLabel()] =
+                llvm::BasicBlock::Create(m_module.getContext(), "", m_builder.GetInsertBlock()->getParent());
+        }
+        m_builder.CreateBr(bb);
+    }
 
-    void visit(const cld::Semantics::LabelStatement& labelStatement) {}
+    void visit(const cld::Semantics::LabelStatement& labelStatement)
+    {
+        auto* bb = m_labels[&labelStatement];
+        if (!bb)
+        {
+            bb = m_labels[&labelStatement] =
+                llvm::BasicBlock::Create(m_module.getContext(), "", m_builder.GetInsertBlock()->getParent());
+        }
+        m_builder.CreateBr(bb);
+        m_builder.SetInsertPoint(bb);
+        visit(labelStatement.getStatement());
+    }
 
     llvm::Value* visit(const cld::Semantics::Expression& expression)
     {
