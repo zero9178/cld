@@ -1846,11 +1846,14 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
     {
         return condition;
     }
+    condition = lvalueConversion(std::move(condition));
     if (!condition.isUndefined() && !isScalar(condition.getType()))
     {
         log(Errors::Semantics::FIRST_OPERAND_OF_CONDITIONAL_EXPRESSION_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
             condition, m_sourceInterface, condition, *node.getOptionalQuestionMark(), *node.getOptionalColon()));
     }
+    condition = Expression(PrimitiveType::createUnderlineBool(false, false), ValueCategory::Rvalue,
+                           Conversion(Conversion::Implicit, std::make_unique<Expression>(std::move(condition))));
     auto second = visit(*node.getOptionalExpression());
     auto third = visit(*node.getOptionalConditionalExpression());
     if (isArithmetic(second.getType()) && isArithmetic(third.getType()))

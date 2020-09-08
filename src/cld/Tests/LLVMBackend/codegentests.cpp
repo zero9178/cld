@@ -2276,3 +2276,37 @@ TEST_CASE("LLVM codegen casts", "[LLVM]")
         CHECK(cld::Tests::computeInJIT<double(float)>(std::move(module), "bool", 5.0) == 5.0);
     }
 }
+
+TEST_CASE("LLVM codegen conditional expressions", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    auto module = std::make_unique<llvm::Module>("", context);
+    SECTION("True")
+    {
+        auto program = generateProgram("void or(unsigned value,unsigned* true,unsigned int* false) {\n"
+                                       "value ? ++*true : ++*false;\n"
+                                       "return;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        unsigned first = 0, second = 0;
+        cld::Tests::computeInJIT<void(unsigned, unsigned*, unsigned*)>(std::move(module), "or", 1, &first, &second);
+        CHECK(first == 1);
+        CHECK(second == 0);
+    }
+    SECTION("True")
+    {
+        auto program = generateProgram("void or(unsigned value,unsigned* true,unsigned int* false) {\n"
+                                       "value ? ++*true : ++*false;\n"
+                                       "return;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        unsigned first = 0, second = 0;
+        cld::Tests::computeInJIT<void(unsigned, unsigned*, unsigned*)>(std::move(module), "or", 0, &first, &second);
+        CHECK(first == 0);
+        CHECK(second == 1);
+    }
+}

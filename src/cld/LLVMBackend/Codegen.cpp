@@ -101,6 +101,7 @@ class CodeGenerator final
 
     std::unordered_map<const llvm::FunctionType*, ABITransformations> m_functionABITransformations;
     llvm::IRBuilder<> m_builder{m_module.getContext()};
+    llvm::Value* m_returnSlot = nullptr;
     llvm::DIBuilder m_debugInfo{m_module};
 
     llvm::Value* toBool(llvm::Value* value)
@@ -649,7 +650,7 @@ public:
         }
     }
 
-    void visit(const cld::Semantics::Declaration& declaration)
+    llvm::Value* visit(const cld::Semantics::Declaration& declaration)
     {
         llvm::Function::LinkageTypes linkageType;
         switch (declaration.getLinkage())
@@ -665,7 +666,7 @@ public:
                 llvm::Function::Create(ft, linkageType, -1, declaration.getNameToken()->getText().data(), &m_module);
             applyFunctionAttributes(function, cld::get<cld::Semantics::FunctionType>(declaration.getType().get()));
             m_lvalues.emplace(&declaration, function);
-            return;
+            return function;
         }
         auto* type = visit(declaration.getType());
         if (declaration.getLifetime() == cld::Semantics::Lifetime::Static)
@@ -691,11 +692,27 @@ public:
                 linkageType, constant, declaration.getNameToken()->getText().data());
             global->setAlignment(llvm::MaybeAlign(declaration.getType().getAlignOf(m_programInterface)));
             m_lvalues.emplace(&declaration, global);
-            return;
+            return global;
         }
-        auto* var = m_builder.CreateAlloca(type);
+        // Place all allocas up top
+        // TODO: Except VAL Arrays
+        llvm::IRBuilder<> temp(&m_builder.GetInsertBlock()->getParent()->getEntryBlock(),
+                               m_builder.GetInsertBlock()->getParent()->getEntryBlock().begin());
+        auto* var = temp.CreateAlloca(type);
         var->setAlignment(llvm::Align(declaration.getType().getAlignOf(m_programInterface)));
         m_lvalues.emplace(&declaration, var);
+        if (cld::Semantics::isVariableLengthArray(declaration.getType()))
+        {
+            m_builder.CreateLifetimeStart(var);
+        }
+        else
+        {
+            visit(cld::Semantics::PrimitiveType::createSizeT(false, false, m_programInterface.getLanguageOptions()));
+            auto* size =
+                llvm::ConstantInt::get(m_builder.getInt64Ty(), declaration.getType().getSizeOf(m_programInterface));
+            m_builder.CreateLifetimeStart(var, llvm::cast<llvm::ConstantInt>(size));
+        }
+        return var;
     }
 
     void visit(const cld::Semantics::FunctionDefinition& functionDefinition)
@@ -720,29 +737,17 @@ public:
 
         auto& ft = cld::get<cld::Semantics::FunctionType>(functionDefinition.getType().get());
         applyFunctionAttributes(function, ft, &functionDefinition.getParameterDeclarations());
-
-        cld::YComb{[&](auto&& self, std::int64_t scope) -> void {
-            auto& decls = m_programInterface.getScopes()[scope];
-            for (auto& [name, decl] : decls.declarations)
-            {
-                if (std::holds_alternative<const cld::Semantics::Declaration*>(decl.declared))
-                {
-                    auto& var = *cld::get<const cld::Semantics::Declaration*>(decl.declared);
-                    if (cld::Semantics::isVariablyModified(var.getType()))
-                    {
-                        continue;
-                    }
-                    visit(var);
-                }
-            }
-            for (auto& subScope : decls.subScopes)
-            {
-                self(subScope);
-            }
-        }}(functionDefinition.getCompoundStatement().getScope());
-
         auto transformations = m_functionABITransformations.find(function->getFunctionType());
         CLD_ASSERT(transformations != m_functionABITransformations.end());
+        if (transformations->second.returnType == ABITransformations::Flattened)
+        {
+            m_returnSlot = m_builder.CreateAlloca(function->getReturnType());
+        }
+        else
+        {
+            m_returnSlot = nullptr;
+        }
+
         std::size_t argStart = 0;
         if (transformations->second.returnType == ABITransformations::PointerToTemporary)
         {
@@ -806,18 +811,6 @@ public:
 
     void visit(const cld::Semantics::CompoundStatement& compoundStatement)
     {
-        for (auto& [name, decl] : m_programInterface.getScopes()[compoundStatement.getScope()].declarations)
-        {
-            if (std::holds_alternative<const cld::Semantics::Declaration*>(decl.declared))
-            {
-                auto& var = *cld::get<const cld::Semantics::Declaration*>(decl.declared);
-                if (!cld::Semantics::isVariablyModified(var.getType()))
-                {
-                    continue;
-                }
-                // TODO: Evaluate val array expression
-            }
-        }
         for (auto& iter : compoundStatement.getCompoundItems())
         {
             if (std::holds_alternative<std::shared_ptr<const cld::Semantics::Expression>>(iter))
@@ -826,22 +819,7 @@ public:
             }
             else if (std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(iter))
             {
-                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(iter);
-                auto result = m_lvalues.find(decl.get());
-                CLD_ASSERT(result != m_lvalues.end());
-                if (cld::Semantics::isVariableLengthArray(decl->getType()))
-                {
-                    m_builder.CreateLifetimeStart(result->second);
-                }
-                else
-                {
-                    visit(cld::Semantics::PrimitiveType::createSizeT(false, false,
-                                                                     m_programInterface.getLanguageOptions()));
-                    auto* size =
-                        llvm::ConstantInt::get(m_builder.getInt64Ty(), decl->getType().getSizeOf(m_programInterface));
-                    m_builder.CreateLifetimeStart(result->second, llvm::cast<llvm::ConstantInt>(size));
-                }
-                // TODO: Initializer
+                visit(*cld::get<std::unique_ptr<cld::Semantics::Declaration>>(iter));
             }
             else if (std::holds_alternative<cld::Semantics::Statement>(iter))
             {
@@ -879,30 +857,28 @@ public:
         if (!returnStatement.getExpression())
         {
             m_builder.CreateRetVoid();
+            return;
+        }
+
+        auto* function = m_builder.GetInsertBlock()->getParent();
+        auto transformation = m_functionABITransformations.find(function->getFunctionType());
+        CLD_ASSERT(transformation != m_functionABITransformations.end());
+        auto* value = visit(*returnStatement.getExpression());
+        if (transformation->second.returnType == ABITransformations::PointerToTemporary)
+        {
+            m_builder.CreateStore(value, function->getArg(0));
+            m_builder.CreateRetVoid();
+        }
+        else if (transformation->second.returnType == ABITransformations::Flattened)
+        {
+            auto* bitCast = m_builder.CreateBitCast(m_returnSlot, llvm::PointerType::getUnqual(value->getType()));
+            m_builder.CreateStore(value, bitCast);
+            auto* ret = m_builder.CreateLoad(m_returnSlot);
+            m_builder.CreateRet(ret);
         }
         else
         {
-            auto* function = m_builder.GetInsertBlock()->getParent();
-            auto transformation = m_functionABITransformations.find(function->getFunctionType());
-            CLD_ASSERT(transformation != m_functionABITransformations.end());
-            auto* value = visit(*returnStatement.getExpression());
-            if (transformation->second.returnType == ABITransformations::PointerToTemporary)
-            {
-                m_builder.CreateStore(value, function->getArg(0));
-                m_builder.CreateRetVoid();
-            }
-            else if (transformation->second.returnType == ABITransformations::Flattened)
-            {
-                auto* temp = m_builder.CreateAlloca(m_builder.getCurrentFunctionReturnType());
-                auto* bitCast = m_builder.CreateBitCast(temp, llvm::PointerType::getUnqual(value->getType()));
-                m_builder.CreateStore(value, bitCast);
-                auto* ret = m_builder.CreateLoad(temp);
-                m_builder.CreateRet(ret);
-            }
-            else
-            {
-                m_builder.CreateRet(value);
-            }
+            m_builder.CreateRet(value);
         }
     }
 
@@ -1705,9 +1681,11 @@ public:
     {
         auto* boolean = visit(conditional.getBoolExpression());
         boolean = m_builder.CreateTrunc(boolean, m_builder.getInt1Ty());
-        auto* trueBranch = llvm::BasicBlock::Create(m_builder.getContext());
-        auto* falseBranch = llvm::BasicBlock::Create(m_builder.getContext());
-        auto* contBr = llvm::BasicBlock::Create(m_builder.getContext());
+        auto* trueBranch =
+            llvm::BasicBlock::Create(m_builder.getContext(), "", m_builder.GetInsertBlock()->getParent());
+        auto* falseBranch =
+            llvm::BasicBlock::Create(m_builder.getContext(), "", m_builder.GetInsertBlock()->getParent());
+        auto* contBr = llvm::BasicBlock::Create(m_builder.getContext(), "", m_builder.GetInsertBlock()->getParent());
         m_builder.CreateCondBr(boolean, trueBranch, falseBranch);
         m_builder.SetInsertPoint(trueBranch);
         auto* trueValue = visit(conditional.getTrueExpression());
@@ -1715,6 +1693,7 @@ public:
         m_builder.SetInsertPoint(falseBranch);
         auto* falseValue = visit(conditional.getFalseExpression());
         m_builder.CreateBr(contBr);
+        m_builder.SetInsertPoint(contBr);
         auto* phi = m_builder.CreatePHI(trueValue->getType(), 2);
         phi->addIncoming(trueValue, trueBranch);
         phi->addIncoming(falseValue, falseBranch);
