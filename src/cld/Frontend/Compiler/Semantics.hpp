@@ -1536,7 +1536,7 @@ class SwitchStatement final
     Expression m_expression;
     std::unique_ptr<Statement> m_statement;
     std::int64_t m_scope;
-    std::map<llvm::APSInt, const CaseStatement * CLD_NON_NULL> m_cases;
+    std::unordered_map<llvm::APSInt, const CaseStatement * CLD_NON_NULL> m_cases;
     const DefaultStatement* CLD_NULLABLE m_default;
 
 public:
@@ -1563,7 +1563,7 @@ public:
 
     [[nodiscard]] const std::map<llvm::APSInt, const CaseStatement * CLD_NON_NULL>& getCases() const
     {
-        return m_cases;
+        //return m_cases;
     }
 
     [[nodiscard]] const DefaultStatement* getDefaultStatement() const

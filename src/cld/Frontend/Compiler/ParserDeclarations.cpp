@@ -1926,7 +1926,6 @@ std::optional<cld::Syntax::Statement> cld::Parser::parseStatement(Lexer::CTokenI
                 const auto* id = ++begin;
                 if (!expect(Lexer::TokenType::Identifier, begin, end, context))
                 {
-                    id = nullptr;
                     if (begin < end && begin + 1 < end && (begin + 1)->getTokenType() == Lexer::TokenType::SemiColon)
                     {
                         begin++;

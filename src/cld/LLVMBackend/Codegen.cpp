@@ -675,7 +675,7 @@ public:
 
     llvm::Value* visit(const cld::Semantics::Declaration& declaration)
     {
-        llvm::Function::LinkageTypes linkageType;
+        llvm::Function::LinkageTypes linkageType = llvm::GlobalValue::ExternalLinkage;
         switch (declaration.getLinkage())
         {
             case cld::Semantics::Linkage::Internal: linkageType = llvm::GlobalValue::InternalLinkage; break;
