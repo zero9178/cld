@@ -288,7 +288,7 @@ public:
 
     std::vector<DeclRetVariant> visit(const Syntax::Declaration& node);
 
-    Statement visit(const Syntax::Statement& node);
+    std::unique_ptr<Statement> visit(const Syntax::Statement& node);
 
     Expression visit(const Syntax::Expression& node);
 
@@ -360,33 +360,33 @@ public:
     Initializer visit(const Syntax::InitializerList& node, const Type& type, bool staticLifetime = false,
                       std::size_t* size = nullptr);
 
-    [[nodiscard]] CompoundStatement visit(const Syntax::CompoundStatement& node, bool pushScope = true);
+    [[nodiscard]] std::unique_ptr<Statement> visit(const Syntax::CompoundStatement& node, bool pushScope = true);
 
     [[nodiscard]] std::vector<CompoundStatement::Variant> visit(const Syntax::CompoundItem& node);
 
-    [[nodiscard]] ReturnStatement visit(const Syntax::ReturnStatement& node);
+    [[nodiscard]] std::unique_ptr<Statement> visit(const Syntax::ReturnStatement& node);
 
-    [[nodiscard]] IfStatement visit(const Syntax::IfStatement& node);
+    [[nodiscard]] std::unique_ptr<Statement> visit(const Syntax::IfStatement& node);
 
-    [[nodiscard]] std::unique_ptr<ForStatement> visit(const Syntax::ForStatement& node);
+    [[nodiscard]] std::unique_ptr<Statement> visit(const Syntax::ForStatement& node);
 
-    [[nodiscard]] std::unique_ptr<HeadWhileStatement> visit(const Syntax::HeadWhileStatement& node);
+    [[nodiscard]] std::unique_ptr<Statement> visit(const Syntax::HeadWhileStatement& node);
 
-    [[nodiscard]] std::unique_ptr<FootWhileStatement> visit(const Syntax::FootWhileStatement& node);
+    [[nodiscard]] std::unique_ptr<Statement> visit(const Syntax::FootWhileStatement& node);
 
-    [[nodiscard]] BreakStatement visit(const Syntax::BreakStatement& node);
+    [[nodiscard]] std::unique_ptr<Statement> visit(const Syntax::BreakStatement& node);
 
-    [[nodiscard]] ContinueStatement visit(const Syntax::ContinueStatement& node);
+    [[nodiscard]] std::unique_ptr<Statement> visit(const Syntax::ContinueStatement& node);
 
-    [[nodiscard]] std::unique_ptr<SwitchStatement> visit(const Syntax::SwitchStatement& node);
+    [[nodiscard]] std::unique_ptr<Statement> visit(const Syntax::SwitchStatement& node);
 
-    [[nodiscard]] std::unique_ptr<DefaultStatement> visit(const Syntax::DefaultStatement& node);
+    [[nodiscard]] std::unique_ptr<Statement> visit(const Syntax::DefaultStatement& node);
 
-    [[nodiscard]] std::unique_ptr<CaseStatement> visit(const Syntax::CaseStatement& node);
+    [[nodiscard]] std::unique_ptr<Statement> visit(const Syntax::CaseStatement& node);
 
-    [[nodiscard]] std::unique_ptr<GotoStatement> visit(const Syntax::GotoStatement& node);
+    [[nodiscard]] std::unique_ptr<Statement> visit(const Syntax::GotoStatement& node);
 
-    [[nodiscard]] std::unique_ptr<LabelStatement> visit(const Syntax::LabelStatement& node);
+    [[nodiscard]] std::unique_ptr<Statement> visit(const Syntax::LabelStatement& node);
 };
 
 } // namespace cld::Semantics

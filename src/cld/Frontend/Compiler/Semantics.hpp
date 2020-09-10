@@ -1361,6 +1361,10 @@ class HeadWhileStatement;
 
 class FootWhileStatement;
 
+class BreakStatement;
+
+class ContinueStatement;
+
 class GotoStatement final
 {
     const LabelStatement* m_label;
@@ -1406,11 +1410,9 @@ public:
     }
 };
 
-using Statement =
-    std::variant<std::unique_ptr<ForStatement>, ReturnStatement, ExpressionStatement, IfStatement, CompoundStatement,
-                 std::unique_ptr<HeadWhileStatement>, std::unique_ptr<FootWhileStatement>, BreakStatement,
-                 ContinueStatement, std::unique_ptr<SwitchStatement>, std::unique_ptr<DefaultStatement>,
-                 std::unique_ptr<CaseStatement>, std::unique_ptr<GotoStatement>, std::unique_ptr<LabelStatement>>;
+using Statement = std::variant<ForStatement, ReturnStatement, ExpressionStatement, IfStatement, CompoundStatement,
+                               HeadWhileStatement, FootWhileStatement, BreakStatement, ContinueStatement,
+                               SwitchStatement, DefaultStatement, CaseStatement, GotoStatement, LabelStatement>;
 
 class IfStatement final
 {
@@ -1419,7 +1421,8 @@ class IfStatement final
     std::unique_ptr<Statement> m_falseBranch;
 
 public:
-    IfStatement(Expression&& expression, Statement&& trueBranch, std::unique_ptr<Statement>&& falseBranch);
+    IfStatement(Expression&& expression, std::unique_ptr<Statement>&& trueBranch,
+                std::unique_ptr<Statement>&& falseBranch);
 
     [[nodiscard]] const Expression& getExpression() const
     {
@@ -1437,7 +1440,8 @@ public:
 class CompoundStatement final
 {
 public:
-    using Variant = std::variant<Statement, std::unique_ptr<Declaration>, std::shared_ptr<const Expression>>;
+    using Variant =
+        std::variant<std::unique_ptr<Statement>, std::unique_ptr<Declaration>, std::shared_ptr<const Expression>>;
 
 private:
     std::int64_t m_scope;
@@ -1479,7 +1483,7 @@ private:
 
 public:
     ForStatement(Variant initial, std::optional<Expression> controlling, std::optional<Expression> iteration,
-                 Statement&& statement);
+                 std::unique_ptr<Statement>&& statement);
 
     [[nodiscard]] const Variant& getInitial() const
     {
@@ -1505,7 +1509,7 @@ class HeadWhileStatement final
     std::unique_ptr<Statement> m_statement;
 
 public:
-    HeadWhileStatement(Expression&& expression, Statement&& statement);
+    HeadWhileStatement(Expression&& expression, std::unique_ptr<Statement>&& statement);
 
     [[nodiscard]] const Expression& getExpression() const
     {
@@ -1521,7 +1525,7 @@ class FootWhileStatement final
     Expression m_expression;
 
 public:
-    FootWhileStatement(Statement&& statement, Expression&& expression);
+    FootWhileStatement(std::unique_ptr<Statement>&& statement, Expression&& expression);
 
     [[nodiscard]] const Statement& getStatement() const;
 
@@ -1540,7 +1544,7 @@ class SwitchStatement final
     const DefaultStatement* CLD_NULLABLE m_default;
 
 public:
-    SwitchStatement(Expression&& expression, Statement&& statement, std::int64_t scope,
+    SwitchStatement(Expression&& expression, std::unique_ptr<Statement>&& statement, std::int64_t scope,
                     std::map<llvm::APSInt, const CaseStatement* CLD_NON_NULL> cases = {},
                     const DefaultStatement* CLD_NULLABLE defaultStmt = nullptr);
 
@@ -1580,8 +1584,8 @@ class DefaultStatement final
     const SwitchStatement* CLD_NON_NULL m_switchStmt;
 
 public:
-    DefaultStatement(Lexer::CTokenIterator defaultToken, Lexer::CTokenIterator colonToken, Statement&& statement,
-                     const SwitchStatement& switchStmt);
+    DefaultStatement(Lexer::CTokenIterator defaultToken, Lexer::CTokenIterator colonToken,
+                     std::unique_ptr<Statement>&& statement, const SwitchStatement& switchStmt);
 
     [[nodiscard]] Lexer::CTokenIterator getDefaultToken() const
     {
@@ -1611,7 +1615,7 @@ class CaseStatement final
 
 public:
     CaseStatement(Lexer::CTokenIterator caseToken, llvm::APSInt constant, Lexer::CTokenIterator colonToken,
-                  Statement&& statement, const SwitchStatement& switchStmt);
+                  std::unique_ptr<Statement>&& statement, const SwitchStatement& switchStmt);
 
     [[nodiscard]] Lexer::CTokenIterator getCaseToken() const
     {
@@ -1645,7 +1649,7 @@ class LabelStatement final
 
 public:
     LabelStatement(Lexer::CTokenIterator identifier, std::int64_t scope, std::size_t sizeOfCurrentScope,
-                   Statement&& statement);
+                   std::unique_ptr<Statement>&& statement);
 
     [[nodiscard]] Lexer::CTokenIterator getIdentifier() const
     {

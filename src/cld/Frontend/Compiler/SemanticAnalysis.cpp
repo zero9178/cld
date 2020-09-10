@@ -258,7 +258,7 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
     auto functionScope = pushFunctionScope(*ptr);
 
     auto comp = visit(node.getCompoundStatement(), false);
-    ptr->setCompoundStatement(std::move(comp));
+    ptr->setCompoundStatement(cld::get<CompoundStatement>(std::move(*comp)));
     return result;
 }
 
@@ -736,8 +736,8 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
     return decls;
 }
 
-cld::Semantics::CompoundStatement cld::Semantics::SemanticAnalysis::visit(const Syntax::CompoundStatement& node,
-                                                                          bool pushScope)
+std::unique_ptr<cld::Semantics::Statement>
+    cld::Semantics::SemanticAnalysis::visit(const Syntax::CompoundStatement& node, bool pushScope)
 {
     std::optional<decltype(this->pushScope())> scope;
     if (pushScope)
@@ -750,7 +750,7 @@ cld::Semantics::CompoundStatement cld::Semantics::SemanticAnalysis::visit(const 
         auto tmp = visit(iter);
         result.insert(result.end(), std::move_iterator(tmp.begin()), std::move_iterator(tmp.end()));
     }
-    return CompoundStatement(m_currentScope, std::move(result));
+    return std::make_unique<Statement>(CompoundStatement(m_currentScope, std::move(result)));
 }
 
 std::vector<cld::Semantics::CompoundStatement::Variant>
@@ -773,16 +773,16 @@ std::vector<cld::Semantics::CompoundStatement::Variant>
     return result;
 }
 
-cld::Semantics::Statement cld::Semantics::SemanticAnalysis::visit(const Syntax::Statement& node)
+std::unique_ptr<cld::Semantics::Statement> cld::Semantics::SemanticAnalysis::visit(const Syntax::Statement& node)
 {
     return cld::match(
-        node, [&](const auto& node) -> Statement { return visit(node); },
-        [&](const Syntax::ExpressionStatement& node) -> Statement {
+        node, [&](const auto& node) -> std::unique_ptr<Statement> { return visit(node); },
+        [&](const Syntax::ExpressionStatement& node) -> std::unique_ptr<Statement> {
             if (!node.getOptionalExpression())
             {
-                return ExpressionStatement({});
+                return std::make_unique<Statement>(ExpressionStatement({}));
             }
-            return ExpressionStatement(visit(*node.getOptionalExpression()));
+            return std::make_unique<Statement>(ExpressionStatement(visit(*node.getOptionalExpression())));
         });
 }
 

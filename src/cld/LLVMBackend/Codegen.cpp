@@ -844,9 +844,9 @@ public:
             {
                 visit(*cld::get<std::unique_ptr<cld::Semantics::Declaration>>(iter));
             }
-            else if (std::holds_alternative<cld::Semantics::Statement>(iter))
+            else if (std::holds_alternative<std::unique_ptr<cld::Semantics::Statement>>(iter))
             {
-                visit(cld::get<cld::Semantics::Statement>(iter));
+                visit(*cld::get<std::unique_ptr<cld::Semantics::Statement>>(iter));
             }
         }
     }

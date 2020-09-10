@@ -80,9 +80,10 @@ std::pair<cld::Semantics::ConstValue, std::string>
     REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
         translationUnit.getGlobals().back()));
     auto& funcDef = *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit.getGlobals().back());
-    REQUIRE(
-        std::holds_alternative<cld::Semantics::Statement>(funcDef.getCompoundStatement().getCompoundItems().back()));
-    auto& statement = cld::get<cld::Semantics::Statement>(funcDef.getCompoundStatement().getCompoundItems().back());
+    REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Statement>>(
+        funcDef.getCompoundStatement().getCompoundItems().back()));
+    auto& statement =
+        *cld::get<std::unique_ptr<cld::Semantics::Statement>>(funcDef.getCompoundStatement().getCompoundItems().back());
     REQUIRE(std::holds_alternative<cld::Semantics::ExpressionStatement>(statement));
     auto& expr = cld::get<cld::Semantics::ExpressionStatement>(statement).getExpression();
     REQUIRE(expr);

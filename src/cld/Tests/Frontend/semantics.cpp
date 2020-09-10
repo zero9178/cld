@@ -1601,8 +1601,9 @@ const Expression& generateExpression(std::string source, cld::LanguageOptions op
     REQUIRE_THAT(errors, ProducesNoErrors());
     REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals().back()));
     auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals().back());
-    REQUIRE(std::holds_alternative<Statement>(funcDef.getCompoundStatement().getCompoundItems().back()));
-    auto& statement = cld::get<Statement>(funcDef.getCompoundStatement().getCompoundItems().back());
+    REQUIRE(
+        std::holds_alternative<std::unique_ptr<Statement>>(funcDef.getCompoundStatement().getCompoundItems().back()));
+    auto& statement = *cld::get<std::unique_ptr<Statement>>(funcDef.getCompoundStatement().getCompoundItems().back());
     REQUIRE(std::holds_alternative<ExpressionStatement>(statement));
     auto& expr = cld::get<ExpressionStatement>(statement).getExpression();
     REQUIRE(expr);

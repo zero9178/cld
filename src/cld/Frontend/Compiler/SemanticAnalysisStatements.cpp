@@ -2,7 +2,7 @@
 
 #include "ErrorMessages.hpp"
 
-cld::Semantics::ReturnStatement cld::Semantics::SemanticAnalysis::visit(const Syntax::ReturnStatement& node)
+std::unique_ptr<cld::Semantics::Statement> cld::Semantics::SemanticAnalysis::visit(const Syntax::ReturnStatement& node)
 {
     auto& ft = cld::get<FunctionType>(getCurrentFunctionScope()->currentFunction->getType().get());
     if (!node.getExpression())
@@ -13,7 +13,7 @@ cld::Semantics::ReturnStatement cld::Semantics::SemanticAnalysis::visit(const Sy
                 node, m_sourceInterface, *getCurrentFunctionScope()->currentFunction->getNameToken(),
                 ft.getReturnType(), node));
         }
-        return ReturnStatement({});
+        return std::make_unique<Statement>(std::in_place_type<ReturnStatement>, std::optional<Expression>{});
     }
     if (isVoid(ft.getReturnType()))
     {
@@ -60,10 +60,10 @@ cld::Semantics::ReturnStatement cld::Semantics::SemanticAnalysis::visit(const Sy
                     value, m_sourceInterface, *node.begin(), value));
             }
         });
-    return ReturnStatement(std::move(value));
+    return std::make_unique<Statement>(ReturnStatement(std::move(value)));
 }
 
-cld::Semantics::IfStatement cld::Semantics::SemanticAnalysis::visit(const Syntax::IfStatement& node)
+std::unique_ptr<cld::Semantics::Statement> cld::Semantics::SemanticAnalysis::visit(const Syntax::IfStatement& node)
 {
     auto value = lvalueConversion(visit(node.getExpression()));
     if (!value.getType().isUndefined() && !isScalar(value.getType()))
@@ -75,13 +75,15 @@ cld::Semantics::IfStatement cld::Semantics::SemanticAnalysis::visit(const Syntax
     auto trueBranch = visit(node.getBranch());
     if (!node.getElseBranch())
     {
-        return IfStatement(std::move(value), std::move(trueBranch), nullptr);
+        return std::make_unique<Statement>(std::in_place_type<IfStatement>, std::move(value), std::move(trueBranch),
+                                           nullptr);
     }
     auto falseBranch = visit(*node.getElseBranch());
-    return IfStatement(std::move(value), std::move(trueBranch), std::make_unique<Statement>(std::move(falseBranch)));
+    return std::make_unique<Statement>(std::in_place_type<IfStatement>, std::move(value), std::move(trueBranch),
+                                       std::move(falseBranch));
 }
 
-std::unique_ptr<cld::Semantics::ForStatement> cld::Semantics::SemanticAnalysis::visit(const Syntax::ForStatement& node)
+std::unique_ptr<cld::Semantics::Statement> cld::Semantics::SemanticAnalysis::visit(const Syntax::ForStatement& node)
 {
     std::optional<decltype(pushScope())> scope;
     ForStatement::Variant initial;
@@ -104,7 +106,7 @@ std::unique_ptr<cld::Semantics::ForStatement> cld::Semantics::SemanticAnalysis::
             }
         }
         auto result = visit(declarations);
-        auto& vector = initial.emplace<2>();
+        auto& vector = initial.emplace<std::vector<std::unique_ptr<Declaration>>>();
         for (auto& iter : result)
         {
             if (std::holds_alternative<std::unique_ptr<Declaration>>(iter))
@@ -140,16 +142,16 @@ std::unique_ptr<cld::Semantics::ForStatement> cld::Semantics::SemanticAnalysis::
         iteration = visit(*node.getPost());
     }
 
-    auto forStatement = std::make_unique<ForStatement>(ForStatement::Variant{}, std::optional<Expression>{},
-                                                       std::optional<Expression>{}, Statement{});
-    auto loopGuard = pushLoop(forStatement.get());
+    auto storage = std::make_unique<Statement>(std::in_place_type<ForStatement>, ForStatement::Variant{},
+                                               std::optional<Expression>{}, std::optional<Expression>{}, nullptr);
+    auto& forStatement = cld::get<ForStatement>(*storage);
+    auto loopGuard = pushLoop(&forStatement);
     auto statement = visit(node.getStatement());
-    *forStatement =
-        ForStatement(std::move(initial), std::move(controlling), std::move(iteration), std::move(statement));
-    return forStatement;
+    forStatement = ForStatement(std::move(initial), std::move(controlling), std::move(iteration), std::move(statement));
+    return storage;
 }
 
-std::unique_ptr<cld::Semantics::HeadWhileStatement>
+std::unique_ptr<cld::Semantics::Statement>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::HeadWhileStatement& node)
 {
     auto expression = lvalueConversion(visit(node.getExpression()));
@@ -158,18 +160,20 @@ std::unique_ptr<cld::Semantics::HeadWhileStatement>
         log(Errors::Semantics::CONTROLLING_EXPRESSION_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
             expression, m_sourceInterface, expression));
     }
-    auto loop = std::make_unique<HeadWhileStatement>(Expression(node), Statement{});
-    auto loopGuard = pushLoop(loop.get());
+    auto storage = std::make_unique<Statement>(std::in_place_type<HeadWhileStatement>, Expression(node), nullptr);
+    auto& loop = cld::get<HeadWhileStatement>(*storage);
+    auto loopGuard = pushLoop(&loop);
     auto statement = visit(node.getStatement());
-    *loop = HeadWhileStatement(toBool(std::move(expression)), std::move(statement));
-    return loop;
+    loop = HeadWhileStatement(toBool(std::move(expression)), std::move(statement));
+    return storage;
 }
 
-std::unique_ptr<cld::Semantics::FootWhileStatement>
+std::unique_ptr<cld::Semantics::Statement>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::FootWhileStatement& node)
 {
-    auto loop = std::make_unique<FootWhileStatement>(Statement{}, Expression(node));
-    auto guard = pushLoop(loop.get());
+    auto storage = std::make_unique<Statement>(std::in_place_type<FootWhileStatement>, nullptr, Expression(node));
+    auto& loop = cld::get<FootWhileStatement>(*storage);
+    auto guard = pushLoop(&loop);
     auto statement = visit(node.getStatement());
     auto expression = lvalueConversion(visit(node.getExpression()));
     if (!expression.getType().isUndefined() && !isScalar(expression.getType()))
@@ -177,32 +181,32 @@ std::unique_ptr<cld::Semantics::FootWhileStatement>
         log(Errors::Semantics::CONTROLLING_EXPRESSION_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
             expression, m_sourceInterface, expression));
     }
-    *loop = FootWhileStatement(std::move(statement), toBool(std::move(expression)));
-    return loop;
+    loop = FootWhileStatement(std::move(statement), toBool(std::move(expression)));
+    return storage;
 }
 
-cld::Semantics::BreakStatement cld::Semantics::SemanticAnalysis::visit(const Syntax::BreakStatement& node)
+std::unique_ptr<cld::Semantics::Statement> cld::Semantics::SemanticAnalysis::visit(const Syntax::BreakStatement& node)
 {
     if (m_breakableStatements.empty())
     {
         log(Errors::Semantics::BREAK_MUST_BE_WITHIN_A_SWITCH_OR_LOOP_STATEMENT.args(node, m_sourceInterface, node));
-        return BreakStatement({});
+        return {};
     }
-    return BreakStatement(m_breakableStatements.back());
+    return std::make_unique<Statement>(BreakStatement(m_breakableStatements.back()));
 }
 
-cld::Semantics::ContinueStatement cld::Semantics::SemanticAnalysis::visit(const Syntax::ContinueStatement& node)
+std::unique_ptr<cld::Semantics::Statement>
+    cld::Semantics::SemanticAnalysis::visit(const Syntax::ContinueStatement& node)
 {
     if (m_loopStatements.empty())
     {
         log(Errors::Semantics::CONTINUE_MUST_BE_WITHIN_A_LOOP_STATEMENT.args(node, m_sourceInterface, node));
-        return ContinueStatement({});
+        return {};
     }
-    return ContinueStatement(m_loopStatements.back());
+    return std::make_unique<Statement>(ContinueStatement(m_loopStatements.back()));
 }
 
-std::unique_ptr<cld::Semantics::SwitchStatement>
-    cld::Semantics::SemanticAnalysis::visit(const Syntax::SwitchStatement& node)
+std::unique_ptr<cld::Semantics::Statement> cld::Semantics::SemanticAnalysis::visit(const Syntax::SwitchStatement& node)
 {
     auto expression = integerPromotion(visit(node.getExpression()));
     if (!expression.getType().isUndefined() && !isInteger(expression.getType()))
@@ -211,12 +215,14 @@ std::unique_ptr<cld::Semantics::SwitchStatement>
                                                                                    expression));
         expression = Expression{node};
     }
-    auto switchStmt = std::make_unique<SwitchStatement>(std::move(expression), Statement{}, m_currentScope);
-    auto guard = pushSwitch(*switchStmt);
+    auto storage = std::make_unique<Statement>(std::in_place_type<SwitchStatement>, std::move(expression), nullptr,
+                                               m_currentScope);
+    auto& switchStmt = cld::get<SwitchStatement>(*storage);
+    auto guard = pushSwitch(switchStmt);
     auto statement = visit(node.getStatement());
-    *switchStmt = SwitchStatement(std::move(*switchStmt).getExpression(), std::move(statement), m_currentScope,
-                                  std::move(m_switchStatements.back().cases), m_switchStatements.back().defaultStmt);
-    return switchStmt;
+    switchStmt = SwitchStatement(std::move(switchStmt).getExpression(), std::move(statement), m_currentScope,
+                                 std::move(m_switchStatements.back().cases), m_switchStatements.back().defaultStmt);
+    return storage;
 }
 
 void cld::Semantics::SemanticAnalysis::checkForIllegalSwitchJumps(
@@ -291,8 +297,7 @@ void cld::Semantics::SemanticAnalysis::checkForIllegalSwitchJumps(
     }
 }
 
-std::unique_ptr<cld::Semantics::DefaultStatement>
-    cld::Semantics::SemanticAnalysis::visit(const Syntax::DefaultStatement& node)
+std::unique_ptr<cld::Semantics::Statement> cld::Semantics::SemanticAnalysis::visit(const Syntax::DefaultStatement& node)
 {
     if (m_switchStatements.empty())
     {
@@ -304,8 +309,9 @@ std::unique_ptr<cld::Semantics::DefaultStatement>
     auto& switchStmt = *m_switchStatements.back().switchStatement;
     checkForIllegalSwitchJumps(std::forward_as_tuple(*node.getDefaultToken(), *node.getColonToken()), switchStmt,
                                false);
-    auto defaultStmt =
-        std::make_unique<DefaultStatement>(node.getDefaultToken(), node.getColonToken(), Statement{}, switchStmt);
+    auto storage = std::make_unique<Statement>(std::in_place_type<DefaultStatement>, node.getDefaultToken(),
+                                               node.getColonToken(), nullptr, switchStmt);
+    auto& defaultStmt = cld::get<DefaultStatement>(*storage);
     if (m_switchStatements.back().defaultStmt)
     {
         log(Errors::Semantics::REDEFINITION_OF_DEFAULT.args(
@@ -320,15 +326,14 @@ std::unique_ptr<cld::Semantics::DefaultStatement>
     }
     else
     {
-        m_switchStatements.back().defaultStmt = defaultStmt.get();
+        m_switchStatements.back().defaultStmt = &defaultStmt;
     }
     auto statement = visit(node.getStatement());
-    *defaultStmt = DefaultStatement(node.getDefaultToken(), node.getColonToken(), std::move(statement), switchStmt);
-    return defaultStmt;
+    defaultStmt = DefaultStatement(node.getDefaultToken(), node.getColonToken(), std::move(statement), switchStmt);
+    return storage;
 }
 
-std::unique_ptr<cld::Semantics::CaseStatement>
-    cld::Semantics::SemanticAnalysis::visit(const Syntax::CaseStatement& node)
+std::unique_ptr<cld::Semantics::Statement> cld::Semantics::SemanticAnalysis::visit(const Syntax::CaseStatement& node)
 {
     auto expr = visit(node.getConstantExpression());
     if (!expr.getType().isUndefined() && !isInteger(expr.getType()))
@@ -349,22 +354,24 @@ std::unique_ptr<cld::Semantics::CaseStatement>
         log(Errors::Semantics::CASE_MUST_BE_WITHIN_A_SWITCH_STATEMENT.args(
             std::forward_as_tuple(node.getCaseToken(), node.getColonToken()), m_sourceInterface,
             std::forward_as_tuple(node.getCaseToken(), node.getColonToken())));
-        return nullptr;
+        return {};
     }
     auto& switchStmt = *m_switchStatements.back().switchStatement;
     checkForIllegalSwitchJumps(std::forward_as_tuple(*node.getCaseToken(), *node.getColonToken()), switchStmt, true);
     if (!constant || !std::holds_alternative<llvm::APSInt>(constant->getValue()))
     {
-        return nullptr;
+        return {};
     }
     if (switchStmt.getExpression().isUndefined())
     {
-        return nullptr;
+        return {};
     }
     constant = constant->castTo(switchStmt.getExpression().getType(), this, m_sourceInterface.getLanguageOptions());
-    auto caseStmt = std::make_unique<CaseStatement>(node.getCaseToken(), cld::get<llvm::APSInt>(constant->getValue()),
-                                                    node.getColonToken(), Statement{}, switchStmt);
-    auto [prev, notRedefinition] = m_switchStatements.back().cases.emplace(caseStmt->getConstant(), caseStmt.get());
+    auto storage = std::make_unique<Statement>(std::in_place_type<CaseStatement>, node.getCaseToken(),
+                                               cld::get<llvm::APSInt>(constant->getValue()), node.getColonToken(),
+                                               nullptr, switchStmt);
+    auto& caseStmt = cld::get<CaseStatement>(*storage);
+    auto [prev, notRedefinition] = m_switchStatements.back().cases.emplace(caseStmt.getConstant(), &caseStmt);
     if (!notRedefinition)
     {
         log(Errors::Semantics::REDEFINITION_OF_CASE_WITH_VALUE_N.args(
@@ -374,9 +381,9 @@ std::unique_ptr<cld::Semantics::CaseStatement>
             std::forward_as_tuple(prev->second->getCaseToken() + 1, prev->second->getColonToken() - 1), *constant));
     }
     auto statement = visit(node.getStatement());
-    *caseStmt = CaseStatement(node.getCaseToken(), caseStmt->getConstant(), node.getColonToken(), std::move(statement),
-                              switchStmt);
-    return caseStmt;
+    caseStmt = CaseStatement(node.getCaseToken(), caseStmt.getConstant(), node.getColonToken(), std::move(statement),
+                             switchStmt);
+    return storage;
 }
 
 void cld::Semantics::SemanticAnalysis::resolveGotos()
@@ -470,28 +477,27 @@ void cld::Semantics::SemanticAnalysis::resolveGotos()
     m_scheduledGotos.clear();
 }
 
-std::unique_ptr<cld::Semantics::GotoStatement>
-    cld::Semantics::SemanticAnalysis::visit(const Syntax::GotoStatement& node)
+std::unique_ptr<cld::Semantics::Statement> cld::Semantics::SemanticAnalysis::visit(const Syntax::GotoStatement& node)
 {
-    auto gotoStatement = std::make_unique<GotoStatement>(nullptr);
-    m_scheduledGotos.emplace_back(node.getIdentifier(), gotoStatement.get());
+    auto gotoStatement = std::make_unique<Statement>(std::in_place_type<GotoStatement>, nullptr);
+    m_scheduledGotos.emplace_back(node.getIdentifier(), &cld::get<GotoStatement>(*gotoStatement));
     return gotoStatement;
 }
 
-std::unique_ptr<cld::Semantics::LabelStatement>
-    cld::Semantics::SemanticAnalysis::visit(const Syntax::LabelStatement& node)
+std::unique_ptr<cld::Semantics::Statement> cld::Semantics::SemanticAnalysis::visit(const Syntax::LabelStatement& node)
 {
     if (node.getIdentifierToken()->getText() == "__func__")
     {
         log(Errors::Semantics::DECLARING_LABEL_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR.args(
             *node.getIdentifierToken(), m_sourceInterface, *node.getIdentifierToken()));
-        return nullptr;
+        return {};
     }
 
-    auto label = std::make_unique<LabelStatement>(node.getIdentifierToken(), m_currentScope,
-                                                  getCurrentScope().declarations.size(), Statement{});
+    auto storage = std::make_unique<Statement>(std::in_place_type<LabelStatement>, node.getIdentifierToken(),
+                                               m_currentScope, getCurrentScope().declarations.size(), nullptr);
+    auto& label = cld::get<LabelStatement>(*storage);
     auto [prev, notRedefinition] =
-        getCurrentFunctionScope()->labels.emplace(node.getIdentifierToken()->getText(), label.get());
+        getCurrentFunctionScope()->labels.emplace(node.getIdentifierToken()->getText(), &label);
     if (!notRedefinition)
     {
         log(Errors::Semantics::REDEFINITION_OF_LABEL_N.args(*node.getIdentifierToken(), m_sourceInterface,
@@ -501,9 +507,9 @@ std::unique_ptr<cld::Semantics::LabelStatement>
     }
     else
     {
-        *label = LabelStatement(node.getIdentifierToken(), m_currentScope, getCurrentScope().declarations.size(),
-                                visit(node.getStatement()));
+        label = LabelStatement(node.getIdentifierToken(), m_currentScope, getCurrentScope().declarations.size(),
+                               visit(node.getStatement()));
     }
 
-    return label;
+    return storage;
 }
