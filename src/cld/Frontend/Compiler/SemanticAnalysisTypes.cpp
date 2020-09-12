@@ -10,7 +10,7 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(Type& type,
                                                            const Syntax::ParameterTypeList* parameterTypeList,
                                                            T&& returnTypeLoc)
 {
-    if (std::holds_alternative<FunctionType>(type.get()))
+    if (std::holds_alternative<FunctionType>(type.getVariant()))
     {
         log(Errors::Semantics::FUNCTION_RETURN_TYPE_MUST_NOT_BE_A_FUNCTION.args(returnTypeLoc, m_sourceInterface,
                                                                                 returnTypeLoc, type));
@@ -24,7 +24,7 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(Type& type,
         type = Type{};
         return;
     }
-    if (std::holds_alternative<FunctionType>(type.get()))
+    if (std::holds_alternative<FunctionType>(type.getVariant()))
     {
         log(Errors::Semantics::FUNCTION_RETURN_TYPE_MUST_NOT_BE_A_FUNCTION.args(returnTypeLoc, m_sourceInterface,
                                                                                 returnTypeLoc, type));
@@ -85,13 +85,13 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(Type& type,
         auto begin = visitor.begin();
         begin++;
         auto result = std::find_if(begin, visitor.end(), [](const Type& type) {
-            if (std::holds_alternative<ValArrayType>(type.get()))
+            if (std::holds_alternative<ValArrayType>(type.getVariant()))
             {
-                return cld::get<ValArrayType>(type.get()).isStatic();
+                return cld::get<ValArrayType>(type.getVariant()).isStatic();
             }
-            else if (std::holds_alternative<ArrayType>(type.get()))
+            else if (std::holds_alternative<ArrayType>(type.getVariant()))
             {
-                return cld::get<ArrayType>(type.get()).isStatic();
+                return cld::get<ArrayType>(type.getVariant()).isStatic();
             }
             return false;
         });
@@ -107,7 +107,7 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(Type& type,
         }
         // Not transforming array types to pointers here as we might still want to use that information
         // to warn callers.
-        if (std::holds_alternative<FunctionType>(paramType.get()))
+        if (std::holds_alternative<FunctionType>(paramType.getVariant()))
         {
             paramType = PointerType::create(false, false, false, std::move(paramType));
         }
@@ -190,7 +190,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                 for (auto& iter : parentheses.getDeclarator().getPointers())
                 {
                     auto [isConst, isVolatile, restricted] = getQualifiers(iter.getTypeQualifiers());
-                    if (restricted && std::holds_alternative<FunctionType>(type.get()))
+                    if (restricted && std::holds_alternative<FunctionType>(type.getVariant()))
                     {
                         auto restrictQual =
                             std::find_if(iter.getTypeQualifiers().begin(), iter.getTypeQualifiers().end(),
@@ -236,7 +236,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                 {
                     scope2.emplace(pushScope());
                 }
-                if (std::holds_alternative<FunctionType>(type.get()))
+                if (std::holds_alternative<FunctionType>(type.getVariant()))
                 {
                     log(Errors::Semantics::FUNCTION_RETURN_TYPE_MUST_NOT_BE_A_FUNCTION.args(
                         std::forward_as_tuple(declarationOrSpecifierQualifiers[0], identifiers.getDirectDeclarator()),
@@ -397,7 +397,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                 for (auto& iter : parentheses.getAbstractDeclarator().getPointers())
                 {
                     auto [isConst, isVolatile, restricted] = getQualifiers(iter.getTypeQualifiers());
-                    if (restricted && std::holds_alternative<FunctionType>(type.get()))
+                    if (restricted && std::holds_alternative<FunctionType>(type.getVariant()))
                     {
                         auto restrictQual =
                             std::find_if(iter.getTypeQualifiers().begin(), iter.getTypeQualifiers().end(),
@@ -489,7 +489,7 @@ cld::Semantics::Type
         }
         const auto* type = getTypedef(*name);
         CLD_ASSERT(type);
-        auto ret = Type(isConst, isVolatile, type->get());
+        auto ret = Type(isConst, isVolatile, type->getVariant());
         if (std::tuple(type->isConst(), type->isVolatile()) == std::tuple(isConst, isVolatile))
         {
             ret.setName(type->getName());
@@ -629,7 +629,7 @@ cld::Semantics::Type
                 }
                 else if (!isCompleteType(type)
                          && !(!structOrUnion->isUnion() && last && !first
-                              && std::holds_alternative<AbstractArrayType>(type.get())))
+                              && std::holds_alternative<AbstractArrayType>(type.getVariant())))
                 {
                     if (structOrUnion->isUnion())
                     {
@@ -643,7 +643,7 @@ cld::Semantics::Type
                     }
                     type = Type{};
                 }
-                else if (std::holds_alternative<FunctionType>(type.get()))
+                else if (std::holds_alternative<FunctionType>(type.getVariant()))
                 {
                     if (structOrUnion->isUnion())
                     {
@@ -659,7 +659,7 @@ cld::Semantics::Type
                 }
                 else if (!structOrUnion->isUnion() && hasFlexibleArrayMember(type))
                 {
-                    if (std::holds_alternative<StructType>(type.get()))
+                    if (std::holds_alternative<StructType>(type.getVariant()))
                     {
                         log(Errors::Semantics::STRUCT_WITH_FLEXIBLE_ARRAY_MEMBER_NOT_ALLOWED_IN_STRUCT.args(
                             specifiers, m_sourceInterface, specifiers));
@@ -676,7 +676,7 @@ cld::Semantics::Type
                 if (size)
                 {
                     bool hadValidType = true;
-                    if (!std::holds_alternative<PrimitiveType>(type.get()))
+                    if (!std::holds_alternative<PrimitiveType>(type.getVariant()))
                     {
                         log(Errors::Semantics::BITFIELD_MAY_ONLY_BE_OF_TYPE_INT_OR_BOOL.args(
                             specifiers, m_sourceInterface, specifiers));
@@ -684,7 +684,7 @@ cld::Semantics::Type
                     }
                     else
                     {
-                        auto& primitive = cld::get<PrimitiveType>(type.get());
+                        auto& primitive = cld::get<PrimitiveType>(type.getVariant());
                         switch (primitive.getKind())
                         {
                             case PrimitiveType::Kind::Bool:
@@ -712,8 +712,8 @@ cld::Semantics::Type
                         }
                         continue;
                     }
-                    CLD_ASSERT(std::holds_alternative<PrimitiveType>(expr.getType().get()));
-                    if (cld::get<PrimitiveType>(expr.getType().get()).isSigned() && result->toInt() < 0)
+                    CLD_ASSERT(std::holds_alternative<PrimitiveType>(expr.getType().getVariant()));
+                    if (cld::get<PrimitiveType>(expr.getType().getVariant()).isSigned() && result->toInt() < 0)
                     {
                         log(Errors::Semantics::BITFIELD_MUST_BE_OF_SIZE_ZERO_OR_GREATER.args(*size, m_sourceInterface,
                                                                                              *size, result->toInt()));
@@ -723,7 +723,7 @@ cld::Semantics::Type
                     {
                         continue;
                     }
-                    auto objectWidth = cld::get<PrimitiveType>(type.get()).getBitCount();
+                    auto objectWidth = cld::get<PrimitiveType>(type.getVariant()).getBitCount();
                     if (result->toUInt() > objectWidth)
                     {
                         log(Errors::Semantics::BITFIELD_MUST_NOT_HAVE_A_GREATER_WIDTH_THAN_THE_TYPE.args(
@@ -754,7 +754,7 @@ cld::Semantics::Type
                     iter++;
                     continue;
                 }
-                if (iter + 1 == fields.end() && std::holds_alternative<AbstractArrayType>(iter->type->get()))
+                if (iter + 1 == fields.end() && std::holds_alternative<AbstractArrayType>(iter->type->getVariant()))
                 {
                     // TODO: I don't think this should be part of the layout but I am not sure?
                     break;
@@ -809,7 +809,7 @@ cld::Semantics::Type
                     }
                     prevSize = size;
                     storageLeft =
-                        cld::get<PrimitiveType>(iter->type->get()).getBitCount() - iter->bitFieldBounds->second;
+                        cld::get<PrimitiveType>(iter->type->getVariant()).getBitCount() - iter->bitFieldBounds->second;
                     used = iter->bitFieldBounds->second;
                     iter->bitFieldBounds.emplace(0, used);
                     iter->layoutIndex = layout.size();
@@ -1175,7 +1175,7 @@ void cld::Semantics::SemanticAnalysis::handleArray(cld::Semantics::Type& type,
                                                    const cld::Syntax::AssignmentExpression* assignmentExpression,
                                                    bool isStatic, bool valarray, T&& returnTypeLoc)
 {
-    if (std::holds_alternative<FunctionType>(type.get()))
+    if (std::holds_alternative<FunctionType>(type.getVariant()))
     {
         log(Errors::Semantics::ARRAY_ELEMENT_TYPE_MUST_NOT_BE_A_FUNCTION.args(returnTypeLoc, m_sourceInterface,
                                                                               returnTypeLoc, type));
@@ -1224,7 +1224,7 @@ void cld::Semantics::SemanticAnalysis::handleArray(cld::Semantics::Type& type,
         type = Type{};
         return;
     }
-    if (cld::get<PrimitiveType>(expr.getType().get()).isSigned())
+    if (cld::get<PrimitiveType>(expr.getType().getVariant()).isSigned())
     {
         if (result->toInt() <= 0)
         {

@@ -593,12 +593,12 @@ public:
     {
     }
 
-    [[nodiscard]] const Variant& get() const&
+    [[nodiscard]] const Variant& getVariant() const&
     {
         return m_type;
     }
 
-    [[nodiscard]] Variant&& get() &&
+    [[nodiscard]] Variant&& getVariant() &&
     {
         return std::move(m_type);
     }
@@ -1280,7 +1280,7 @@ public:
 #endif
         = default;
 
-    [[nodiscard]] const Variant& get() const
+    [[nodiscard]] const Variant& getVariant() const
     {
         return m_expression;
     }
@@ -1410,9 +1410,7 @@ public:
     }
 };
 
-using Statement = std::variant<ForStatement, ReturnStatement, ExpressionStatement, IfStatement, CompoundStatement,
-                               HeadWhileStatement, FootWhileStatement, BreakStatement, ContinueStatement,
-                               SwitchStatement, DefaultStatement, CaseStatement, GotoStatement, LabelStatement>;
+class Statement;
 
 class IfStatement final
 {
@@ -1669,6 +1667,36 @@ public:
     [[nodiscard]] const Statement& getStatement() const;
 };
 
+class Statement
+{
+public:
+    using Variant = std::variant<ForStatement, ReturnStatement, ExpressionStatement, IfStatement, CompoundStatement,
+                                 HeadWhileStatement, FootWhileStatement, BreakStatement, ContinueStatement,
+                                 SwitchStatement, DefaultStatement, CaseStatement, GotoStatement, LabelStatement>;
+
+private:
+    Variant m_variant;
+
+public:
+    template <class T, class... Args>
+    explicit Statement(std::in_place_type_t<T>, Args&&... args)
+        : m_variant(std::in_place_type<T>, std::forward<Args>(args)...)
+    {
+    }
+
+    explicit Statement(Variant variant) : m_variant(std::move(variant)) {}
+
+    const Variant& getVariant() const&
+    {
+        return m_variant;
+    }
+
+    Variant&& getVariant() &&
+    {
+        return std::move(m_variant);
+    }
+};
+
 class StructDefinition
 {
     std::string_view m_name;
@@ -1909,7 +1937,7 @@ public:
 
     [[nodiscard]] bool isKandR() const
     {
-        return cld::get<FunctionType>(m_type.get()).isKandR();
+        return cld::get<FunctionType>(m_type.getVariant()).isKandR();
     }
 
     [[nodiscard]] Linkage getLinkage() const

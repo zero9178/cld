@@ -31,7 +31,7 @@ class SemanticAnalysis final : public ProgramInterface
     std::vector<FunctionScope> m_functionScopes;
     bool m_inStaticInitializer = false;
     bool m_inFunctionPrototype = false;
-    std::vector<std::pair<Lexer::CTokenIterator, GotoStatement * CLD_NON_NULL>> m_scheduledGotos;
+    std::vector<std::pair<Lexer::CTokenIterator, Statement * CLD_NON_NULL>> m_scheduledGotos;
     std::vector<LoopStatements> m_loopStatements;
     std::vector<BreakableStatements> m_breakableStatements;
     struct SwitchStack

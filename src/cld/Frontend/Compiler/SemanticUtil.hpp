@@ -108,7 +108,7 @@ constexpr auto DIRECT_DECL_NEXT_FN = [](const Syntax::DirectDeclarator& value) -
 };
 
 constexpr auto ARRAY_TYPE_NEXT_FN = [](const Type& type) -> const Type* {
-    return cld::match(type.get(), [](auto&& value) -> const Type* {
+    return cld::match(type.getVariant(), [](auto&& value) -> const Type* {
         using T = std::decay_t<decltype(value)>;
         if constexpr (std::is_same_v<ArrayType,
                                      T> || std::is_same_v<AbstractArrayType, T> || std::is_same_v<ValArrayType, T>)
@@ -124,7 +124,7 @@ constexpr auto ARRAY_TYPE_NEXT_FN = [](const Type& type) -> const Type* {
 
 constexpr auto TYPE_NEXT_FN = [](const Type& type) -> const Type* {
     return cld::match(
-        type.get(),
+        type.getVariant(),
         [](const auto& value) -> const Type* {
             using T = std::decay_t<decltype(value)>;
             if constexpr (std::is_same_v<ArrayType,

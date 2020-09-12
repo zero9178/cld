@@ -77,7 +77,7 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
     }
     auto scope = pushScope();
     auto type = declaratorsToType(node.getDeclarationSpecifiers(), node.getDeclarator(), node.getDeclarations(), true);
-    if (!std::holds_alternative<FunctionType>(type.get()))
+    if (!std::holds_alternative<FunctionType>(type.getVariant()))
     {
         log(Errors::Semantics::FUNCTION_DEFINITION_MUST_HAVE_FUNCTION_TYPE.args(
             std::forward_as_tuple(node.getDeclarationSpecifiers(), node.getDeclarator()), m_sourceInterface,
@@ -85,7 +85,7 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
         return {};
     }
 
-    auto& ft = cld::get<FunctionType>(type.get());
+    auto& ft = cld::get<FunctionType>(type.getVariant());
     if (!(isVoid(ft.getReturnType()) && !ft.getReturnType().isConst() && !ft.getReturnType().isVolatile())
         && !isCompleteType(ft.getReturnType()))
     {
@@ -258,7 +258,7 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
     auto functionScope = pushFunctionScope(*ptr);
 
     auto comp = visit(node.getCompoundStatement(), false);
-    ptr->setCompoundStatement(cld::get<CompoundStatement>(std::move(*comp)));
+    ptr->setCompoundStatement(cld::get<CompoundStatement>(std::move(*comp).getVariant()));
     return result;
 }
 
@@ -340,7 +340,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
     {
         const auto* loc = declaratorToLoc(*declarator);
         auto result = declaratorsToType(node.getDeclarationSpecifiers(), *declarator);
-        if (auto* functionType = std::get_if<FunctionType>(&result.get());
+        if (auto* functionType = std::get_if<FunctionType>(&result.getVariant());
             functionType
             && (!storageClassSpecifier
                 || storageClassSpecifier->getSpecifier() != Syntax::StorageClassSpecifier::Typedef))
@@ -486,7 +486,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
             auto typeVisitor = RecursiveVisitor(result, ARRAY_TYPE_NEXT_FN);
             if (std::any_of(typeVisitor.begin(), typeVisitor.end(), [](const Type& type) {
                     return cld::match(
-                        type.get(), [](const ArrayType& arrayType) { return arrayType.isStatic(); },
+                        type.getVariant(), [](const ArrayType& arrayType) { return arrayType.isStatic(); },
                         [](const ValArrayType& arrayType) { return arrayType.isStatic(); },
                         [](auto&&) { return false; });
                 }))
@@ -504,7 +504,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
             }
             if (std::any_of(typeVisitor.begin(), typeVisitor.end(), [](const Type& type) {
                     return cld::match(
-                        type.get(),
+                        type.getVariant(),
                         [&](const ArrayType& arrayType) {
                             return type.isConst() || type.isVolatile() || arrayType.isRestricted();
                         },
@@ -571,9 +571,9 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                 }
                 for (auto& iter : typeVisitor)
                 {
-                    if (std::holds_alternative<ValArrayType>(iter.get()))
+                    if (std::holds_alternative<ValArrayType>(iter.getVariant()))
                     {
-                        decls.push_back(cld::get<ValArrayType>(iter.get()).getExpression());
+                        decls.push_back(cld::get<ValArrayType>(iter.getVariant()).getExpression());
                     }
                 }
                 continue;
@@ -697,11 +697,12 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                     std::size_t size = 0;
                     auto expr = visit(*initializer, declaration->getType(),
                                       declaration->getLifetime() == Lifetime::Static, &size);
-                    if (std::holds_alternative<AbstractArrayType>(declaration->getType().get()))
+                    if (std::holds_alternative<AbstractArrayType>(declaration->getType().getVariant()))
                     {
-                        prevType = ArrayType::create(prevType.isConst(), prevType.isVolatile(),
-                                                     cld::get<AbstractArrayType>(prevType.get()).isRestricted(), false,
-                                                     cld::get<AbstractArrayType>(prevType.get()).getType(), size);
+                        prevType =
+                            ArrayType::create(prevType.isConst(), prevType.isVolatile(),
+                                              cld::get<AbstractArrayType>(prevType.getVariant()).isRestricted(), false,
+                                              cld::get<AbstractArrayType>(prevType.getVariant()).getType(), size);
                     }
                     *declaration = Declaration(std::move(prevType), linkage, lifetime, loc, kind, std::move(expr));
                     m_inStaticInitializer = false;
@@ -875,7 +876,7 @@ bool cld::Semantics::SemanticAnalysis::typesAreCompatible(const cld::Semantics::
     }
     if (isArray(lhs) && isArray(rhs))
     {
-        const auto& lhsType = cld::match(lhs.get(), [](auto&& value) -> const Type& {
+        const auto& lhsType = cld::match(lhs.getVariant(), [](auto&& value) -> const Type& {
             using T = std::decay_t<decltype(value)>;
             if constexpr (std::is_same_v<ArrayType,
                                          T> || std::is_same_v<AbstractArrayType, T> || std::is_same_v<ValArrayType, T>)
@@ -884,7 +885,7 @@ bool cld::Semantics::SemanticAnalysis::typesAreCompatible(const cld::Semantics::
             }
             CLD_UNREACHABLE;
         });
-        const auto& rhsType = cld::match(rhs.get(), [](auto&& value) -> const Type& {
+        const auto& rhsType = cld::match(rhs.getVariant(), [](auto&& value) -> const Type& {
             using T = std::decay_t<decltype(value)>;
             if constexpr (std::is_same_v<ArrayType,
                                          T> || std::is_same_v<AbstractArrayType, T> || std::is_same_v<ValArrayType, T>)
@@ -897,35 +898,36 @@ bool cld::Semantics::SemanticAnalysis::typesAreCompatible(const cld::Semantics::
         {
             return false;
         }
-        if (!std::holds_alternative<ArrayType>(lhs.get()) || !std::holds_alternative<ArrayType>(rhs.get()))
+        if (!std::holds_alternative<ArrayType>(lhs.getVariant())
+            || !std::holds_alternative<ArrayType>(rhs.getVariant()))
         {
             return true;
         }
-        return cld::get<ArrayType>(lhs.get()).getSize() == cld::get<ArrayType>(rhs.get()).getSize();
+        return cld::get<ArrayType>(lhs.getVariant()).getSize() == cld::get<ArrayType>(rhs.getVariant()).getSize();
     }
-    if (lhs.get().index() != rhs.get().index())
+    if (lhs.getVariant().index() != rhs.getVariant().index())
     {
         return false;
     }
-    if (std::holds_alternative<PointerType>(lhs.get()))
+    if (std::holds_alternative<PointerType>(lhs.getVariant()))
     {
-        auto& lhsType = cld::get<PointerType>(lhs.get());
-        auto& rhsType = cld::get<PointerType>(rhs.get());
+        auto& lhsType = cld::get<PointerType>(lhs.getVariant());
+        auto& rhsType = cld::get<PointerType>(rhs.getVariant());
         if (lhsType.isRestricted() != rhsType.isRestricted())
         {
             return false;
         }
         return typesAreCompatible(lhsType.getElementType(), rhsType.getElementType());
     }
-    if (std::holds_alternative<FunctionType>(lhs.get()))
+    if (std::holds_alternative<FunctionType>(lhs.getVariant()))
     {
         // C99 6.7.5.3§15:
         // (In the determination of type
         // compatibility and of a composite type, each parameter declared with function or array
         // type is taken as having the adjusted type and each parameter declared with qualified type
         // is taken as having the unqualified version of its declared type.)
-        auto& lhsFtype = cld::get<FunctionType>(lhs.get());
-        auto& rhsFtype = cld::get<FunctionType>(rhs.get());
+        auto& lhsFtype = cld::get<FunctionType>(lhs.getVariant());
+        auto& rhsFtype = cld::get<FunctionType>(rhs.getVariant());
         if (!typesAreCompatible(lhsFtype.getReturnType(), rhsFtype.getReturnType()))
         {
             return false;
@@ -956,7 +958,7 @@ bool cld::Semantics::SemanticAnalysis::typesAreCompatible(const cld::Semantics::
                 }
                 for (auto& iter : paramFunc.getArguments())
                 {
-                    auto nonQualifiedType = Type(false, false, iter.first.get());
+                    auto nonQualifiedType = Type(false, false, iter.first.getVariant());
                     auto ret = defaultArgumentPromotion(nonQualifiedType);
                     if (!typesAreCompatible(nonQualifiedType, ret))
                     {
@@ -979,8 +981,8 @@ bool cld::Semantics::SemanticAnalysis::typesAreCompatible(const cld::Semantics::
             {
                 auto kandRType = adjustParameterType(kandRFunc.getArguments()[i].first);
                 auto paramType = adjustParameterType(paramFunc.getArguments()[i].first);
-                auto nonQualifiedkandR = Type(false, false, kandRType.get());
-                auto nonQualifiedParam = Type(false, false, paramType.get());
+                auto nonQualifiedkandR = Type(false, false, kandRType.getVariant());
+                auto nonQualifiedParam = Type(false, false, paramType.getVariant());
                 if (!typesAreCompatible(defaultArgumentPromotion(nonQualifiedkandR), nonQualifiedParam))
                 {
                     return false;
@@ -1004,8 +1006,8 @@ bool cld::Semantics::SemanticAnalysis::typesAreCompatible(const cld::Semantics::
         {
             auto lhsType = adjustParameterType(lhsFtype.getArguments()[i].first);
             auto rhsType = adjustParameterType(rhsFtype.getArguments()[i].first);
-            auto nonQualifiedLhs = Type(false, false, lhsType.get());
-            auto nonQualifiedRhs = Type(false, false, rhsType.get());
+            auto nonQualifiedLhs = Type(false, false, lhsType.getVariant());
+            auto nonQualifiedRhs = Type(false, false, rhsType.getVariant());
             if (!typesAreCompatible(nonQualifiedLhs, nonQualifiedRhs))
             {
                 return false;
@@ -1013,39 +1015,39 @@ bool cld::Semantics::SemanticAnalysis::typesAreCompatible(const cld::Semantics::
         }
         return true;
     }
-    if (std::holds_alternative<StructType>(lhs.get()) && std::holds_alternative<StructType>(rhs.get()))
+    if (std::holds_alternative<StructType>(lhs.getVariant()) && std::holds_alternative<StructType>(rhs.getVariant()))
     {
-        auto* lhsDef = getStructDefinition(cld::get<StructType>(lhs.get()).getName(),
-                                           cld::get<StructType>(lhs.get()).getScopeOrId());
-        auto* rhsDef = getStructDefinition(cld::get<StructType>(rhs.get()).getName(),
-                                           cld::get<StructType>(rhs.get()).getScopeOrId());
+        auto* lhsDef = getStructDefinition(cld::get<StructType>(lhs.getVariant()).getName(),
+                                           cld::get<StructType>(lhs.getVariant()).getScopeOrId());
+        auto* rhsDef = getStructDefinition(cld::get<StructType>(rhs.getVariant()).getName(),
+                                           cld::get<StructType>(rhs.getVariant()).getScopeOrId());
         if (!lhsDef && !rhsDef)
         {
-            return cld::get<StructType>(lhs.get()).getName() == cld::get<StructType>(rhs.get()).getName();
+            return cld::get<StructType>(lhs.getVariant()).getName() == cld::get<StructType>(rhs.getVariant()).getName();
         }
         return lhsDef == rhsDef;
     }
-    if (std::holds_alternative<UnionType>(lhs.get()) && std::holds_alternative<UnionType>(rhs.get()))
+    if (std::holds_alternative<UnionType>(lhs.getVariant()) && std::holds_alternative<UnionType>(rhs.getVariant()))
     {
-        auto* lhsDef =
-            getUnionDefinition(cld::get<UnionType>(lhs.get()).getName(), cld::get<UnionType>(lhs.get()).getScopeOrId());
-        auto* rhsDef =
-            getUnionDefinition(cld::get<UnionType>(rhs.get()).getName(), cld::get<UnionType>(rhs.get()).getScopeOrId());
+        auto* lhsDef = getUnionDefinition(cld::get<UnionType>(lhs.getVariant()).getName(),
+                                          cld::get<UnionType>(lhs.getVariant()).getScopeOrId());
+        auto* rhsDef = getUnionDefinition(cld::get<UnionType>(rhs.getVariant()).getName(),
+                                          cld::get<UnionType>(rhs.getVariant()).getScopeOrId());
         if (!lhsDef && !rhsDef)
         {
-            return cld::get<UnionType>(lhs.get()).getName() == cld::get<UnionType>(rhs.get()).getName();
+            return cld::get<UnionType>(lhs.getVariant()).getName() == cld::get<UnionType>(rhs.getVariant()).getName();
         }
         return lhsDef == rhsDef;
     }
-    if (std::holds_alternative<EnumType>(lhs.get()) && std::holds_alternative<EnumType>(rhs.get()))
+    if (std::holds_alternative<EnumType>(lhs.getVariant()) && std::holds_alternative<EnumType>(rhs.getVariant()))
     {
-        auto* lhsDef =
-            getEnumDefinition(cld::get<EnumType>(lhs.get()).getName(), cld::get<EnumType>(lhs.get()).getScopeOrId());
-        auto* rhsDef =
-            getEnumDefinition(cld::get<EnumType>(rhs.get()).getName(), cld::get<EnumType>(rhs.get()).getScopeOrId());
+        auto* lhsDef = getEnumDefinition(cld::get<EnumType>(lhs.getVariant()).getName(),
+                                         cld::get<EnumType>(lhs.getVariant()).getScopeOrId());
+        auto* rhsDef = getEnumDefinition(cld::get<EnumType>(rhs.getVariant()).getName(),
+                                         cld::get<EnumType>(rhs.getVariant()).getScopeOrId());
         if (!lhsDef && !rhsDef)
         {
-            return cld::get<EnumType>(lhs.get()).getName() == cld::get<EnumType>(rhs.get()).getName();
+            return cld::get<EnumType>(lhs.getVariant()).getName() == cld::get<EnumType>(rhs.getVariant()).getName();
         }
         return lhsDef == rhsDef;
     }
@@ -1054,11 +1056,11 @@ bool cld::Semantics::SemanticAnalysis::typesAreCompatible(const cld::Semantics::
 
 cld::Semantics::Type cld::Semantics::SemanticAnalysis::defaultArgumentPromotion(const cld::Semantics::Type& type) const
 {
-    if (!std::holds_alternative<PrimitiveType>(type.get()))
+    if (!std::holds_alternative<PrimitiveType>(type.getVariant()))
     {
         return type;
     }
-    auto& prim = cld::get<PrimitiveType>(type.get());
+    auto& prim = cld::get<PrimitiveType>(type.getVariant());
     if (prim.isFloatingPoint())
     {
         if (prim.getBitCount() == 32)
@@ -1072,11 +1074,11 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::defaultArgumentPromotion(
 
 cld::Semantics::Type cld::Semantics::SemanticAnalysis::integerPromotion(const Type& type) const
 {
-    if (!std::holds_alternative<PrimitiveType>(type.get()))
+    if (!std::holds_alternative<PrimitiveType>(type.getVariant()))
     {
         return type;
     }
-    auto& prim = cld::get<PrimitiveType>(type.get());
+    auto& prim = cld::get<PrimitiveType>(type.getVariant());
     if (prim.isFloatingPoint())
     {
         return type;
@@ -1098,7 +1100,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::compositeType(const cld::
     if (isArray(lhs) || isArray(rhs))
     {
         auto getElementType = [](const Type& type) -> const Type& {
-            return cld::match(type.get(), [](auto&& value) -> const Type& {
+            return cld::match(type.getVariant(), [](auto&& value) -> const Type& {
                 using T = std::decay_t<decltype(value)>;
                 if constexpr (std::is_same_v<
                                   ArrayType,
@@ -1113,37 +1115,37 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::compositeType(const cld::
                 CLD_UNREACHABLE;
             });
         };
-        if (auto* array = std::get_if<ArrayType>(&lhs.get()))
+        if (auto* array = std::get_if<ArrayType>(&lhs.getVariant()))
         {
             return ArrayType::create(lhs.isConst(), lhs.isVolatile(), array->isRestricted(), array->isStatic(),
                                      compositeType(array->getType(), getElementType(rhs)), array->getSize());
         }
-        if (auto* array = std::get_if<ArrayType>(&rhs.get()))
+        if (auto* array = std::get_if<ArrayType>(&rhs.getVariant()))
         {
             return ArrayType::create(rhs.isConst(), rhs.isVolatile(), array->isRestricted(), array->isStatic(),
                                      compositeType(array->getType(), getElementType(lhs)), array->getSize());
         }
-        if (auto* valArray = std::get_if<ValArrayType>(&lhs.get()))
+        if (auto* valArray = std::get_if<ValArrayType>(&lhs.getVariant()))
         {
             return ValArrayType::create(lhs.isConst(), lhs.isVolatile(), valArray->isRestricted(), valArray->isStatic(),
                                         compositeType(valArray->getType(), getElementType(rhs)),
                                         valArray->getExpression());
         }
-        if (auto* valArray = std::get_if<ValArrayType>(&rhs.get()))
+        if (auto* valArray = std::get_if<ValArrayType>(&rhs.getVariant()))
         {
             return ValArrayType::create(rhs.isConst(), rhs.isVolatile(), valArray->isRestricted(), valArray->isStatic(),
                                         compositeType(valArray->getType(), getElementType(lhs)),
                                         valArray->getExpression());
         }
-        auto& abstractArray = std::holds_alternative<AbstractArrayType>(lhs.get()) ? lhs : rhs;
+        auto& abstractArray = std::holds_alternative<AbstractArrayType>(lhs.getVariant()) ? lhs : rhs;
         return AbstractArrayType::create(rhs.isConst(), rhs.isVolatile(),
-                                         cld::get<AbstractArrayType>(abstractArray.get()).isRestricted(),
+                                         cld::get<AbstractArrayType>(abstractArray.getVariant()).isRestricted(),
                                          compositeType(getElementType(lhs), getElementType(rhs)));
     }
-    if (std::holds_alternative<FunctionType>(lhs.get()))
+    if (std::holds_alternative<FunctionType>(lhs.getVariant()))
     {
-        auto& lhsFtype = cld::get<FunctionType>(lhs.get());
-        auto& rhsFtype = cld::get<FunctionType>(rhs.get());
+        auto& lhsFtype = cld::get<FunctionType>(lhs.getVariant());
+        auto& rhsFtype = cld::get<FunctionType>(rhs.getVariant());
         if (lhsFtype.isKandR() && !rhsFtype.isKandR())
         {
             return rhs;
@@ -1165,36 +1167,37 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::compositeType(const cld::
         return FunctionType::create(compositeType(lhsFtype.getReturnType(), rhsFtype.getReturnType()),
                                     std::move(parameters), rhsFtype.isLastVararg(), false);
     }
-    if (std::holds_alternative<PointerType>(lhs.get()))
+    if (std::holds_alternative<PointerType>(lhs.getVariant()))
     {
-        return PointerType::create(rhs.isConst(), rhs.isVolatile(), cld::get<PointerType>(rhs.get()).isRestricted(),
-                                   compositeType(cld::get<PointerType>(lhs.get()).getElementType(),
-                                                 cld::get<PointerType>(rhs.get()).getElementType()));
+        return PointerType::create(rhs.isConst(), rhs.isVolatile(),
+                                   cld::get<PointerType>(rhs.getVariant()).isRestricted(),
+                                   compositeType(cld::get<PointerType>(lhs.getVariant()).getElementType(),
+                                                 cld::get<PointerType>(rhs.getVariant()).getElementType()));
     }
     return rhs;
 }
 
 bool cld::Semantics::SemanticAnalysis::hasFlexibleArrayMember(const Type& type) const
 {
-    if (std::holds_alternative<StructType>(type.get()))
+    if (std::holds_alternative<StructType>(type.getVariant()))
     {
-        auto* maybeStructDef = getStructDefinition(cld::get<StructType>(type.get()).getName(),
-                                                   cld::get<StructType>(type.get()).getScopeOrId());
+        auto* maybeStructDef = getStructDefinition(cld::get<StructType>(type.getVariant()).getName(),
+                                                   cld::get<StructType>(type.getVariant()).getScopeOrId());
         if (maybeStructDef)
         {
             return !maybeStructDef->getFields().empty()
-                   && std::holds_alternative<AbstractArrayType>(maybeStructDef->getFields().back().type->get());
+                   && std::holds_alternative<AbstractArrayType>(maybeStructDef->getFields().back().type->getVariant());
         }
     }
-    else if (std::holds_alternative<UnionType>(type.get()))
+    else if (std::holds_alternative<UnionType>(type.getVariant()))
     {
-        auto* maybeUnionDef = getUnionDefinition(cld::get<UnionType>(type.get()).getName(),
-                                                 cld::get<UnionType>(type.get()).getScopeOrId());
+        auto* maybeUnionDef = getUnionDefinition(cld::get<UnionType>(type.getVariant()).getName(),
+                                                 cld::get<UnionType>(type.getVariant()).getScopeOrId());
         if (maybeUnionDef)
         {
             for (auto& iter : maybeUnionDef->getFields())
             {
-                if (std::holds_alternative<AbstractArrayType>(iter.type->get()))
+                if (std::holds_alternative<AbstractArrayType>(iter.type->getVariant()))
                 {
                     return true;
                 }
@@ -1206,18 +1209,18 @@ bool cld::Semantics::SemanticAnalysis::hasFlexibleArrayMember(const Type& type) 
             return false;
         }
     }
-    else if (std::holds_alternative<AnonymousStructType>(type.get()))
+    else if (std::holds_alternative<AnonymousStructType>(type.getVariant()))
     {
-        auto& structDef = cld::get<AnonymousStructType>(type.get());
+        auto& structDef = cld::get<AnonymousStructType>(type.getVariant());
         return !structDef.getFields().empty()
-               && std::holds_alternative<AbstractArrayType>(structDef.getFields().back().type->get());
+               && std::holds_alternative<AbstractArrayType>(structDef.getFields().back().type->getVariant());
     }
-    else if (std::holds_alternative<AnonymousUnionType>(type.get()))
+    else if (std::holds_alternative<AnonymousUnionType>(type.getVariant()))
     {
-        auto& unionDef = cld::get<AnonymousUnionType>(type.get());
+        auto& unionDef = cld::get<AnonymousUnionType>(type.getVariant());
         for (auto& iter : unionDef.getFields())
         {
-            if (std::holds_alternative<AbstractArrayType>(iter.type->get()))
+            if (std::holds_alternative<AbstractArrayType>(iter.type->getVariant()))
             {
                 return true;
             }
@@ -1267,7 +1270,8 @@ cld::Semantics::ConstValue
         return !value.isUndefined();
     };
     return cld::match(
-        expression.get(), [](const std::pair<Lexer::CTokenIterator, Lexer::CTokenIterator>&) { return ConstValue{}; },
+        expression.getVariant(),
+        [](const std::pair<Lexer::CTokenIterator, Lexer::CTokenIterator>&) { return ConstValue{}; },
         [&](const Constant& constant) -> ConstValue {
             if (std::holds_alternative<std::string>(constant.getValue())
                 || std::holds_alternative<Lexer::NonCharString>(constant.getValue()))
@@ -1329,8 +1333,8 @@ cld::Semantics::ConstValue
             {
                 if (mode == Initialization
                     && (isArray(conversion.getExpression().getType())
-                        || std::holds_alternative<CompoundLiteral>(conversion.getExpression().get())
-                        || std::holds_alternative<FunctionType>(conversion.getExpression().getType().get())))
+                        || std::holds_alternative<CompoundLiteral>(conversion.getExpression().getVariant())
+                        || std::holds_alternative<FunctionType>(conversion.getExpression().getType().getVariant())))
                 {
                     return {AddressConstant{}};
                 }
@@ -1489,17 +1493,17 @@ cld::Semantics::ConstValue
         [&](const UnaryOperator& unaryOperator) -> ConstValue {
             if (unaryOperator.getKind() == UnaryOperator::AddressOf)
             {
-                if (std::holds_alternative<UnaryOperator>(unaryOperator.getOperand().get()))
+                if (std::holds_alternative<UnaryOperator>(unaryOperator.getOperand().getVariant()))
                 {
-                    auto& innerUnary = cld::get<UnaryOperator>(unaryOperator.getOperand().get());
+                    auto& innerUnary = cld::get<UnaryOperator>(unaryOperator.getOperand().getVariant());
                     if (innerUnary.getKind() == UnaryOperator::Dereference)
                     {
                         return evaluate(innerUnary.getOperand(), mode, logger);
                     }
                 }
-                else if (std::holds_alternative<SubscriptOperator>(unaryOperator.getOperand().get()))
+                else if (std::holds_alternative<SubscriptOperator>(unaryOperator.getOperand().getVariant()))
                 {
-                    auto& subScript = cld::get<SubscriptOperator>(unaryOperator.getOperand().get());
+                    auto& subScript = cld::get<SubscriptOperator>(unaryOperator.getOperand().getVariant());
                     auto lhs = evaluate(subScript.getLeftExpression(), mode, logger);
                     auto rhs = evaluate(subScript.getRightExpression(), mode, logger);
                     if (lhs.isUndefined() || rhs.isUndefined())
@@ -1543,7 +1547,7 @@ cld::Semantics::ConstValue
             {
                 auto type = PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions());
                 return {llvm::APSInt(
-                    llvm::APInt(cld::get<PrimitiveType>(type.get()).getBitCount(), *sizeofOperator.getSize()))};
+                    llvm::APInt(cld::get<PrimitiveType>(type.getVariant()).getBitCount(), *sizeofOperator.getSize()))};
             }
             logger(Errors::Semantics::SIZEOF_VAL_MODIFIED_TYPE_CANNOT_BE_DETERMINED_IN_CONSTANT_EXPRESSION.args(
                 sizeofOperator, m_sourceInterface, sizeofOperator));

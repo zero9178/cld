@@ -5,14 +5,16 @@
 cld::Semantics::Type cld::Semantics::SemanticAnalysis::removeQualifiers(Type type)
 {
     if (type.isConst() || type.isVolatile()
-        || (std::holds_alternative<PointerType>(type.get()) && cld::get<PointerType>(type.get()).isRestricted()))
+        || (std::holds_alternative<PointerType>(type.getVariant())
+            && cld::get<PointerType>(type.getVariant()).isRestricted()))
     {
-        if (!std::holds_alternative<PointerType>(type.get()) || !cld::get<PointerType>(type.get()).isRestricted())
+        if (!std::holds_alternative<PointerType>(type.getVariant())
+            || !cld::get<PointerType>(type.getVariant()).isRestricted())
         {
-            return Type(false, false, std::move(type).get());
+            return Type(false, false, std::move(type).getVariant());
         }
         return PointerType::create(false, false, false,
-                                   cld::get<cld::Semantics::PointerType>(type.get()).getElementType());
+                                   cld::get<cld::Semantics::PointerType>(type.getVariant()).getElementType());
     }
     return type;
 }
@@ -115,7 +117,7 @@ bool cld::Semantics::SemanticAnalysis::doAssignmentLikeConstraints(
         return true;
     }
 
-    if (!std::holds_alternative<PointerType>(lhsType.get()))
+    if (!std::holds_alternative<PointerType>(lhsType.getVariant()))
     {
         return true;
     }
@@ -138,7 +140,7 @@ bool cld::Semantics::SemanticAnalysis::doAssignmentLikeConstraints(
         return true;
     }
 
-    if (!rhsValue.isUndefined() && !std::holds_alternative<PointerType>(rhsValue.getType().get()))
+    if (!rhsValue.isUndefined() && !std::holds_alternative<PointerType>(rhsValue.getType().getVariant()))
     {
         mustBePointer();
         return false;
@@ -149,13 +151,13 @@ bool cld::Semantics::SemanticAnalysis::doAssignmentLikeConstraints(
         return true;
     }
 
-    auto& lhsElementType = cld::get<PointerType>(lhsType.get()).getElementType();
-    auto& rhsElementType = cld::get<PointerType>(rhsValue.getType().get()).getElementType();
+    auto& lhsElementType = cld::get<PointerType>(lhsType.getVariant()).getElementType();
+    auto& rhsElementType = cld::get<PointerType>(rhsValue.getType().getVariant()).getElementType();
     if (isVoid(lhsElementType) != isVoid(rhsElementType))
     {
         bool leftIsVoid = isVoid(lhsElementType);
         auto& nonVoidType = leftIsVoid ? rhsElementType : lhsElementType;
-        if (std::holds_alternative<FunctionType>(nonVoidType.get()))
+        if (std::holds_alternative<FunctionType>(nonVoidType.getVariant()))
         {
             voidFunctionPointers();
             return false;
@@ -248,7 +250,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                             rhsValue, m_sourceInterface, *token, rhsValue));
                     },
                     [&, token = token] {
-                        if (isVoid(cld::get<PointerType>(lhsValue.getType().get()).getElementType()))
+                        if (isVoid(cld::get<PointerType>(lhsValue.getType().getVariant()).getElementType()))
                         {
                             log(Errors::Semantics::CANNOT_ASSIGN_FUNCTION_POINTER_TO_VOID_POINTER.args(
                                 lhsValue, m_sourceInterface, lhsValue, *token, rhsValue));
@@ -269,10 +271,10 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                     log(Errors::Semantics::LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
                         lhsValue, m_sourceInterface, *token, lhsValue));
                 }
-                if (std::holds_alternative<PointerType>(lhsValue.getType().get()))
+                if (std::holds_alternative<PointerType>(lhsValue.getType().getVariant()))
                 {
-                    auto& elementType = cld::get<PointerType>(lhsValue.getType().get()).getElementType();
-                    if (std::holds_alternative<FunctionType>(elementType.get()))
+                    auto& elementType = cld::get<PointerType>(lhsValue.getType().getVariant()).getElementType();
+                    if (std::holds_alternative<FunctionType>(elementType.getVariant()))
                     {
                         log(Errors::Semantics::POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC.args(
                             lhsValue, m_sourceInterface, lhsValue));
@@ -539,28 +541,28 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
     {
         return Expression(node);
     }
-    if (!std::holds_alternative<PointerType>(first.getType().get())
-        && !std::holds_alternative<PointerType>(second.getType().get()))
+    if (!std::holds_alternative<PointerType>(first.getType().getVariant())
+        && !std::holds_alternative<PointerType>(second.getType().getVariant()))
     {
         log(Errors::Semantics::EXPECTED_ONE_OPERAND_TO_BE_OF_POINTER_TYPE.args(node.getPostFixExpression(),
                                                                                m_sourceInterface, first, second));
         return Expression(node);
     }
-    auto& pointerExpr = std::holds_alternative<PointerType>(first.getType().get()) ? first : second;
+    auto& pointerExpr = std::holds_alternative<PointerType>(first.getType().getVariant()) ? first : second;
     auto& intExpr = &pointerExpr == &first ? second : first;
     if (!isInteger(intExpr.getType()))
     {
         log(Errors::Semantics::EXPECTED_OTHER_OPERAND_TO_BE_OF_INTEGER_TYPE.args(intExpr, m_sourceInterface, intExpr));
         return Expression(node);
     }
-    auto elementType = cld::get<PointerType>(pointerExpr.getType().get()).getElementType();
+    auto elementType = cld::get<PointerType>(pointerExpr.getType().getVariant()).getElementType();
     if (!isCompleteType(elementType))
     {
         log(Errors::Semantics::POINTER_TO_INCOMPLETE_TYPE_N_NOT_ALLOWED_IN_SUBSCRIPT_OPERATOR.args(
             pointerExpr, m_sourceInterface, elementType, pointerExpr));
         return Expression(node);
     }
-    else if (std::holds_alternative<FunctionType>(elementType.get()))
+    else if (std::holds_alternative<FunctionType>(elementType.getVariant()))
     {
         log(Errors::Semantics::POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_SUBSCRIPT_OPERATOR.args(
             pointerExpr, m_sourceInterface, pointerExpr));
@@ -576,17 +578,17 @@ std::optional<std::pair<cld::Semantics::Type, std::uint64_t>> cld::Semantics::Se
     const Type& recordType, const Syntax::PostFixExpression& postFixExpr, const Lexer::CToken& identifier)
 {
     const std::vector<Field>* fields = nullptr;
-    if (std::holds_alternative<AnonymousUnionType>(recordType.get()))
+    if (std::holds_alternative<AnonymousUnionType>(recordType.getVariant()))
     {
-        fields = &cld::get<AnonymousUnionType>(recordType.get()).getFields();
+        fields = &cld::get<AnonymousUnionType>(recordType.getVariant()).getFields();
     }
-    if (std::holds_alternative<AnonymousStructType>(recordType.get()))
+    if (std::holds_alternative<AnonymousStructType>(recordType.getVariant()))
     {
-        fields = &cld::get<AnonymousStructType>(recordType.get()).getFields();
+        fields = &cld::get<AnonymousStructType>(recordType.getVariant()).getFields();
     }
-    if (std::holds_alternative<StructType>(recordType.get()))
+    if (std::holds_alternative<StructType>(recordType.getVariant()))
     {
-        auto& structType = cld::get<StructType>(recordType.get());
+        auto& structType = cld::get<StructType>(recordType.getVariant());
         auto* structDef = getStructDefinition(structType.getName(), structType.getScopeOrId());
         if (!structDef)
         {
@@ -596,9 +598,9 @@ std::optional<std::pair<cld::Semantics::Type, std::uint64_t>> cld::Semantics::Se
         }
         fields = &structDef->getFields();
     }
-    if (std::holds_alternative<UnionType>(recordType.get()))
+    if (std::holds_alternative<UnionType>(recordType.getVariant()))
     {
-        auto& unionType = cld::get<UnionType>(recordType.get());
+        auto& unionType = cld::get<UnionType>(recordType.getVariant());
         auto* unionDef = getUnionDefinition(unionType.getName(), unionType.getScopeOrId());
         if (!unionDef)
         {
@@ -613,25 +615,25 @@ std::optional<std::pair<cld::Semantics::Type, std::uint64_t>> cld::Semantics::Se
                                [&](const Field& field) { return field.name == identifier.getText(); });
     if (result == fields->end())
     {
-        if (std::holds_alternative<AnonymousUnionType>(recordType.get()))
+        if (std::holds_alternative<AnonymousUnionType>(recordType.getVariant()))
         {
             log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_ANONYMOUS_UNION.args(identifier, m_sourceInterface,
                                                                                     identifier));
         }
-        if (std::holds_alternative<AnonymousStructType>(recordType.get()))
+        if (std::holds_alternative<AnonymousStructType>(recordType.getVariant()))
         {
             log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_ANONYMOUS_STRUCT.args(identifier, m_sourceInterface,
                                                                                      identifier));
         }
-        if (std::holds_alternative<UnionType>(recordType.get()))
+        if (std::holds_alternative<UnionType>(recordType.getVariant()))
         {
             log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_UNION_N.args(
-                identifier, m_sourceInterface, identifier, cld::get<UnionType>(recordType.get()).getName()));
+                identifier, m_sourceInterface, identifier, cld::get<UnionType>(recordType.getVariant()).getName()));
         }
-        if (std::holds_alternative<StructType>(recordType.get()))
+        if (std::holds_alternative<StructType>(recordType.getVariant()))
         {
             log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_STRUCT_N.args(
-                identifier, m_sourceInterface, identifier, cld::get<StructType>(recordType.get()).getName()));
+                identifier, m_sourceInterface, identifier, cld::get<StructType>(recordType.getVariant()).getName()));
         }
         return {};
     }
@@ -642,7 +644,7 @@ std::optional<std::pair<cld::Semantics::Type, std::uint64_t>> cld::Semantics::Se
     }
     else
     {
-        type = Type(recordType.isConst(), recordType.isVolatile(), result->type->get());
+        type = Type(recordType.isConst(), recordType.isVolatile(), result->type->getVariant());
     }
     return std::pair(std::move(type), result - fields->begin());
 }
@@ -683,13 +685,13 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
     {
         return Expression(node);
     }
-    if (!std::holds_alternative<PointerType>(structOrUnionPtr.getType().get()))
+    if (!std::holds_alternative<PointerType>(structOrUnionPtr.getType().getVariant()))
     {
         log(Errors::Semantics::EXPECTED_POINTER_TO_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_ARROW_OPERATOR.args(
             structOrUnionPtr, m_sourceInterface, structOrUnionPtr));
         return Expression(node);
     }
-    auto& structOrUnion = cld::get<PointerType>(structOrUnionPtr.getType().get()).getElementType();
+    auto& structOrUnion = cld::get<PointerType>(structOrUnionPtr.getType().getVariant()).getElementType();
     if (!isRecord(structOrUnion))
     {
         log(Errors::Semantics::EXPECTED_POINTER_TO_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_ARROW_OPERATOR.args(
@@ -710,9 +712,9 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::PostFixExpressionFunctionCall& node)
 {
     auto function = lvalueConversion(visit(node.getPostFixExpression()));
-    if (!std::holds_alternative<PointerType>(function.getType().get())
+    if (!std::holds_alternative<PointerType>(function.getType().getVariant())
         || !std::holds_alternative<FunctionType>(
-            cld::get<PointerType>(function.getType().get()).getElementType().get()))
+            cld::get<PointerType>(function.getType().getVariant()).getElementType().getVariant()))
     {
         if (!function.isUndefined())
         {
@@ -726,7 +728,8 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         }
         return Expression(node);
     }
-    auto& ft = cld::get<FunctionType>(cld::get<PointerType>(function.getType().get()).getElementType().get());
+    auto& ft =
+        cld::get<FunctionType>(cld::get<PointerType>(function.getType().getVariant()).getElementType().getVariant());
     std::vector<Expression> arguments;
     if (ft.isKandR())
     {
@@ -739,24 +742,24 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
     else
     {
         auto callsFunction = [&] {
-            if (!std::holds_alternative<Conversion>(function.get()))
+            if (!std::holds_alternative<Conversion>(function.getVariant()))
             {
                 return false;
             }
-            auto& conversion = cld::get<Conversion>(function.get());
+            auto& conversion = cld::get<Conversion>(function.getVariant());
             if (conversion.getKind() != Conversion::LValue)
             {
                 return false;
             }
-            if (!std::holds_alternative<DeclarationRead>(conversion.getExpression().get()))
+            if (!std::holds_alternative<DeclarationRead>(conversion.getExpression().getVariant()))
             {
                 return false;
             }
-            auto& decl = cld::get<DeclarationRead>(conversion.getExpression().get());
+            auto& decl = cld::get<DeclarationRead>(conversion.getExpression().getVariant());
             return cld::match(
                 decl.getDeclRead(), [](const FunctionDefinition*) { return true; },
                 [](const Declaration* declaration) {
-                    return std::holds_alternative<FunctionType>(declaration->getType().get());
+                    return std::holds_alternative<FunctionType>(declaration->getType().getVariant());
                 });
         }();
         auto& argumentTypes = ft.getArguments();
@@ -766,7 +769,8 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
             {
                 if (callsFunction)
                 {
-                    auto& decl = cld::get<DeclarationRead>(cld::get<Conversion>(function.get()).getExpression().get());
+                    auto& decl = cld::get<DeclarationRead>(
+                        cld::get<Conversion>(function.getVariant()).getExpression().getVariant());
                     log(Errors::Semantics::NOT_ENOUGH_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_N_GOT_N.args(
                         decl, m_sourceInterface, *decl.getIdentifierToken(), argumentTypes.size(),
                         node.getOptionalAssignmentExpressions().size()));
@@ -782,7 +786,8 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
             {
                 if (callsFunction)
                 {
-                    auto& decl = cld::get<DeclarationRead>(cld::get<Conversion>(function.get()).getExpression().get());
+                    auto& decl = cld::get<DeclarationRead>(
+                        cld::get<Conversion>(function.getVariant()).getExpression().getVariant());
                     log(Errors::Semantics::NOT_ENOUGH_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_AT_LEAST_N_GOT_N.args(
                         decl, m_sourceInterface, *decl.getIdentifierToken(), argumentTypes.size(),
                         node.getOptionalAssignmentExpressions().size()));
@@ -799,7 +804,8 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         {
             if (callsFunction)
             {
-                auto& decl = cld::get<DeclarationRead>(cld::get<Conversion>(function.get()).getExpression().get());
+                auto& decl =
+                    cld::get<DeclarationRead>(cld::get<Conversion>(function.getVariant()).getExpression().getVariant());
                 log(Errors::Semantics::TOO_MANY_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_N_GOT_N.args(
                     decl, m_sourceInterface, *decl.getIdentifierToken(), argumentTypes.size(),
                     node.getOptionalAssignmentExpressions().size(),
@@ -862,7 +868,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                             expression, m_sourceInterface, i + 1, expression));
                     },
                     [&] {
-                        if (isVoid(cld::get<PointerType>(paramType.get()).getElementType()))
+                        if (isVoid(cld::get<PointerType>(paramType.getVariant()).getElementType()))
                         {
                             log(Errors::Semantics::CANNOT_PASS_FUNCTION_POINTER_TO_VOID_POINTER_PARAMETER.args(
                                 expression, m_sourceInterface, expression));
@@ -914,13 +920,13 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::checkIncrementAndDe
         return Expression(std::move(type), ValueCategory::Rvalue,
                           UnaryOperator(kind, opToken, std::make_unique<Expression>(std::move(value))));
     }
-    auto& elementType = cld::get<PointerType>(value.getType().get()).getElementType();
+    auto& elementType = cld::get<PointerType>(value.getType().getVariant()).getElementType();
     if (!isCompleteType(elementType))
     {
         log(Errors::Semantics::INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args(value, m_sourceInterface, elementType,
                                                                                  value, value.getType()));
     }
-    else if (std::holds_alternative<FunctionType>(elementType.get()))
+    else if (std::holds_alternative<FunctionType>(elementType.getVariant()))
     {
         log(Errors::Semantics::POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC.args(value, m_sourceInterface,
                                                                                                value));
@@ -952,7 +958,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         visit(node.getInitializerList(), type, !inFunction() || m_inStaticInitializer);
         return Expression(node);
     }
-    if (std::holds_alternative<FunctionType>(type.get()))
+    if (std::holds_alternative<FunctionType>(type.getVariant()))
     {
         log(Errors::Semantics::CANNOT_INITIALIZE_FUNCTION_TYPE.args(node.getTypeName(), m_sourceInterface,
                                                                     node.getTypeName(), type));
@@ -967,11 +973,11 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         return Expression(node);
     }
     Initializer value{Expression(node)};
-    if (std::holds_alternative<AbstractArrayType>(type.get()))
+    if (std::holds_alternative<AbstractArrayType>(type.getVariant()))
     {
         std::size_t size = 0;
         value = visit(node.getInitializerList(), type, !inFunction() || m_inStaticInitializer, &size);
-        auto& abstractArrayType = cld::get<AbstractArrayType>(type.get());
+        auto& abstractArrayType = cld::get<AbstractArrayType>(type.getVariant());
         type = ArrayType::create(type.isConst(), type.isVolatile(), abstractArrayType.isRestricted(), false,
                                  abstractArrayType.getType(), size);
     }
@@ -1011,9 +1017,9 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                                               node.getUnaryToken());
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Ampersand:
         {
-            if (std::holds_alternative<DeclarationRead>(value.get()))
+            if (std::holds_alternative<DeclarationRead>(value.getVariant()))
             {
-                auto& declRead = cld::get<DeclarationRead>(value.get());
+                auto& declRead = cld::get<DeclarationRead>(value.getVariant());
                 if (std::holds_alternative<const Declaration*>(declRead.getDeclRead())
                     && cld::get<const Declaration*>(declRead.getDeclRead())->getLifetime() == Lifetime::Register)
                 {
@@ -1026,7 +1032,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                 log(Errors::Semantics::CANNOT_TAKE_ADDRESS_OF_BITFIELD.args(value, m_sourceInterface,
                                                                             *node.getUnaryToken(), value));
             }
-            if (!std::holds_alternative<CallExpression>(value.get())
+            if (!std::holds_alternative<CallExpression>(value.getVariant())
                 && value.getValueCategory() != ValueCategory::Lvalue)
             {
                 log(Errors::Semantics::CANNOT_TAKE_ADDRESS_OF_TEMPORARY.args(value, m_sourceInterface,
@@ -1040,7 +1046,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Asterisk:
         {
             value = lvalueConversion(std::move(value));
-            if (!value.getType().isUndefined() && !std::holds_alternative<PointerType>(value.getType().get()))
+            if (!value.getType().isUndefined() && !std::holds_alternative<PointerType>(value.getType().getVariant()))
             {
                 log(Errors::Semantics::CANNOT_DEREFERENCE_NON_POINTER_TYPE_N.args(
                     *node.getUnaryToken(), m_sourceInterface, *node.getUnaryToken(), value));
@@ -1050,7 +1056,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
             {
                 return Expression(node);
             }
-            auto elementType = cld::get<PointerType>(value.getType().get()).getElementType();
+            auto elementType = cld::get<PointerType>(value.getType().getVariant()).getElementType();
             return Expression(std::move(elementType), ValueCategory::Lvalue,
                               UnaryOperator(UnaryOperator::Dereference, node.getUnaryToken(),
                                             std::make_unique<Expression>(std::move(value))));
@@ -1122,7 +1128,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                 log(Errors::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(exp, m_sourceInterface, type, exp));
                 return Expression(node);
             }
-            else if (std::holds_alternative<FunctionType>(type.get()))
+            else if (std::holds_alternative<FunctionType>(type.getVariant()))
             {
                 log(Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF.args(exp, m_sourceInterface, exp, type));
                 return Expression(node);
@@ -1159,7 +1165,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                                                                          *typeName));
                 return Expression(node);
             }
-            else if (std::holds_alternative<FunctionType>(type.get()))
+            else if (std::holds_alternative<FunctionType>(type.getVariant()))
             {
                 log(Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF.args(*typeName, m_sourceInterface,
                                                                                  *typeName, type));
@@ -1232,18 +1238,18 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                 return Expression(node);
             }
             type = lvalueConversion(std::move(type));
-            if (std::holds_alternative<PointerType>(type.get()))
+            if (std::holds_alternative<PointerType>(type.getVariant()))
             {
-                if (!std::holds_alternative<PointerType>(value.getType().get()) && !isInteger(value.getType()))
+                if (!std::holds_alternative<PointerType>(value.getType().getVariant()) && !isInteger(value.getType()))
                 {
                     log(Errors::Semantics::CANNOT_CAST_NON_INTEGER_AND_POINTER_TYPE_N_TO_POINTER_TYPE.args(
                         value, m_sourceInterface, value));
                     return Expression(node);
                 }
             }
-            else if (std::holds_alternative<PointerType>(value.getType().get()))
+            else if (std::holds_alternative<PointerType>(value.getType().getVariant()))
             {
-                if (!std::holds_alternative<PointerType>(type.get()) && !isInteger(type))
+                if (!std::holds_alternative<PointerType>(type.getVariant()) && !isInteger(type))
                 {
                     log(Errors::Semantics::CANNOT_CAST_POINTER_TYPE_TO_NON_INTEGER_AND_POINTER_TYPE.args(
                         cast.typeName, m_sourceInterface, cast.typeName, value));
@@ -1367,8 +1373,8 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         {
             case Syntax::AdditiveExpression::BinaryMinus:
             {
-                if (std::holds_alternative<PrimitiveType>(value.getType().get())
-                    && std::holds_alternative<PrimitiveType>(rhsValue.getType().get()))
+                if (std::holds_alternative<PrimitiveType>(value.getType().getVariant())
+                    && std::holds_alternative<PrimitiveType>(rhsValue.getType().getVariant()))
                 {
                     auto type = value.getType();
                     value = Expression(std::move(type), ValueCategory::Rvalue,
@@ -1382,8 +1388,8 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                     value = Expression(value.begin(), rhsValue.end());
                     continue;
                 }
-                if (std::holds_alternative<PrimitiveType>(value.getType().get())
-                    && std::holds_alternative<PointerType>(rhsValue.getType().get()))
+                if (std::holds_alternative<PrimitiveType>(value.getType().getVariant())
+                    && std::holds_alternative<PointerType>(rhsValue.getType().getVariant()))
                 {
                     log(Errors::Semantics::CANNOT_SUBTRACT_POINTER_FROM_ARITHMETIC_TYPE.args(value, m_sourceInterface,
                                                                                              value, *token, rhsValue));
@@ -1395,26 +1401,26 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                     continue;
                 }
                 // value is guaranteed to be a pointer type now, rhsValue is a scalar
-                auto valueElementType = cld::get<PointerType>(value.getType().get()).getElementType();
+                auto valueElementType = cld::get<PointerType>(value.getType().getVariant()).getElementType();
                 if (!isCompleteType(valueElementType))
                 {
                     log(Errors::Semantics::INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args(
                         value, m_sourceInterface, valueElementType, value, value.getType()));
                 }
-                else if (std::holds_alternative<FunctionType>(valueElementType.get()))
+                else if (std::holds_alternative<FunctionType>(valueElementType.getVariant()))
                 {
                     log(Errors::Semantics::POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC.args(
                         value, m_sourceInterface, value));
                 }
-                if (std::holds_alternative<PointerType>(rhsValue.getType().get()))
+                if (std::holds_alternative<PointerType>(rhsValue.getType().getVariant()))
                 {
-                    auto rhsElementType = cld::get<PointerType>(rhsValue.getType().get()).getElementType();
+                    auto rhsElementType = cld::get<PointerType>(rhsValue.getType().getVariant()).getElementType();
                     if (!isCompleteType(rhsElementType))
                     {
                         log(Errors::Semantics::INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args(
                             rhsValue, m_sourceInterface, rhsElementType, rhsValue, rhsValue.getType()));
                     }
-                    else if (std::holds_alternative<FunctionType>(rhsElementType.get()))
+                    else if (std::holds_alternative<FunctionType>(rhsElementType.getVariant()))
                     {
                         log(Errors::Semantics::POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC.args(
                             rhsValue, m_sourceInterface, rhsValue));
@@ -1450,8 +1456,8 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
             }
             case Syntax::AdditiveExpression::BinaryPlus:
             {
-                if (std::holds_alternative<PrimitiveType>(value.getType().get())
-                    && std::holds_alternative<PrimitiveType>(rhsValue.getType().get()))
+                if (std::holds_alternative<PrimitiveType>(value.getType().getVariant())
+                    && std::holds_alternative<PrimitiveType>(rhsValue.getType().getVariant()))
                 {
                     auto type = value.getType();
                     value = Expression(std::move(type), ValueCategory::Rvalue,
@@ -1465,20 +1471,21 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                     value = Expression(value.begin(), rhsValue.end());
                     continue;
                 }
-                auto& pointerExpr = std::holds_alternative<PointerType>(value.getType().get()) ? value : rhsValue;
+                auto& pointerExpr =
+                    std::holds_alternative<PointerType>(value.getType().getVariant()) ? value : rhsValue;
                 auto& intExpr = &pointerExpr == &value ? rhsValue : value;
                 if (!isInteger(intExpr.getType()))
                 {
                     log(Errors::Semantics::EXPECTED_OTHER_OPERAND_OF_OPERATOR_N_TO_BE_OF_INTEGER_TYPE.args(
                         intExpr, m_sourceInterface, *token, intExpr));
                 }
-                auto& elementType = cld::get<PointerType>(pointerExpr.getType().get()).getElementType();
+                auto& elementType = cld::get<PointerType>(pointerExpr.getType().getVariant()).getElementType();
                 if (!isCompleteType(elementType))
                 {
                     log(Errors::Semantics::INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args(
                         pointerExpr, m_sourceInterface, elementType, pointerExpr, pointerExpr.getType()));
                 }
-                else if (std::holds_alternative<FunctionType>(elementType.get()))
+                else if (std::holds_alternative<FunctionType>(elementType.getVariant()))
                 {
                     log(Errors::Semantics::POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC.args(
                         pointerExpr, m_sourceInterface, pointerExpr));
@@ -1567,24 +1574,24 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                     rhsValue, m_sourceInterface, *token, rhsValue));
             }
         }
-        else if (std::holds_alternative<PointerType>(value.getType().get()))
+        else if (std::holds_alternative<PointerType>(value.getType().getVariant()))
         {
-            if (!rhsValue.isUndefined() && !std::holds_alternative<PointerType>(rhsValue.getType().get()))
+            if (!rhsValue.isUndefined() && !std::holds_alternative<PointerType>(rhsValue.getType().getVariant()))
             {
                 log(Errors::Semantics::EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_A_POINTER_TYPE.args(
                     rhsValue, m_sourceInterface, *token, rhsValue));
             }
             else if (!rhsValue.isUndefined())
             {
-                auto valueElementType = cld::get<PointerType>(value.getType().get()).getElementType();
-                auto rhsElementType = cld::get<PointerType>(rhsValue.getType().get()).getElementType();
+                auto valueElementType = cld::get<PointerType>(value.getType().getVariant()).getElementType();
+                auto rhsElementType = cld::get<PointerType>(rhsValue.getType().getVariant()).getElementType();
                 valueElementType = removeQualifiers(std::move(valueElementType));
-                if (std::holds_alternative<FunctionType>(valueElementType.get()))
+                if (std::holds_alternative<FunctionType>(valueElementType.getVariant()))
                 {
                     log(Errors::Semantics::POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC.args(
                         value, m_sourceInterface, value));
                     rhsElementType = removeQualifiers(std::move(rhsElementType));
-                    if (std::holds_alternative<FunctionType>(rhsElementType.get()))
+                    if (std::holds_alternative<FunctionType>(rhsElementType.getVariant()))
                     {
                         log(Errors::Semantics::POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC.args(
                             rhsValue, m_sourceInterface, rhsValue));
@@ -1593,7 +1600,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                 else
                 {
                     rhsElementType = removeQualifiers(std::move(rhsElementType));
-                    if (std::holds_alternative<FunctionType>(rhsElementType.get()))
+                    if (std::holds_alternative<FunctionType>(rhsElementType.getVariant()))
                     {
                         log(Errors::Semantics::POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC.args(
                             rhsValue, m_sourceInterface, rhsValue));
@@ -1654,7 +1661,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         }
         else if (isArithmetic(value.getType()))
         {
-            if (std::holds_alternative<PointerType>(rhsValue.getType().get()) && isInteger(value.getType()))
+            if (std::holds_alternative<PointerType>(rhsValue.getType().getVariant()) && isInteger(value.getType()))
             {
                 auto constant = evaluateConstantExpression(value);
                 if (!constant || constant->toUInt() != 0)
@@ -1669,7 +1676,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                     rhsValue, m_sourceInterface, *token, rhsValue));
             }
         }
-        else if (std::holds_alternative<PointerType>(value.getType().get()))
+        else if (std::holds_alternative<PointerType>(value.getType().getVariant()))
         {
             if (isInteger(rhsValue.getType()))
             {
@@ -1688,15 +1695,15 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                     }
                 }
             }
-            else if (!rhsValue.isUndefined() && !std::holds_alternative<PointerType>(rhsValue.getType().get()))
+            else if (!rhsValue.isUndefined() && !std::holds_alternative<PointerType>(rhsValue.getType().getVariant()))
             {
                 log(Errors::Semantics::EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_A_POINTER_TYPE.args(
                     rhsValue, m_sourceInterface, *token, rhsValue));
             }
             else if (!rhsValue.isUndefined())
             {
-                auto valueElementType = cld::get<PointerType>(value.getType().get()).getElementType();
-                auto rhsElementType = cld::get<PointerType>(rhsValue.getType().get()).getElementType();
+                auto valueElementType = cld::get<PointerType>(value.getType().getVariant()).getElementType();
+                auto rhsElementType = cld::get<PointerType>(rhsValue.getType().getVariant()).getElementType();
                 valueElementType = removeQualifiers(std::move(valueElementType));
                 rhsElementType = removeQualifiers(std::move(rhsElementType));
                 if (!isVoid(valueElementType) && !isVoid(rhsElementType)
@@ -1864,7 +1871,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
     Type resultType;
     if (isArithmetic(second.getType()))
     {
-        if (std::holds_alternative<PointerType>(third.getType().get()) && isInteger(second.getType()))
+        if (std::holds_alternative<PointerType>(third.getType().getVariant()) && isInteger(second.getType()))
         {
             auto constant = evaluateConstantExpression(second);
             if (!constant || constant->toUInt() != 0)
@@ -1889,7 +1896,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         }
         resultType = second.getType();
     }
-    else if (std::holds_alternative<PointerType>(second.getType().get()))
+    else if (std::holds_alternative<PointerType>(second.getType().getVariant()))
     {
         if (isInteger(third.getType()))
         {
@@ -1910,15 +1917,15 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                 resultType = second.getType();
             }
         }
-        else if (!third.isUndefined() && !std::holds_alternative<PointerType>(third.getType().get()))
+        else if (!third.isUndefined() && !std::holds_alternative<PointerType>(third.getType().getVariant()))
         {
             log(Errors::Semantics::EXPECTED_THIRD_OPERAND_OF_CONDITIONAL_EXPRESSION_TO_BE_A_POINTER_TYPE.args(
                 third, m_sourceInterface, third, *node.getOptionalQuestionMark(), *node.getOptionalColon()));
         }
         else if (!third.isUndefined())
         {
-            auto& secondElementType = cld::get<PointerType>(second.getType().get()).getElementType();
-            auto& thirdElementType = cld::get<PointerType>(third.getType().get()).getElementType();
+            auto& secondElementType = cld::get<PointerType>(second.getType().getVariant()).getElementType();
+            auto& thirdElementType = cld::get<PointerType>(third.getType().getVariant()).getElementType();
             auto secondWithoutQualifier = removeQualifiers(secondElementType);
             auto thirdWithoutQualifier = removeQualifiers(thirdElementType);
             if (!isVoid(secondWithoutQualifier) && !isVoid(thirdWithoutQualifier)
@@ -1941,7 +1948,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                 resultType = PointerType::create(false, false, false,
                                                  Type(secondElementType.isConst() || thirdElementType.isConst(),
                                                       secondElementType.isVolatile() || thirdElementType.isVolatile(),
-                                                      std::move(composite).get()));
+                                                      std::move(composite).getVariant()));
             }
         }
     }
@@ -1973,7 +1980,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::lvalueConversion(Ex
         return Expression(std::move(newType), ValueCategory::Rvalue,
                           Conversion(Conversion::LValue, std::make_unique<Expression>(std::move(expression))));
     }
-    if (std::holds_alternative<FunctionType>(expression.getType().get()))
+    if (std::holds_alternative<FunctionType>(expression.getType().getVariant()))
     {
         auto newType = PointerType::create(false, false, false, expression.getType());
         return Expression(std::move(newType), ValueCategory::Rvalue,
@@ -1982,12 +1989,12 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::lvalueConversion(Ex
     // If the expression isn't an lvalue and not qualified then conversion is redundant
     if (expression.getValueCategory() != ValueCategory::Lvalue && !expression.getType().isVolatile()
         && !expression.getType().isConst()
-        && (!std::holds_alternative<PointerType>(expression.getType().get())
-            || !cld::get<PointerType>(expression.getType().get()).isRestricted()))
+        && (!std::holds_alternative<PointerType>(expression.getType().getVariant())
+            || !cld::get<PointerType>(expression.getType().getVariant()).isRestricted()))
     {
         return std::move(expression);
     }
-    auto newType = Type(false, false, expression.getType().get());
+    auto newType = Type(false, false, expression.getType().getVariant());
     return Expression(std::move(newType), ValueCategory::Rvalue,
                       Conversion(Conversion::LValue, std::make_unique<Expression>(std::move(expression))));
 }
@@ -1999,27 +2006,28 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::lvalueConversion(Type typ
         auto& elementType = getArrayElementType(type);
         return PointerType::create(false, false, false, elementType);
     }
-    if (std::holds_alternative<FunctionType>(type.get()))
+    if (std::holds_alternative<FunctionType>(type.getVariant()))
     {
         return PointerType::create(false, false, false, type);
     }
     // If the expression isn't an lvalue and not qualified then conversion is redundant
     if (!type.isVolatile() && !type.isConst()
-        && (!std::holds_alternative<PointerType>(type.get()) || !cld::get<PointerType>(type.get()).isRestricted()))
+        && (!std::holds_alternative<PointerType>(type.getVariant())
+            || !cld::get<PointerType>(type.getVariant()).isRestricted()))
     {
         return type;
     }
-    return Type(false, false, type.get());
+    return Type(false, false, type.getVariant());
 }
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::defaultArgumentPromotion(Expression&& expression) const
 {
     expression = integerPromotion(std::move(expression));
-    if (!std::holds_alternative<PrimitiveType>(expression.getType().get()))
+    if (!std::holds_alternative<PrimitiveType>(expression.getType().getVariant()))
     {
         return std::move(expression);
     }
-    auto& prim = cld::get<PrimitiveType>(expression.getType().get());
+    auto& prim = cld::get<PrimitiveType>(expression.getType().getVariant());
     if (prim.getKind() != PrimitiveType::Kind::Float)
     {
         return std::move(expression);
@@ -2032,11 +2040,11 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::defaultArgumentProm
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::integerPromotion(Expression&& expression) const
 {
     expression = lvalueConversion(std::move(expression));
-    if (!std::holds_alternative<PrimitiveType>(expression.getType().get()))
+    if (!std::holds_alternative<PrimitiveType>(expression.getType().getVariant()))
     {
         return std::move(expression);
     }
-    auto& prim = cld::get<PrimitiveType>(expression.getType().get());
+    auto& prim = cld::get<PrimitiveType>(expression.getType().getVariant());
     if (prim.isFloatingPoint() || prim.getBitCount() == 0
         || prim.getBitCount() >= m_sourceInterface.getLanguageOptions().sizeOfInt * 8)
     {
@@ -2065,8 +2073,8 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(Expression& lhs, Exp
     {
         return;
     }
-    auto& lhsPrim = cld::get<PrimitiveType>(lhs.getType().get());
-    auto& rhsPrim = cld::get<PrimitiveType>(rhs.getType().get());
+    auto& lhsPrim = cld::get<PrimitiveType>(lhs.getType().getVariant());
+    auto& rhsPrim = cld::get<PrimitiveType>(rhs.getType().getVariant());
     Type type;
     if (lhsPrim.isFloatingPoint() || rhsPrim.isFloatingPoint())
     {
@@ -2111,8 +2119,8 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(Type& lhs, Expressio
     {
         return;
     }
-    auto& lhsPrim = cld::get<PrimitiveType>(lhs.get());
-    auto& rhsPrim = cld::get<PrimitiveType>(rhs.getType().get());
+    auto& lhsPrim = cld::get<PrimitiveType>(lhs.getVariant());
+    auto& rhsPrim = cld::get<PrimitiveType>(rhs.getType().getVariant());
     Type type;
     if (lhsPrim.isFloatingPoint() || rhsPrim.isFloatingPoint())
     {
@@ -2174,7 +2182,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::doSingleElementInit
             }
             return Expression(node);
         }
-        auto& str = cld::get<Constant>(expression.get()).getValue();
+        auto& str = cld::get<Constant>(expression.getVariant()).getValue();
         if (std::holds_alternative<std::string>(str) && !isCharType(elementType))
         {
             log(Errors::Semantics::CANNOT_INITIALIZE_WCHART_ARRAY_WITH_STRING_LITERAL.args(
@@ -2228,7 +2236,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::doSingleElementInit
                                                                                   expression));
         },
         [&] {
-            if (isVoid(cld::get<PointerType>(type.get()).getElementType()))
+            if (isVoid(cld::get<PointerType>(type.getVariant()).getElementType()))
             {
                 log(Errors::Semantics::CANNOT_INITIALIZE_VOID_POINTER_WITH_FUNCTION_POINTER.args(
                     expression, m_sourceInterface, expression));
@@ -2240,27 +2248,27 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::doSingleElementInit
             }
         });
 
-    if (std::holds_alternative<AbstractArrayType>(type.get()) && size)
+    if (std::holds_alternative<AbstractArrayType>(type.getVariant()) && size)
     {
-        auto& elementType = cld::get<AbstractArrayType>(type.get()).getType();
+        auto& elementType = cld::get<AbstractArrayType>(type.getVariant()).getType();
         if (isCharType(elementType))
         {
-            if (std::holds_alternative<Constant>(expression.get())
-                && std::holds_alternative<std::string>(cld::get<Constant>(expression.get()).getValue()))
+            if (std::holds_alternative<Constant>(expression.getVariant())
+                && std::holds_alternative<std::string>(cld::get<Constant>(expression.getVariant()).getValue()))
             {
-                *size = cld::get<std::string>(cld::get<Constant>(expression.get()).getValue()).size() + 1;
+                *size = cld::get<std::string>(cld::get<Constant>(expression.getVariant()).getValue()).size() + 1;
             }
         }
-        else if (std::holds_alternative<PrimitiveType>(elementType.get())
+        else if (std::holds_alternative<PrimitiveType>(elementType.getVariant())
                  && removeQualifiers(elementType)
                         == PrimitiveType::createWcharT(false, false, m_sourceInterface.getLanguageOptions()))
         {
-            if (std::holds_alternative<Constant>(expression.get())
-                && std::holds_alternative<Lexer::NonCharString>(cld::get<Constant>(expression.get()).getValue()))
+            if (std::holds_alternative<Constant>(expression.getVariant())
+                && std::holds_alternative<Lexer::NonCharString>(cld::get<Constant>(expression.getVariant()).getValue()))
             {
-                *size =
-                    cld::get<Lexer::NonCharString>(cld::get<Constant>(expression.get()).getValue()).characters.size()
-                    + 1;
+                *size = cld::get<Lexer::NonCharString>(cld::get<Constant>(expression.getVariant()).getValue())
+                            .characters.size()
+                        + 1;
             }
         }
     }
@@ -2432,7 +2440,7 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
         if (isRecord(type))
         {
             auto ref = getFields(type);
-            if (std::holds_alternative<AbstractArrayType>(ref.back().type->get()))
+            if (std::holds_alternative<AbstractArrayType>(ref.back().type->getVariant()))
             {
                 ref = ref.drop_back();
             }
@@ -2448,9 +2456,9 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
                 }
             }
         }
-        if (std::holds_alternative<ArrayType>(type.get()))
+        if (std::holds_alternative<ArrayType>(type.getVariant()))
         {
-            auto& arrayType = cld::get<ArrayType>(type.get());
+            auto& arrayType = cld::get<ArrayType>(type.getVariant());
             parent.resize(arrayType.getSize());
             for (std::size_t i = 0; i < arrayType.getSize(); i++)
             {
@@ -2465,11 +2473,11 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
         }
     }};
     bool isAbstractArray = false;
-    if (std::holds_alternative<AbstractArrayType>(type.get()))
+    if (std::holds_alternative<AbstractArrayType>(type.getVariant()))
     {
         isAbstractArray = true;
         top.resize(1);
-        top.at(0).type = &cld::get<AbstractArrayType>(type.get()).getType();
+        top.at(0).type = &cld::get<AbstractArrayType>(type.getVariant()).getType();
         top.at(0).index = 0;
         top.at(0).parent = &top;
         if (isAggregate(*top.at(0).type))
@@ -2563,7 +2571,7 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
                         finishRest(iter + 1, node.getNonCommaExpressionsAndBlocks().end());
                         return Expression(node);
                     }
-                    if (cld::get<PrimitiveType>(exp.getType().get()).isSigned() && constant->toInt() < 0)
+                    if (cld::get<PrimitiveType>(exp.getType().getVariant()).isSigned() && constant->toInt() < 0)
                     {
                         log(Errors::Semantics::DESIGNATOR_INDEX_MUST_NOT_BE_NEGATIVE.args(exp, m_sourceInterface, exp,
                                                                                           constant->toInt()));
@@ -2571,7 +2579,7 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
                         return Expression(node);
                     }
                     if (!(current == &top && isAbstractArray)
-                        && constant->toUInt() >= cld::get<ArrayType>(current->type->get()).getSize())
+                        && constant->toUInt() >= cld::get<ArrayType>(current->type->getVariant()).getSize())
                     {
                         log(Errors::Semantics::DESIGNATOR_INDEX_OUT_OF_RANGE_FOR_ARRAY_TYPE_N.args(
                             exp, m_sourceInterface, *current->type, exp, constant->toUInt()));
@@ -2584,7 +2592,7 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
                         auto prevSize = top.size();
                         for (std::size_t i = prevSize; i < *size; i++)
                         {
-                            top.push_back({cld::get<AbstractArrayType>(top.type->get()).getType(), i, top});
+                            top.push_back({cld::get<AbstractArrayType>(top.type->getVariant()).getType(), i, top});
                             assignChildren(*top.at(i).type, top.at(i));
                         }
                     }
@@ -2594,8 +2602,8 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
                 {
                     if (!std::holds_alternative<Lexer::CTokenIterator>(desig))
                     {
-                        if (std::holds_alternative<StructType>(current->type->get())
-                            || std::holds_alternative<AnonymousStructType>(current->type->get()))
+                        if (std::holds_alternative<StructType>(current->type->getVariant())
+                            || std::holds_alternative<AnonymousStructType>(current->type->getVariant()))
                         {
                             log(Errors::Semantics::EXPECTED_MEMBER_DESIGNATOR_FOR_STRUCT_TYPE.args(
                                 desig, m_sourceInterface, desig));
@@ -2616,7 +2624,7 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
                     if (result == fields.end())
                     {
                         cld::match(
-                            current->type->get(),
+                            current->type->getVariant(),
                             [&](const StructType& structType) {
                                 log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_STRUCT_N.args(
                                     *token, m_sourceInterface, *token, structType.getName()));
@@ -2637,7 +2645,7 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
                         finishRest(iter + 1, node.getNonCommaExpressionsAndBlocks().end());
                         return Expression(node);
                     }
-                    if (std::holds_alternative<AbstractArrayType>(result->type->get()))
+                    if (std::holds_alternative<AbstractArrayType>(result->type->getVariant()))
                     {
                         log(Errors::Semantics::CANNOT_INITIALIZE_FLEXIBLE_ARRAY_MEMBER.args(*token, m_sourceInterface,
                                                                                             *token));
@@ -2667,7 +2675,7 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
         {
             if (current == &top && isAbstractArray)
             {
-                top.push_back({cld::get<AbstractArrayType>(top.type->get()).getType(), top.size(), top});
+                top.push_back({cld::get<AbstractArrayType>(top.type->getVariant()).getType(), top.size(), top});
                 *size = currentIndex + 1;
                 assignChildren(*top.at(currentIndex).type, top.at(currentIndex));
             }
@@ -2764,8 +2772,8 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
                                                        std::move(expression), staticLifetime, nullptr);
             initializations.push_back({{path.rbegin(), path.rend()}, std::move(expression)});
         }
-        if (std::holds_alternative<UnionType>(current->type->get())
-            || std::holds_alternative<AnonymousUnionType>(current->type->get()))
+        if (std::holds_alternative<UnionType>(current->type->getVariant())
+            || std::holds_alternative<AnonymousUnionType>(current->type->getVariant()))
         {
             currentIndex = current->index + 1;
             current = current->parent;

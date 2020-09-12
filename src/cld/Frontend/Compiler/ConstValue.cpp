@@ -66,7 +66,7 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::castTo(const cld::Semanti
         [](AddressConstant) -> ConstValue { CLD_UNREACHABLE; },
         [&](VoidStar address) -> ConstValue {
             return match(
-                type.get(), [](const auto&) -> ConstValue { CLD_UNREACHABLE; },
+                type.getVariant(), [](const auto&) -> ConstValue { CLD_UNREACHABLE; },
                 [&](const PrimitiveType& primitiveType) -> ConstValue {
                     if (primitiveType.isFloatingPoint())
                     {
@@ -90,7 +90,7 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::castTo(const cld::Semanti
         },
         [&](llvm::APFloat floating) -> ConstValue {
             return match(
-                type.get(), [](const auto&) -> ConstValue { CLD_UNREACHABLE; },
+                type.getVariant(), [](const auto&) -> ConstValue { CLD_UNREACHABLE; },
                 [&](const PrimitiveType& primitiveType) mutable -> ConstValue {
                     bool response;
                     llvm::APFloat::opStatus op;
@@ -134,7 +134,7 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::castTo(const cld::Semanti
         },
         [&](const llvm::APSInt& integer) -> ConstValue {
             return match(
-                type.get(), [](const auto&) -> ConstValue { CLD_UNREACHABLE; },
+                type.getVariant(), [](const auto&) -> ConstValue { CLD_UNREACHABLE; },
                 [&](const PrimitiveType& primitiveType) -> ConstValue {
                     if (primitiveType.isFloatingPoint())
                     {
@@ -308,10 +308,10 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::minus(const cld::Semantic
             if (std::holds_alternative<VoidStar>(rhs.getValue()))
             {
                 return {llvm::APSInt(
-                    llvm::APInt(cld::get<PrimitiveType>(PrimitiveType::createPtrdiffT(false, false, options).get())
-                                    .getBitCount(),
-                                (address.address - cld::get<VoidStar>(rhs.getValue()).address) / address.elementSize,
-                                true),
+                    llvm::APInt(
+                        cld::get<PrimitiveType>(PrimitiveType::createPtrdiffT(false, false, options).getVariant())
+                            .getBitCount(),
+                        (address.address - cld::get<VoidStar>(rhs.getValue()).address) / address.elementSize, true),
                     false)};
             }
             if (!std::holds_alternative<llvm::APSInt>(rhs.getValue()))

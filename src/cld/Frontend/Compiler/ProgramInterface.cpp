@@ -7,23 +7,23 @@ bool cld::Semantics::ProgramInterface::isCompleteType(const Type& type) const
     {
         return false;
     }
-    if (std::holds_alternative<AbstractArrayType>(type.get()))
+    if (std::holds_alternative<AbstractArrayType>(type.getVariant()))
     {
         return false;
     }
-    if (std::holds_alternative<EnumType>(type.get()))
+    if (std::holds_alternative<EnumType>(type.getVariant()))
     {
-        auto& enumType = cld::get<EnumType>(type.get());
+        auto& enumType = cld::get<EnumType>(type.getVariant());
         return getEnumDefinition(enumType.getName(), enumType.getScopeOrId());
     }
-    if (std::holds_alternative<StructType>(type.get()))
+    if (std::holds_alternative<StructType>(type.getVariant()))
     {
-        auto& structType = cld::get<StructType>(type.get());
+        auto& structType = cld::get<StructType>(type.getVariant());
         return getStructDefinition(structType.getName(), structType.getScopeOrId());
     }
-    if (std::holds_alternative<UnionType>(type.get()))
+    if (std::holds_alternative<UnionType>(type.getVariant()))
     {
-        auto& unionType = cld::get<UnionType>(type.get());
+        auto& unionType = cld::get<UnionType>(type.getVariant());
         return getUnionDefinition(unionType.getName(), unionType.getScopeOrId());
     }
     return true;
@@ -128,24 +128,24 @@ const cld::Semantics::UnionDefinition* cld::Semantics::ProgramInterface::getUnio
 llvm::ArrayRef<cld::Semantics::Field>
     cld::Semantics::ProgramInterface::getFields(const cld::Semantics::Type& recordType) const
 {
-    if (std::holds_alternative<AnonymousUnionType>(recordType.get()))
+    if (std::holds_alternative<AnonymousUnionType>(recordType.getVariant()))
     {
-        return cld::get<AnonymousUnionType>(recordType.get()).getFields();
+        return cld::get<AnonymousUnionType>(recordType.getVariant()).getFields();
     }
-    if (std::holds_alternative<AnonymousStructType>(recordType.get()))
+    if (std::holds_alternative<AnonymousStructType>(recordType.getVariant()))
     {
-        return cld::get<AnonymousStructType>(recordType.get()).getFields();
+        return cld::get<AnonymousStructType>(recordType.getVariant()).getFields();
     }
-    if (std::holds_alternative<StructType>(recordType.get()))
+    if (std::holds_alternative<StructType>(recordType.getVariant()))
     {
-        auto& structType = cld::get<StructType>(recordType.get());
+        auto& structType = cld::get<StructType>(recordType.getVariant());
         auto* structDef = getStructDefinition(structType.getName(), structType.getScopeOrId());
         CLD_ASSERT(structDef);
         return structDef->getFields();
     }
-    if (std::holds_alternative<UnionType>(recordType.get()))
+    if (std::holds_alternative<UnionType>(recordType.getVariant()))
     {
-        auto& unionType = cld::get<UnionType>(recordType.get());
+        auto& unionType = cld::get<UnionType>(recordType.getVariant());
         auto* unionDef = getUnionDefinition(unionType.getName(), unionType.getScopeOrId());
         CLD_ASSERT(unionDef);
         return unionDef->getFields();
@@ -155,14 +155,14 @@ llvm::ArrayRef<cld::Semantics::Field>
 
 bool cld::Semantics::ProgramInterface::isBitfieldAccess(const Expression& expression) const
 {
-    if (!std::holds_alternative<MemberAccess>(expression.get()))
+    if (!std::holds_alternative<MemberAccess>(expression.getVariant()))
     {
         return false;
     }
-    auto& mem = cld::get<MemberAccess>(expression.get());
+    auto& mem = cld::get<MemberAccess>(expression.getVariant());
     auto& expr = mem.getRecordExpression();
-    auto& recordType = std::holds_alternative<PointerType>(expr.getType().get()) ?
-                           cld::get<PointerType>(expr.getType().get()).getElementType() :
+    auto& recordType = std::holds_alternative<PointerType>(expr.getType().getVariant()) ?
+                           cld::get<PointerType>(expr.getType().getVariant()).getElementType() :
                            expr.getType();
     auto fields = getFields(recordType);
     return static_cast<bool>(fields[mem.getMemberIndex()].bitFieldBounds);

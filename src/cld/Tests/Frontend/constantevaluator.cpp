@@ -83,7 +83,8 @@ std::pair<cld::Semantics::ConstValue, std::string>
     REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Statement>>(
         funcDef.getCompoundStatement().getCompoundItems().back()));
     auto& statement =
-        *cld::get<std::unique_ptr<cld::Semantics::Statement>>(funcDef.getCompoundStatement().getCompoundItems().back());
+        cld::get<std::unique_ptr<cld::Semantics::Statement>>(funcDef.getCompoundStatement().getCompoundItems().back())
+            ->getVariant();
     REQUIRE(std::holds_alternative<cld::Semantics::ExpressionStatement>(statement));
     auto& expr = cld::get<cld::Semantics::ExpressionStatement>(statement).getExpression();
     REQUIRE(expr);
@@ -1498,6 +1499,6 @@ TEST_CASE("Const eval initialization", "[constEval]")
     //                            x64linux, cld::Semantics::SemanticAnalysis::Initialization);
     //        REQUIRE_THAT(error, ProducesNoErrors());
     //        CHECK(std::holds_alternative<llvm::APSInt>(value.getValue()));
-    //        CHECK(cld::get<llvm::APSInt>(value.getValue()) == 12);
+    //        CHECK(cld::getVariant<llvm::APSInt>(value.getValue()) == 12);
     //    }
 }

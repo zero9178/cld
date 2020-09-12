@@ -471,7 +471,7 @@ std::size_t cld::Semantics::UnionType::getAlignOf(const ProgramInterface& progra
 
 bool cld::Semantics::isStringLiteralExpr(const Expression& expression)
 {
-    auto* constant = std::get_if<Constant>(&expression.get());
+    auto* constant = std::get_if<Constant>(&expression.getVariant());
     if (!constant)
     {
         return false;
@@ -482,7 +482,7 @@ bool cld::Semantics::isStringLiteralExpr(const Expression& expression)
 
 bool cld::Semantics::isVoid(const cld::Semantics::Type& type)
 {
-    auto* primitive = std::get_if<PrimitiveType>(&type.get());
+    auto* primitive = std::get_if<PrimitiveType>(&type.getVariant());
     if (!primitive)
     {
         return false;
@@ -492,14 +492,15 @@ bool cld::Semantics::isVoid(const cld::Semantics::Type& type)
 
 bool cld::Semantics::isArray(const Type& type)
 {
-    return std::holds_alternative<ArrayType>(type.get()) || std::holds_alternative<ValArrayType>(type.get())
-           || std::holds_alternative<AbstractArrayType>(type.get());
+    return std::holds_alternative<ArrayType>(type.getVariant())
+           || std::holds_alternative<ValArrayType>(type.getVariant())
+           || std::holds_alternative<AbstractArrayType>(type.getVariant());
 }
 
 const cld::Semantics::Type& cld::Semantics::getArrayElementType(const Type& type)
 {
     return cld::match(
-        type.get(), [](const auto&) -> const Type& { CLD_UNREACHABLE; },
+        type.getVariant(), [](const auto&) -> const Type& { CLD_UNREACHABLE; },
         [](const ArrayType& arrayType) -> const Type& { return arrayType.getType(); },
         [](const AbstractArrayType& abstractArrayType) -> const Type& { return abstractArrayType.getType(); },
         [](const ValArrayType& arrayType) -> const Type& { return arrayType.getType(); });
@@ -507,18 +508,20 @@ const cld::Semantics::Type& cld::Semantics::getArrayElementType(const Type& type
 
 bool cld::Semantics::isInteger(const Type& type)
 {
-    return std::holds_alternative<PrimitiveType>(type.get()) && !cld::get<PrimitiveType>(type.get()).isFloatingPoint()
-           && cld::get<PrimitiveType>(type.get()).getBitCount() != 0;
+    return std::holds_alternative<PrimitiveType>(type.getVariant())
+           && !cld::get<PrimitiveType>(type.getVariant()).isFloatingPoint()
+           && cld::get<PrimitiveType>(type.getVariant()).getBitCount() != 0;
 }
 
 bool cld::Semantics::isArithmetic(const Type& type)
 {
-    return std::holds_alternative<PrimitiveType>(type.get()) && cld::get<PrimitiveType>(type.get()).getBitCount() != 0;
+    return std::holds_alternative<PrimitiveType>(type.getVariant())
+           && cld::get<PrimitiveType>(type.getVariant()).getBitCount() != 0;
 }
 
 bool cld::Semantics::isScalar(const Type& type)
 {
-    return isArithmetic(type) || std::holds_alternative<PointerType>(type.get());
+    return isArithmetic(type) || std::holds_alternative<PointerType>(type.getVariant());
 }
 
 bool cld::Semantics::isRecord(const cld::Semantics::Type& type)
@@ -528,17 +531,19 @@ bool cld::Semantics::isRecord(const cld::Semantics::Type& type)
 
 bool cld::Semantics::isStruct(const cld::Semantics::Type& type)
 {
-    return std::holds_alternative<StructType>(type.get()) || std::holds_alternative<AnonymousStructType>(type.get());
+    return std::holds_alternative<StructType>(type.getVariant())
+           || std::holds_alternative<AnonymousStructType>(type.getVariant());
 }
 
 bool cld::Semantics::isUnion(const cld::Semantics::Type& type)
 {
-    return std::holds_alternative<UnionType>(type.get()) || std::holds_alternative<AnonymousUnionType>(type.get());
+    return std::holds_alternative<UnionType>(type.getVariant())
+           || std::holds_alternative<AnonymousUnionType>(type.getVariant());
 }
 
 bool cld::Semantics::isBool(const cld::Semantics::Type& type)
 {
-    auto* primitive = std::get_if<PrimitiveType>(&type.get());
+    auto* primitive = std::get_if<PrimitiveType>(&type.getVariant());
     if (!primitive)
     {
         return false;
@@ -548,7 +553,7 @@ bool cld::Semantics::isBool(const cld::Semantics::Type& type)
 
 bool cld::Semantics::isCharType(const cld::Semantics::Type& type)
 {
-    auto* primitive = std::get_if<PrimitiveType>(&type.get());
+    auto* primitive = std::get_if<PrimitiveType>(&type.getVariant());
     if (!primitive)
     {
         return false;
@@ -567,14 +572,14 @@ bool cld::Semantics::isVariablyModified(const Type& type)
 {
     auto typeVisitor = RecursiveVisitor(type, TYPE_NEXT_FN);
     return std::any_of(typeVisitor.begin(), typeVisitor.end(),
-                       [](const Type& type) { return std::holds_alternative<ValArrayType>(type.get()); });
+                       [](const Type& type) { return std::holds_alternative<ValArrayType>(type.getVariant()); });
 }
 
 bool cld::Semantics::isVariableLengthArray(const Type& type)
 {
     auto typeVisitor = RecursiveVisitor(type, ARRAY_TYPE_NEXT_FN);
     return std::any_of(typeVisitor.begin(), typeVisitor.end(),
-                       [](const Type& type) { return std::holds_alternative<ValArrayType>(type.get()); });
+                       [](const Type& type) { return std::holds_alternative<ValArrayType>(type.getVariant()); });
 }
 
 cld::Semantics::TranslationUnit::TranslationUnit(std::vector<TranslationUnit::Variant> globals)
@@ -715,7 +720,7 @@ std::string typeToString(const cld::Semantics::Type& arg)
     while (maybeCurr)
     {
         maybeCurr = cld::match(
-            maybeCurr->get(),
+            maybeCurr->getVariant(),
             [&](const PrimitiveType& primitiveType) -> std::optional<Type> {
                 if (maybeCurr->isConst())
                 {
@@ -749,7 +754,7 @@ std::string typeToString(const cld::Semantics::Type& arg)
             [&](const PointerType&) -> std::optional<Type> {
                 std::string temp;
                 auto curr = *maybeCurr;
-                while (auto* pointerType = std::get_if<PointerType>(&curr.get()))
+                while (auto* pointerType = std::get_if<PointerType>(&curr.getVariant()))
                 {
                     if (pointerType->isRestricted())
                     {
@@ -787,9 +792,10 @@ std::string typeToString(const cld::Semantics::Type& arg)
                     temp = "*" + temp;
                     curr = pointerType->getElementType();
                 }
-                if (std::holds_alternative<AbstractArrayType>(curr.get())
-                    || std::holds_alternative<ValArrayType>(curr.get()) || std::holds_alternative<ArrayType>(curr.get())
-                    || std::holds_alternative<FunctionType>(curr.get()))
+                if (std::holds_alternative<AbstractArrayType>(curr.getVariant())
+                    || std::holds_alternative<ValArrayType>(curr.getVariant())
+                    || std::holds_alternative<ArrayType>(curr.getVariant())
+                    || std::holds_alternative<FunctionType>(curr.getVariant()))
                 {
                     declarators = "(" + temp + declarators + ")";
                     return {std::move(curr)};
@@ -1247,7 +1253,7 @@ cld::Semantics::Type cld::Semantics::adjustParameterType(const cld::Semantics::T
 {
     if (isArray(type))
     {
-        auto elementType = cld::match(type.get(), [](auto&& value) -> Type {
+        auto elementType = cld::match(type.getVariant(), [](auto&& value) -> Type {
             using T = std::decay_t<decltype(value)>;
             if constexpr (std::is_same_v<ArrayType,
                                          T> || std::is_same_v<AbstractArrayType, T> || std::is_same_v<ValArrayType, T>)
@@ -1256,7 +1262,7 @@ cld::Semantics::Type cld::Semantics::adjustParameterType(const cld::Semantics::T
             }
             CLD_UNREACHABLE;
         });
-        bool restrict = cld::match(type.get(), [](auto&& value) -> bool {
+        bool restrict = cld::match(type.getVariant(), [](auto&& value) -> bool {
             using T = std::decay_t<decltype(value)>;
             if constexpr (std::is_same_v<ArrayType,
                                          T> || std::is_same_v<AbstractArrayType, T> || std::is_same_v<ValArrayType, T>)

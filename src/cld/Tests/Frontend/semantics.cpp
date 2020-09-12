@@ -399,15 +399,15 @@ TEST_CASE("Semantics declarations", "[semantics]")
             auto& first = def.getCompoundStatement().getCompoundItems()[0];
             REQUIRE(std::holds_alternative<std::shared_ptr<const cld::Semantics::Expression>>(first));
             auto& firstExpr = *cld::get<std::shared_ptr<const cld::Semantics::Expression>>(first);
-            CHECK(std::holds_alternative<cld::Semantics::BinaryOperator>(firstExpr.get()));
+            CHECK(std::holds_alternative<cld::Semantics::BinaryOperator>(firstExpr.getVariant()));
             auto& second = def.getCompoundStatement().getCompoundItems()[1];
             REQUIRE(std::holds_alternative<std::shared_ptr<const cld::Semantics::Expression>>(second));
             auto& secondExpr = *cld::get<std::shared_ptr<const cld::Semantics::Expression>>(second);
-            CHECK(std::holds_alternative<cld::Semantics::UnaryOperator>(secondExpr.get()));
+            CHECK(std::holds_alternative<cld::Semantics::UnaryOperator>(secondExpr.getVariant()));
             auto& third = def.getCompoundStatement().getCompoundItems()[2];
             REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(third));
             auto& thirdDecl = *cld::get<std::unique_ptr<cld::Semantics::Declaration>>(third);
-            CHECK(std::holds_alternative<cld::Semantics::ValArrayType>(thirdDecl.getType().get()));
+            CHECK(std::holds_alternative<cld::Semantics::ValArrayType>(thirdDecl.getType().getVariant()));
             SEMA_PRODUCES("extern int i;\n"
                           "typedef int n[i];",
                           ProducesError(VARIABLY_MODIFIED_TYPEDEF_NOT_ALLOWED_AT_FILE_SCOPE));
@@ -788,9 +788,9 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
         REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
         auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
         CHECK(decl->getNameToken()->getText() == "a");
-        REQUIRE(std::holds_alternative<cld::Semantics::StructType>(decl->getType().get()));
-        CHECK(cld::get<cld::Semantics::StructType>(decl->getType().get()).getName() == "A");
-        CHECK(cld::get<cld::Semantics::StructType>(decl->getType().get()).getScopeOrId() == 0);
+        REQUIRE(std::holds_alternative<cld::Semantics::StructType>(decl->getType().getVariant()));
+        CHECK(cld::get<cld::Semantics::StructType>(decl->getType().getVariant()).getName() == "A");
+        CHECK(cld::get<cld::Semantics::StructType>(decl->getType().getVariant()).getScopeOrId() == 0);
     }
     SECTION("Simple union")
     {
@@ -800,9 +800,9 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
         REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
         auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
         CHECK(decl->getNameToken()->getText() == "a");
-        REQUIRE(std::holds_alternative<cld::Semantics::UnionType>(decl->getType().get()));
-        CHECK(cld::get<cld::Semantics::UnionType>(decl->getType().get()).getName() == "A");
-        CHECK(cld::get<cld::Semantics::UnionType>(decl->getType().get()).getScopeOrId() == 0);
+        REQUIRE(std::holds_alternative<cld::Semantics::UnionType>(decl->getType().getVariant()));
+        CHECK(cld::get<cld::Semantics::UnionType>(decl->getType().getVariant()).getName() == "A");
+        CHECK(cld::get<cld::Semantics::UnionType>(decl->getType().getVariant()).getScopeOrId() == 0);
     }
     SECTION("Anonymous struct")
     {
@@ -812,8 +812,8 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
         REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
         auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
         CHECK(decl->getNameToken()->getText() == "a");
-        REQUIRE(std::holds_alternative<cld::Semantics::AnonymousStructType>(decl->getType().get()));
-        auto& anon = cld::get<cld::Semantics::AnonymousStructType>(decl->getType().get());
+        REQUIRE(std::holds_alternative<cld::Semantics::AnonymousStructType>(decl->getType().getVariant()));
+        auto& anon = cld::get<cld::Semantics::AnonymousStructType>(decl->getType().getVariant());
         CHECK(anon.getFields().size() == 3);
         CHECK(anon.getFields()[0].name == "i");
         CHECK(*anon.getFields()[0].type
@@ -834,8 +834,8 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
         REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
         auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
         CHECK(decl->getNameToken()->getText() == "a");
-        REQUIRE(std::holds_alternative<cld::Semantics::AnonymousUnionType>(decl->getType().get()));
-        auto& anon = cld::get<cld::Semantics::AnonymousUnionType>(decl->getType().get());
+        REQUIRE(std::holds_alternative<cld::Semantics::AnonymousUnionType>(decl->getType().getVariant()));
+        auto& anon = cld::get<cld::Semantics::AnonymousUnionType>(decl->getType().getVariant());
         CHECK(anon.getFields().size() == 3);
         CHECK(anon.getFields()[0].name == "i");
         CHECK(*anon.getFields()[0].type
@@ -909,8 +909,8 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
                     translationUnit.getGlobals()[0]));
                 auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
-                REQUIRE(std::holds_alternative<cld::Semantics::ArrayType>(decl->getType().get()));
-                auto& array = cld::get<cld::Semantics::ArrayType>(decl->getType().get());
+                REQUIRE(std::holds_alternative<cld::Semantics::ArrayType>(decl->getType().getVariant()));
+                auto& array = cld::get<cld::Semantics::ArrayType>(decl->getType().getVariant());
                 CHECK(array.getSize() == 8);
             }
             SECTION("System V bitfields")
@@ -932,8 +932,8 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
                     translationUnit.getGlobals()[0]));
                 auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
-                REQUIRE(std::holds_alternative<cld::Semantics::ArrayType>(decl->getType().get()));
-                auto& array = cld::get<cld::Semantics::ArrayType>(decl->getType().get());
+                REQUIRE(std::holds_alternative<cld::Semantics::ArrayType>(decl->getType().getVariant()));
+                auto& array = cld::get<cld::Semantics::ArrayType>(decl->getType().getVariant());
                 CHECK(array.getSize() == 4);
             }
         }
@@ -1058,8 +1058,8 @@ TEST_CASE("Semantics enums", "[semantics]")
             {
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(iter));
                 auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(iter);
-                REQUIRE(std::holds_alternative<cld::Semantics::ArrayType>(decl->getType().get()));
-                auto& array = cld::get<cld::Semantics::ArrayType>(decl->getType().get());
+                REQUIRE(std::holds_alternative<cld::Semantics::ArrayType>(decl->getType().getVariant()));
+                auto& array = cld::get<cld::Semantics::ArrayType>(decl->getType().getVariant());
                 CHECK(array.getSize() == i++);
             }
         }
@@ -1079,8 +1079,8 @@ TEST_CASE("Semantics enums", "[semantics]")
             {
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(iter));
                 auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(iter);
-                REQUIRE(std::holds_alternative<cld::Semantics::ArrayType>(decl->getType().get()));
-                auto& array = cld::get<cld::Semantics::ArrayType>(decl->getType().get());
+                REQUIRE(std::holds_alternative<cld::Semantics::ArrayType>(decl->getType().getVariant()));
+                auto& array = cld::get<cld::Semantics::ArrayType>(decl->getType().getVariant());
                 CHECK(array.getSize() == i--);
             }
         }
@@ -1107,8 +1107,8 @@ TEST_CASE("Semantics enums", "[semantics]")
             {
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(iter));
                 auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(iter);
-                REQUIRE(std::holds_alternative<cld::Semantics::ArrayType>(decl->getType().get()));
-                auto& array = cld::get<cld::Semantics::ArrayType>(decl->getType().get());
+                REQUIRE(std::holds_alternative<cld::Semantics::ArrayType>(decl->getType().getVariant()));
+                auto& array = cld::get<cld::Semantics::ArrayType>(decl->getType().getVariant());
                 CHECK(array.getSize() == i++);
             }
         }
@@ -1128,8 +1128,8 @@ TEST_CASE("Semantics enums", "[semantics]")
             {
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(iter));
                 auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(iter);
-                REQUIRE(std::holds_alternative<cld::Semantics::ArrayType>(decl->getType().get()));
-                auto& array = cld::get<cld::Semantics::ArrayType>(decl->getType().get());
+                REQUIRE(std::holds_alternative<cld::Semantics::ArrayType>(decl->getType().getVariant()));
+                auto& array = cld::get<cld::Semantics::ArrayType>(decl->getType().getVariant());
                 CHECK(array.getSize() == i--);
             }
         }
@@ -1604,8 +1604,8 @@ const Expression& generateExpression(std::string source, cld::LanguageOptions op
     REQUIRE(
         std::holds_alternative<std::unique_ptr<Statement>>(funcDef.getCompoundStatement().getCompoundItems().back()));
     auto& statement = *cld::get<std::unique_ptr<Statement>>(funcDef.getCompoundStatement().getCompoundItems().back());
-    REQUIRE(std::holds_alternative<ExpressionStatement>(statement));
-    auto& expr = cld::get<ExpressionStatement>(statement).getExpression();
+    REQUIRE(std::holds_alternative<ExpressionStatement>(statement.getVariant()));
+    auto& expr = cld::get<ExpressionStatement>(statement.getVariant()).getExpression();
     REQUIRE(expr);
     return *expr;
 }
@@ -1634,7 +1634,7 @@ TEST_CASE("Semantics primary expressions", "[semantics]")
             auto& expr = generateExpression("void foo(void) { " + constant.first + ";}");
             CHECK(expr.getType() == constant.second);
             CHECK(expr.getValueCategory() == ValueCategory::Rvalue);
-            CHECK(std::holds_alternative<Constant>(expr.get()));
+            CHECK(std::holds_alternative<Constant>(expr.getVariant()));
         }
         SECTION("Wide")
         {
@@ -1646,7 +1646,7 @@ TEST_CASE("Semantics primary expressions", "[semantics]")
                       == ArrayType::create(false, false, false, false,
                                            PrimitiveType::createUnsignedShort(false, false, options), 4));
                 CHECK(expr.getValueCategory() == ValueCategory::Rvalue);
-                CHECK(std::holds_alternative<Constant>(expr.get()));
+                CHECK(std::holds_alternative<Constant>(expr.getVariant()));
             }
             SECTION("Unix")
             {
@@ -1656,7 +1656,7 @@ TEST_CASE("Semantics primary expressions", "[semantics]")
                       == ArrayType::create(false, false, false, false, PrimitiveType::createInt(false, false, options),
                                            4));
                 CHECK(expr.getValueCategory() == ValueCategory::Rvalue);
-                CHECK(std::holds_alternative<Constant>(expr.get()));
+                CHECK(std::holds_alternative<Constant>(expr.getVariant()));
             }
         }
     }
@@ -1665,7 +1665,7 @@ TEST_CASE("Semantics primary expressions", "[semantics]")
         auto& expr = generateExpression("void foo(void) { (5);}");
         CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         CHECK(expr.getValueCategory() == ValueCategory::Rvalue);
-        CHECK(std::holds_alternative<Constant>(expr.get()));
+        CHECK(std::holds_alternative<Constant>(expr.getVariant()));
     }
     SECTION("Identifiers")
     {
@@ -1674,16 +1674,16 @@ TEST_CASE("Semantics primary expressions", "[semantics]")
             auto& expr = generateExpression("void foo(void) { foo;}");
             CHECK(expr.getType() == FunctionType::create(PrimitiveType::createVoid(false, false), {}, false, false));
             CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
-            REQUIRE(std::holds_alternative<DeclarationRead>(expr.get()));
-            CHECK(
-                std::holds_alternative<const FunctionDefinition*>(cld::get<DeclarationRead>(expr.get()).getDeclRead()));
+            REQUIRE(std::holds_alternative<DeclarationRead>(expr.getVariant()));
+            CHECK(std::holds_alternative<const FunctionDefinition*>(
+                cld::get<DeclarationRead>(expr.getVariant()).getDeclRead()));
         }
         SECTION("Enum constants")
         {
             auto& expr = generateExpression("enum A { VALUE = 7};void foo(void) { VALUE;}");
             CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             CHECK(expr.getValueCategory() == ValueCategory::Rvalue);
-            REQUIRE(std::holds_alternative<Constant>(expr.get()));
+            REQUIRE(std::holds_alternative<Constant>(expr.getVariant()));
         }
         SEMA_PRODUCES("void foo(void) { bar; }", ProducesError(UNDECLARED_IDENTIFIER_N, "'bar'"));
     }
@@ -1699,14 +1699,16 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
 
         CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
-        REQUIRE(std::holds_alternative<SubscriptOperator>(expr.get()));
-        CHECK(cld::get<SubscriptOperator>(expr.get()).getLeftExpression().getType()
+        REQUIRE(std::holds_alternative<SubscriptOperator>(expr.getVariant()));
+        CHECK(cld::get<SubscriptOperator>(expr.getVariant()).getLeftExpression().getType()
               == PointerType::create(false, false, false,
                                      PrimitiveType::createInt(false, false, cld::LanguageOptions::native())));
-        CHECK(cld::get<SubscriptOperator>(expr.get()).getLeftExpression().getValueCategory() == ValueCategory::Rvalue);
-        CHECK(cld::get<SubscriptOperator>(expr.get()).getRightExpression().getType()
+        CHECK(cld::get<SubscriptOperator>(expr.getVariant()).getLeftExpression().getValueCategory()
+              == ValueCategory::Rvalue);
+        CHECK(cld::get<SubscriptOperator>(expr.getVariant()).getRightExpression().getType()
               == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-        CHECK(cld::get<SubscriptOperator>(expr.get()).getRightExpression().getValueCategory() == ValueCategory::Rvalue);
+        CHECK(cld::get<SubscriptOperator>(expr.getVariant()).getRightExpression().getValueCategory()
+              == ValueCategory::Rvalue);
         SEMA_PRODUCES("int foo(void) {\n"
                       " 5[5];\n"
                       "}",
@@ -1755,11 +1757,12 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
                                             "}");
             CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
-            REQUIRE(std::holds_alternative<MemberAccess>(expr.get()));
-            CHECK(cld::get<MemberAccess>(expr.get()).getRecordExpression().getValueCategory() == ValueCategory::Lvalue);
+            REQUIRE(std::holds_alternative<MemberAccess>(expr.getVariant()));
+            CHECK(cld::get<MemberAccess>(expr.getVariant()).getRecordExpression().getValueCategory()
+                  == ValueCategory::Lvalue);
             CHECK(std::holds_alternative<StructType>(
-                cld::get<MemberAccess>(expr.get()).getRecordExpression().getType().get()));
-            CHECK(cld::get<MemberAccess>(expr.get()).getMemberIndex() == 0);
+                cld::get<MemberAccess>(expr.getVariant()).getRecordExpression().getType().getVariant()));
+            CHECK(cld::get<MemberAccess>(expr.getVariant()).getMemberIndex() == 0);
         }
         SECTION("union")
         {
@@ -1772,11 +1775,12 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
                                             "}");
             CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
-            REQUIRE(std::holds_alternative<MemberAccess>(expr.get()));
-            CHECK(cld::get<MemberAccess>(expr.get()).getRecordExpression().getValueCategory() == ValueCategory::Lvalue);
+            REQUIRE(std::holds_alternative<MemberAccess>(expr.getVariant()));
+            CHECK(cld::get<MemberAccess>(expr.getVariant()).getRecordExpression().getValueCategory()
+                  == ValueCategory::Lvalue);
             CHECK(std::holds_alternative<UnionType>(
-                cld::get<MemberAccess>(expr.get()).getRecordExpression().getType().get()));
-            CHECK(cld::get<MemberAccess>(expr.get()).getMemberIndex() == 0);
+                cld::get<MemberAccess>(expr.getVariant()).getRecordExpression().getType().getVariant()));
+            CHECK(cld::get<MemberAccess>(expr.getVariant()).getMemberIndex() == 0);
         }
         SECTION("anonymous struct")
         {
@@ -1786,11 +1790,12 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
 
             CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
-            REQUIRE(std::holds_alternative<MemberAccess>(expr.get()));
-            CHECK(cld::get<MemberAccess>(expr.get()).getRecordExpression().getValueCategory() == ValueCategory::Lvalue);
+            REQUIRE(std::holds_alternative<MemberAccess>(expr.getVariant()));
+            CHECK(cld::get<MemberAccess>(expr.getVariant()).getRecordExpression().getValueCategory()
+                  == ValueCategory::Lvalue);
             CHECK(std::holds_alternative<AnonymousStructType>(
-                cld::get<MemberAccess>(expr.get()).getRecordExpression().getType().get()));
-            CHECK(cld::get<MemberAccess>(expr.get()).getMemberIndex() == 0);
+                cld::get<MemberAccess>(expr.getVariant()).getRecordExpression().getType().getVariant()));
+            CHECK(cld::get<MemberAccess>(expr.getVariant()).getMemberIndex() == 0);
         }
         SECTION("anonymous union")
         {
@@ -1800,11 +1805,12 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
 
             CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
-            REQUIRE(std::holds_alternative<MemberAccess>(expr.get()));
-            CHECK(cld::get<MemberAccess>(expr.get()).getRecordExpression().getValueCategory() == ValueCategory::Lvalue);
+            REQUIRE(std::holds_alternative<MemberAccess>(expr.getVariant()));
+            CHECK(cld::get<MemberAccess>(expr.getVariant()).getRecordExpression().getValueCategory()
+                  == ValueCategory::Lvalue);
             CHECK(std::holds_alternative<AnonymousUnionType>(
-                cld::get<MemberAccess>(expr.get()).getRecordExpression().getType().get()));
-            CHECK(cld::get<MemberAccess>(expr.get()).getMemberIndex() == 0);
+                cld::get<MemberAccess>(expr.getVariant()).getRecordExpression().getType().getVariant()));
+            CHECK(cld::get<MemberAccess>(expr.getVariant()).getMemberIndex() == 0);
         }
         SEMA_PRODUCES("int foo(void) {\n"
                       " '5'.m;\n"
@@ -1863,12 +1869,12 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
 
             CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
-            REQUIRE(std::holds_alternative<MemberAccess>(expr.get()));
-            auto& mem = cld::get<MemberAccess>(expr.get());
+            REQUIRE(std::holds_alternative<MemberAccess>(expr.getVariant()));
+            auto& mem = cld::get<MemberAccess>(expr.getVariant());
             CHECK(mem.getRecordExpression().getValueCategory() == ValueCategory::Lvalue);
-            REQUIRE(std::holds_alternative<PointerType>(mem.getRecordExpression().getType().get()));
+            REQUIRE(std::holds_alternative<PointerType>(mem.getRecordExpression().getType().getVariant()));
             CHECK(std::holds_alternative<StructType>(
-                cld::get<PointerType>(mem.getRecordExpression().getType().get()).getElementType().get()));
+                cld::get<PointerType>(mem.getRecordExpression().getType().getVariant()).getElementType().getVariant()));
             CHECK(mem.getMemberIndex() == 0);
         }
         SECTION("union")
@@ -1883,12 +1889,12 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
 
             CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
-            REQUIRE(std::holds_alternative<MemberAccess>(expr.get()));
-            auto& mem = cld::get<MemberAccess>(expr.get());
+            REQUIRE(std::holds_alternative<MemberAccess>(expr.getVariant()));
+            auto& mem = cld::get<MemberAccess>(expr.getVariant());
             CHECK(mem.getRecordExpression().getValueCategory() == ValueCategory::Lvalue);
-            REQUIRE(std::holds_alternative<PointerType>(mem.getRecordExpression().getType().get()));
+            REQUIRE(std::holds_alternative<PointerType>(mem.getRecordExpression().getType().getVariant()));
             CHECK(std::holds_alternative<UnionType>(
-                cld::get<PointerType>(mem.getRecordExpression().getType().get()).getElementType().get()));
+                cld::get<PointerType>(mem.getRecordExpression().getType().getVariant()).getElementType().getVariant()));
             CHECK(mem.getMemberIndex() == 0);
         }
         SECTION("anonymous struct")
@@ -1899,12 +1905,12 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
 
             CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
-            REQUIRE(std::holds_alternative<MemberAccess>(expr.get()));
-            auto& mem = cld::get<MemberAccess>(expr.get());
+            REQUIRE(std::holds_alternative<MemberAccess>(expr.getVariant()));
+            auto& mem = cld::get<MemberAccess>(expr.getVariant());
             CHECK(mem.getRecordExpression().getValueCategory() == ValueCategory::Lvalue);
-            REQUIRE(std::holds_alternative<PointerType>(mem.getRecordExpression().getType().get()));
+            REQUIRE(std::holds_alternative<PointerType>(mem.getRecordExpression().getType().getVariant()));
             CHECK(std::holds_alternative<AnonymousStructType>(
-                cld::get<PointerType>(mem.getRecordExpression().getType().get()).getElementType().get()));
+                cld::get<PointerType>(mem.getRecordExpression().getType().getVariant()).getElementType().getVariant()));
             CHECK(mem.getMemberIndex() == 0);
         }
         SECTION("anonymous union")
@@ -1915,12 +1921,12 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
 
             CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
-            REQUIRE(std::holds_alternative<MemberAccess>(expr.get()));
-            auto& mem = cld::get<MemberAccess>(expr.get());
+            REQUIRE(std::holds_alternative<MemberAccess>(expr.getVariant()));
+            auto& mem = cld::get<MemberAccess>(expr.getVariant());
             CHECK(mem.getRecordExpression().getValueCategory() == ValueCategory::Lvalue);
-            REQUIRE(std::holds_alternative<PointerType>(mem.getRecordExpression().getType().get()));
+            REQUIRE(std::holds_alternative<PointerType>(mem.getRecordExpression().getType().getVariant()));
             CHECK(std::holds_alternative<AnonymousUnionType>(
-                cld::get<PointerType>(mem.getRecordExpression().getType().get()).getElementType().get()));
+                cld::get<PointerType>(mem.getRecordExpression().getType().getVariant()).getElementType().getVariant()));
             CHECK(mem.getMemberIndex() == 0);
         }
         SEMA_PRODUCES("int foo(void) {\n"
@@ -1975,8 +1981,8 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
                                             "}");
             CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             CHECK(expr.getValueCategory() == ValueCategory::Rvalue);
-            REQUIRE(std::holds_alternative<UnaryOperator>(expr.get()));
-            auto& unary = cld::get<UnaryOperator>(expr.get());
+            REQUIRE(std::holds_alternative<UnaryOperator>(expr.getVariant()));
+            auto& unary = cld::get<UnaryOperator>(expr.getVariant());
             CHECK(unary.getKind() == UnaryOperator::PostIncrement);
         }
         SECTION("Decrement")
@@ -1986,8 +1992,8 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
                                             "}");
             CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             CHECK(expr.getValueCategory() == ValueCategory::Rvalue);
-            REQUIRE(std::holds_alternative<UnaryOperator>(expr.get()));
-            auto& unary = cld::get<UnaryOperator>(expr.get());
+            REQUIRE(std::holds_alternative<UnaryOperator>(expr.getVariant()));
+            auto& unary = cld::get<UnaryOperator>(expr.getVariant());
             CHECK(unary.getKind() == UnaryOperator::PostDecrement);
         }
         SEMA_PRODUCES("int foo(void) {\n"
@@ -2054,8 +2060,8 @@ TEST_CASE("Semantics unary expressions", "[semantics]")
                                             "}");
             CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             CHECK(expr.getValueCategory() == ValueCategory::Rvalue);
-            REQUIRE(std::holds_alternative<UnaryOperator>(expr.get()));
-            auto& unary = cld::get<UnaryOperator>(expr.get());
+            REQUIRE(std::holds_alternative<UnaryOperator>(expr.getVariant()));
+            auto& unary = cld::get<UnaryOperator>(expr.getVariant());
             CHECK(unary.getKind() == UnaryOperator::PreIncrement);
         }
         SECTION("Decrement")
@@ -2065,8 +2071,8 @@ TEST_CASE("Semantics unary expressions", "[semantics]")
                                             "}");
             CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
             CHECK(expr.getValueCategory() == ValueCategory::Rvalue);
-            REQUIRE(std::holds_alternative<UnaryOperator>(expr.get()));
-            auto& unary = cld::get<UnaryOperator>(expr.get());
+            REQUIRE(std::holds_alternative<UnaryOperator>(expr.getVariant()));
+            auto& unary = cld::get<UnaryOperator>(expr.getVariant());
             CHECK(unary.getKind() == UnaryOperator::PreDecrement);
         }
         SEMA_PRODUCES("int foo(void) {\n"
@@ -2162,8 +2168,8 @@ TEST_CASE("Semantics unary expressions", "[semantics]")
                                        "}");
         CHECK(exp.getValueCategory() == ValueCategory::Lvalue);
         CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-        REQUIRE(std::holds_alternative<UnaryOperator>(exp.get()));
-        CHECK(cld::get<UnaryOperator>(exp.get()).getKind() == UnaryOperator::Dereference);
+        REQUIRE(std::holds_alternative<UnaryOperator>(exp.getVariant()));
+        CHECK(cld::get<UnaryOperator>(exp.getVariant()).getKind() == UnaryOperator::Dereference);
         SEMA_PRODUCES("void foo(int i) {\n"
                       " *i;\n"
                       "}",
@@ -2178,8 +2184,8 @@ TEST_CASE("Semantics unary expressions", "[semantics]")
                                            "}");
             CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
             CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            REQUIRE(std::holds_alternative<UnaryOperator>(exp.get()));
-            CHECK(cld::get<UnaryOperator>(exp.get()).getKind() == UnaryOperator::Minus);
+            REQUIRE(std::holds_alternative<UnaryOperator>(exp.getVariant()));
+            CHECK(cld::get<UnaryOperator>(exp.getVariant()).getKind() == UnaryOperator::Minus);
         }
         SECTION("+")
         {
@@ -2188,8 +2194,8 @@ TEST_CASE("Semantics unary expressions", "[semantics]")
                                            "}");
             CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
             CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            REQUIRE(std::holds_alternative<UnaryOperator>(exp.get()));
-            CHECK(cld::get<UnaryOperator>(exp.get()).getKind() == UnaryOperator::Plus);
+            REQUIRE(std::holds_alternative<UnaryOperator>(exp.getVariant()));
+            CHECK(cld::get<UnaryOperator>(exp.getVariant()).getKind() == UnaryOperator::Plus);
         }
         SEMA_PRODUCES("void foo(float i) {\n"
                       "+i;\n"
@@ -2211,8 +2217,8 @@ TEST_CASE("Semantics unary expressions", "[semantics]")
                                        "}");
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
         CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-        REQUIRE(std::holds_alternative<UnaryOperator>(exp.get()));
-        CHECK(cld::get<UnaryOperator>(exp.get()).getKind() == UnaryOperator::BitwiseNegate);
+        REQUIRE(std::holds_alternative<UnaryOperator>(exp.getVariant()));
+        CHECK(cld::get<UnaryOperator>(exp.getVariant()).getKind() == UnaryOperator::BitwiseNegate);
         SEMA_PRODUCES("void foo(float i) {\n"
                       "~i;\n"
                       "}",
@@ -2231,8 +2237,8 @@ TEST_CASE("Semantics unary expressions", "[semantics]")
                                            "}");
             CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
             CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            REQUIRE(std::holds_alternative<UnaryOperator>(exp.get()));
-            CHECK(cld::get<UnaryOperator>(exp.get()).getKind() == UnaryOperator::BooleanNegate);
+            REQUIRE(std::holds_alternative<UnaryOperator>(exp.getVariant()));
+            CHECK(cld::get<UnaryOperator>(exp.getVariant()).getKind() == UnaryOperator::BooleanNegate);
         }
         SECTION("Pointer")
         {
@@ -2241,8 +2247,8 @@ TEST_CASE("Semantics unary expressions", "[semantics]")
                                            "}");
             CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
             CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            REQUIRE(std::holds_alternative<UnaryOperator>(exp.get()));
-            CHECK(cld::get<UnaryOperator>(exp.get()).getKind() == UnaryOperator::BooleanNegate);
+            REQUIRE(std::holds_alternative<UnaryOperator>(exp.getVariant()));
+            CHECK(cld::get<UnaryOperator>(exp.getVariant()).getKind() == UnaryOperator::BooleanNegate);
         }
         SEMA_PRODUCES("void foo(float i) {\n"
                       "!i;\n"
@@ -2260,7 +2266,7 @@ TEST_CASE("Semantics unary expressions", "[semantics]")
                                        "}");
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
         CHECK(exp.getType() == PrimitiveType::createSizeT(false, false, cld::LanguageOptions::native()));
-        REQUIRE(std::holds_alternative<SizeofOperator>(exp.get()));
+        REQUIRE(std::holds_alternative<SizeofOperator>(exp.getVariant()));
         SEMA_PRODUCES("void foo(struct r* i) {\n"
                       " sizeof *i;\n"
                       "}",
@@ -2293,7 +2299,7 @@ TEST_CASE("Semantics cast expression", "[semantics]")
     CHECK(exp.getType()
           == PointerType::create(false, false, false,
                                  PrimitiveType::createInt(true, false, cld::LanguageOptions::native())));
-    CHECK(std::holds_alternative<Cast>(exp.get()));
+    CHECK(std::holds_alternative<Cast>(exp.getVariant()));
     SEMA_PRODUCES("void foo(int* i) {\n"
                   " (struct r)i;\n"
                   "}",
@@ -2313,8 +2319,8 @@ TEST_CASE("Semantics term expression", "[semantics]")
                                        "}");
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
         CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-        REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
-        auto& binOp = cld::get<BinaryOperator>(exp.get());
+        REQUIRE(std::holds_alternative<BinaryOperator>(exp.getVariant()));
+        auto& binOp = cld::get<BinaryOperator>(exp.getVariant());
         CHECK(binOp.getKind() == BinaryOperator::Multiply);
         SEMA_PRODUCES("void foo(void) {\n"
                       "5.0 * 5;\n"
@@ -2344,8 +2350,8 @@ TEST_CASE("Semantics term expression", "[semantics]")
                                        "}");
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
         CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-        REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
-        auto& binOp = cld::get<BinaryOperator>(exp.get());
+        REQUIRE(std::holds_alternative<BinaryOperator>(exp.getVariant()));
+        auto& binOp = cld::get<BinaryOperator>(exp.getVariant());
         CHECK(binOp.getKind() == BinaryOperator::Divide);
         SEMA_PRODUCES("void foo(void) {\n"
                       "5.0 / 5;\n"
@@ -2375,8 +2381,8 @@ TEST_CASE("Semantics term expression", "[semantics]")
                                        "}");
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
         CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-        REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
-        auto& binOp = cld::get<BinaryOperator>(exp.get());
+        REQUIRE(std::holds_alternative<BinaryOperator>(exp.getVariant()));
+        auto& binOp = cld::get<BinaryOperator>(exp.getVariant());
         CHECK(binOp.getKind() == BinaryOperator::Modulo);
         SEMA_PRODUCES("void foo(void) {\n"
                       "5uLL % 5;\n"
@@ -2413,8 +2419,8 @@ TEST_CASE("Semantics additive expression", "[semantics]")
                                            "}");
             CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
             CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
-            auto& binOp = cld::get<BinaryOperator>(exp.get());
+            REQUIRE(std::holds_alternative<BinaryOperator>(exp.getVariant()));
+            auto& binOp = cld::get<BinaryOperator>(exp.getVariant());
             CHECK(binOp.getKind() == BinaryOperator::Addition);
         }
         SECTION("Pointer")
@@ -2428,8 +2434,8 @@ TEST_CASE("Semantics additive expression", "[semantics]")
                 CHECK(exp.getType()
                       == PointerType::create(false, false, false,
                                              PrimitiveType::createInt(false, false, cld::LanguageOptions::native())));
-                REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
-                auto& binOp = cld::get<BinaryOperator>(exp.get());
+                REQUIRE(std::holds_alternative<BinaryOperator>(exp.getVariant()));
+                auto& binOp = cld::get<BinaryOperator>(exp.getVariant());
                 CHECK(binOp.getKind() == BinaryOperator::Addition);
             }
             SECTION("Pointer right")
@@ -2441,8 +2447,8 @@ TEST_CASE("Semantics additive expression", "[semantics]")
                 CHECK(exp.getType()
                       == PointerType::create(false, false, false,
                                              PrimitiveType::createInt(false, false, cld::LanguageOptions::native())));
-                REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
-                auto& binOp = cld::get<BinaryOperator>(exp.get());
+                REQUIRE(std::holds_alternative<BinaryOperator>(exp.getVariant()));
+                auto& binOp = cld::get<BinaryOperator>(exp.getVariant());
                 CHECK(binOp.getKind() == BinaryOperator::Addition);
             }
         }
@@ -2480,8 +2486,8 @@ TEST_CASE("Semantics additive expression", "[semantics]")
                                            "}");
             CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
             CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-            REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
-            auto& binOp = cld::get<BinaryOperator>(exp.get());
+            REQUIRE(std::holds_alternative<BinaryOperator>(exp.getVariant()));
+            auto& binOp = cld::get<BinaryOperator>(exp.getVariant());
             CHECK(binOp.getKind() == BinaryOperator::Subtraction);
         }
         SECTION("Pointer")
@@ -2495,8 +2501,8 @@ TEST_CASE("Semantics additive expression", "[semantics]")
                 CHECK(exp.getType()
                       == PointerType::create(false, false, false,
                                              PrimitiveType::createInt(false, false, cld::LanguageOptions::native())));
-                REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
-                auto& binOp = cld::get<BinaryOperator>(exp.get());
+                REQUIRE(std::holds_alternative<BinaryOperator>(exp.getVariant()));
+                auto& binOp = cld::get<BinaryOperator>(exp.getVariant());
                 CHECK(binOp.getKind() == BinaryOperator::Subtraction);
             }
             SECTION("Pointer and Pointer")
@@ -2506,8 +2512,8 @@ TEST_CASE("Semantics additive expression", "[semantics]")
                                                "}");
                 CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
                 CHECK(exp.getType() == PrimitiveType::createPtrdiffT(false, false, cld::LanguageOptions::native()));
-                REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
-                auto& binOp = cld::get<BinaryOperator>(exp.get());
+                REQUIRE(std::holds_alternative<BinaryOperator>(exp.getVariant()));
+                auto& binOp = cld::get<BinaryOperator>(exp.getVariant());
                 CHECK(binOp.getKind() == BinaryOperator::Subtraction);
             }
         }
@@ -2561,8 +2567,8 @@ TEST_CASE("Semantics shift expression", "[semantics]")
                                        "}");
         CHECK(exp.getType() == PrimitiveType::createUnsignedLongLong(false, false));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-        REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
-        CHECK(cld::get<BinaryOperator>(exp.get()).getKind() == BinaryOperator::LeftShift);
+        REQUIRE(std::holds_alternative<BinaryOperator>(exp.getVariant()));
+        CHECK(cld::get<BinaryOperator>(exp.getVariant()).getKind() == BinaryOperator::LeftShift);
         SEMA_PRODUCES("void foo(void) {\n"
                       " 5.0 << 1;\n"
                       "}",
@@ -2579,8 +2585,8 @@ TEST_CASE("Semantics shift expression", "[semantics]")
                                        "}");
         CHECK(exp.getType() == PrimitiveType::createUnsignedLongLong(false, false));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-        REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
-        CHECK(cld::get<BinaryOperator>(exp.get()).getKind() == BinaryOperator::RightShift);
+        REQUIRE(std::holds_alternative<BinaryOperator>(exp.getVariant()));
+        CHECK(cld::get<BinaryOperator>(exp.getVariant()).getKind() == BinaryOperator::RightShift);
         SEMA_PRODUCES("void foo(void) {\n"
                       " 5.0 >> 1;\n"
                       "}",
@@ -2601,8 +2607,8 @@ TEST_CASE("Semantics relational expression", "[semantics]")
                                        "}");
         CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-        REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
-        CHECK(cld::get<BinaryOperator>(exp.get()).getKind() == BinaryOperator::LessThan);
+        REQUIRE(std::holds_alternative<BinaryOperator>(exp.getVariant()));
+        CHECK(cld::get<BinaryOperator>(exp.getVariant()).getKind() == BinaryOperator::LessThan);
         SEMA_PRODUCES("void foo(struct { int r; } r) {\n"
                       " r < 0;\n"
                       "}",
@@ -2639,8 +2645,8 @@ TEST_CASE("Semantics relational expression", "[semantics]")
                                        "}");
         CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-        REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
-        CHECK(cld::get<BinaryOperator>(exp.get()).getKind() == BinaryOperator::GreaterThan);
+        REQUIRE(std::holds_alternative<BinaryOperator>(exp.getVariant()));
+        CHECK(cld::get<BinaryOperator>(exp.getVariant()).getKind() == BinaryOperator::GreaterThan);
         SEMA_PRODUCES("void foo(struct { int r; } r) {\n"
                       " r > 0;\n"
                       "}",
@@ -2677,8 +2683,8 @@ TEST_CASE("Semantics relational expression", "[semantics]")
                                        "}");
         CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-        REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
-        CHECK(cld::get<BinaryOperator>(exp.get()).getKind() == BinaryOperator::LessOrEqual);
+        REQUIRE(std::holds_alternative<BinaryOperator>(exp.getVariant()));
+        CHECK(cld::get<BinaryOperator>(exp.getVariant()).getKind() == BinaryOperator::LessOrEqual);
         SEMA_PRODUCES("void foo(struct { int r; } r) {\n"
                       " r <= 0;\n"
                       "}",
@@ -2715,8 +2721,8 @@ TEST_CASE("Semantics relational expression", "[semantics]")
                                        "}");
         CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-        REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
-        CHECK(cld::get<BinaryOperator>(exp.get()).getKind() == BinaryOperator::GreaterOrEqual);
+        REQUIRE(std::holds_alternative<BinaryOperator>(exp.getVariant()));
+        CHECK(cld::get<BinaryOperator>(exp.getVariant()).getKind() == BinaryOperator::GreaterOrEqual);
         SEMA_PRODUCES("void foo(struct { int r; } r) {\n"
                       " r >= 0;\n"
                       "}",
@@ -2757,8 +2763,8 @@ TEST_CASE("Semantics equal expressions", "[semantics]")
                                        "}");
         CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-        REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
-        CHECK(cld::get<BinaryOperator>(exp.get()).getKind() == BinaryOperator::Equal);
+        REQUIRE(std::holds_alternative<BinaryOperator>(exp.getVariant()));
+        CHECK(cld::get<BinaryOperator>(exp.getVariant()).getKind() == BinaryOperator::Equal);
         SEMA_PRODUCES("void foo(struct { int r; } r) {\n"
                       " r == 0;\n"
                       "}",
@@ -2811,8 +2817,8 @@ TEST_CASE("Semantics equal expressions", "[semantics]")
                                        "}");
         CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-        REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
-        CHECK(cld::get<BinaryOperator>(exp.get()).getKind() == BinaryOperator::NotEqual);
+        REQUIRE(std::holds_alternative<BinaryOperator>(exp.getVariant()));
+        CHECK(cld::get<BinaryOperator>(exp.getVariant()).getKind() == BinaryOperator::NotEqual);
         SEMA_PRODUCES("void foo(struct { int r; } r) {\n"
                       " r != 0;\n"
                       "}",
@@ -2869,8 +2875,8 @@ TEST_CASE("Semantics bit operators", "[semantics]")
                                        "}");
         CHECK(exp.getType() == PrimitiveType::createUnsignedLongLong(false, false));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-        REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
-        CHECK(cld::get<BinaryOperator>(exp.get()).getKind() == BinaryOperator::BitAnd);
+        REQUIRE(std::holds_alternative<BinaryOperator>(exp.getVariant()));
+        CHECK(cld::get<BinaryOperator>(exp.getVariant()).getKind() == BinaryOperator::BitAnd);
         SEMA_PRODUCES("void foo(void) {\n"
                       " 5.0 & 1;\n"
                       "}",
@@ -2887,8 +2893,8 @@ TEST_CASE("Semantics bit operators", "[semantics]")
                                        "}");
         CHECK(exp.getType() == PrimitiveType::createUnsignedLongLong(false, false));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-        REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
-        CHECK(cld::get<BinaryOperator>(exp.get()).getKind() == BinaryOperator::BitOr);
+        REQUIRE(std::holds_alternative<BinaryOperator>(exp.getVariant()));
+        CHECK(cld::get<BinaryOperator>(exp.getVariant()).getKind() == BinaryOperator::BitOr);
         SEMA_PRODUCES("void foo(void) {\n"
                       " 5.0 | 1;\n"
                       "}",
@@ -2905,8 +2911,8 @@ TEST_CASE("Semantics bit operators", "[semantics]")
                                        "}");
         CHECK(exp.getType() == PrimitiveType::createUnsignedLongLong(false, false));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-        REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
-        CHECK(cld::get<BinaryOperator>(exp.get()).getKind() == BinaryOperator::BitXor);
+        REQUIRE(std::holds_alternative<BinaryOperator>(exp.getVariant()));
+        CHECK(cld::get<BinaryOperator>(exp.getVariant()).getKind() == BinaryOperator::BitXor);
         SEMA_PRODUCES("void foo(void) {\n"
                       " 5.0 ^ 1;\n"
                       "}",
@@ -2927,8 +2933,8 @@ TEST_CASE("Semantics logic operators", "[semantics]")
                                        "}");
         CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-        REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
-        CHECK(cld::get<BinaryOperator>(exp.get()).getKind() == BinaryOperator::LogicAnd);
+        REQUIRE(std::holds_alternative<BinaryOperator>(exp.getVariant()));
+        CHECK(cld::get<BinaryOperator>(exp.getVariant()).getKind() == BinaryOperator::LogicAnd);
         SEMA_PRODUCES("void foo(struct { int i; } r) {\n"
                       " r && 1;\n"
                       "}",
@@ -2949,8 +2955,8 @@ TEST_CASE("Semantics logic operators", "[semantics]")
                                        "}");
         CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-        REQUIRE(std::holds_alternative<BinaryOperator>(exp.get()));
-        CHECK(cld::get<BinaryOperator>(exp.get()).getKind() == BinaryOperator::LogicOr);
+        REQUIRE(std::holds_alternative<BinaryOperator>(exp.getVariant()));
+        CHECK(cld::get<BinaryOperator>(exp.getVariant()).getKind() == BinaryOperator::LogicOr);
         SEMA_PRODUCES("void foo(struct { int i; } r) {\n"
                       " r || 1;\n"
                       "}",
@@ -3056,8 +3062,8 @@ TEST_CASE("Semantics assignment expression", "[semantics]")
                                        "}");
         CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-        REQUIRE(std::holds_alternative<Assignment>(exp.get()));
-        CHECK(cld::get<Assignment>(exp.get()).getKind() == Assignment::Simple);
+        REQUIRE(std::holds_alternative<Assignment>(exp.getVariant()));
+        CHECK(cld::get<Assignment>(exp.getVariant()).getKind() == Assignment::Simple);
         SEMA_PRODUCES("void foo(void) {\n"
                       "5 = 3;\n"
                       "}",
@@ -3178,8 +3184,9 @@ TEST_CASE("Semantics assignment expression", "[semantics]")
                                          "}");
         CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-        REQUIRE(std::holds_alternative<Assignment>(exp.get()));
-        CHECK(cld::get<Assignment>(exp.get()).getKind() == (operand == "-=" ? Assignment::Minus : Assignment::Plus));
+        REQUIRE(std::holds_alternative<Assignment>(exp.getVariant()));
+        CHECK(cld::get<Assignment>(exp.getVariant()).getKind()
+              == (operand == "-=" ? Assignment::Minus : Assignment::Plus));
         SEMA_PRODUCES("void foo(void) {\n"
                       "5 " + operand
                           + " 3;\n"
@@ -3236,8 +3243,8 @@ TEST_CASE("Semantics assignment expression", "[semantics]")
                                          "}");
         CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-        REQUIRE(std::holds_alternative<Assignment>(exp.get()));
-        CHECK(cld::get<Assignment>(exp.get()).getKind()
+        REQUIRE(std::holds_alternative<Assignment>(exp.getVariant()));
+        CHECK(cld::get<Assignment>(exp.getVariant()).getKind()
               == (operand == "*=" ? Assignment::Multiply : Assignment::Divide));
         SEMA_PRODUCES("void foo(void) {\n"
                       "5 " + operand
@@ -3286,8 +3293,8 @@ TEST_CASE("Semantics assignment expression", "[semantics]")
                                          "}");
         CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-        REQUIRE(std::holds_alternative<Assignment>(exp.get()));
-        CHECK(cld::get<Assignment>(exp.get()).getKind() == [&operand] {
+        REQUIRE(std::holds_alternative<Assignment>(exp.getVariant()));
+        CHECK(cld::get<Assignment>(exp.getVariant()).getKind() == [&operand] {
             if (operand == "%=")
             {
                 return Assignment::Modulo;
@@ -3360,7 +3367,7 @@ TEST_CASE("Semantics comma expression", "[semantics]")
                                    "}");
     CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
     CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-    CHECK(std::holds_alternative<CommaExpression>(exp.get()));
+    CHECK(std::holds_alternative<CommaExpression>(exp.getVariant()));
     SEMA_PRODUCES("void foo(int i) {\n"
                   "(5,i) = 3;\n"
                   "}",
@@ -3378,15 +3385,16 @@ TEST_CASE("Semantics function call expression", "[semantics]")
                                        "}");
         CHECK(exp.getType() == PrimitiveType::createDouble(false, false));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-        REQUIRE(std::holds_alternative<CallExpression>(exp.get()));
-        auto& call = cld::get<CallExpression>(exp.get());
+        REQUIRE(std::holds_alternative<CallExpression>(exp.getVariant()));
+        auto& call = cld::get<CallExpression>(exp.getVariant());
         REQUIRE(call.getArgumentExpressions().size() == 2);
-        REQUIRE(std::holds_alternative<Conversion>(call.getArgumentExpressions()[0].get()));
-        CHECK(cld::get<Conversion>(call.getArgumentExpressions()[0].get()).getKind()
+        REQUIRE(std::holds_alternative<Conversion>(call.getArgumentExpressions()[0].getVariant()));
+        CHECK(cld::get<Conversion>(call.getArgumentExpressions()[0].getVariant()).getKind()
               == Conversion::DefaultArgumentPromotion);
         CHECK(call.getArgumentExpressions()[0].getType() == PrimitiveType::createDouble(false, false));
-        REQUIRE(std::holds_alternative<Conversion>(call.getArgumentExpressions()[1].get()));
-        CHECK(cld::get<Conversion>(call.getArgumentExpressions()[1].get()).getKind() == Conversion::IntegerPromotion);
+        REQUIRE(std::holds_alternative<Conversion>(call.getArgumentExpressions()[1].getVariant()));
+        CHECK(cld::get<Conversion>(call.getArgumentExpressions()[1].getVariant()).getKind()
+              == Conversion::IntegerPromotion);
         CHECK(call.getArgumentExpressions()[1].getType()
               == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
     }
@@ -3399,8 +3407,8 @@ TEST_CASE("Semantics function call expression", "[semantics]")
                                        "}");
         CHECK(exp.getType() == PrimitiveType::createDouble(false, false));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-        REQUIRE(std::holds_alternative<CallExpression>(exp.get()));
-        auto& call = cld::get<CallExpression>(exp.get());
+        REQUIRE(std::holds_alternative<CallExpression>(exp.getVariant()));
+        auto& call = cld::get<CallExpression>(exp.getVariant());
         REQUIRE(call.getArgumentExpressions().size() == 2);
         CHECK(call.getArgumentExpressions()[0].getType() == PrimitiveType::createFloat(false, false));
         CHECK(call.getArgumentExpressions()[1].getType()
@@ -3550,8 +3558,8 @@ TEST_CASE("Semantics simple initializer", "[semantics]")
             auto& global = translationUnit.getGlobals()[0];
             REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(global));
             auto& declaration = *cld::get<std::unique_ptr<Declaration>>(global);
-            REQUIRE(std::holds_alternative<ArrayType>(declaration.getType().get()));
-            CHECK(cld::get<ArrayType>(declaration.getType().get()).getSize() == 7);
+            REQUIRE(std::holds_alternative<ArrayType>(declaration.getType().getVariant()));
+            CHECK(cld::get<ArrayType>(declaration.getType().getVariant()).getSize() == 7);
         }
         SECTION("Wide string")
         {
@@ -3564,8 +3572,8 @@ TEST_CASE("Semantics simple initializer", "[semantics]")
                 auto& global = translationUnit.getGlobals()[0];
                 REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(global));
                 auto& declaration = *cld::get<std::unique_ptr<Declaration>>(global);
-                REQUIRE(std::holds_alternative<ArrayType>(declaration.getType().get()));
-                CHECK(cld::get<ArrayType>(declaration.getType().get()).getSize() == 7);
+                REQUIRE(std::holds_alternative<ArrayType>(declaration.getType().getVariant()));
+                CHECK(cld::get<ArrayType>(declaration.getType().getVariant()).getSize() == 7);
             }
             SECTION("Posix")
             {
@@ -3575,8 +3583,8 @@ TEST_CASE("Semantics simple initializer", "[semantics]")
                 auto& global = translationUnit.getGlobals()[0];
                 REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(global));
                 auto& declaration = *cld::get<std::unique_ptr<Declaration>>(global);
-                REQUIRE(std::holds_alternative<ArrayType>(declaration.getType().get()));
-                CHECK(cld::get<ArrayType>(declaration.getType().get()).getSize() == 7);
+                REQUIRE(std::holds_alternative<ArrayType>(declaration.getType().getVariant()));
+                CHECK(cld::get<ArrayType>(declaration.getType().getVariant()).getSize() == 7);
             }
         }
     }
@@ -3771,8 +3779,8 @@ TEST_CASE("Semantics initializer list", "[semantics]")
                 auto& global = translationUnit.getGlobals()[0];
                 REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(global));
                 auto& declaration = *cld::get<std::unique_ptr<Declaration>>(global);
-                REQUIRE(std::holds_alternative<ArrayType>(declaration.getType().get()));
-                CHECK(cld::get<ArrayType>(declaration.getType().get()).getSize() == 3);
+                REQUIRE(std::holds_alternative<ArrayType>(declaration.getType().getVariant()));
+                CHECK(cld::get<ArrayType>(declaration.getType().getVariant()).getSize() == 3);
             }
             SECTION("Designators")
             {
@@ -3786,8 +3794,8 @@ TEST_CASE("Semantics initializer list", "[semantics]")
                 auto& global = translationUnit.getGlobals()[0];
                 REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(global));
                 auto& declaration = *cld::get<std::unique_ptr<Declaration>>(global);
-                REQUIRE(std::holds_alternative<ArrayType>(declaration.getType().get()));
-                CHECK(cld::get<ArrayType>(declaration.getType().get()).getSize() == 11);
+                REQUIRE(std::holds_alternative<ArrayType>(declaration.getType().getVariant()));
+                CHECK(cld::get<ArrayType>(declaration.getType().getVariant()).getSize() == 11);
                 REQUIRE(declaration.getInitializer());
                 REQUIRE(std::holds_alternative<InitializerList>(*declaration.getInitializer()));
                 auto& initialization = cld::get<InitializerList>(*declaration.getInitializer());
@@ -3810,8 +3818,8 @@ TEST_CASE("Semantics initializer list", "[semantics]")
                 auto& global = translationUnit.getGlobals()[0];
                 REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(global));
                 auto& declaration = *cld::get<std::unique_ptr<Declaration>>(global);
-                REQUIRE(std::holds_alternative<ArrayType>(declaration.getType().get()));
-                CHECK(cld::get<ArrayType>(declaration.getType().get()).getSize() == 4);
+                REQUIRE(std::holds_alternative<ArrayType>(declaration.getType().getVariant()));
+                CHECK(cld::get<ArrayType>(declaration.getType().getVariant()).getSize() == 4);
             }
         }
     }
@@ -3864,8 +3872,8 @@ TEST_CASE("Semantics compound literal", "[semantics]")
                                        "(struct { int r; float f; }){.r = 3,.f = 3.53f};\n"
                                        "}");
         CHECK(exp.getValueCategory() == ValueCategory::Lvalue);
-        CHECK(std::holds_alternative<CompoundLiteral>(exp.get()));
-        CHECK(std::holds_alternative<AnonymousStructType>(exp.getType().get()));
+        CHECK(std::holds_alternative<CompoundLiteral>(exp.getVariant()));
+        CHECK(std::holds_alternative<AnonymousStructType>(exp.getType().getVariant()));
     }
     SECTION("Size deduction")
     {
@@ -3873,9 +3881,9 @@ TEST_CASE("Semantics compound literal", "[semantics]")
                                        "(float[]){3,3.53f};\n"
                                        "}");
         CHECK(exp.getValueCategory() == ValueCategory::Lvalue);
-        CHECK(std::holds_alternative<CompoundLiteral>(exp.get()));
-        REQUIRE(std::holds_alternative<ArrayType>(exp.getType().get()));
-        CHECK(cld::get<ArrayType>(exp.getType().get()).getSize() == 2);
+        CHECK(std::holds_alternative<CompoundLiteral>(exp.getVariant()));
+        REQUIRE(std::holds_alternative<ArrayType>(exp.getType().getVariant()));
+        CHECK(cld::get<ArrayType>(exp.getType().getVariant()).getSize() == 2);
     }
     SEMA_PRODUCES("void foo(void) {\n"
                   " (int(void)){5};\n"
@@ -3931,8 +3939,8 @@ TEST_CASE("Semantics __func__", "[semantics]")
     auto& exp = generateExpression("void foo(void) {\n"
                                    "__func__;\n"
                                    "}");
-    REQUIRE(std::holds_alternative<Constant>(exp.get()));
-    auto& constant = cld::get<Constant>(exp.get());
+    REQUIRE(std::holds_alternative<Constant>(exp.getVariant()));
+    auto& constant = cld::get<Constant>(exp.getVariant());
     REQUIRE(std::holds_alternative<std::string>(constant.getValue()));
     CHECK(cld::get<std::string>(constant.getValue()) == "foo");
     SEMA_PRODUCES("void __func__(void) {}",

@@ -401,7 +401,7 @@ class CodeGenerator final
         }
         else if (transformations->second.returnType == ABITransformations::Unchanged
                  && cld::Semantics::isInteger(ft.getReturnType())
-                 && cld::get<cld::Semantics::PrimitiveType>(ft.getReturnType().get()).isSigned())
+                 && cld::get<cld::Semantics::PrimitiveType>(ft.getReturnType().getVariant()).isSigned())
         {
             attributeApply.addAttribute(0, llvm::Attribute::SExt);
         }
@@ -415,7 +415,8 @@ class CodeGenerator final
                 if (change == ABITransformations::Unchanged)
                 {
                     auto& arg = ft.getArguments()[origArgI].first;
-                    if (cld::Semantics::isInteger(arg) && cld::get<cld::Semantics::PrimitiveType>(arg.get()).isSigned())
+                    if (cld::Semantics::isInteger(arg)
+                        && cld::get<cld::Semantics::PrimitiveType>(arg.getVariant()).isSigned())
                     {
                         attributeApply.addParamAttr(i, llvm::Attribute::SExt);
                     }
@@ -509,7 +510,7 @@ public:
     llvm::Type* visit(const cld::Semantics::Type& type)
     {
         return cld::match(
-            type.get(),
+            type.getVariant(),
             [&](const cld::Semantics::PrimitiveType& primitiveType) -> llvm::Type* {
                 switch (primitiveType.getKind())
                 {
@@ -682,12 +683,13 @@ public:
             case cld::Semantics::Linkage::External: linkageType = llvm::GlobalValue::ExternalLinkage; break;
             case cld::Semantics::Linkage::None: break;
         }
-        if (std::holds_alternative<cld::Semantics::FunctionType>(declaration.getType().get()))
+        if (std::holds_alternative<cld::Semantics::FunctionType>(declaration.getType().getVariant()))
         {
             auto* ft = llvm::cast<llvm::FunctionType>(visit(declaration.getType()));
             auto* function =
                 llvm::Function::Create(ft, linkageType, -1, declaration.getNameToken()->getText().data(), &m_module);
-            applyFunctionAttributes(*function, ft, cld::get<cld::Semantics::FunctionType>(declaration.getType().get()));
+            applyFunctionAttributes(*function, ft,
+                                    cld::get<cld::Semantics::FunctionType>(declaration.getType().getVariant()));
             m_lvalues.emplace(&declaration, function);
             return function;
         }
@@ -757,7 +759,7 @@ public:
         auto* bb = llvm::BasicBlock::Create(m_module.getContext(), "entry", function);
         m_builder.SetInsertPoint(bb);
 
-        auto& ft = cld::get<cld::Semantics::FunctionType>(functionDefinition.getType().get());
+        auto& ft = cld::get<cld::Semantics::FunctionType>(functionDefinition.getType().getVariant());
         applyFunctionAttributes(*function, function->getFunctionType(), ft,
                                 &functionDefinition.getParameterDeclarations());
         auto transformations = m_functionABITransformations.find(function->getFunctionType());
@@ -854,7 +856,7 @@ public:
     void visit(const cld::Semantics::Statement& statement)
     {
         cld::match(
-            statement,
+            statement.getVariant(),
             [&](const auto& statement) {
                 using T = std::decay_t<decltype(statement)>;
                 if constexpr (cld::IsUniquePtr<T>{})
@@ -1100,7 +1102,7 @@ public:
     llvm::Value* visit(const cld::Semantics::Expression& expression)
     {
         return cld::match(
-            expression.get(),
+            expression.getVariant(),
             [](const std::pair<cld::Lexer::CTokenIterator, cld::Lexer::CTokenIterator>&) -> llvm::Value* {
                 CLD_UNREACHABLE;
             },
@@ -1157,7 +1159,7 @@ public:
                     return m_builder.CreateInBoundsGEP(value, {zero, zero});
                 }
                 else if (std::holds_alternative<cld::Semantics::FunctionType>(
-                             conversion.getExpression().getType().get())
+                             conversion.getExpression().getType().getVariant())
                          || m_programInterface.isBitfieldAccess(conversion.getExpression()))
                 {
                     return value;
@@ -1171,8 +1173,9 @@ public:
             case cld::Semantics::Conversion::IntegerPromotion:
             {
                 auto& prevType = conversion.getExpression().getType();
-                return m_builder.CreateIntCast(value, visit(expression.getType()),
-                                               cld::get<cld::Semantics::PrimitiveType>(prevType.get()).isSigned());
+                return m_builder.CreateIntCast(
+                    value, visit(expression.getType()),
+                    cld::get<cld::Semantics::PrimitiveType>(prevType.getVariant()).isSigned());
             }
             case cld::Semantics::Conversion::Implicit:
             {
@@ -1182,7 +1185,7 @@ public:
                 {
                     return m_builder.CreateIntCast(toBool(value), visit(newType), false);
                 }
-                if (std::holds_alternative<cld::Semantics::PointerType>(newType.get()))
+                if (std::holds_alternative<cld::Semantics::PointerType>(newType.getVariant()))
                 {
                     if (cld::Semantics::isInteger(prevType))
                     {
@@ -1198,12 +1201,13 @@ public:
                 auto& newType = expression.getType();
                 if (cld::Semantics::isInteger(prevType) && cld::Semantics::isInteger(newType))
                 {
-                    return m_builder.CreateIntCast(value, visit(newType),
-                                                   cld::get<cld::Semantics::PrimitiveType>(prevType.get()).isSigned());
+                    return m_builder.CreateIntCast(
+                        value, visit(newType),
+                        cld::get<cld::Semantics::PrimitiveType>(prevType.getVariant()).isSigned());
                 }
                 if (cld::Semantics::isInteger(prevType))
                 {
-                    if (cld::get<cld::Semantics::PrimitiveType>(prevType.get()).isSigned())
+                    if (cld::get<cld::Semantics::PrimitiveType>(prevType.getVariant()).isSigned())
                     {
                         return m_builder.CreateSIToFP(value, visit(newType));
                     }
@@ -1214,11 +1218,11 @@ public:
                 }
                 if (cld::Semantics::isInteger(newType))
                 {
-                    if (std::holds_alternative<cld::Semantics::PointerType>(prevType.get()))
+                    if (std::holds_alternative<cld::Semantics::PointerType>(prevType.getVariant()))
                     {
                         return m_builder.CreatePtrToInt(value, visit(newType));
                     }
-                    else if (cld::get<cld::Semantics::PrimitiveType>(newType.get()).isSigned())
+                    else if (cld::get<cld::Semantics::PrimitiveType>(newType.getVariant()).isSigned())
                     {
                         return m_builder.CreateFPToSI(value, visit(newType));
                     }
@@ -1234,8 +1238,9 @@ public:
                 auto& prevType = conversion.getExpression().getType();
                 if (cld::Semantics::isInteger(prevType))
                 {
-                    return m_builder.CreateIntCast(value, visit(expression.getType()),
-                                                   cld::get<cld::Semantics::PrimitiveType>(prevType.get()).isSigned());
+                    return m_builder.CreateIntCast(
+                        value, visit(expression.getType()),
+                        cld::get<cld::Semantics::PrimitiveType>(prevType.getVariant()).isSigned());
                 }
                 return m_builder.CreateFPCast(value, visit(expression.getType()));
             }
@@ -1246,15 +1251,18 @@ public:
     {
         auto* value = visit(memberAccess.getRecordExpression());
         auto& type =
-            std::holds_alternative<cld::Semantics::PointerType>(memberAccess.getRecordExpression().getType().get()) ?
-                cld::get<cld::Semantics::PointerType>(memberAccess.getRecordExpression().getType().get())
+            std::holds_alternative<cld::Semantics::PointerType>(
+                memberAccess.getRecordExpression().getType().getVariant()) ?
+                cld::get<cld::Semantics::PointerType>(memberAccess.getRecordExpression().getType().getVariant())
                     .getElementType() :
                 memberAccess.getRecordExpression().getType();
-        if (std::holds_alternative<cld::Semantics::PointerType>(memberAccess.getRecordExpression().getType().get()))
+        if (std::holds_alternative<cld::Semantics::PointerType>(
+                memberAccess.getRecordExpression().getType().getVariant()))
         {
             value = m_builder.CreateLoad(value, memberAccess.getRecordExpression().getType().isVolatile());
         }
-        else if (std::holds_alternative<cld::Semantics::CallExpression>(memberAccess.getRecordExpression().get()))
+        else if (std::holds_alternative<cld::Semantics::CallExpression>(
+                     memberAccess.getRecordExpression().getVariant()))
         {
             // Struct access is only ever allowed on pointers or lvalue except if it's the return value of a function
             // then it's also allowed to be an rvalue
@@ -1281,8 +1289,10 @@ public:
         {
             // If the record expression is the return value of a function and this is a dot access not arrow access
             // we must load because an rvalue is returned and no lvalue conversion will load for us
-            if (!std::holds_alternative<cld::Semantics::PointerType>(memberAccess.getRecordExpression().getType().get())
-                && std::holds_alternative<cld::Semantics::CallExpression>(memberAccess.getRecordExpression().get()))
+            if (!std::holds_alternative<cld::Semantics::PointerType>(
+                    memberAccess.getRecordExpression().getType().getVariant())
+                && std::holds_alternative<cld::Semantics::CallExpression>(
+                    memberAccess.getRecordExpression().getVariant()))
             {
                 return m_builder.CreateLoad(field, type.isVolatile());
             }
@@ -1293,7 +1303,7 @@ public:
         auto upLeft = loaded->getType()->getPrimitiveSizeInBits() - fields[index].bitFieldBounds->second;
         auto* shl = m_builder.CreateShl(loaded, llvm::ConstantInt::get(loaded->getType(), upLeft));
         auto* shrConstant = llvm::ConstantInt::get(loaded->getType(), upLeft + fields[index].bitFieldBounds->first);
-        if (cld::get<cld::Semantics::PrimitiveType>(expression.getType().get()).isSigned())
+        if (cld::get<cld::Semantics::PrimitiveType>(expression.getType().getVariant()).isSigned())
         {
             return m_builder.CreateAShr(shl, shrConstant);
         }
@@ -1317,7 +1327,7 @@ public:
                     if (cld::Semantics::isInteger(binaryExpression.getLeftExpression().getType()))
                     {
                         if (!cld::get<cld::Semantics::PrimitiveType>(
-                                 binaryExpression.getLeftExpression().getType().get())
+                                 binaryExpression.getLeftExpression().getType().getVariant())
                                  .isSigned())
                         {
                             return m_builder.CreateNSWAdd(lhs, rhs);
@@ -1338,7 +1348,7 @@ public:
                     {
                         rhs = m_builder.CreateIntCast(rhs, m_builder.getInt64Ty(),
                                                       cld::get<cld::Semantics::PrimitiveType>(
-                                                          binaryExpression.getRightExpression().getType().get())
+                                                          binaryExpression.getRightExpression().getType().getVariant())
                                                           .isSigned());
                         return m_builder.CreateGEP(lhs, rhs);
                     }
@@ -1346,7 +1356,7 @@ public:
                     {
                         lhs = m_builder.CreateIntCast(lhs, m_builder.getInt64Ty(),
                                                       cld::get<cld::Semantics::PrimitiveType>(
-                                                          binaryExpression.getLeftExpression().getType().get())
+                                                          binaryExpression.getLeftExpression().getType().getVariant())
                                                           .isSigned());
                         return m_builder.CreateGEP(rhs, lhs);
                     }
@@ -1361,7 +1371,7 @@ public:
                     if (cld::Semantics::isInteger(binaryExpression.getLeftExpression().getType()))
                     {
                         if (!cld::get<cld::Semantics::PrimitiveType>(
-                                 binaryExpression.getLeftExpression().getType().get())
+                                 binaryExpression.getLeftExpression().getType().getVariant())
                                  .isSigned())
                         {
                             return m_builder.CreateNSWSub(lhs, rhs);
@@ -1383,10 +1393,11 @@ public:
                         if (rhs->getType()->isIntegerTy())
                         {
                             rhs = m_builder.CreateNeg(rhs);
-                            rhs = m_builder.CreateIntCast(rhs, m_builder.getInt64Ty(),
-                                                          cld::get<cld::Semantics::PrimitiveType>(
-                                                              binaryExpression.getRightExpression().getType().get())
-                                                              .isSigned());
+                            rhs = m_builder.CreateIntCast(
+                                rhs, m_builder.getInt64Ty(),
+                                cld::get<cld::Semantics::PrimitiveType>(
+                                    binaryExpression.getRightExpression().getType().getVariant())
+                                    .isSigned());
                             return m_builder.CreateGEP(lhs, rhs);
                         }
                         else
@@ -1399,10 +1410,11 @@ public:
                         if (rhs->getType()->isIntegerTy())
                         {
                             lhs = m_builder.CreateNeg(lhs);
-                            lhs = m_builder.CreateIntCast(lhs, m_builder.getInt64Ty(),
-                                                          cld::get<cld::Semantics::PrimitiveType>(
-                                                              binaryExpression.getLeftExpression().getType().get())
-                                                              .isSigned());
+                            lhs =
+                                m_builder.CreateIntCast(lhs, m_builder.getInt64Ty(),
+                                                        cld::get<cld::Semantics::PrimitiveType>(
+                                                            binaryExpression.getLeftExpression().getType().getVariant())
+                                                            .isSigned());
                             return m_builder.CreateGEP(rhs, lhs);
                         }
                         else
@@ -1429,7 +1441,8 @@ public:
                 auto* rhs = visit(binaryExpression.getRightExpression());
                 if (cld::Semantics::isInteger(binaryExpression.getLeftExpression().getType()))
                 {
-                    if (cld::get<cld::Semantics::PrimitiveType>(binaryExpression.getLeftExpression().getType().get())
+                    if (cld::get<cld::Semantics::PrimitiveType>(
+                            binaryExpression.getLeftExpression().getType().getVariant())
                             .isSigned())
                     {
                         return m_builder.CreateSDiv(lhs, rhs);
@@ -1447,7 +1460,7 @@ public:
             case cld::Semantics::BinaryOperator::Modulo:
             {
                 auto* rhs = visit(binaryExpression.getRightExpression());
-                if (cld::get<cld::Semantics::PrimitiveType>(binaryExpression.getLeftExpression().getType().get())
+                if (cld::get<cld::Semantics::PrimitiveType>(binaryExpression.getLeftExpression().getType().getVariant())
                         .isSigned())
                 {
                     return m_builder.CreateSRem(lhs, rhs);
@@ -1462,10 +1475,10 @@ public:
                 auto* rhs = visit(binaryExpression.getRightExpression());
                 if (lhs->getType() != rhs->getType())
                 {
-                    rhs = m_builder.CreateIntCast(
-                        rhs, lhs->getType(),
-                        cld::get<cld::Semantics::PrimitiveType>(binaryExpression.getRightExpression().getType().get())
-                            .isSigned());
+                    rhs = m_builder.CreateIntCast(rhs, lhs->getType(),
+                                                  cld::get<cld::Semantics::PrimitiveType>(
+                                                      binaryExpression.getRightExpression().getType().getVariant())
+                                                      .isSigned());
                 }
                 return m_builder.CreateShl(lhs, rhs);
             }
@@ -1474,10 +1487,10 @@ public:
                 auto* rhs = visit(binaryExpression.getRightExpression());
                 if (lhs->getType() != rhs->getType())
                 {
-                    rhs = m_builder.CreateIntCast(
-                        rhs, lhs->getType(),
-                        cld::get<cld::Semantics::PrimitiveType>(binaryExpression.getRightExpression().getType().get())
-                            .isSigned());
+                    rhs = m_builder.CreateIntCast(rhs, lhs->getType(),
+                                                  cld::get<cld::Semantics::PrimitiveType>(
+                                                      binaryExpression.getRightExpression().getType().getVariant())
+                                                      .isSigned());
                 }
                 return m_builder.CreateAShr(lhs, rhs);
             }
@@ -1492,10 +1505,10 @@ public:
                 llvm::CmpInst::Predicate predicate;
                 bool fp = cld::Semantics::isArithmetic(binaryExpression.getLeftExpression().getType())
                           && !cld::Semantics::isInteger(binaryExpression.getLeftExpression().getType());
-                bool isSigned =
-                    cld::Semantics::isInteger(binaryExpression.getLeftExpression().getType())
-                    && cld::get<cld::Semantics::PrimitiveType>(binaryExpression.getLeftExpression().getType().get())
-                           .isSigned();
+                bool isSigned = cld::Semantics::isInteger(binaryExpression.getLeftExpression().getType())
+                                && cld::get<cld::Semantics::PrimitiveType>(
+                                       binaryExpression.getLeftExpression().getType().getVariant())
+                                       .isSigned();
                 switch (binaryExpression.getKind())
                 {
                     case cld::Semantics::BinaryOperator::GreaterThan:
@@ -1648,7 +1661,7 @@ public:
         auto* value = visit(cast.getExpression());
         auto& prevType = cast.getExpression().getType();
         auto& newType = expression.getType();
-        if (std::holds_alternative<cld::Semantics::PointerType>(newType.get()))
+        if (std::holds_alternative<cld::Semantics::PointerType>(newType.getVariant()))
         {
             if (cld::Semantics::isInteger(prevType))
             {
@@ -1663,11 +1676,11 @@ public:
         if (cld::Semantics::isInteger(prevType) && cld::Semantics::isInteger(newType))
         {
             return m_builder.CreateIntCast(value, visit(newType),
-                                           cld::get<cld::Semantics::PrimitiveType>(prevType.get()).isSigned());
+                                           cld::get<cld::Semantics::PrimitiveType>(prevType.getVariant()).isSigned());
         }
         if (cld::Semantics::isInteger(prevType))
         {
-            if (cld::get<cld::Semantics::PrimitiveType>(prevType.get()).isSigned())
+            if (cld::get<cld::Semantics::PrimitiveType>(prevType.getVariant()).isSigned())
             {
                 return m_builder.CreateSIToFP(value, visit(newType));
             }
@@ -1678,11 +1691,11 @@ public:
         }
         if (cld::Semantics::isInteger(newType))
         {
-            if (std::holds_alternative<cld::Semantics::PointerType>(prevType.get()))
+            if (std::holds_alternative<cld::Semantics::PointerType>(prevType.getVariant()))
             {
                 return m_builder.CreatePtrToInt(value, visit(newType));
             }
-            else if (cld::get<cld::Semantics::PrimitiveType>(newType.get()).isSigned())
+            else if (cld::get<cld::Semantics::PrimitiveType>(newType.getVariant()).isSigned())
             {
                 return m_builder.CreateFPToSI(value, visit(newType));
             }
@@ -1708,7 +1721,8 @@ public:
                 auto* prev = m_builder.CreateLoad(value, unaryOperator.getOperand().getType().isVolatile());
                 if (cld::Semantics::isInteger(unaryOperator.getOperand().getType()))
                 {
-                    if (cld::get<cld::Semantics::PrimitiveType>(unaryOperator.getOperand().getType().get()).isSigned())
+                    if (cld::get<cld::Semantics::PrimitiveType>(unaryOperator.getOperand().getType().getVariant())
+                            .isSigned())
                     {
                         auto* result = m_builder.CreateNSWAdd(prev, llvm::ConstantInt::get(prev->getType(), 1));
                         m_builder.CreateStore(result, value);
@@ -1720,7 +1734,7 @@ public:
                     }
                 }
                 else if (!std::holds_alternative<cld::Semantics::PointerType>(
-                             unaryOperator.getOperand().getType().get()))
+                             unaryOperator.getOperand().getType().getVariant()))
                 {
                     auto* result = m_builder.CreateFAdd(prev, llvm::ConstantFP::get(prev->getType(), 1));
                     m_builder.CreateStore(result, value);
@@ -1737,7 +1751,8 @@ public:
                 auto* prev = m_builder.CreateLoad(value, unaryOperator.getOperand().getType().isVolatile());
                 if (cld::Semantics::isInteger(unaryOperator.getOperand().getType()))
                 {
-                    if (cld::get<cld::Semantics::PrimitiveType>(unaryOperator.getOperand().getType().get()).isSigned())
+                    if (cld::get<cld::Semantics::PrimitiveType>(unaryOperator.getOperand().getType().getVariant())
+                            .isSigned())
                     {
                         auto* result = m_builder.CreateNSWSub(prev, llvm::ConstantInt::get(prev->getType(), 1));
                         m_builder.CreateStore(result, value);
@@ -1749,7 +1764,7 @@ public:
                     }
                 }
                 else if (!std::holds_alternative<cld::Semantics::PointerType>(
-                             unaryOperator.getOperand().getType().get()))
+                             unaryOperator.getOperand().getType().getVariant()))
                 {
                     auto* result = m_builder.CreateFSub(prev, llvm::ConstantFP::get(prev->getType(), 1));
                     m_builder.CreateStore(result, value);
@@ -1767,7 +1782,8 @@ public:
                 auto* prev = m_builder.CreateLoad(value, unaryOperator.getOperand().getType().isVolatile());
                 if (cld::Semantics::isInteger(unaryOperator.getOperand().getType()))
                 {
-                    if (cld::get<cld::Semantics::PrimitiveType>(unaryOperator.getOperand().getType().get()).isSigned())
+                    if (cld::get<cld::Semantics::PrimitiveType>(unaryOperator.getOperand().getType().getVariant())
+                            .isSigned())
                     {
                         result = m_builder.CreateNSWAdd(prev, llvm::ConstantInt::get(prev->getType(), 1));
                         m_builder.CreateStore(result, value);
@@ -1779,7 +1795,7 @@ public:
                     }
                 }
                 else if (!std::holds_alternative<cld::Semantics::PointerType>(
-                             unaryOperator.getOperand().getType().get()))
+                             unaryOperator.getOperand().getType().getVariant()))
                 {
                     result = m_builder.CreateFAdd(prev, llvm::ConstantFP::get(prev->getType(), 1));
                     m_builder.CreateStore(result, value);
@@ -1797,7 +1813,8 @@ public:
                 auto* prev = m_builder.CreateLoad(value, unaryOperator.getOperand().getType().isVolatile());
                 if (cld::Semantics::isInteger(unaryOperator.getOperand().getType()))
                 {
-                    if (cld::get<cld::Semantics::PrimitiveType>(unaryOperator.getOperand().getType().get()).isSigned())
+                    if (cld::get<cld::Semantics::PrimitiveType>(unaryOperator.getOperand().getType().getVariant())
+                            .isSigned())
                     {
                         result = m_builder.CreateNSWSub(prev, llvm::ConstantInt::get(prev->getType(), 1));
                         m_builder.CreateStore(result, value);
@@ -1809,7 +1826,7 @@ public:
                     }
                 }
                 else if (!std::holds_alternative<cld::Semantics::PointerType>(
-                             unaryOperator.getOperand().getType().get()))
+                             unaryOperator.getOperand().getType().getVariant()))
                 {
                     result = m_builder.CreateFSub(prev, llvm::ConstantFP::get(prev->getType(), 1));
                     m_builder.CreateStore(result, value);
@@ -1826,7 +1843,8 @@ public:
             {
                 if (cld::Semantics::isInteger(unaryOperator.getOperand().getType()))
                 {
-                    if (cld::get<cld::Semantics::PrimitiveType>(unaryOperator.getOperand().getType().get()).isSigned())
+                    if (cld::get<cld::Semantics::PrimitiveType>(unaryOperator.getOperand().getType().getVariant())
+                            .isSigned())
                     {
                         return m_builder.CreateNSWNeg(value);
                     }
@@ -1871,7 +1889,7 @@ public:
         {
             rhs = m_builder.CreateIntCast(
                 rhs, m_builder.getInt64Ty(),
-                cld::get<cld::Semantics::PrimitiveType>(subscriptOperator.getRightExpression().getType().get())
+                cld::get<cld::Semantics::PrimitiveType>(subscriptOperator.getRightExpression().getType().getVariant())
                     .isSigned());
             return m_builder.CreateGEP(lhs, rhs);
         }
@@ -1879,7 +1897,7 @@ public:
         {
             lhs = m_builder.CreateIntCast(
                 lhs, m_builder.getInt64Ty(),
-                cld::get<cld::Semantics::PrimitiveType>(subscriptOperator.getLeftExpression().getType().get())
+                cld::get<cld::Semantics::PrimitiveType>(subscriptOperator.getLeftExpression().getType().getVariant())
                     .isSigned());
             return m_builder.CreateGEP(rhs, lhs);
         }
@@ -1918,14 +1936,16 @@ public:
             return m_builder.CreateLoad(lhs->getType()->getPointerElementType(), lhs,
                                         assignment.getLeftExpression().getType().isVolatile());
         }
-        auto& memberAccess = cld::get<cld::Semantics::MemberAccess>(assignment.getLeftExpression().get());
+        auto& memberAccess = cld::get<cld::Semantics::MemberAccess>(assignment.getLeftExpression().getVariant());
         auto* lhsRecord = visit(memberAccess.getRecordExpression());
         auto& type =
-            std::holds_alternative<cld::Semantics::PointerType>(memberAccess.getRecordExpression().getType().get()) ?
-                cld::get<cld::Semantics::PointerType>(memberAccess.getRecordExpression().getType().get())
+            std::holds_alternative<cld::Semantics::PointerType>(
+                memberAccess.getRecordExpression().getType().getVariant()) ?
+                cld::get<cld::Semantics::PointerType>(memberAccess.getRecordExpression().getType().getVariant())
                     .getElementType() :
                 memberAccess.getRecordExpression().getType();
-        if (std::holds_alternative<cld::Semantics::PointerType>(memberAccess.getRecordExpression().getType().get()))
+        if (std::holds_alternative<cld::Semantics::PointerType>(
+                memberAccess.getRecordExpression().getType().getVariant()))
         {
             lhsRecord = m_builder.CreateLoad(lhsRecord, memberAccess.getRecordExpression().getType().isVolatile());
         }
@@ -1973,7 +1993,9 @@ public:
     {
         auto* function = visit(call.getFunctionExpression());
         auto cldFt = cld::get<cld::Semantics::FunctionType>(
-            cld::get<cld::Semantics::PointerType>(call.getFunctionExpression().getType().get()).getElementType().get());
+            cld::get<cld::Semantics::PointerType>(call.getFunctionExpression().getType().getVariant())
+                .getElementType()
+                .getVariant());
         auto* ft = llvm::cast<llvm::FunctionType>(function->getType()->getPointerElementType());
         auto transformation = m_functionABITransformations.find(ft);
         CLD_ASSERT(transformation != m_functionABITransformations.end());
@@ -1990,7 +2012,7 @@ public:
             ft = llvm::cast<llvm::FunctionType>(visit(callerFt));
             transformation = m_functionABITransformations.find(ft);
             CLD_ASSERT(transformation != m_functionABITransformations.end());
-            cldFt = cld::get<cld::Semantics::FunctionType>(callerFt.get());
+            cldFt = cld::get<cld::Semantics::FunctionType>(callerFt.getVariant());
         }
 
         std::size_t llvmFnI = 0;
