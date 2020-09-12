@@ -2114,7 +2114,6 @@ TEST_CASE("LLVM codegen binary expressions", "[LLVM]")
         {
             auto program = generateProgram("void and(unsigned value,unsigned* check) {\n"
                                            "value && ++*check;\n"
-                                           "return;\n"
                                            "}");
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
@@ -2127,7 +2126,6 @@ TEST_CASE("LLVM codegen binary expressions", "[LLVM]")
         {
             auto program = generateProgram("void and(unsigned value,unsigned* check) {\n"
                                            "value && ++*check;\n"
-                                           "return;\n"
                                            "}");
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
@@ -2143,7 +2141,7 @@ TEST_CASE("LLVM codegen binary expressions", "[LLVM]")
         {
             auto program = generateProgram("void or(unsigned value,unsigned* check) {\n"
                                            "value || ++*check;\n"
-                                           "return;\n"
+
                                            "}");
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
@@ -2156,7 +2154,6 @@ TEST_CASE("LLVM codegen binary expressions", "[LLVM]")
         {
             auto program = generateProgram("void or(unsigned value,unsigned* check) {\n"
                                            "value || ++*check;\n"
-                                           "return;\n"
                                            "}");
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
@@ -2309,7 +2306,6 @@ TEST_CASE("LLVM codegen conditional expressions", "[LLVM]")
     {
         auto program = generateProgram("void or(unsigned value,unsigned* true,unsigned int* false) {\n"
                                        "value ? ++*true : ++*false;\n"
-                                       "return;\n"
                                        "}");
         cld::CGLLVM::generateLLVM(*module, program);
         CAPTURE(*module);
@@ -2323,7 +2319,6 @@ TEST_CASE("LLVM codegen conditional expressions", "[LLVM]")
     {
         auto program = generateProgram("void or(unsigned value,unsigned* true,unsigned int* false) {\n"
                                        "value ? ++*true : ++*false;\n"
-                                       "return;\n"
                                        "}");
         cld::CGLLVM::generateLLVM(*module, program);
         CAPTURE(*module);
@@ -2418,7 +2413,6 @@ TEST_CASE("LLVM codegen function call", "[LLVM]")
                                            "r.c = 5;\n"
                                            "r.f = 3;\n"
                                            "toCall(r,success);\n"
-                                           "return;"
                                            "}");
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
@@ -2451,7 +2445,6 @@ TEST_CASE("LLVM codegen function call", "[LLVM]")
                                            "r.f[0] = 3456.34;\n"
                                            "r.f[1] = 4356.2134;\n"
                                            "toCall(r,success);\n"
-                                           "return;"
                                            "}");
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
@@ -2487,7 +2480,6 @@ TEST_CASE("LLVM codegen function call", "[LLVM]")
                                            "r.f[6] = 6;\n"
                                            "r.f[7] = 7;\n"
                                            "toCall(r,success);\n"
-                                           "return;\n"
                                            "}");
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
@@ -2521,7 +2513,6 @@ TEST_CASE("LLVM codegen function call", "[LLVM]")
                                            "r.c = 5;\n"
                                            "r.f = 3;\n"
                                            "toCall(success,r);\n"
-                                           "return;"
                                            "}");
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
@@ -2545,7 +2536,6 @@ TEST_CASE("LLVM codegen function call", "[LLVM]")
                                            "r.f[0] = 3456.34;\n"
                                            "r.f[1] = 4356.2134;\n"
                                            "toCall(success,r);\n"
-                                           "return;"
                                            "}");
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
@@ -2572,7 +2562,6 @@ TEST_CASE("LLVM codegen function call", "[LLVM]")
                                            "r.f[6] = 6;\n"
                                            "r.f[7] = 7;\n"
                                            "toCall(success,r);\n"
-                                           "return;\n"
                                            "}");
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
@@ -2602,7 +2591,6 @@ TEST_CASE("LLVM codegen function call", "[LLVM]")
                                            "r.c = 5;\n"
                                            "r.f = 3;\n"
                                            "toCall(r,success);\n"
-                                           "return;"
                                            "}");
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
@@ -2635,7 +2623,6 @@ TEST_CASE("LLVM codegen function call", "[LLVM]")
                                            "r.f[0] = 3456.34;\n"
                                            "r.f[1] = 4356.2134;\n"
                                            "toCall(r,success);\n"
-                                           "return;"
                                            "}");
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
@@ -2671,7 +2658,6 @@ TEST_CASE("LLVM codegen function call", "[LLVM]")
                                            "r.f[6] = 6;\n"
                                            "r.f[7] = 7;\n"
                                            "toCall(r,success);\n"
-                                           "return;\n"
                                            "}");
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
@@ -2759,7 +2745,6 @@ TEST_CASE("LLVM codegen if statement", "[LLVM]")
                                            "if(value) {\n"
                                            "++*true;\n"
                                            "}\n"
-                                           "return;\n"
                                            "}");
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
@@ -2774,7 +2759,6 @@ TEST_CASE("LLVM codegen if statement", "[LLVM]")
                                            "if(value) {\n"
                                            "++*true;\n"
                                            "}\n"
-                                           "return;\n"
                                            "}");
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
@@ -2793,8 +2777,7 @@ TEST_CASE("LLVM codegen if statement", "[LLVM]")
                                            "++*true;\n"
                                            "} else {\n"
                                            "++*false;\n"
-                                           "}"
-                                           "return;\n"
+                                           "}\n"
                                            "}");
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
@@ -2811,8 +2794,7 @@ TEST_CASE("LLVM codegen if statement", "[LLVM]")
                                            "++*true;\n"
                                            "} else {\n"
                                            "++*false;\n"
-                                           "}"
-                                           "return;\n"
+                                           "}\n"
                                            "}");
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
@@ -2822,5 +2804,82 @@ TEST_CASE("LLVM codegen if statement", "[LLVM]")
             CHECK(first == 0);
             CHECK(second == 1);
         }
+    }
+    SECTION("Control flow")
+    {
+        SECTION("Without dead code")
+        {
+            auto program = generateProgram("int threeOrFive(int value) {\n"
+                                           "    if(value) {\n"
+                                           "        return 5;\n"
+                                           "    } else {\n"
+                                           "        return 3;\n"
+                                           "    }\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        }
+        SECTION("Dead code")
+        {
+            auto program = generateProgram("int threeOrFive(int value) {\n"
+                                           "    if(value) {\n"
+                                           "        return 5;\n"
+                                           "    } else {\n"
+                                           "        return 3;\n"
+                                           "    }\n"
+                                           "    value *= 2; // Dead code \n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        }
+    }
+}
+
+TEST_CASE("LLVM codegen for loop", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    auto module = std::make_unique<llvm::Module>("", context);
+    SECTION("Initial declaration")
+    {
+        auto program = generateProgram("int incrementLoop(int n) {\n"
+                                       "int i;\n"
+                                       "for (i = 0;i < n; i++);\n"
+                                       "return i;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int(int)>(std::move(module), "incrementLoop", 5) == 5);
+    }
+    SECTION("Initial expression")
+    {
+        // TODO: when initialization works
+        //        auto program = generateProgram("int incrementLoop(int n) {\n"
+        //                                       "int r;\n"
+        //                                       "r = 0;"
+        //                                       "for (int i = 0;i < n; i++) {\n"
+        //                                       "    r++;\n"
+        //                                       "}\n"
+        //                                       "return r;\n"
+        //                                       "}");
+        //        cld::CGLLVM::generateLLVM(*module, program);
+        //        CAPTURE(*module);
+        //        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        //        CHECK(cld::Tests::computeInJIT<int(int)>(std::move(module), "incrementLoop", 5) == 5);
+    }
+    SECTION("Without controlling")
+    {
+        auto program = generateProgram("int incrementLoop(int n) {\n"
+                                       "int i;\n"
+                                       "for (i = 0;; i++) {\n"
+                                       "    if (i >= n) return i;\n"
+                                       "}\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int(int)>(std::move(module), "incrementLoop", 5) == 5);
     }
 }
