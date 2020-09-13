@@ -111,6 +111,7 @@ class CodeGenerator final
     std::unordered_map<const cld::Semantics::SwitchStatement*, Switch> m_switches;
 
     llvm::IRBuilder<> m_builder{m_module.getContext()};
+    llvm::Function* m_currentFunction = nullptr;
     llvm::Value* m_returnSlot = nullptr;
     llvm::DIBuilder m_debugInfo{m_module};
 
@@ -468,6 +469,168 @@ class CodeGenerator final
         }
     }
 
+    llvm::Value* add(llvm::Value* lhs, const cld::Semantics::Type& lhsType, llvm::Value* rhs,
+                     const cld::Semantics::Type& rhsType)
+    {
+        if (cld::Semantics::isArithmetic(lhsType) && cld::Semantics::isArithmetic(rhsType))
+        {
+            if (cld::Semantics::isInteger(lhsType))
+            {
+                if (!cld::get<cld::Semantics::PrimitiveType>(lhsType.getVariant()).isSigned())
+                {
+                    return m_builder.CreateNSWAdd(lhs, rhs);
+                }
+                else
+                {
+                    return m_builder.CreateAdd(lhs, rhs);
+                }
+            }
+            else
+            {
+                return m_builder.CreateFAdd(lhs, rhs);
+            }
+        }
+        else
+        {
+            if (lhs->getType()->isPointerTy())
+            {
+                rhs = m_builder.CreateIntCast(rhs, m_builder.getInt64Ty(),
+                                              cld::get<cld::Semantics::PrimitiveType>(rhsType.getVariant()).isSigned());
+                return m_builder.CreateGEP(lhs, rhs);
+            }
+            else
+            {
+                lhs = m_builder.CreateIntCast(lhs, m_builder.getInt64Ty(),
+                                              cld::get<cld::Semantics::PrimitiveType>(lhsType.getVariant()).isSigned());
+                return m_builder.CreateGEP(rhs, lhs);
+            }
+        }
+    }
+
+    llvm::Value* sub(llvm::Value* lhs, const cld::Semantics::Type& lhsType, llvm::Value* rhs,
+                     const cld::Semantics::Type& rhsType)
+    {
+        if (cld::Semantics::isArithmetic(lhsType) && cld::Semantics::isArithmetic(rhsType))
+        {
+            if (cld::Semantics::isInteger(lhsType))
+            {
+                if (!cld::get<cld::Semantics::PrimitiveType>(lhsType.getVariant()).isSigned())
+                {
+                    return m_builder.CreateNSWSub(lhs, rhs);
+                }
+                else
+                {
+                    return m_builder.CreateSub(lhs, rhs);
+                }
+            }
+            else
+            {
+                return m_builder.CreateFSub(lhs, rhs);
+            }
+        }
+        else
+        {
+            if (lhs->getType()->isPointerTy())
+            {
+                if (rhs->getType()->isIntegerTy())
+                {
+                    rhs = m_builder.CreateNeg(rhs);
+                    rhs = m_builder.CreateIntCast(
+                        rhs, m_builder.getInt64Ty(),
+                        cld::get<cld::Semantics::PrimitiveType>(rhsType.getVariant()).isSigned());
+                    return m_builder.CreateGEP(lhs, rhs);
+                }
+                else
+                {
+                    return m_builder.CreatePtrDiff(lhs, rhs);
+                }
+            }
+            else
+            {
+                if (rhs->getType()->isIntegerTy())
+                {
+                    lhs = m_builder.CreateNeg(lhs);
+                    lhs = m_builder.CreateIntCast(
+                        lhs, m_builder.getInt64Ty(),
+                        cld::get<cld::Semantics::PrimitiveType>(lhsType.getVariant()).isSigned());
+                    return m_builder.CreateGEP(rhs, lhs);
+                }
+                else
+                {
+                    return m_builder.CreatePtrDiff(lhs, rhs);
+                }
+            }
+        }
+    }
+
+    llvm::Value* mul(llvm::Value* lhs, const cld::Semantics::Type& lhsType, llvm::Value* rhs,
+                     const cld::Semantics::Type&)
+    {
+        if (cld::Semantics::isInteger(lhsType))
+        {
+            return m_builder.CreateNSWMul(lhs, rhs);
+        }
+        else
+        {
+            return m_builder.CreateFMul(lhs, rhs);
+        }
+    }
+
+    llvm::Value* div(llvm::Value* lhs, const cld::Semantics::Type& lhsType, llvm::Value* rhs,
+                     const cld::Semantics::Type&)
+    {
+        if (cld::Semantics::isInteger(lhsType))
+        {
+            if (cld::get<cld::Semantics::PrimitiveType>(lhsType.getVariant()).isSigned())
+            {
+                return m_builder.CreateSDiv(lhs, rhs);
+            }
+            else
+            {
+                return m_builder.CreateUDiv(lhs, rhs);
+            }
+        }
+        else
+        {
+            return m_builder.CreateFDiv(lhs, rhs);
+        }
+    }
+
+    llvm::Value* mod(llvm::Value* lhs, const cld::Semantics::Type& lhsType, llvm::Value* rhs,
+                     const cld::Semantics::Type&)
+    {
+        if (cld::get<cld::Semantics::PrimitiveType>(lhsType.getVariant()).isSigned())
+        {
+            return m_builder.CreateSRem(lhs, rhs);
+        }
+        else
+        {
+            return m_builder.CreateURem(lhs, rhs);
+        }
+    }
+
+    llvm::Value* shl(llvm::Value* lhs, const cld::Semantics::Type&, llvm::Value* rhs,
+                     const cld::Semantics::Type& rhsType)
+    {
+        if (lhs->getType() != rhs->getType())
+        {
+            rhs = m_builder.CreateIntCast(rhs, lhs->getType(),
+                                          cld::get<cld::Semantics::PrimitiveType>(rhsType.getVariant()).isSigned());
+        }
+        return m_builder.CreateShl(lhs, rhs);
+    }
+
+    llvm::Value* shr(llvm::Value* lhs, const cld::Semantics::Type&, llvm::Value* rhs,
+                     const cld::Semantics::Type& rhsType)
+    {
+        if (lhs->getType() != rhs->getType())
+        {
+            rhs = m_builder.CreateIntCast(rhs, lhs->getType(),
+                                          cld::get<cld::Semantics::PrimitiveType>(rhsType.getVariant()).isSigned());
+        }
+        return m_builder.CreateAShr(lhs, rhs);
+    }
+
 public:
     explicit CodeGenerator(llvm::Module& module, const cld::Semantics::ProgramInterface& programInterface,
                            const cld::SourceInterface& sourceInterface, cld::Triple triple)
@@ -721,8 +884,7 @@ public:
         }
         // Place all allocas up top
         // TODO: Except VAL Arrays
-        llvm::IRBuilder<> temp(&m_builder.GetInsertBlock()->getParent()->getEntryBlock(),
-                               m_builder.GetInsertBlock()->getParent()->getEntryBlock().begin());
+        llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(), m_currentFunction->getEntryBlock().begin());
         auto* var = temp.CreateAlloca(type, nullptr, llvm::StringRef{declaration.getNameToken()->getText()});
         var->setAlignment(llvm::Align(declaration.getType().getAlignOf(m_programInterface)));
         m_lvalues.emplace(&declaration, var);
@@ -758,6 +920,7 @@ public:
         }
         auto* bb = llvm::BasicBlock::Create(m_module.getContext(), "entry", function);
         m_builder.SetInsertPoint(bb);
+        m_currentFunction = function;
 
         auto& ft = cld::get<cld::Semantics::FunctionType>(functionDefinition.getType().getVariant());
         applyFunctionAttributes(*function, function->getFunctionType(), ft,
@@ -850,6 +1013,7 @@ public:
             }
         }
         m_builder.ClearInsertionPoint();
+        m_currentFunction = nullptr;
     }
 
     void visit(const cld::Semantics::CompoundStatement& compoundStatement)
@@ -913,7 +1077,7 @@ public:
             return;
         }
 
-        auto* function = m_builder.GetInsertBlock()->getParent();
+        auto* function = m_currentFunction;
         auto transformation = m_functionABITransformations.find(function->getFunctionType());
         CLD_ASSERT(transformation != m_functionABITransformations.end());
         auto* value = visit(*returnStatement.getExpression());
@@ -947,18 +1111,22 @@ public:
                     visit(*iter);
                 }
             },
-            [&](const cld::Semantics::Expression& expression) { visit(expression); });
-        auto* controlling =
-            llvm::BasicBlock::Create(m_module.getContext(), "for.controlling", m_builder.GetInsertBlock()->getParent());
+            [&](const cld::Semantics::Expression& expression) {
+                if (!m_builder.GetInsertBlock())
+                {
+                    return;
+                }
+                visit(expression);
+            });
+        auto* controlling = llvm::BasicBlock::Create(m_module.getContext(), "for.controlling", m_currentFunction);
         if (m_builder.GetInsertBlock())
         {
             m_builder.CreateBr(controlling);
         }
         m_builder.SetInsertPoint(controlling);
-        auto* body =
-            llvm::BasicBlock::Create(m_module.getContext(), "for.body", m_builder.GetInsertBlock()->getParent());
+        auto* body = llvm::BasicBlock::Create(m_module.getContext(), "for.body", m_currentFunction);
         llvm::BasicBlock* contBlock =
-            llvm::BasicBlock::Create(m_module.getContext(), "for.continue", m_builder.GetInsertBlock()->getParent());
+            llvm::BasicBlock::Create(m_module.getContext(), "for.continue", m_currentFunction);
         m_breakTargets[&forStatement] = contBlock;
         if (forStatement.getControlling())
         {
@@ -971,9 +1139,9 @@ public:
             m_builder.CreateBr(body);
         }
         m_builder.SetInsertPoint(body);
-        auto* iteration = forStatement.getIteration() ? llvm::BasicBlock::Create(
-                              m_module.getContext(), "for.iteration", m_builder.GetInsertBlock()->getParent()) :
-                                                        controlling;
+        auto* iteration = forStatement.getIteration() ?
+                              llvm::BasicBlock::Create(m_module.getContext(), "for.iteration", m_currentFunction) :
+                              controlling;
         m_continueTargets[&forStatement] = iteration;
         visit(forStatement.getStatement());
         m_builder.CreateBr(iteration);
@@ -990,12 +1158,10 @@ public:
     {
         auto* expression = visit(ifStatement.getExpression());
         expression = m_builder.CreateTrunc(expression, m_builder.getInt1Ty());
-        auto* trueBranch =
-            llvm::BasicBlock::Create(m_module.getContext(), "if.true", m_builder.GetInsertBlock()->getParent());
+        auto* trueBranch = llvm::BasicBlock::Create(m_module.getContext(), "if.true", m_currentFunction);
         if (!ifStatement.getFalseBranch())
         {
-            auto* contBranch =
-                llvm::BasicBlock::Create(m_module.getContext(), "if.continue", m_builder.GetInsertBlock()->getParent());
+            auto* contBranch = llvm::BasicBlock::Create(m_module.getContext(), "if.continue", m_currentFunction);
             if (m_builder.GetInsertBlock())
             {
                 m_builder.CreateCondBr(expression, trueBranch, contBranch);
@@ -1009,8 +1175,7 @@ public:
             m_builder.SetInsertPoint(contBranch);
             return;
         }
-        auto* falseBranch =
-            llvm::BasicBlock::Create(m_module.getContext(), "if.false", m_builder.GetInsertBlock()->getParent());
+        auto* falseBranch = llvm::BasicBlock::Create(m_module.getContext(), "if.false", m_currentFunction);
         if (m_builder.GetInsertBlock())
         {
             m_builder.CreateCondBr(expression, trueBranch, falseBranch);
@@ -1021,8 +1186,7 @@ public:
         visit(*ifStatement.getFalseBranch());
         if (!falseBranch->getTerminator() || !trueBranch->getTerminator())
         {
-            auto* contBranch =
-                llvm::BasicBlock::Create(m_module.getContext(), "if.continue", m_builder.GetInsertBlock()->getParent());
+            auto* contBranch = llvm::BasicBlock::Create(m_module.getContext(), "if.continue", m_currentFunction);
             if (!falseBranch->getTerminator())
             {
                 m_builder.SetInsertPoint(falseBranch);
@@ -1043,16 +1207,17 @@ public:
 
     void visit(const cld::Semantics::HeadWhileStatement& headWhileStatement)
     {
-        auto* controlling = llvm::BasicBlock::Create(m_module.getContext(), "while.controlling",
-                                                     m_builder.GetInsertBlock()->getParent());
+        auto* controlling = llvm::BasicBlock::Create(m_module.getContext(), "while.controlling", m_currentFunction);
+        if (m_builder.GetInsertBlock())
+        {
+            m_builder.CreateBr(controlling);
+        }
         m_continueTargets[&headWhileStatement] = controlling;
         m_builder.SetInsertPoint(controlling);
         auto* expression = visit(headWhileStatement.getExpression());
         expression = m_builder.CreateTrunc(expression, m_builder.getInt1Ty());
-        auto* contBlock =
-            llvm::BasicBlock::Create(m_module.getContext(), "while.continue", m_builder.GetInsertBlock()->getParent());
-        auto* body =
-            llvm::BasicBlock::Create(m_module.getContext(), "while.body", m_builder.GetInsertBlock()->getParent());
+        auto* contBlock = llvm::BasicBlock::Create(m_module.getContext(), "while.continue", m_currentFunction);
+        auto* body = llvm::BasicBlock::Create(m_module.getContext(), "while.body", m_currentFunction);
         m_builder.CreateCondBr(expression, body, contBlock);
         m_builder.SetInsertPoint(body);
         m_breakTargets[&headWhileStatement] = contBlock;
@@ -1063,12 +1228,13 @@ public:
 
     void visit(const cld::Semantics::FootWhileStatement& footWhileStatement)
     {
-        auto* controlling = llvm::BasicBlock::Create(m_module.getContext(), "do_while.controlling",
-                                                     m_builder.GetInsertBlock()->getParent());
-        auto* contBlock = llvm::BasicBlock::Create(m_module.getContext(), "do_while.continue",
-                                                   m_builder.GetInsertBlock()->getParent());
-        auto* body =
-            llvm::BasicBlock::Create(m_module.getContext(), "do_while.body", m_builder.GetInsertBlock()->getParent());
+        auto* controlling = llvm::BasicBlock::Create(m_module.getContext(), "do_while.controlling", m_currentFunction);
+        auto* contBlock = llvm::BasicBlock::Create(m_module.getContext(), "do_while.continue", m_currentFunction);
+        auto* body = llvm::BasicBlock::Create(m_module.getContext(), "do_while.body", m_currentFunction);
+        if (m_builder.GetInsertBlock())
+        {
+            m_builder.CreateBr(body);
+        }
         m_continueTargets[&footWhileStatement] = controlling;
         m_breakTargets[&footWhileStatement] = contBlock;
         m_builder.SetInsertPoint(body);
@@ -1103,27 +1269,34 @@ public:
 
     void visit(const cld::Semantics::SwitchStatement& switchStatement)
     {
-        auto* expression = visit(switchStatement.getExpression());
+        auto* expression = m_builder.GetInsertBlock() ? visit(switchStatement.getExpression()) : nullptr;
         auto& switchData = m_switches[&switchStatement];
-        auto* contBlock =
-            llvm::BasicBlock::Create(m_module.getContext(), "switch.continue", m_builder.GetInsertBlock()->getParent());
+        auto* contBlock = llvm::BasicBlock::Create(m_module.getContext(), "switch.continue", m_currentFunction);
         if (switchStatement.getDefaultStatement())
         {
-            switchData.defaultBlock = llvm::BasicBlock::Create(m_module.getContext(), "switch.default",
-                                                               m_builder.GetInsertBlock()->getParent());
+            switchData.defaultBlock =
+                llvm::BasicBlock::Create(m_module.getContext(), "switch.default", m_currentFunction);
         }
-        auto* switchStmt = m_builder.CreateSwitch(
-            expression, switchData.defaultBlock ? switchData.defaultBlock : contBlock, switchData.cases.size());
+        auto* switchStmt =
+            expression ? m_builder.CreateSwitch(
+                expression, switchData.defaultBlock ? switchData.defaultBlock : contBlock, switchData.cases.size()) :
+                         nullptr;
         for (auto& [value, theCase] : switchStatement.getCases())
         {
-            auto iter =
-                switchData.cases.emplace(theCase, llvm::BasicBlock::Create(m_module.getContext(), "switch.case",
-                                                                           m_builder.GetInsertBlock()->getParent()));
-            switchStmt->addCase(llvm::cast<llvm::ConstantInt>(llvm::ConstantInt::get(expression->getType(), value)),
-                                iter.first->second);
+            auto iter = switchData.cases.emplace(
+                theCase, llvm::BasicBlock::Create(m_module.getContext(), "switch.case", m_currentFunction));
+            if (switchStmt && expression)
+            {
+                switchStmt->addCase(llvm::cast<llvm::ConstantInt>(llvm::ConstantInt::get(expression->getType(), value)),
+                                    iter.first->second);
+            }
         }
         m_breakTargets[&switchStatement] = contBlock;
         visit(switchStatement.getStatement());
+        if (m_builder.GetInsertBlock() && !m_builder.GetInsertBlock()->getTerminator())
+        {
+            m_builder.CreateBr(contBlock);
+        }
         m_builder.SetInsertPoint(contBlock);
     }
 
@@ -1131,7 +1304,10 @@ public:
     {
         auto& switchData = m_switches[&defaultStatement.getSwitchStatement()];
         auto* bb = switchData.defaultBlock;
-        m_builder.CreateBr(bb);
+        if (m_builder.GetInsertBlock() && !m_builder.GetInsertBlock()->getTerminator())
+        {
+            m_builder.CreateBr(bb);
+        }
         m_builder.SetInsertPoint(bb);
         visit(defaultStatement.getStatement());
     }
@@ -1140,7 +1316,10 @@ public:
     {
         auto& switchData = m_switches[&caseStatement.getSwitchStatement()];
         auto* bb = switchData.cases[&caseStatement];
-        m_builder.CreateBr(bb);
+        if (m_builder.GetInsertBlock() && !m_builder.GetInsertBlock()->getTerminator())
+        {
+            m_builder.CreateBr(bb);
+        }
         m_builder.SetInsertPoint(bb);
         visit(caseStatement.getStatement());
     }
@@ -1156,7 +1335,7 @@ public:
         {
             bb = m_labels[gotoStatement.getLabel()] = llvm::BasicBlock::Create(
                 m_module.getContext(), llvm::StringRef{gotoStatement.getLabel()->getIdentifier()->getText()},
-                m_builder.GetInsertBlock()->getParent());
+                m_currentFunction);
         }
         m_builder.CreateBr(bb);
         m_builder.ClearInsertionPoint();
@@ -1168,10 +1347,12 @@ public:
         if (!bb)
         {
             bb = m_labels[&labelStatement] = llvm::BasicBlock::Create(
-                m_module.getContext(), llvm::StringRef{labelStatement.getIdentifier()->getText()},
-                m_builder.GetInsertBlock()->getParent());
+                m_module.getContext(), llvm::StringRef{labelStatement.getIdentifier()->getText()}, m_currentFunction);
         }
-        m_builder.CreateBr(bb);
+        if (m_builder.GetInsertBlock() && !m_builder.GetInsertBlock()->getTerminator())
+        {
+            m_builder.CreateBr(bb);
+        }
         m_builder.SetInsertPoint(bb);
         visit(labelStatement.getStatement());
     }
@@ -1243,10 +1424,6 @@ public:
                 }
                 else
                 {
-                    if (!m_builder.GetInsertBlock())
-                    {
-                        return nullptr;
-                    }
                     return m_builder.CreateLoad(value->getType()->getPointerElementType(), value,
                                                 conversion.getExpression().getType().isVolatile());
                 }
@@ -1402,178 +1579,44 @@ public:
             case cld::Semantics::BinaryOperator::Addition:
             {
                 auto* rhs = visit(binaryExpression.getRightExpression());
-                if (cld::Semantics::isArithmetic(binaryExpression.getLeftExpression().getType())
-                    && cld::Semantics::isArithmetic(binaryExpression.getLeftExpression().getType()))
-                {
-                    if (cld::Semantics::isInteger(binaryExpression.getLeftExpression().getType()))
-                    {
-                        if (!cld::get<cld::Semantics::PrimitiveType>(
-                                 binaryExpression.getLeftExpression().getType().getVariant())
-                                 .isSigned())
-                        {
-                            return m_builder.CreateNSWAdd(lhs, rhs);
-                        }
-                        else
-                        {
-                            return m_builder.CreateAdd(lhs, rhs);
-                        }
-                    }
-                    else
-                    {
-                        return m_builder.CreateFAdd(lhs, rhs);
-                    }
-                }
-                else
-                {
-                    if (lhs->getType()->isPointerTy())
-                    {
-                        rhs = m_builder.CreateIntCast(rhs, m_builder.getInt64Ty(),
-                                                      cld::get<cld::Semantics::PrimitiveType>(
-                                                          binaryExpression.getRightExpression().getType().getVariant())
-                                                          .isSigned());
-                        return m_builder.CreateGEP(lhs, rhs);
-                    }
-                    else
-                    {
-                        lhs = m_builder.CreateIntCast(lhs, m_builder.getInt64Ty(),
-                                                      cld::get<cld::Semantics::PrimitiveType>(
-                                                          binaryExpression.getLeftExpression().getType().getVariant())
-                                                          .isSigned());
-                        return m_builder.CreateGEP(rhs, lhs);
-                    }
-                }
+                return add(lhs, binaryExpression.getLeftExpression().getType(), rhs,
+                           binaryExpression.getRightExpression().getType());
             }
             case cld::Semantics::BinaryOperator::Subtraction:
             {
                 auto* rhs = visit(binaryExpression.getRightExpression());
-                if (cld::Semantics::isArithmetic(binaryExpression.getLeftExpression().getType())
-                    && cld::Semantics::isArithmetic(binaryExpression.getLeftExpression().getType()))
-                {
-                    if (cld::Semantics::isInteger(binaryExpression.getLeftExpression().getType()))
-                    {
-                        if (!cld::get<cld::Semantics::PrimitiveType>(
-                                 binaryExpression.getLeftExpression().getType().getVariant())
-                                 .isSigned())
-                        {
-                            return m_builder.CreateNSWSub(lhs, rhs);
-                        }
-                        else
-                        {
-                            return m_builder.CreateSub(lhs, rhs);
-                        }
-                    }
-                    else
-                    {
-                        return m_builder.CreateFSub(lhs, rhs);
-                    }
-                }
-                else
-                {
-                    if (lhs->getType()->isPointerTy())
-                    {
-                        if (rhs->getType()->isIntegerTy())
-                        {
-                            rhs = m_builder.CreateNeg(rhs);
-                            rhs = m_builder.CreateIntCast(
-                                rhs, m_builder.getInt64Ty(),
-                                cld::get<cld::Semantics::PrimitiveType>(
-                                    binaryExpression.getRightExpression().getType().getVariant())
-                                    .isSigned());
-                            return m_builder.CreateGEP(lhs, rhs);
-                        }
-                        else
-                        {
-                            return m_builder.CreatePtrDiff(lhs, rhs);
-                        }
-                    }
-                    else
-                    {
-                        if (rhs->getType()->isIntegerTy())
-                        {
-                            lhs = m_builder.CreateNeg(lhs);
-                            lhs =
-                                m_builder.CreateIntCast(lhs, m_builder.getInt64Ty(),
-                                                        cld::get<cld::Semantics::PrimitiveType>(
-                                                            binaryExpression.getLeftExpression().getType().getVariant())
-                                                            .isSigned());
-                            return m_builder.CreateGEP(rhs, lhs);
-                        }
-                        else
-                        {
-                            return m_builder.CreatePtrDiff(lhs, rhs);
-                        }
-                    }
-                }
+                return sub(lhs, binaryExpression.getLeftExpression().getType(), rhs,
+                           binaryExpression.getRightExpression().getType());
             }
             case cld::Semantics::BinaryOperator::Multiply:
             {
                 auto* rhs = visit(binaryExpression.getRightExpression());
-                if (cld::Semantics::isInteger(binaryExpression.getLeftExpression().getType()))
-                {
-                    return m_builder.CreateNSWMul(lhs, rhs);
-                }
-                else
-                {
-                    return m_builder.CreateFMul(lhs, rhs);
-                }
+                return mul(lhs, binaryExpression.getLeftExpression().getType(), rhs,
+                           binaryExpression.getRightExpression().getType());
             }
             case cld::Semantics::BinaryOperator::Divide:
             {
                 auto* rhs = visit(binaryExpression.getRightExpression());
-                if (cld::Semantics::isInteger(binaryExpression.getLeftExpression().getType()))
-                {
-                    if (cld::get<cld::Semantics::PrimitiveType>(
-                            binaryExpression.getLeftExpression().getType().getVariant())
-                            .isSigned())
-                    {
-                        return m_builder.CreateSDiv(lhs, rhs);
-                    }
-                    else
-                    {
-                        return m_builder.CreateUDiv(lhs, rhs);
-                    }
-                }
-                else
-                {
-                    return m_builder.CreateFDiv(lhs, rhs);
-                }
+                return div(lhs, binaryExpression.getLeftExpression().getType(), rhs,
+                           binaryExpression.getRightExpression().getType());
             }
             case cld::Semantics::BinaryOperator::Modulo:
             {
                 auto* rhs = visit(binaryExpression.getRightExpression());
-                if (cld::get<cld::Semantics::PrimitiveType>(binaryExpression.getLeftExpression().getType().getVariant())
-                        .isSigned())
-                {
-                    return m_builder.CreateSRem(lhs, rhs);
-                }
-                else
-                {
-                    return m_builder.CreateURem(lhs, rhs);
-                }
+                return mod(lhs, binaryExpression.getLeftExpression().getType(), rhs,
+                           binaryExpression.getRightExpression().getType());
             }
             case cld::Semantics::BinaryOperator::LeftShift:
             {
                 auto* rhs = visit(binaryExpression.getRightExpression());
-                if (lhs->getType() != rhs->getType())
-                {
-                    rhs = m_builder.CreateIntCast(rhs, lhs->getType(),
-                                                  cld::get<cld::Semantics::PrimitiveType>(
-                                                      binaryExpression.getRightExpression().getType().getVariant())
-                                                      .isSigned());
-                }
-                return m_builder.CreateShl(lhs, rhs);
+                return shl(lhs, binaryExpression.getLeftExpression().getType(), rhs,
+                           binaryExpression.getRightExpression().getType());
             }
             case cld::Semantics::BinaryOperator::RightShift:
             {
                 auto* rhs = visit(binaryExpression.getRightExpression());
-                if (lhs->getType() != rhs->getType())
-                {
-                    rhs = m_builder.CreateIntCast(rhs, lhs->getType(),
-                                                  cld::get<cld::Semantics::PrimitiveType>(
-                                                      binaryExpression.getRightExpression().getType().getVariant())
-                                                      .isSigned());
-                }
-                return m_builder.CreateAShr(lhs, rhs);
+                return shr(lhs, binaryExpression.getLeftExpression().getType(), rhs,
+                           binaryExpression.getRightExpression().getType());
             }
             case cld::Semantics::BinaryOperator::GreaterThan:
             case cld::Semantics::BinaryOperator::LessOrEqual:
@@ -1692,12 +1735,11 @@ public:
             case cld::Semantics::BinaryOperator::LogicAnd:
             {
                 lhs = m_builder.CreateTrunc(lhs, m_builder.getInt1Ty());
-                auto* falseBranch = llvm::BasicBlock::Create(m_module.getContext(), "logicAnd.false",
-                                                             m_builder.GetInsertBlock()->getParent());
-                auto* trueBranch = llvm::BasicBlock::Create(m_module.getContext(), "logicAnd.true",
-                                                            m_builder.GetInsertBlock()->getParent());
-                auto* continueBranch = llvm::BasicBlock::Create(m_module.getContext(), "logicAnd.continue",
-                                                                m_builder.GetInsertBlock()->getParent());
+                auto* falseBranch =
+                    llvm::BasicBlock::Create(m_module.getContext(), "logicAnd.false", m_currentFunction);
+                auto* trueBranch = llvm::BasicBlock::Create(m_module.getContext(), "logicAnd.true", m_currentFunction);
+                auto* continueBranch =
+                    llvm::BasicBlock::Create(m_module.getContext(), "logicAnd.continue", m_currentFunction);
                 m_builder.CreateCondBr(lhs, trueBranch, falseBranch);
                 m_builder.SetInsertPoint(trueBranch);
                 auto* rhs = visit(binaryExpression.getRightExpression());
@@ -1714,12 +1756,10 @@ public:
             case cld::Semantics::BinaryOperator::LogicOr:
             {
                 lhs = m_builder.CreateTrunc(lhs, m_builder.getInt1Ty());
-                auto* falseBranch = llvm::BasicBlock::Create(m_module.getContext(), "logicOr.false",
-                                                             m_builder.GetInsertBlock()->getParent());
-                auto* trueBranch = llvm::BasicBlock::Create(m_module.getContext(), "logicOr.true",
-                                                            m_builder.GetInsertBlock()->getParent());
-                auto* continueBranch = llvm::BasicBlock::Create(m_module.getContext(), "logicOr.continue",
-                                                                m_builder.GetInsertBlock()->getParent());
+                auto* falseBranch = llvm::BasicBlock::Create(m_module.getContext(), "logicOr.false", m_currentFunction);
+                auto* trueBranch = llvm::BasicBlock::Create(m_module.getContext(), "logicOr.true", m_currentFunction);
+                auto* continueBranch =
+                    llvm::BasicBlock::Create(m_module.getContext(), "logicOr.continue", m_currentFunction);
                 m_builder.CreateCondBr(lhs, trueBranch, falseBranch);
                 m_builder.SetInsertPoint(falseBranch);
                 auto* rhs = visit(binaryExpression.getRightExpression());
@@ -1799,10 +1839,6 @@ public:
                 return value;
             case cld::Semantics::UnaryOperator::PostIncrement:
             {
-                if (!m_builder.GetInsertBlock())
-                {
-                    return nullptr;
-                }
                 auto* prev = m_builder.CreateLoad(value, unaryOperator.getOperand().getType().isVolatile());
                 if (cld::Semantics::isInteger(unaryOperator.getOperand().getType()))
                 {
@@ -1833,10 +1869,6 @@ public:
             }
             case cld::Semantics::UnaryOperator::PostDecrement:
             {
-                if (!m_builder.GetInsertBlock())
-                {
-                    return nullptr;
-                }
                 auto* prev = m_builder.CreateLoad(value, unaryOperator.getOperand().getType().isVolatile());
                 if (cld::Semantics::isInteger(unaryOperator.getOperand().getType()))
                 {
@@ -1867,10 +1899,6 @@ public:
             }
             case cld::Semantics::UnaryOperator::PreIncrement:
             {
-                if (!m_builder.GetInsertBlock())
-                {
-                    return nullptr;
-                }
                 llvm::Value* result = nullptr;
                 auto* prev = m_builder.CreateLoad(value, unaryOperator.getOperand().getType().isVolatile());
                 if (cld::Semantics::isInteger(unaryOperator.getOperand().getType()))
@@ -1902,10 +1930,6 @@ public:
             }
             case cld::Semantics::UnaryOperator::PreDecrement:
             {
-                if (!m_builder.GetInsertBlock())
-                {
-                    return nullptr;
-                }
                 llvm::Value* result = nullptr;
                 auto* prev = m_builder.CreateLoad(value, unaryOperator.getOperand().getType().isVolatile());
                 if (cld::Semantics::isInteger(unaryOperator.getOperand().getType()))
@@ -2002,18 +2026,11 @@ public:
 
     llvm::Value* visit(const cld::Semantics::Expression&, const cld::Semantics::Conditional& conditional)
     {
-        if (!m_builder.GetInsertBlock())
-        {
-            return nullptr;
-        }
         auto* boolean = visit(conditional.getBoolExpression());
         boolean = m_builder.CreateTrunc(boolean, m_builder.getInt1Ty());
-        auto* trueBranch =
-            llvm::BasicBlock::Create(m_builder.getContext(), "cond.true", m_builder.GetInsertBlock()->getParent());
-        auto* falseBranch =
-            llvm::BasicBlock::Create(m_builder.getContext(), "cond.false", m_builder.GetInsertBlock()->getParent());
-        auto* contBr =
-            llvm::BasicBlock::Create(m_builder.getContext(), "cond.continue", m_builder.GetInsertBlock()->getParent());
+        auto* trueBranch = llvm::BasicBlock::Create(m_builder.getContext(), "cond.true", m_currentFunction);
+        auto* falseBranch = llvm::BasicBlock::Create(m_builder.getContext(), "cond.false", m_currentFunction);
+        auto* contBr = llvm::BasicBlock::Create(m_builder.getContext(), "cond.continue", m_currentFunction);
         m_builder.CreateCondBr(boolean, trueBranch, falseBranch);
         m_builder.SetInsertPoint(trueBranch);
         auto* trueValue = visit(conditional.getTrueExpression());
@@ -2030,14 +2047,92 @@ public:
 
     llvm::Value* visit(const cld::Semantics::Expression&, const cld::Semantics::Assignment& assignment)
     {
-        if (!m_builder.GetInsertBlock())
-        {
-            return nullptr;
-        }
         if (!m_programInterface.isBitfieldAccess(assignment.getLeftExpression()))
         {
             auto* lhs = visit(assignment.getLeftExpression());
             auto* rhs = visit(assignment.getRightExpression());
+            // TODO: Conversions of left operand I think?
+            switch (assignment.getKind())
+            {
+                case cld::Semantics::Assignment::Simple: break;
+                case cld::Semantics::Assignment::Plus:
+                {
+                    auto* load = m_builder.CreateLoad(lhs->getType()->getPointerElementType(), lhs,
+                                                      assignment.getLeftExpression().getType().isVolatile());
+                    rhs = add(load, assignment.getLeftExpression().getType(), rhs,
+                              assignment.getRightExpression().getType());
+                    break;
+                }
+                case cld::Semantics::Assignment::Minus:
+                {
+                    auto* load = m_builder.CreateLoad(lhs->getType()->getPointerElementType(), lhs,
+                                                      assignment.getLeftExpression().getType().isVolatile());
+                    rhs = sub(load, assignment.getLeftExpression().getType(), rhs,
+                              assignment.getRightExpression().getType());
+                    break;
+                }
+                case cld::Semantics::Assignment::Divide:
+                {
+                    auto* load = m_builder.CreateLoad(lhs->getType()->getPointerElementType(), lhs,
+                                                      assignment.getLeftExpression().getType().isVolatile());
+                    rhs = div(load, assignment.getLeftExpression().getType(), rhs,
+                              assignment.getRightExpression().getType());
+                    break;
+                }
+                case cld::Semantics::Assignment::Multiply:
+                {
+                    auto* load = m_builder.CreateLoad(lhs->getType()->getPointerElementType(), lhs,
+                                                      assignment.getLeftExpression().getType().isVolatile());
+                    rhs = mul(load, assignment.getLeftExpression().getType(), rhs,
+                              assignment.getRightExpression().getType());
+                    break;
+                }
+                case cld::Semantics::Assignment::Modulo:
+                {
+                    auto* load = m_builder.CreateLoad(lhs->getType()->getPointerElementType(), lhs,
+                                                      assignment.getLeftExpression().getType().isVolatile());
+                    rhs = mod(load, assignment.getLeftExpression().getType(), rhs,
+                              assignment.getRightExpression().getType());
+                    break;
+                }
+                case cld::Semantics::Assignment::LeftShift:
+                {
+                    auto* load = m_builder.CreateLoad(lhs->getType()->getPointerElementType(), lhs,
+                                                      assignment.getLeftExpression().getType().isVolatile());
+                    rhs = shl(load, assignment.getLeftExpression().getType(), rhs,
+                              assignment.getRightExpression().getType());
+                    break;
+                }
+                case cld::Semantics::Assignment::RightShift:
+                {
+                    auto* load = m_builder.CreateLoad(lhs->getType()->getPointerElementType(), lhs,
+                                                      assignment.getLeftExpression().getType().isVolatile());
+                    rhs = shr(load, assignment.getLeftExpression().getType(), rhs,
+                              assignment.getRightExpression().getType());
+                    break;
+                }
+                case cld::Semantics::Assignment::BitAnd:
+                {
+                    auto* load = m_builder.CreateLoad(lhs->getType()->getPointerElementType(), lhs,
+                                                      assignment.getLeftExpression().getType().isVolatile());
+                    rhs = m_builder.CreateAnd(load, rhs);
+                    break;
+                }
+                case cld::Semantics::Assignment::BitOr:
+                {
+                    auto* load = m_builder.CreateLoad(lhs->getType()->getPointerElementType(), lhs,
+                                                      assignment.getLeftExpression().getType().isVolatile());
+                    rhs = m_builder.CreateOr(load, rhs);
+                    break;
+                }
+                case cld::Semantics::Assignment::BitXor:
+                {
+                    auto* load = m_builder.CreateLoad(lhs->getType()->getPointerElementType(), lhs,
+                                                      assignment.getLeftExpression().getType().isVolatile());
+                    rhs = m_builder.CreateXor(load, rhs);
+                    break;
+                }
+            }
             m_builder.CreateStore(rhs, lhs, assignment.getLeftExpression().getType().isVolatile());
             return m_builder.CreateLoad(lhs->getType()->getPointerElementType(), lhs,
                                         assignment.getLeftExpression().getType().isVolatile());
@@ -2072,6 +2167,7 @@ public:
         }
 
         auto* loaded = m_builder.CreateLoad(fieldPtr, type.isVolatile());
+        // TODO: Compounds
         auto size = field.bitFieldBounds->second - field.bitFieldBounds->first;
         rhsValue = m_builder.CreateAnd(rhsValue, llvm::ConstantInt::get(rhsValue->getType(), (1u << size) - 1));
         rhsValue =
@@ -2097,10 +2193,6 @@ public:
 
     llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::CallExpression& call)
     {
-        if (!m_builder.GetInsertBlock())
-        {
-            return nullptr;
-        }
         auto* function = visit(call.getFunctionExpression());
         auto cldFt = cld::get<cld::Semantics::FunctionType>(
             cld::get<cld::Semantics::PointerType>(call.getFunctionExpression().getType().getVariant())
@@ -2131,8 +2223,7 @@ public:
         if (transformation->second.returnType == ABITransformations::PointerToTemporary)
         {
             llvmFnI = 1;
-            llvm::IRBuilder<> temp(&m_builder.GetInsertBlock()->getParent()->getEntryBlock(),
-                                   m_builder.GetInsertBlock()->getParent()->getEntryBlock().begin());
+            llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(), m_currentFunction->getEntryBlock().begin());
             returnSlot = temp.CreateAlloca(ft->getParamType(0)->getPointerElementType(), nullptr, "ret");
             returnSlot->setAlignment(llvm::Align(expression.getType().getAlignOf(m_programInterface)));
             m_builder.CreateLifetimeStart(returnSlot,
@@ -2142,8 +2233,7 @@ public:
         else if (transformation->second.returnType == ABITransformations::Flattened
                  || transformation->second.returnType == ABITransformations::IntegerRegister)
         {
-            llvm::IRBuilder<> temp(&m_builder.GetInsertBlock()->getParent()->getEntryBlock(),
-                                   m_builder.GetInsertBlock()->getParent()->getEntryBlock().begin());
+            llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(), m_currentFunction->getEntryBlock().begin());
             returnSlot = temp.CreateAlloca(visit(expression.getType()), nullptr, "ret");
             returnSlot->setAlignment(llvm::Align(expression.getType().getAlignOf(m_programInterface)));
             m_builder.CreateLifetimeStart(returnSlot,
@@ -2173,8 +2263,8 @@ public:
                 }
                 if (change == ABITransformations::PointerToTemporary)
                 {
-                    llvm::IRBuilder<> temp(&m_builder.GetInsertBlock()->getParent()->getEntryBlock(),
-                                           m_builder.GetInsertBlock()->getParent()->getEntryBlock().begin());
+                    llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(),
+                                           m_currentFunction->getEntryBlock().begin());
                     auto* ret = temp.CreateAlloca(value->getType());
                     ret->setAlignment(llvm::Align(iter->getType().getAlignOf(m_programInterface)));
                     m_builder.CreateLifetimeStart(ret,

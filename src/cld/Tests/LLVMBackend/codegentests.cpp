@@ -2882,4 +2882,162 @@ TEST_CASE("LLVM codegen for loop", "[LLVM]")
         REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
         CHECK(cld::Tests::computeInJIT<int(int)>(std::move(module), "incrementLoop", 5) == 5);
     }
+    SECTION("Without iteration")
+    {
+        auto program = generateProgram("int incrementLoop(int n) {\n"
+                                       "int i;\n"
+                                       "for (i = 0;i < n;) {\n"
+                                       "     i++;\n"
+                                       "}\n"
+                                       "return i;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int(int)>(std::move(module), "incrementLoop", 5) == 5);
+    }
+}
+
+TEST_CASE("LLVM codegen while loop", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    auto module = std::make_unique<llvm::Module>("", context);
+    auto program = generateProgram("int incrementLoop(int n) {\n"
+                                   "int i;\n"
+                                   "i = 0;\n"
+                                   "while (i < n) {\n"
+                                   "     i++;\n"
+                                   "}\n"
+                                   "return i;\n"
+                                   "}");
+    cld::CGLLVM::generateLLVM(*module, program);
+    CAPTURE(*module);
+    REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+    CHECK(cld::Tests::computeInJIT<int(int)>(std::move(module), "incrementLoop", 5) == 5);
+}
+
+TEST_CASE("LLVM codegen do while loop", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    auto module = std::make_unique<llvm::Module>("", context);
+    auto program = generateProgram("int incrementLoop(int n) {\n"
+                                   "int i;\n"
+                                   "i = 0;\n"
+                                   "do {\n"
+                                   "     i++;\n"
+                                   "} while (i < n);\n"
+                                   "return i;\n"
+                                   "}");
+    cld::CGLLVM::generateLLVM(*module, program);
+    CAPTURE(*module);
+    REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+    CHECK(cld::Tests::computeInJIT<int(int)>(std::move(module), "incrementLoop", 5) == 5);
+}
+
+TEST_CASE("LLVM codegen switch, case and default", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    auto module = std::make_unique<llvm::Module>("", context);
+    SECTION("Simple")
+    {
+        auto program = generateProgram("static int switchFunc(int n) {\n"
+                                       "switch (n) {\n"
+                                       "case 3: return 5;\n"
+                                       "case 5: return 3;\n"
+                                       "default: return 7;\n"
+                                       "}\n"
+                                       "}"
+                                       "\n"
+                                       "int intoSwitch(void) {\n"
+                                       "int first,second,third;\n"
+                                       "first = switchFunc(3);\n"
+                                       "second = switchFunc(5);\n"
+                                       "third = switchFunc(300);\n"
+                                       "return first == 5 && second == 3 && third == 7;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "intoSwitch") != 0);
+    }
+    SECTION("Fallthrough")
+    {
+        auto program = generateProgram("static int switchFunc(int n) {\n"
+                                       "switch (n) {\n"
+                                       "case 3: n += 5;\n"
+                                       "case 5: n += 3;\n"
+                                       "default: n += 7;\n"
+                                       "}\n"
+                                       "return n;\n"
+                                       "}"
+                                       "\n"
+                                       "int intoSwitch(void) {\n"
+                                       "int first,second,third;\n"
+                                       "first = switchFunc(3);\n"
+                                       "second = switchFunc(5);\n"
+                                       "third = switchFunc(300);\n"
+                                       "return first == 18 && second == 15 && third == 307;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "intoSwitch") != 0);
+    }
+    SECTION("In dead code")
+    {
+        auto program = generateProgram("static int switchFunc(int n) {\n"
+                                       "return 0;\n"
+                                       "switch (n) {\n"
+                                       "case 3: return 5;\n"
+                                       "case 5: return 3;\n"
+                                       "default: return 7;\n"
+                                       "}\n"
+                                       "}\n"
+                                       "\n"
+                                       "int intoSwitch(void) {\n"
+                                       "int first,second,third;\n"
+                                       "first = switchFunc(3);\n"
+                                       "second = switchFunc(5);\n"
+                                       "third = switchFunc(300);\n"
+                                       "return first == 0 && second == 0 && third == 0;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "intoSwitch") != 0);
+    }
+}
+
+TEST_CASE("Codegen LLVM goto and labels", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    auto module = std::make_unique<llvm::Module>("", context);
+    SECTION("Simple")
+    {
+        auto program = generateProgram("static int switchFunc(int n) {\n"
+                                       "if (n == 3)\n"
+                                       "    goto three;\n"
+                                       "else if (n == 5) \n"
+                                       "    goto five;\n"
+                                       "else goto defaultCase;\n"
+                                       "three:\n"
+                                       "    return 5;\n"
+                                       "five:\n"
+                                       "    return 3;\n"
+                                       "defaultCase:\n"
+                                       "    return 7;\n"
+                                       "}\n"
+                                       "\n"
+                                       "int intoSwitch(void) {\n"
+                                       "int first,second,third;\n"
+                                       "first = switchFunc(3);\n"
+                                       "second = switchFunc(5);\n"
+                                       "third = switchFunc(300);\n"
+                                       "return first == 5 && second == 3 && third == 7;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "intoSwitch") != 0);
+    }
 }
