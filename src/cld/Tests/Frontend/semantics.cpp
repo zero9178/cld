@@ -3801,14 +3801,14 @@ TEST_CASE("Semantics initializer list", "[semantics]")
                 auto& initialization = cld::get<InitializerList>(*declaration.getInitializer());
                 REQUIRE(initialization.getFields().size() == 8);
                 auto& fields = initialization.getFields();
-                CHECK_THAT(fields[0].path, Equals<std::size_t>({10, 0}));
-                CHECK_THAT(fields[1].path, Equals<std::size_t>({10, 1}));
-                CHECK_THAT(fields[2].path, Equals<std::size_t>({0, 0}));
-                CHECK_THAT(fields[3].path, Equals<std::size_t>({0, 1}));
-                CHECK_THAT(fields[4].path, Equals<std::size_t>({1, 0}));
-                CHECK_THAT(fields[5].path, Equals<std::size_t>({1, 1}));
-                CHECK_THAT(fields[6].path, Equals<std::size_t>({2, 0}));
-                CHECK_THAT(fields[7].path, Equals<std::size_t>({2, 1}));
+                CHECK_THAT(fields[0].path, Equals<std::uint32_t>({10, 0}));
+                CHECK_THAT(fields[1].path, Equals<std::uint32_t>({10, 1}));
+                CHECK_THAT(fields[2].path, Equals<std::uint32_t>({0, 0}));
+                CHECK_THAT(fields[3].path, Equals<std::uint32_t>({0, 1}));
+                CHECK_THAT(fields[4].path, Equals<std::uint32_t>({1, 0}));
+                CHECK_THAT(fields[5].path, Equals<std::uint32_t>({1, 1}));
+                CHECK_THAT(fields[6].path, Equals<std::uint32_t>({2, 0}));
+                CHECK_THAT(fields[7].path, Equals<std::uint32_t>({2, 1}));
             }
             SECTION("array is declared")
             {

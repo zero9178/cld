@@ -2730,6 +2730,197 @@ TEST_CASE("LLVM codegen function call", "[LLVM]")
     }
 }
 
+TEST_CASE("LLVM codegen assignment", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    auto module = std::make_unique<llvm::Module>("", context);
+    SECTION("Simple")
+    {
+        SECTION("Without operator")
+        {
+            auto program = generateProgram("int foo(void) {\n"
+                                           "int bar;\n"
+                                           "bar = 5;\n"
+                                           "bar = 7;\n"
+                                           "return bar;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "foo") == 7);
+        }
+        SECTION("+=")
+        {
+            auto program = generateProgram("int foo(void) {\n"
+                                           "char bar;\n"
+                                           "bar = 5;\n"
+                                           "bar += 7;\n"
+                                           "return bar;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "foo") == 12);
+        }
+        SECTION("-=")
+        {
+            auto program = generateProgram("int foo(void) {\n"
+                                           "float bar;\n"
+                                           "bar = 5;\n"
+                                           "bar -= 7;\n"
+                                           "return bar;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "foo") == -2);
+        }
+        SECTION("/=")
+        {
+            auto program = generateProgram("float foo(void) {\n"
+                                           "float bar;\n"
+                                           "bar = 5;\n"
+                                           "bar /= 7;\n"
+                                           "return bar;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<float()>(std::move(module), "foo") == 5.f / 7);
+        }
+        SECTION("*=")
+        {
+            auto program = generateProgram("int foo(void) {\n"
+                                           "float bar;\n"
+                                           "bar = 5;\n"
+                                           "bar *= 7;\n"
+                                           "return bar;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "foo") == 35);
+        }
+        SECTION("%=")
+        {
+            auto program = generateProgram("int foo(void) {\n"
+                                           "int bar;\n"
+                                           "bar = 50;\n"
+                                           "bar %= 7;\n"
+                                           "return bar;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "foo") == 50 % 7);
+        }
+        SECTION("<<=")
+        {
+            auto program = generateProgram("int foo(void) {\n"
+                                           "int bar;\n"
+                                           "bar = 1;\n"
+                                           "bar <<= 7;\n"
+                                           "return bar;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "foo") == 1 << 7);
+        }
+        SECTION(">>=")
+        {
+            auto program = generateProgram("int foo(void) {\n"
+                                           "int bar;\n"
+                                           "bar = 100;\n"
+                                           "bar >>= 2;\n"
+                                           "return bar;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "foo") == 25);
+        }
+        SECTION("&=")
+        {
+            auto program = generateProgram("int foo(void) {\n"
+                                           "int bar;\n"
+                                           "bar = 100;\n"
+                                           "bar &= ~32;\n"
+                                           "return bar;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "foo") == 68);
+        }
+        SECTION("|=")
+        {
+            auto program = generateProgram("int foo(void) {\n"
+                                           "int bar;\n"
+                                           "bar = 100;\n"
+                                           "bar |= 8;\n"
+                                           "return bar;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "foo") == 108);
+        }
+        SECTION("^=")
+        {
+            auto program = generateProgram("int foo(void) {\n"
+                                           "int bar;\n"
+                                           "bar = 100;\n"
+                                           "bar ^= 12;\n"
+                                           "return bar;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "foo") == 104);
+        }
+    }
+    SECTION("Bitfields")
+    {
+        SECTION("Without operator")
+        {
+            auto program = generateProgram("struct R {\n"
+                                           "unsigned int f : 13;\n"
+                                           "unsigned int bar : 13;\n"
+                                           "};\n"
+                                           "\n"
+                                           "int foo(void) {\n"
+                                           "struct R r;\n"
+                                           "r.bar = 5;\n"
+                                           "r.f = 5;\n"
+                                           "r.bar = 0xFFFF;\n"
+                                           "return r.bar == 0x1FFF && r.f == 5;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int(void)>(std::move(module), "foo") != 0);
+        }
+        SECTION("+=")
+        {
+            auto program = generateProgram("struct R {\n"
+                                           "int bar : 13;\n"
+                                           "};\n"
+                                           "\n"
+                                           "int foo(void) {\n"
+                                           "struct R r;\n"
+                                           "r.bar = 5;\n"
+                                           "r.bar += 7;\n"
+                                           "return r.bar;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "foo") == 12);
+        }
+    }
+}
+
 TEST_CASE("LLVM codegen if statement", "[LLVM]")
 {
     llvm::LLVMContext context;

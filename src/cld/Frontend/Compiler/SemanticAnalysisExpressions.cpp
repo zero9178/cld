@@ -284,7 +284,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                         log(Errors::Semantics::INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args(
                             lhsValue, m_sourceInterface, elementType, lhsValue, lhsValue.getType()));
                     }
-                    if (!rhsValue.isUndefined() && !isInteger(rhsValue.getType()))
+                    if (!rhsValue.getType().isUndefined() && !isInteger(rhsValue.getType()))
                     {
                         log(Errors::Semantics::EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_INTEGER_TYPE.args(
                             rhsValue, m_sourceInterface, *token, rhsValue));
@@ -292,10 +292,15 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                 }
                 else if (isArithmetic(lhsValue.getType()))
                 {
-                    if (!rhsValue.isUndefined() && !isArithmetic(rhsValue.getType()))
+                    if (!rhsValue.getType().isUndefined() && !isArithmetic(rhsValue.getType()))
                     {
                         log(Errors::Semantics::EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_ARITHMETIC_TYPE.args(
                             rhsValue, m_sourceInterface, *token, rhsValue));
+                    }
+                    else if (isArithmetic(rhsValue.getType()))
+                    {
+                        auto lhsType = lhsValue.getType();
+                        arithmeticConversion(lhsType, rhsValue);
                     }
                 }
                 break;
@@ -316,7 +321,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                     log(Errors::Semantics::LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE.args(
                         lhsValue, m_sourceInterface, *token, lhsValue));
                 }
-                if (!rhsValue.isUndefined() && !isArithmetic(rhsValue.getType()))
+                if (!rhsValue.getType().isUndefined() && !isArithmetic(rhsValue.getType()))
                 {
                     log(Errors::Semantics::RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE.args(
                         rhsValue, m_sourceInterface, *token, rhsValue));

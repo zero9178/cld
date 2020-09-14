@@ -631,6 +631,54 @@ class CodeGenerator final
         return m_builder.CreateAShr(lhs, rhs);
     }
 
+    llvm::Value* cast(llvm::Value* value, const cld::Semantics::Type& from, const cld::Semantics::Type& to)
+    {
+        if (std::holds_alternative<cld::Semantics::PointerType>(to.getVariant()))
+        {
+            if (cld::Semantics::isInteger(from))
+            {
+                return m_builder.CreateIntToPtr(value, visit(to));
+            }
+            return m_builder.CreatePointerCast(value, visit(to));
+        }
+        if (cld::Semantics::isBool(to))
+        {
+            return m_builder.CreateIntCast(toBool(value), visit(to), false);
+        }
+        if (cld::Semantics::isInteger(to) && cld::Semantics::isInteger(from))
+        {
+            return m_builder.CreateIntCast(value, visit(to),
+                                           cld::get<cld::Semantics::PrimitiveType>(from.getVariant()).isSigned());
+        }
+        if (cld::Semantics::isArithmetic(to) && cld::Semantics::isInteger(from))
+        {
+            if (cld::get<cld::Semantics::PrimitiveType>(from.getVariant()).isSigned())
+            {
+                return m_builder.CreateSIToFP(value, visit(to));
+            }
+            else
+            {
+                return m_builder.CreateUIToFP(value, visit(to));
+            }
+        }
+        if (cld::Semantics::isInteger(to))
+        {
+            if (std::holds_alternative<cld::Semantics::PointerType>(from.getVariant()))
+            {
+                return m_builder.CreatePtrToInt(value, visit(to));
+            }
+            else if (cld::get<cld::Semantics::PrimitiveType>(to.getVariant()).isSigned())
+            {
+                return m_builder.CreateFPToSI(value, visit(to));
+            }
+            else
+            {
+                return m_builder.CreateFPToUI(value, visit(to));
+            }
+        }
+        return m_builder.CreateFPCast(value, visit(to));
+    }
+
 public:
     explicit CodeGenerator(llvm::Module& module, const cld::Semantics::ProgramInterface& programInterface,
                            const cld::SourceInterface& sourceInterface, cld::Triple triple)
@@ -1391,8 +1439,12 @@ public:
         }
         else if (std::holds_alternative<std::string>(constant.getValue()))
         {
-            return llvm::ConstantDataArray::getString(m_module.getContext(),
-                                                      cld::get<std::string>(constant.getValue()));
+            auto* array =
+                llvm::ConstantDataArray::getString(m_module.getContext(), cld::get<std::string>(constant.getValue()));
+            auto* global =
+                new llvm::GlobalVariable(m_module, array->getType(), true, llvm::GlobalValue::PrivateLinkage, array);
+            global->setAlignment(llvm::MaybeAlign(1));
+            return global;
         }
         else
         {
@@ -1794,50 +1846,7 @@ public:
         auto* value = visit(cast.getExpression());
         auto& prevType = cast.getExpression().getType();
         auto& newType = expression.getType();
-        if (std::holds_alternative<cld::Semantics::PointerType>(newType.getVariant()))
-        {
-            if (cld::Semantics::isInteger(prevType))
-            {
-                return m_builder.CreateIntToPtr(value, visit(newType));
-            }
-            return m_builder.CreatePointerCast(value, visit(newType));
-        }
-        if (cld::Semantics::isBool(newType))
-        {
-            return m_builder.CreateIntCast(toBool(value), visit(newType), false);
-        }
-        if (cld::Semantics::isInteger(prevType) && cld::Semantics::isInteger(newType))
-        {
-            return m_builder.CreateIntCast(value, visit(newType),
-                                           cld::get<cld::Semantics::PrimitiveType>(prevType.getVariant()).isSigned());
-        }
-        if (cld::Semantics::isInteger(prevType))
-        {
-            if (cld::get<cld::Semantics::PrimitiveType>(prevType.getVariant()).isSigned())
-            {
-                return m_builder.CreateSIToFP(value, visit(newType));
-            }
-            else
-            {
-                return m_builder.CreateUIToFP(value, visit(newType));
-            }
-        }
-        if (cld::Semantics::isInteger(newType))
-        {
-            if (std::holds_alternative<cld::Semantics::PointerType>(prevType.getVariant()))
-            {
-                return m_builder.CreatePtrToInt(value, visit(newType));
-            }
-            else if (cld::get<cld::Semantics::PrimitiveType>(newType.getVariant()).isSigned())
-            {
-                return m_builder.CreateFPToSI(value, visit(newType));
-            }
-            else
-            {
-                return m_builder.CreateFPToUI(value, visit(newType));
-            }
-        }
-        return m_builder.CreateFPCast(value, visit(newType));
+        return this->cast(value, prevType, newType);
     }
 
     llvm::Value* visit(const cld::Semantics::Expression&, const cld::Semantics::UnaryOperator& unaryOperator)
@@ -2063,87 +2072,47 @@ public:
         {
             auto* lhs = visit(assignment.getLeftExpression());
             auto* rhs = visit(assignment.getRightExpression());
-            // TODO: Conversions of left operand I think?
-            switch (assignment.getKind())
+            if (assignment.getKind() != cld::Semantics::Assignment::Simple)
             {
-                case cld::Semantics::Assignment::Simple: break;
-                case cld::Semantics::Assignment::Plus:
+                llvm::Value* load = m_builder.CreateLoad(lhs->getType()->getPointerElementType(), lhs,
+                                                         assignment.getLeftExpression().getType().isVolatile());
+                load = cast(load, assignment.getLeftExpression().getType(), assignment.getRightExpression().getType());
+                switch (assignment.getKind())
                 {
-                    auto* load = m_builder.CreateLoad(lhs->getType()->getPointerElementType(), lhs,
-                                                      assignment.getLeftExpression().getType().isVolatile());
-                    rhs = add(load, assignment.getLeftExpression().getType(), rhs,
-                              assignment.getRightExpression().getType());
-                    break;
+                    case cld::Semantics::Assignment::Simple: CLD_UNREACHABLE;
+                    case cld::Semantics::Assignment::Plus:
+                        rhs = add(load, assignment.getLeftExpression().getType(), rhs,
+                                  assignment.getRightExpression().getType());
+                        break;
+                    case cld::Semantics::Assignment::Minus:
+                        rhs = sub(load, assignment.getLeftExpression().getType(), rhs,
+                                  assignment.getRightExpression().getType());
+                        break;
+                    case cld::Semantics::Assignment::Divide:
+                        rhs = div(load, assignment.getLeftExpression().getType(), rhs,
+                                  assignment.getRightExpression().getType());
+                        break;
+                    case cld::Semantics::Assignment::Multiply:
+                        rhs = mul(load, assignment.getLeftExpression().getType(), rhs,
+                                  assignment.getRightExpression().getType());
+                        break;
+                    case cld::Semantics::Assignment::Modulo:
+                        rhs = mod(load, assignment.getLeftExpression().getType(), rhs,
+                                  assignment.getRightExpression().getType());
+                        break;
+                    case cld::Semantics::Assignment::LeftShift:
+                        rhs = shl(load, assignment.getLeftExpression().getType(), rhs,
+                                  assignment.getRightExpression().getType());
+                        break;
+                    case cld::Semantics::Assignment::RightShift:
+                        rhs = shr(load, assignment.getLeftExpression().getType(), rhs,
+                                  assignment.getRightExpression().getType());
+                        break;
+                    case cld::Semantics::Assignment::BitAnd: rhs = m_builder.CreateAnd(load, rhs); break;
+                    case cld::Semantics::Assignment::BitOr: rhs = m_builder.CreateOr(load, rhs); break;
+                    case cld::Semantics::Assignment::BitXor: rhs = m_builder.CreateXor(load, rhs); break;
                 }
-                case cld::Semantics::Assignment::Minus:
-                {
-                    auto* load = m_builder.CreateLoad(lhs->getType()->getPointerElementType(), lhs,
-                                                      assignment.getLeftExpression().getType().isVolatile());
-                    rhs = sub(load, assignment.getLeftExpression().getType(), rhs,
-                              assignment.getRightExpression().getType());
-                    break;
-                }
-                case cld::Semantics::Assignment::Divide:
-                {
-                    auto* load = m_builder.CreateLoad(lhs->getType()->getPointerElementType(), lhs,
-                                                      assignment.getLeftExpression().getType().isVolatile());
-                    rhs = div(load, assignment.getLeftExpression().getType(), rhs,
-                              assignment.getRightExpression().getType());
-                    break;
-                }
-                case cld::Semantics::Assignment::Multiply:
-                {
-                    auto* load = m_builder.CreateLoad(lhs->getType()->getPointerElementType(), lhs,
-                                                      assignment.getLeftExpression().getType().isVolatile());
-                    rhs = mul(load, assignment.getLeftExpression().getType(), rhs,
-                              assignment.getRightExpression().getType());
-                    break;
-                }
-                case cld::Semantics::Assignment::Modulo:
-                {
-                    auto* load = m_builder.CreateLoad(lhs->getType()->getPointerElementType(), lhs,
-                                                      assignment.getLeftExpression().getType().isVolatile());
-                    rhs = mod(load, assignment.getLeftExpression().getType(), rhs,
-                              assignment.getRightExpression().getType());
-                    break;
-                }
-                case cld::Semantics::Assignment::LeftShift:
-                {
-                    auto* load = m_builder.CreateLoad(lhs->getType()->getPointerElementType(), lhs,
-                                                      assignment.getLeftExpression().getType().isVolatile());
-                    rhs = shl(load, assignment.getLeftExpression().getType(), rhs,
-                              assignment.getRightExpression().getType());
-                    break;
-                }
-                case cld::Semantics::Assignment::RightShift:
-                {
-                    auto* load = m_builder.CreateLoad(lhs->getType()->getPointerElementType(), lhs,
-                                                      assignment.getLeftExpression().getType().isVolatile());
-                    rhs = shr(load, assignment.getLeftExpression().getType(), rhs,
-                              assignment.getRightExpression().getType());
-                    break;
-                }
-                case cld::Semantics::Assignment::BitAnd:
-                {
-                    auto* load = m_builder.CreateLoad(lhs->getType()->getPointerElementType(), lhs,
-                                                      assignment.getLeftExpression().getType().isVolatile());
-                    rhs = m_builder.CreateAnd(load, rhs);
-                    break;
-                }
-                case cld::Semantics::Assignment::BitOr:
-                {
-                    auto* load = m_builder.CreateLoad(lhs->getType()->getPointerElementType(), lhs,
-                                                      assignment.getLeftExpression().getType().isVolatile());
-                    rhs = m_builder.CreateOr(load, rhs);
-                    break;
-                }
-                case cld::Semantics::Assignment::BitXor:
-                {
-                    auto* load = m_builder.CreateLoad(lhs->getType()->getPointerElementType(), lhs,
-                                                      assignment.getLeftExpression().getType().isVolatile());
-                    rhs = m_builder.CreateXor(load, rhs);
-                    break;
-                }
+                rhs = cast(rhs, assignment.getRightExpression().getType(), assignment.getLeftExpression().getType());
             }
             m_builder.CreateStore(rhs, lhs, assignment.getLeftExpression().getType().isVolatile());
             return m_builder.CreateLoad(lhs->getType()->getPointerElementType(), lhs,
@@ -2179,9 +2148,51 @@ public:
         }
 
         llvm::Value* loaded = m_builder.CreateLoad(fieldPtr, type.isVolatile());
-        // TODO: Compounds
         auto size = field.bitFieldBounds->second - field.bitFieldBounds->first;
         llvm::Value* mask = llvm::ConstantInt::get(rhsValue->getType(), (1u << size) - 1);
+        if (assignment.getKind() != cld::Semantics::Assignment::Simple)
+        {
+            llvm::Value* load =
+                m_builder.CreateAShr(loaded, llvm::ConstantInt::get(mask->getType(), field.bitFieldBounds->first));
+            load = m_builder.CreateAnd(load, mask);
+            load = cast(load, assignment.getLeftExpression().getType(), assignment.getRightExpression().getType());
+            switch (assignment.getKind())
+            {
+                case cld::Semantics::Assignment::Simple: CLD_UNREACHABLE;
+                case cld::Semantics::Assignment::Plus:
+                    rhsValue = add(load, assignment.getLeftExpression().getType(), rhsValue,
+                                   assignment.getRightExpression().getType());
+                    break;
+                case cld::Semantics::Assignment::Minus:
+                    rhsValue = sub(load, assignment.getLeftExpression().getType(), rhsValue,
+                                   assignment.getRightExpression().getType());
+                    break;
+                case cld::Semantics::Assignment::Divide:
+                    rhsValue = div(load, assignment.getLeftExpression().getType(), rhsValue,
+                                   assignment.getRightExpression().getType());
+                    break;
+                case cld::Semantics::Assignment::Multiply:
+                    rhsValue = mul(load, assignment.getLeftExpression().getType(), rhsValue,
+                                   assignment.getRightExpression().getType());
+                    break;
+                case cld::Semantics::Assignment::Modulo:
+                    rhsValue = mod(load, assignment.getLeftExpression().getType(), rhsValue,
+                                   assignment.getRightExpression().getType());
+                    break;
+                case cld::Semantics::Assignment::LeftShift:
+                    rhsValue = shl(load, assignment.getLeftExpression().getType(), rhsValue,
+                                   assignment.getRightExpression().getType());
+                    break;
+                case cld::Semantics::Assignment::RightShift:
+                    rhsValue = shr(load, assignment.getLeftExpression().getType(), rhsValue,
+                                   assignment.getRightExpression().getType());
+                    break;
+                case cld::Semantics::Assignment::BitAnd: rhsValue = m_builder.CreateAnd(load, rhsValue); break;
+                case cld::Semantics::Assignment::BitOr: rhsValue = m_builder.CreateOr(load, rhsValue); break;
+                case cld::Semantics::Assignment::BitXor: rhsValue = m_builder.CreateXor(load, rhsValue); break;
+            }
+            load = cast(load, assignment.getRightExpression().getType(), assignment.getLeftExpression().getType());
+        }
         rhsValue = m_builder.CreateAnd(rhsValue, mask);
         rhsValue =
             m_builder.CreateShl(rhsValue, llvm::ConstantInt::get(rhsValue->getType(), field.bitFieldBounds->first));
@@ -2190,7 +2201,7 @@ public:
         loaded = m_builder.CreateAnd(loaded, mask);
         auto* result = m_builder.CreateOr(loaded, rhsValue);
         m_builder.CreateStore(result, fieldPtr, type.isVolatile());
-        return m_builder.CreateLoad(fieldPtr, type.isVolatile());
+        return result;
     }
 
     llvm::Value* visit(const cld::Semantics::Expression&, const cld::Semantics::CommaExpression& commaExpression)
