@@ -81,13 +81,13 @@ bool cld::Semantics::SemanticAnalysis::doAssignmentLikeConstraints(
     {
         if (!isBool(lhsType))
         {
-            if (!rhsValue.isUndefined() && !isArithmetic(rhsValue.getType()))
+            if (!rhsValue.getType().isUndefined() && !isArithmetic(rhsValue.getType()))
             {
                 mustBeArithmetic();
                 return false;
             }
         }
-        else if (!rhsValue.isUndefined() && !isScalar(rhsValue.getType()))
+        else if (!rhsValue.getType().isUndefined() && !isScalar(rhsValue.getType()))
         {
             mustBeArithmeticOrPointer();
             return false;
@@ -108,7 +108,7 @@ bool cld::Semantics::SemanticAnalysis::doAssignmentLikeConstraints(
             return false;
         }
 
-        if (!rhsValue.isUndefined()
+        if (!rhsValue.getType().isUndefined()
             && !typesAreCompatible(removeQualifiers(lhsType), removeQualifiers(rhsValue.getType())))
         {
             incompatibleTypes();
@@ -140,13 +140,13 @@ bool cld::Semantics::SemanticAnalysis::doAssignmentLikeConstraints(
         return true;
     }
 
-    if (!rhsValue.isUndefined() && !std::holds_alternative<PointerType>(rhsValue.getType().getVariant()))
+    if (!rhsValue.getType().isUndefined() && !std::holds_alternative<PointerType>(rhsValue.getType().getVariant()))
     {
         mustBePointer();
         return false;
     }
 
-    if (rhsValue.isUndefined())
+    if (rhsValue.getType().isUndefined())
     {
         return true;
     }
@@ -537,7 +537,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
 {
     auto first = lvalueConversion(visit(node.getPostFixExpression()));
     auto second = lvalueConversion(visit(node.getExpression()));
-    if (first.isUndefined() || second.isUndefined())
+    if (first.getType().isUndefined() || second.getType().isUndefined())
     {
         return Expression(node);
     }
@@ -1357,13 +1357,13 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
             rhsValue = lvalueConversion(std::move(rhsValue));
         }
         bool errors = false;
-        if (!value.isUndefined() && !isScalar(value.getType()))
+        if (!value.getType().isUndefined() && !isScalar(value.getType()))
         {
             log(Errors::Semantics::LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
                 value, m_sourceInterface, *token, value));
             errors = true;
         }
-        if (!rhsValue.isUndefined() && !isScalar(rhsValue.getType()))
+        if (!rhsValue.getType().isUndefined() && !isScalar(rhsValue.getType()))
         {
             log(Errors::Semantics::RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
                 rhsValue, m_sourceInterface, *token, rhsValue));
@@ -1383,7 +1383,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                                                       std::make_unique<Expression>(std::move(rhsValue))));
                     continue;
                 }
-                if (value.isUndefined() || rhsValue.isUndefined() || errors)
+                if (value.getType().isUndefined() || rhsValue.getType().isUndefined() || errors)
                 {
                     value = Expression(value.begin(), rhsValue.end());
                     continue;
@@ -1466,7 +1466,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                                                       std::make_unique<Expression>(std::move(rhsValue))));
                     continue;
                 }
-                if (value.isUndefined() || rhsValue.isUndefined() || errors)
+                if (value.getType().isUndefined() || rhsValue.getType().isUndefined() || errors)
                 {
                     value = Expression(value.begin(), rhsValue.end());
                     continue;

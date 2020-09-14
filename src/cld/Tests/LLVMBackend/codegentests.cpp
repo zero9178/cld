@@ -2690,8 +2690,7 @@ TEST_CASE("LLVM codegen function call", "[LLVM]")
                                        "};\n"
                                        "\n"
                                        "int function(struct R (*toCall)(void)) {\n"
-                                       "struct R r;\n"
-                                       "r = toCall();\n"
+                                       "struct R r = toCall();\n"
                                        "return r.c == 5 && r.f == 3;\n"
                                        "}");
         cld::CGLLVM::generateLLVM(*module, program);
@@ -2715,8 +2714,7 @@ TEST_CASE("LLVM codegen function call", "[LLVM]")
                             "};\n"
                             "\n"
                             "int function(struct R (*toCall)(void)) {\n"
-                            "struct R r;\n"
-                            "r = toCall();\n"
+                            "struct R r = toCall();\n"
                             "return r.f[0] == 0 && r.f[1] == 1 && r.f[2] == 2 && r.f[3] == 3 && r.f[4] == 4\n"
                             "&& r.f[5] == 5 && r.f[6] == 6 && r.f[7] == 7;\n"
                             "}");
@@ -2855,19 +2853,17 @@ TEST_CASE("LLVM codegen for loop", "[LLVM]")
     }
     SECTION("Initial expression")
     {
-        // TODO: when initialization works
-        //        auto program = generateProgram("int incrementLoop(int n) {\n"
-        //                                       "int r;\n"
-        //                                       "r = 0;"
-        //                                       "for (int i = 0;i < n; i++) {\n"
-        //                                       "    r++;\n"
-        //                                       "}\n"
-        //                                       "return r;\n"
-        //                                       "}");
-        //        cld::CGLLVM::generateLLVM(*module, program);
-        //        CAPTURE(*module);
-        //        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
-        //        CHECK(cld::Tests::computeInJIT<int(int)>(std::move(module), "incrementLoop", 5) == 5);
+        auto program = generateProgram("int incrementLoop(int n) {\n"
+                                       "int r = 0;\n"
+                                       "for (int i = 0;i < n; i++) {\n"
+                                       "    r++;\n"
+                                       "}\n"
+                                       "return r;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int(int)>(std::move(module), "incrementLoop", 5) == 5);
     }
     SECTION("Without controlling")
     {
@@ -2903,8 +2899,7 @@ TEST_CASE("LLVM codegen while loop", "[LLVM]")
     llvm::LLVMContext context;
     auto module = std::make_unique<llvm::Module>("", context);
     auto program = generateProgram("int incrementLoop(int n) {\n"
-                                   "int i;\n"
-                                   "i = 0;\n"
+                                   "int i = 0;\n"
                                    "while (i < n) {\n"
                                    "     i++;\n"
                                    "}\n"
@@ -2921,8 +2916,7 @@ TEST_CASE("LLVM codegen do while loop", "[LLVM]")
     llvm::LLVMContext context;
     auto module = std::make_unique<llvm::Module>("", context);
     auto program = generateProgram("int incrementLoop(int n) {\n"
-                                   "int i;\n"
-                                   "i = 0;\n"
+                                   "int i = 0;\n"
                                    "do {\n"
                                    "     i++;\n"
                                    "} while (i < n);\n"
@@ -3008,7 +3002,7 @@ TEST_CASE("LLVM codegen switch, case and default", "[LLVM]")
     }
 }
 
-TEST_CASE("Codegen LLVM goto and labels", "[LLVM]")
+TEST_CASE("LLVM Codegen goto and labels", "[LLVM]")
 {
     llvm::LLVMContext context;
     auto module = std::make_unique<llvm::Module>("", context);
@@ -3039,5 +3033,52 @@ TEST_CASE("Codegen LLVM goto and labels", "[LLVM]")
         CAPTURE(*module);
         REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
         CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "intoSwitch") != 0);
+    }
+}
+
+TEST_CASE("LLVM  Codegen initialization", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    auto module = std::make_unique<llvm::Module>("", context);
+    SECTION("static lifetime")
+    {
+        SECTION("Simple")
+        {
+            auto program = generateProgram("struct R {\n"
+                                           "float f[2];\n"
+                                           "double r;\n"
+                                           "};\n"
+                                           "\n"
+                                           "float function(void) {\n"
+                                           "static struct R r = {.r = 3.5,.f = {3456.34,4356.2134}};\n"
+                                           "return r.r + r.f[0] + r.f[1];\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            using namespace Catch::literals;
+            CHECK(cld::Tests::computeInJIT<float()>(std::move(module), "function") == 7816.0534_a);
+        }
+        SECTION("Union")
+        {
+            auto program = generateProgram("struct R {\n"
+                                           "float f[2];\n"
+                                           "};\n"
+                                           "\n"
+                                           "union U {\n"
+                                           "int i[10];\n"
+                                           "struct R r;\n"
+                                           "};\n"
+                                           "\n"
+                                           "float function(void) {\n"
+                                           "static union U u = {.r.f = {3456.34,4356.2134}};\n"
+                                           "return u.r.f[0] + u.r.f[1];\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            using namespace Catch::literals;
+            CHECK(cld::Tests::computeInJIT<float()>(std::move(module), "function") == 7812.5534_a);
+        }
     }
 }

@@ -1804,7 +1804,7 @@ class InitializerList final
 public:
     struct Initialization
     {
-        std::vector<std::size_t> path;
+        std::vector<std::uint32_t> path;
         Expression expression;
     };
 
