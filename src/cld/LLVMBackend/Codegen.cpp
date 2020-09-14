@@ -2178,12 +2178,16 @@ public:
             fieldPtr = m_builder.CreateBitCast(lhsRecord, llvm::PointerType::getUnqual(visit(*field.type)));
         }
 
-        auto* loaded = m_builder.CreateLoad(fieldPtr, type.isVolatile());
+        llvm::Value* loaded = m_builder.CreateLoad(fieldPtr, type.isVolatile());
         // TODO: Compounds
         auto size = field.bitFieldBounds->second - field.bitFieldBounds->first;
-        rhsValue = m_builder.CreateAnd(rhsValue, llvm::ConstantInt::get(rhsValue->getType(), (1u << size) - 1));
+        llvm::Value* mask = llvm::ConstantInt::get(rhsValue->getType(), (1u << size) - 1);
+        rhsValue = m_builder.CreateAnd(rhsValue, mask);
         rhsValue =
             m_builder.CreateShl(rhsValue, llvm::ConstantInt::get(rhsValue->getType(), field.bitFieldBounds->first));
+        mask = m_builder.CreateShl(mask, llvm::ConstantInt::get(mask->getType(), field.bitFieldBounds->first));
+        mask = m_builder.CreateNot(mask);
+        loaded = m_builder.CreateAnd(loaded, mask);
         auto* result = m_builder.CreateOr(loaded, rhsValue);
         m_builder.CreateStore(result, fieldPtr, type.isVolatile());
         return m_builder.CreateLoad(fieldPtr, type.isVolatile());
@@ -2460,23 +2464,61 @@ public:
                                           const Aggregate& aggregate) -> llvm::Constant* {
                         if (cld::Semantics::isStruct(type))
                         {
-                            // TODO: Bitfields
                             std::vector<llvm::Constant*> elements;
                             auto fields = m_programInterface.getFields(type);
-                            for (std::size_t i = 0; i < aggregate.vector.size(); i++)
+                            for (std::size_t i = 0; i < aggregate.vector.size();)
                             {
-                                elements.push_back(cld::match(
-                                    aggregate.vector[i],
-                                    [&](const Aggregate& subAggregate) -> llvm::Constant* {
-                                        return self(*fields[i].type, llvmType->getStructElementType(i), subAggregate);
-                                    },
-                                    [&](llvm::Constant* constant) {
-                                        if (constant)
-                                        {
-                                            return constant;
-                                        }
-                                        return llvm::Constant::getNullValue(llvmType->getStructElementType(i));
-                                    }));
+                                if (!fields[i].bitFieldBounds)
+                                {
+                                    elements.push_back(cld::match(
+                                        aggregate.vector[i],
+                                        [&](const Aggregate& subAggregate) -> llvm::Constant* {
+                                            return self(*fields[i].type,
+                                                        llvmType->getStructElementType(fields[i].layoutIndex),
+                                                        subAggregate);
+                                        },
+                                        [&](llvm::Constant* constant) {
+                                            if (constant)
+                                            {
+                                                return constant;
+                                            }
+                                            return llvm::Constant::getNullValue(
+                                                llvmType->getStructElementType(fields[i].layoutIndex));
+                                        }));
+                                    i++;
+                                    continue;
+                                }
+                                elements.push_back(llvm::Constant::getNullValue(
+                                    llvmType->getStructElementType(fields[i].layoutIndex)));
+                                for (; i < aggregate.vector.size() && fields[i].bitFieldBounds; i++)
+                                {
+                                    auto* value = cld::match(
+                                        aggregate.vector[i],
+                                        [&](const Aggregate& subAggregate) -> llvm::Constant* {
+                                            return self(*fields[i].type,
+                                                        llvmType->getStructElementType(fields[i].layoutIndex),
+                                                        subAggregate);
+                                        },
+                                        [&](llvm::Constant* constant) -> llvm::Constant* {
+                                            if (constant)
+                                            {
+                                                return constant;
+                                            }
+                                            return llvm::Constant::getNullValue(
+                                                llvmType->getStructElementType(fields[i].layoutIndex));
+                                        });
+                                    auto size = fields[i].bitFieldBounds->second - fields[i].bitFieldBounds->first;
+                                    auto* mask = llvm::ConstantInt::get(value->getType(), (1u << size) - 1);
+                                    value = llvm::ConstantExpr::getAnd(value, mask);
+                                    value = llvm::ConstantExpr::getShl(
+                                        value,
+                                        llvm::ConstantInt::get(value->getType(), fields[i].bitFieldBounds->first));
+                                    mask = llvm::ConstantExpr::getShl(
+                                        mask, llvm::ConstantInt::get(mask->getType(), fields[i].bitFieldBounds->first));
+                                    mask = llvm::ConstantExpr::getNot(mask);
+                                    elements.back() = llvm::ConstantExpr::getAnd(elements.back(), mask);
+                                    elements.back() = llvm::ConstantExpr::getOr(elements.back(), value);
+                                }
                             }
                             return llvm::ConstantStruct::get(llvm::cast<llvm::StructType>(llvmType), elements);
                         }

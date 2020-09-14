@@ -115,6 +115,8 @@ public:
 
     llvm::ArrayRef<Field> getFields(const Type& recordType) const;
 
+    llvm::ArrayRef<Type> getLayout(const Type& structType) const;
+
     bool isBitfieldAccess(const Expression& expression) const;
 
     const std::vector<Scope>& getScopes() const

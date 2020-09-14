@@ -153,6 +153,23 @@ llvm::ArrayRef<cld::Semantics::Field>
     CLD_UNREACHABLE;
 }
 
+llvm::ArrayRef<cld::Semantics::Type>
+    cld::Semantics::ProgramInterface::getLayout(const cld::Semantics::Type& structType) const
+{
+    if (std::holds_alternative<AnonymousStructType>(structType.getVariant()))
+    {
+        return cld::get<AnonymousStructType>(structType.getVariant()).getLayout();
+    }
+    if (std::holds_alternative<StructType>(structType.getVariant()))
+    {
+        auto& structTy = cld::get<StructType>(structType.getVariant());
+        auto* structDef = getStructDefinition(structTy.getName(), structTy.getScopeOrId());
+        CLD_ASSERT(structDef);
+        return structDef->getLayout();
+    }
+    CLD_UNREACHABLE;
+}
+
 bool cld::Semantics::ProgramInterface::isBitfieldAccess(const Expression& expression) const
 {
     if (!std::holds_alternative<MemberAccess>(expression.getVariant()))

@@ -664,7 +664,6 @@ TEST_CASE("LLVM codegen global variables", "[LLVM]")
     }
     SECTION("Definitions")
     {
-        // TODO: Check initializers once those are implemented
         SECTION("External definitions")
         {
             SECTION("Single")
@@ -3079,6 +3078,21 @@ TEST_CASE("LLVM  Codegen initialization", "[LLVM]")
             REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
             using namespace Catch::literals;
             CHECK(cld::Tests::computeInJIT<float()>(std::move(module), "function") == 7812.5534_a);
+        }
+        SECTION("Bitfields")
+        {
+            auto program = generateProgram("struct A {\n"
+                                           "unsigned int f:13,r:13;\n"
+                                           "};\n"
+                                           "\n"
+                                           "int foo(void) {\n"
+                                           "static struct A a = {.r = 0xFFFF,.f = 12};\n"
+                                           "return a.r == 0x1FFF && a.f == 12;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int(void)>(std::move(module), "foo") != 0);
         }
     }
 }
