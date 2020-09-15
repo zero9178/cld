@@ -3286,4 +3286,61 @@ TEST_CASE("LLVM  Codegen initialization", "[LLVM]")
             CHECK(cld::Tests::computeInJIT<int(void)>(std::move(module), "foo") != 0);
         }
     }
+    SECTION("automatic lifetime")
+    {
+        SECTION("Simple")
+        {
+            auto program = generateProgram("struct R {\n"
+                                           "float f[2];\n"
+                                           "double r;\n"
+                                           "};\n"
+                                           "\n"
+                                           "float function(void) {\n"
+                                           "struct R r = {.r = 3.5,.f = {3456.34,4356.2134}};\n"
+                                           "return r.r + r.f[0] + r.f[1];\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            using namespace Catch::literals;
+            CHECK(cld::Tests::computeInJIT<float()>(std::move(module), "function") == 7816.0534_a);
+        }
+        SECTION("Union")
+        {
+            auto program = generateProgram("struct R {\n"
+                                           "float f[2];\n"
+                                           "};\n"
+                                           "\n"
+                                           "union U {\n"
+                                           "int i[10];\n"
+                                           "struct R r;\n"
+                                           "};\n"
+                                           "\n"
+                                           "float function(void) {\n"
+                                           "union U u = {.r.f = {3456.34,4356.2134}};\n"
+                                           "return u.r.f[0] + u.r.f[1];\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            using namespace Catch::literals;
+            CHECK(cld::Tests::computeInJIT<float()>(std::move(module), "function") == 7812.5534_a);
+        }
+        return;
+        SECTION("Bitfields")
+        {
+            auto program = generateProgram("struct A {\n"
+                                           "unsigned int f:13,r:13;\n"
+                                           "};\n"
+                                           "\n"
+                                           "int foo(void) {\n"
+                                           "struct A a = {.r = 0xFFFF,.f = 12};\n"
+                                           "return a.r == 0x1FFF && a.f == 12;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int(void)>(std::move(module), "foo") != 0);
+        }
+    }
 }
