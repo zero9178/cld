@@ -2614,6 +2614,18 @@ public:
                         m_builder.CreateStore(subValue, currentPointer, type.isVolatile());
                         continue;
                     }
+                    llvm::Value* loaded = m_builder.CreateLoad(currentPointer, type.isVolatile());
+                    auto size = bitFieldBounds->second - bitFieldBounds->first;
+                    llvm::Value* mask = llvm::ConstantInt::get(subValue->getType(), (1u << size) - 1);
+                    subValue = m_builder.CreateAnd(subValue, mask);
+                    subValue = m_builder.CreateShl(subValue,
+                                                   llvm::ConstantInt::get(subValue->getType(), bitFieldBounds->first));
+                    mask = m_builder.CreateShl(mask, llvm::ConstantInt::get(mask->getType(), bitFieldBounds->first));
+                    mask = m_builder.CreateNot(mask);
+                    loaded = m_builder.CreateAnd(loaded, mask);
+                    auto* result = m_builder.CreateOr(loaded, subValue);
+                    m_builder.CreateStore(result, currentPointer, type.isVolatile());
+                    continue;
                 }
                 return nullptr;
             });

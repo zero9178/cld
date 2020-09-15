@@ -3326,7 +3326,6 @@ TEST_CASE("LLVM  Codegen initialization", "[LLVM]")
             using namespace Catch::literals;
             CHECK(cld::Tests::computeInJIT<float()>(std::move(module), "function") == 7812.5534_a);
         }
-        return;
         SECTION("Bitfields")
         {
             auto program = generateProgram("struct A {\n"
