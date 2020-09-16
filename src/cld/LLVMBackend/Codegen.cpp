@@ -10,6 +10,8 @@
 #include <cld/Frontend/Compiler/Program.hpp>
 #include <cld/Frontend/Compiler/SemanticUtil.hpp>
 
+#include <numeric>
+
 namespace
 {
 class CodeGenerator final
@@ -2331,24 +2333,76 @@ public:
 
     llvm::Value* visit(const cld::Semantics::Expression&, const cld::Semantics::SubscriptOperator& subscriptOperator)
     {
-        auto* lhs = visit(subscriptOperator.getLeftExpression());
-        auto* rhs = visit(subscriptOperator.getRightExpression());
-        if (rhs->getType()->isIntegerTy())
+        auto& integer = cld::Semantics::isInteger(subscriptOperator.getLeftExpression().getType()) ?
+                            subscriptOperator.getLeftExpression() :
+                            subscriptOperator.getRightExpression();
+        auto* pointer = &integer == &subscriptOperator.getLeftExpression() ? &subscriptOperator.getRightExpression() :
+                                                                             &subscriptOperator.getLeftExpression();
+
+        if (!std::holds_alternative<cld::Semantics::Conversion>(pointer->getVariant())
+            || cld::get<cld::Semantics::Conversion>(pointer->getVariant()).getKind()
+                   != cld::Semantics::Conversion::LValue
+            || !std::holds_alternative<cld::Semantics::ValArrayType>(
+                cld::get<cld::Semantics::Conversion>(pointer->getVariant()).getExpression().getType().getVariant()))
         {
-            rhs = m_builder.CreateIntCast(
-                rhs, m_builder.getInt64Ty(),
-                cld::get<cld::Semantics::PrimitiveType>(subscriptOperator.getRightExpression().getType().getVariant())
-                    .isSigned());
-            return m_builder.CreateGEP(lhs, rhs);
+            auto* llvmInteger = visit(integer);
+            auto* llvmPointer = visit(*pointer);
+
+            llvmInteger = m_builder.CreateIntCast(
+                llvmInteger, m_builder.getInt64Ty(),
+                cld::get<cld::Semantics::PrimitiveType>(integer.getType().getVariant()).isSigned());
+            return m_builder.CreateGEP(llvmPointer, llvmInteger);
         }
-        else
+
+        std::vector<llvm::Value*> products = {m_builder.CreateIntCast(
+            visit(integer), m_builder.getInt64Ty(),
+            cld::get<cld::Semantics::PrimitiveType>(integer.getType().getVariant()).isSigned())};
+        llvm::Value* dimensionProduct = nullptr;
+        while (std::holds_alternative<cld::Semantics::Conversion>(pointer->getVariant())
+               && cld::get<cld::Semantics::Conversion>(pointer->getVariant()).getKind()
+                      == cld::Semantics::Conversion::LValue)
         {
-            lhs = m_builder.CreateIntCast(
-                lhs, m_builder.getInt64Ty(),
-                cld::get<cld::Semantics::PrimitiveType>(subscriptOperator.getLeftExpression().getType().getVariant())
-                    .isSigned());
-            return m_builder.CreateGEP(rhs, lhs);
+            auto& subExpr = cld::get<cld::Semantics::Conversion>(pointer->getVariant()).getExpression();
+            if (!std::holds_alternative<cld::Semantics::SubscriptOperator>(subExpr.getVariant()))
+            {
+                break;
+            }
+            auto& subOp = cld::get<cld::Semantics::SubscriptOperator>(subExpr.getVariant());
+            auto& subPointer = cld::Semantics::isInteger(subOp.getLeftExpression().getType()) ?
+                                   subOp.getRightExpression() :
+                                   subOp.getLeftExpression();
+            auto& subInteger =
+                &subPointer == &subOp.getLeftExpression() ? subOp.getRightExpression() : subOp.getLeftExpression();
+            llvm::Value* newInt = visit(subInteger);
+            newInt = m_builder.CreateIntCast(
+                newInt, m_builder.getInt64Ty(),
+                cld::get<cld::Semantics::PrimitiveType>(subInteger.getType().getVariant()).isSigned());
+            llvm::Value* newDimension;
+            if (std::holds_alternative<cld::Semantics::ArrayType>(subExpr.getType().getVariant()))
+            {
+                newDimension =
+                    m_builder.getInt64(cld::get<cld::Semantics::ArrayType>(subExpr.getType().getVariant()).getSize());
+            }
+            else
+            {
+                newDimension =
+                    m_valSizes[cld::get<cld::Semantics::ValArrayType>(subExpr.getType().getVariant()).getExpression()];
+            }
+            if (!dimensionProduct)
+            {
+                dimensionProduct = newDimension;
+            }
+            else
+            {
+                dimensionProduct = m_builder.CreateMul(dimensionProduct, newDimension);
+            }
+            products.push_back(m_builder.CreateMul(newInt, dimensionProduct));
+            pointer = &subPointer;
         }
+        auto* basePointer = visit(*pointer);
+        auto* sum = std::accumulate(products.begin() + 1, products.end(), products.front(),
+                                    [&](llvm::Value* lhs, llvm::Value* rhs) { return m_builder.CreateAdd(lhs, rhs); });
+        return m_builder.CreateGEP(basePointer, sum);
     }
 
     llvm::Value* visit(const cld::Semantics::Expression&, const cld::Semantics::Conditional& conditional)
@@ -2680,7 +2734,24 @@ public:
     llvm::Value* visit(const cld::Semantics::Expression& expression,
                        const cld::Semantics::CompoundLiteral& compoundLiteral)
     {
-        CLD_UNREACHABLE;
+        auto* type = visit(expression.getType());
+        if (compoundLiteral.hasStaticLifetime())
+        {
+            llvm::Constant* constant = nullptr;
+            constant = llvm::cast<llvm::Constant>(visit(compoundLiteral.getInitializer(), expression.getType(), type));
+            type = constant->getType();
+            auto* global = new llvm::GlobalVariable(m_module, type, true, llvm::GlobalValue::PrivateLinkage, constant);
+            global->setAlignment(llvm::MaybeAlign(expression.getType().getAlignOf(m_programInterface)));
+            return global;
+        }
+        llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(), m_currentFunction->getEntryBlock().begin());
+        auto* var = temp.CreateAlloca(type);
+        var->setAlignment(llvm::Align(expression.getType().getAlignOf(m_programInterface)));
+        if (m_builder.GetInsertBlock())
+        {
+            visit(compoundLiteral.getInitializer(), expression.getType(), var);
+        }
+        return var;
     }
 
     llvm::Value* CLD_NULLABLE visit(const cld::Semantics::Initializer& initializer, const cld::Semantics::Type& type,

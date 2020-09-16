@@ -992,7 +992,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
     }
     return Expression(std::move(type), ValueCategory::Lvalue,
                       CompoundLiteral(node.getOpenParentheses(), std::move(value), node.getCloseParentheses(),
-                                      node.getInitializerList().end()));
+                                      node.getInitializerList().end(), m_inStaticInitializer));
 }
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::UnaryExpression& node)

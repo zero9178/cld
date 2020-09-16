@@ -1108,11 +1108,13 @@ cld::Lexer::CTokenIterator cld::Semantics::CallExpression::end() const
 }
 
 cld::Semantics::CompoundLiteral::CompoundLiteral(Lexer::CTokenIterator openParentheses, Initializer initializer,
-                                                 Lexer::CTokenIterator closeParentheses, Lexer::CTokenIterator initEnd)
+                                                 Lexer::CTokenIterator closeParentheses, Lexer::CTokenIterator initEnd,
+                                                 bool staticLifetime)
     : m_openParentheses(openParentheses),
       m_initializer(std::make_unique<Initializer>(std::move(initializer))),
       m_closeParentheses(closeParentheses),
-      m_initEnd(initEnd)
+      m_initEnd(initEnd),
+      m_staticLifetime(staticLifetime)
 {
 }
 

@@ -1218,10 +1218,12 @@ class CompoundLiteral final
     std::unique_ptr<Initializer> m_initializer;
     Lexer::CTokenIterator m_closeParentheses;
     Lexer::CTokenIterator m_initEnd;
+    bool m_staticLifetime;
 
 public:
     explicit CompoundLiteral(Lexer::CTokenIterator openParentheses, Initializer initializer,
-                             Lexer::CTokenIterator closeParentheses, Lexer::CTokenIterator initEnd);
+                             Lexer::CTokenIterator closeParentheses, Lexer::CTokenIterator initEnd,
+                             bool staticLifetime);
 
     [[nodiscard]] Lexer::CTokenIterator getOpenParentheses() const;
 
@@ -1232,6 +1234,11 @@ public:
     [[nodiscard]] Lexer::CTokenIterator begin() const;
 
     [[nodiscard]] Lexer::CTokenIterator end() const;
+
+    [[nodiscard]] bool hasStaticLifetime() const
+    {
+        return m_staticLifetime;
+    }
 };
 
 enum class ValueCategory : std::uint8_t
