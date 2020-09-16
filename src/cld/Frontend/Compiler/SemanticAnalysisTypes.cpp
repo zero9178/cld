@@ -1215,6 +1215,7 @@ void cld::Semantics::SemanticAnalysis::handleArray(cld::Semantics::Type& type,
     auto result = evaluateConstantExpression(expr, Arithmetic);
     if (!result)
     {
+        expr = lvalueConversion(std::move(expr));
         type = ValArrayType::create(isConst, isVolatile, restricted, isStatic, std::move(type),
                                     std::make_shared<const Expression>(std::move(expr)));
         return;

@@ -83,10 +83,9 @@ std::pair<cld::Semantics::ConstValue, std::string>
     REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Statement>>(
         funcDef.getCompoundStatement().getCompoundItems().back()));
     auto& statement =
-        cld::get<std::unique_ptr<cld::Semantics::Statement>>(funcDef.getCompoundStatement().getCompoundItems().back())
-            ->getVariant();
-    REQUIRE(std::holds_alternative<cld::Semantics::ExpressionStatement>(statement));
-    auto& expr = cld::get<cld::Semantics::ExpressionStatement>(statement).getExpression();
+        cld::get<std::unique_ptr<cld::Semantics::Statement>>(funcDef.getCompoundStatement().getCompoundItems().back());
+    REQUIRE(statement->is<cld::Semantics::ExpressionStatement>());
+    auto& expr = static_cast<cld::Semantics::ExpressionStatement&>(*statement).getExpression();
     REQUIRE(expr);
     auto ret = analysis.evaluateConstantExpression(*expr, mode);
     if (!ret)

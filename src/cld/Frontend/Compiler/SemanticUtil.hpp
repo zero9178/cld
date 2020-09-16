@@ -5,6 +5,7 @@
 #include <variant>
 
 #include "Semantics.hpp"
+#include "Syntax.hpp"
 
 namespace cld::Semantics
 {

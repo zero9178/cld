@@ -1141,24 +1141,11 @@ cld::Lexer::CTokenIterator cld::Semantics::CompoundLiteral::end() const
     return m_initEnd;
 }
 
-cld::Semantics::IfStatement::IfStatement(Expression&& expression, std::unique_ptr<Statement>&& trueBranch,
-                                         std::unique_ptr<Statement>&& falseBranch)
-    : m_expression(std::move(expression)), m_trueBranch(std::move(trueBranch)), m_falseBranch(std::move(falseBranch))
-{
-}
+cld::Semantics::Statement::~Statement() = default;
 
 const cld::Semantics::Statement& cld::Semantics::IfStatement::getTrueBranch() const
 {
     return *m_trueBranch;
-}
-
-cld::Semantics::ForStatement::ForStatement(Variant initial, std::optional<Expression> controlling,
-                                           std::optional<Expression> iteration, std::unique_ptr<Statement>&& statement)
-    : m_initial(std::move(initial)),
-      m_controlling(std::move(controlling)),
-      m_iteration(std::move(iteration)),
-      m_statement(std::move(statement))
-{
 }
 
 const cld::Semantics::Statement& cld::Semantics::ForStatement::getStatement() const
@@ -1166,19 +1153,9 @@ const cld::Semantics::Statement& cld::Semantics::ForStatement::getStatement() co
     return *m_statement;
 }
 
-cld::Semantics::HeadWhileStatement::HeadWhileStatement(Expression&& expression, std::unique_ptr<Statement>&& statement)
-    : m_expression(std::move(expression)), m_statement(std::move(statement))
-{
-}
-
 const cld::Semantics::Statement& cld::Semantics::HeadWhileStatement::getStatement() const
 {
     return *m_statement;
-}
-
-cld::Semantics::FootWhileStatement::FootWhileStatement(std::unique_ptr<Statement>&& statement, Expression&& expression)
-    : m_statement(std::move(statement)), m_expression(std::move(expression))
-{
 }
 
 const cld::Semantics::Statement& cld::Semantics::FootWhileStatement::getStatement() const
@@ -1186,30 +1163,9 @@ const cld::Semantics::Statement& cld::Semantics::FootWhileStatement::getStatemen
     return *m_statement;
 }
 
-cld::Semantics::LabelStatement::LabelStatement(Lexer::CTokenIterator identifier, std::int64_t scope,
-                                               std::size_t sizeOfCurrentScope, std::unique_ptr<Statement>&& statement)
-    : m_identifier(identifier),
-      m_scope(scope),
-      m_sizeOfCurrentScope(sizeOfCurrentScope),
-      m_statement(std::move(statement))
-{
-}
-
 const cld::Semantics::Statement& cld::Semantics::LabelStatement::getStatement() const
 {
     return *m_statement;
-}
-
-cld::Semantics::SwitchStatement::SwitchStatement(Expression&& expression, std::unique_ptr<Statement>&& statement,
-                                                 std::int64_t scope,
-                                                 std::map<llvm::APSInt, const CaseStatement * CLD_NON_NULL> cases,
-                                                 const DefaultStatement* CLD_NULLABLE defaultStmt)
-    : m_expression(std::move(expression)),
-      m_statement(std::move(statement)),
-      m_scope(scope),
-      m_cases(std::move(cases)),
-      m_default(defaultStmt)
-{
 }
 
 const cld::Semantics::Statement& cld::Semantics::SwitchStatement::getStatement() const
@@ -1217,31 +1173,9 @@ const cld::Semantics::Statement& cld::Semantics::SwitchStatement::getStatement()
     return *m_statement;
 }
 
-cld::Semantics::CaseStatement::CaseStatement(Lexer::CTokenIterator caseToken, llvm::APSInt constant,
-                                             Lexer::CTokenIterator colonToken, std::unique_ptr<Statement>&& statement,
-                                             const SwitchStatement& switchStmt)
-    : m_caseToken(caseToken),
-      m_constant(std::move(constant)),
-      m_colonToken(colonToken),
-      m_statement(std::move(statement)),
-      m_switchStmt(&switchStmt)
-
-{
-}
-
 const cld::Semantics::Statement& cld::Semantics::CaseStatement::getStatement() const
 {
     return *m_statement;
-}
-
-cld::Semantics::DefaultStatement::DefaultStatement(Lexer::CTokenIterator defaultToken, Lexer::CTokenIterator colonToken,
-                                                   std::unique_ptr<Statement>&& statement,
-                                                   const SwitchStatement& switchStmt)
-    : m_defaultToken(defaultToken),
-      m_colonToken(colonToken),
-      m_statement(std::move(statement)),
-      m_switchStmt(&switchStmt)
-{
 }
 
 const cld::Semantics::Statement& cld::Semantics::DefaultStatement::getStatement() const

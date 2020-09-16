@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cld/Common/MonadicInheritance.h>
+
 #include <map>
 #include <memory>
 #include <optional>
@@ -1317,32 +1319,6 @@ public:
 
 bool isStringLiteralExpr(const Expression& expression);
 
-class ReturnStatement final
-{
-    std::optional<Expression> m_expression;
-
-public:
-    explicit ReturnStatement(std::optional<Expression>&& expression) : m_expression(std::move(expression)) {}
-
-    const std::optional<Expression>& getExpression() const
-    {
-        return m_expression;
-    }
-};
-
-class ExpressionStatement final
-{
-    std::optional<Expression> m_expression;
-
-public:
-    explicit ExpressionStatement(std::optional<Expression>&& expression) : m_expression(std::move(expression)) {}
-
-    const std::optional<Expression>& getExpression() const
-    {
-        return m_expression;
-    }
-};
-
 class CompoundStatement;
 
 class LabelStatement;
@@ -1365,12 +1341,80 @@ class BreakStatement;
 
 class ContinueStatement;
 
-class GotoStatement final
+class ReturnStatement;
+
+class ExpressionStatement;
+
+class GotoStatement;
+
+class Statement
+    : public MonadicInheritance<ForStatement, ReturnStatement, ExpressionStatement, IfStatement, CompoundStatement,
+                                HeadWhileStatement, FootWhileStatement, BreakStatement, ContinueStatement,
+                                SwitchStatement, DefaultStatement, CaseStatement, GotoStatement, LabelStatement>
+{
+    std::int64_t m_scope;
+
+protected:
+    template <class T>
+    Statement(std::int64_t scope, std::in_place_type_t<T>) : MonadicInheritance(std::in_place_type<T>), m_scope(scope)
+    {
+    }
+
+public:
+    virtual ~Statement();
+
+    /**
+     * Scope of the statement. If the statement starts a new scope
+     * (Currently only Compound statement and for loop with declaration) it's the scope it started
+     * @return Scope of the statement
+     */
+    [[nodiscard]] std::int64_t getScope() const
+    {
+        return m_scope;
+    }
+};
+
+class ReturnStatement final : public Statement
+{
+    std::optional<Expression> m_expression;
+
+public:
+    explicit ReturnStatement(std::int64_t scope, std::optional<Expression>&& expression)
+        : Statement(scope, std::in_place_type<ReturnStatement>), m_expression(std::move(expression))
+    {
+    }
+
+    const std::optional<Expression>& getExpression() const
+    {
+        return m_expression;
+    }
+};
+
+class ExpressionStatement final : public Statement
+{
+    std::optional<Expression> m_expression;
+
+public:
+    explicit ExpressionStatement(std::int64_t scope, std::optional<Expression>&& expression)
+        : Statement(scope, std::in_place_type<ExpressionStatement>), m_expression(std::move(expression))
+    {
+    }
+
+    const std::optional<Expression>& getExpression() const
+    {
+        return m_expression;
+    }
+};
+
+class GotoStatement final : public Statement
 {
     const LabelStatement* m_label;
 
 public:
-    explicit GotoStatement(const LabelStatement* label) : m_label(label) {}
+    explicit GotoStatement(std::int64_t scope, const LabelStatement* label)
+        : Statement(scope, std::in_place_type<GotoStatement>), m_label(label)
+    {
+    }
 
     const LabelStatement* getLabel() const
     {
@@ -1381,12 +1425,15 @@ public:
 using BreakableStatements = std::variant<const ForStatement*, const FootWhileStatement * CLD_NON_NULL,
                                          const HeadWhileStatement * CLD_NON_NULL, const SwitchStatement * CLD_NON_NULL>;
 
-class BreakStatement final
+class BreakStatement final : public Statement
 {
     BreakableStatements m_statement;
 
 public:
-    explicit BreakStatement(BreakableStatements statements) : m_statement(statements) {}
+    explicit BreakStatement(std::int64_t scope, BreakableStatements statements)
+        : Statement(scope, std::in_place_type<BreakStatement>), m_statement(statements)
+    {
+    }
 
     [[nodiscard]] const BreakableStatements& getBreakableStatement() const
     {
@@ -1397,12 +1444,15 @@ public:
 using LoopStatements =
     std::variant<const ForStatement*, const FootWhileStatement * CLD_NON_NULL, const HeadWhileStatement * CLD_NON_NULL>;
 
-class ContinueStatement final
+class ContinueStatement final : public Statement
 {
     LoopStatements m_loopStatement;
 
 public:
-    explicit ContinueStatement(LoopStatements loopStatement) : m_loopStatement(loopStatement) {}
+    explicit ContinueStatement(std::int64_t scope, LoopStatements loopStatement)
+        : Statement(scope, std::in_place_type<ContinueStatement>), m_loopStatement(loopStatement)
+    {
+    }
 
     [[nodiscard]] const LoopStatements& getLoopStatement() const
     {
@@ -1410,17 +1460,21 @@ public:
     }
 };
 
-class Statement;
-
-class IfStatement final
+class IfStatement final : public Statement
 {
     Expression m_expression;
     std::unique_ptr<Statement> m_trueBranch;
     std::unique_ptr<Statement> m_falseBranch;
 
 public:
-    IfStatement(Expression&& expression, std::unique_ptr<Statement>&& trueBranch,
-                std::unique_ptr<Statement>&& falseBranch);
+    IfStatement(std::int64_t scope, Expression&& expression, std::unique_ptr<Statement>&& trueBranch,
+                std::unique_ptr<Statement>&& falseBranch)
+        : Statement(scope, std::in_place_type<IfStatement>),
+          m_expression(std::move(expression)),
+          m_trueBranch(std::move(trueBranch)),
+          m_falseBranch(std::move(falseBranch))
+    {
+    }
 
     [[nodiscard]] const Expression& getExpression() const
     {
@@ -1435,19 +1489,18 @@ public:
     }
 };
 
-class CompoundStatement final
+class CompoundStatement final : public Statement
 {
 public:
     using Variant =
         std::variant<std::unique_ptr<Statement>, std::unique_ptr<Declaration>, std::shared_ptr<const Expression>>;
 
 private:
-    std::int64_t m_scope;
     std::vector<Variant> m_compoundItems;
 
 public:
     CompoundStatement(std::int64_t scope, std::vector<Variant>&& compoundItems)
-        : m_scope(scope), m_compoundItems(std::move(compoundItems))
+        : Statement(scope, std::in_place_type<CompoundStatement>), m_compoundItems(std::move(compoundItems))
     {
     }
 
@@ -1461,14 +1514,9 @@ public:
     {
         return m_compoundItems;
     }
-
-    [[nodiscard]] std::int64_t getScope() const
-    {
-        return m_scope;
-    }
 };
 
-class ForStatement final
+class ForStatement final : public Statement
 {
 public:
     using Variant = std::variant<std::monostate, Expression, std::vector<std::unique_ptr<Declaration>>>;
@@ -1480,8 +1528,15 @@ private:
     std::unique_ptr<Statement> m_statement;
 
 public:
-    ForStatement(Variant initial, std::optional<Expression> controlling, std::optional<Expression> iteration,
-                 std::unique_ptr<Statement>&& statement);
+    ForStatement(std::int64_t scope, Variant initial, std::optional<Expression> controlling,
+                 std::optional<Expression> iteration, std::unique_ptr<Statement>&& statement)
+        : Statement(scope, std::in_place_type<ForStatement>),
+          m_initial(std::move(initial)),
+          m_controlling(std::move(controlling)),
+          m_iteration(std::move(iteration)),
+          m_statement(std::move(statement))
+    {
+    }
 
     [[nodiscard]] const Variant& getInitial() const
     {
@@ -1501,13 +1556,18 @@ public:
     [[nodiscard]] const Statement& getStatement() const;
 };
 
-class HeadWhileStatement final
+class HeadWhileStatement final : public Statement
 {
     Expression m_expression;
     std::unique_ptr<Statement> m_statement;
 
 public:
-    HeadWhileStatement(Expression&& expression, std::unique_ptr<Statement>&& statement);
+    HeadWhileStatement(std::int64_t scope, Expression&& expression, std::unique_ptr<Statement>&& statement)
+        : Statement(scope, std::in_place_type<HeadWhileStatement>),
+          m_expression(std::move(expression)),
+          m_statement(std::move(statement))
+    {
+    }
 
     [[nodiscard]] const Expression& getExpression() const
     {
@@ -1517,13 +1577,18 @@ public:
     [[nodiscard]] const Statement& getStatement() const;
 };
 
-class FootWhileStatement final
+class FootWhileStatement final : public Statement
 {
     std::unique_ptr<Statement> m_statement;
     Expression m_expression;
 
 public:
-    FootWhileStatement(std::unique_ptr<Statement>&& statement, Expression&& expression);
+    FootWhileStatement(std::int64_t scope, std::unique_ptr<Statement>&& statement, Expression&& expression)
+        : Statement(scope, std::in_place_type<FootWhileStatement>),
+          m_statement(std::move(statement)),
+          m_expression(std::move(expression))
+    {
+    }
 
     [[nodiscard]] const Statement& getStatement() const;
 
@@ -1533,18 +1598,24 @@ public:
     }
 };
 
-class SwitchStatement final
+class SwitchStatement final : public Statement
 {
     Expression m_expression;
     std::unique_ptr<Statement> m_statement;
-    std::int64_t m_scope;
     std::map<llvm::APSInt, const CaseStatement * CLD_NON_NULL> m_cases;
     const DefaultStatement* CLD_NULLABLE m_default;
 
 public:
-    SwitchStatement(Expression&& expression, std::unique_ptr<Statement>&& statement, std::int64_t scope,
+    SwitchStatement(std::int64_t scope, Expression&& expression, std::unique_ptr<Statement>&& statement,
                     std::map<llvm::APSInt, const CaseStatement* CLD_NON_NULL> cases = {},
-                    const DefaultStatement* CLD_NULLABLE defaultStmt = nullptr);
+                    const DefaultStatement* CLD_NULLABLE defaultStmt = nullptr)
+        : Statement(scope, std::in_place_type<SwitchStatement>),
+          m_expression(std::move(expression)),
+          m_statement(std::move(statement)),
+          m_cases(std::move(cases)),
+          m_default(defaultStmt)
+    {
+    }
 
     [[nodiscard]] const Expression& getExpression() const&
     {
@@ -1558,11 +1629,6 @@ public:
 
     [[nodiscard]] const Statement& getStatement() const;
 
-    [[nodiscard]] std::int64_t getScope() const
-    {
-        return m_scope;
-    }
-
     [[nodiscard]] const std::map<llvm::APSInt, const CaseStatement * CLD_NON_NULL>& getCases() const
     {
         return m_cases;
@@ -1574,7 +1640,7 @@ public:
     }
 };
 
-class DefaultStatement final
+class DefaultStatement final : public Statement
 {
     Lexer::CTokenIterator m_defaultToken;
     Lexer::CTokenIterator m_colonToken;
@@ -1582,8 +1648,15 @@ class DefaultStatement final
     const SwitchStatement* CLD_NON_NULL m_switchStmt;
 
 public:
-    DefaultStatement(Lexer::CTokenIterator defaultToken, Lexer::CTokenIterator colonToken,
-                     std::unique_ptr<Statement>&& statement, const SwitchStatement& switchStmt);
+    DefaultStatement(std::int64_t scope, Lexer::CTokenIterator defaultToken, Lexer::CTokenIterator colonToken,
+                     std::unique_ptr<Statement>&& statement, const SwitchStatement& switchStmt)
+        : Statement(scope, std::in_place_type<DefaultStatement>),
+          m_defaultToken(defaultToken),
+          m_colonToken(colonToken),
+          m_statement(std::move(statement)),
+          m_switchStmt(&switchStmt)
+    {
+    }
 
     [[nodiscard]] Lexer::CTokenIterator getDefaultToken() const
     {
@@ -1603,7 +1676,7 @@ public:
     }
 };
 
-class CaseStatement final
+class CaseStatement final : public Statement
 {
     Lexer::CTokenIterator m_caseToken;
     llvm::APSInt m_constant;
@@ -1612,8 +1685,17 @@ class CaseStatement final
     const SwitchStatement* CLD_NON_NULL m_switchStmt;
 
 public:
-    CaseStatement(Lexer::CTokenIterator caseToken, llvm::APSInt constant, Lexer::CTokenIterator colonToken,
-                  std::unique_ptr<Statement>&& statement, const SwitchStatement& switchStmt);
+    CaseStatement(std::int64_t scope, Lexer::CTokenIterator caseToken, llvm::APSInt constant,
+                  Lexer::CTokenIterator colonToken, std::unique_ptr<Statement>&& statement,
+                  const SwitchStatement& switchStmt)
+        : Statement(scope, std::in_place_type<CaseStatement>),
+          m_caseToken(caseToken),
+          m_constant(std::move(constant)),
+          m_colonToken(colonToken),
+          m_statement(std::move(statement)),
+          m_switchStmt(&switchStmt)
+    {
+    }
 
     [[nodiscard]] Lexer::CTokenIterator getCaseToken() const
     {
@@ -1638,62 +1720,32 @@ public:
     }
 };
 
-class LabelStatement final
+class LabelStatement final : public Statement
 {
     Lexer::CTokenIterator m_identifier;
-    std::int64_t m_scope;
     std::size_t m_sizeOfCurrentScope;
     std::unique_ptr<Statement> m_statement;
 
 public:
-    LabelStatement(Lexer::CTokenIterator identifier, std::int64_t scope, std::size_t sizeOfCurrentScope,
-                   std::unique_ptr<Statement>&& statement);
+    LabelStatement(std::int64_t scope, Lexer::CTokenIterator identifier, std::size_t sizeOfCurrentScope,
+                   std::unique_ptr<Statement>&& statement)
+        : Statement(scope, std::in_place_type<LabelStatement>),
+          m_identifier(identifier),
+          m_sizeOfCurrentScope(sizeOfCurrentScope),
+          m_statement(std::move(statement))
+    {
+    }
 
     [[nodiscard]] Lexer::CTokenIterator getIdentifier() const
     {
         return m_identifier;
     }
 
-    [[nodiscard]] std::int64_t getScope() const
-    {
-        return m_scope;
-    }
+    [[nodiscard]] const Statement& getStatement() const;
 
     [[nodiscard]] std::size_t getSizeOfCurrentScope() const
     {
         return m_sizeOfCurrentScope;
-    }
-
-    [[nodiscard]] const Statement& getStatement() const;
-};
-
-class Statement
-{
-public:
-    using Variant = std::variant<ForStatement, ReturnStatement, ExpressionStatement, IfStatement, CompoundStatement,
-                                 HeadWhileStatement, FootWhileStatement, BreakStatement, ContinueStatement,
-                                 SwitchStatement, DefaultStatement, CaseStatement, GotoStatement, LabelStatement>;
-
-private:
-    Variant m_variant;
-
-public:
-    template <class T, class... Args>
-    explicit Statement(std::in_place_type_t<T>, Args&&... args)
-        : m_variant(std::in_place_type<T>, std::forward<Args>(args)...)
-    {
-    }
-
-    explicit Statement(Variant variant) : m_variant(std::move(variant)) {}
-
-    const Variant& getVariant() const&
-    {
-        return m_variant;
-    }
-
-    Variant&& getVariant() &&
-    {
-        return std::move(m_variant);
     }
 };
 

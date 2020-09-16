@@ -569,7 +569,7 @@ private:
     template <auto& array, std::size_t i, class Curr, class... Args>
     constexpr static void checkConstraints()
     {
-        [[maybe_unused]] auto v = ConstraintCheck<i, array[i], Curr>{};
+        [[maybe_unused]] constexpr auto v = ConstraintCheck<i, array[i], Curr>{};
         checkConstraints<array, i + 1, Args...>();
     }
 
@@ -694,7 +694,8 @@ Message Diagnostic<N, format, Mods...>::args(const T& location, const SourceInte
                                              Args&&... args) const
 {
     static_assert(sizeof...(Args) == N, "Not the same amount of argument as needed by the format");
-    this->checkConstraints<constraints, 0, Args...>();
+    [[maybe_unused]] auto* v = this->checkConstraints<constraints, 0, Args...>; // Instantiate but don't call the
+                                                                                // function to improve debug perf a lil
     static_assert(locationConstraintCheck<T>(), "First argument must denote a location");
     if (sourceInterface.getLanguageOptions().disabledWarnings.count(to_string(m_name)))
     {

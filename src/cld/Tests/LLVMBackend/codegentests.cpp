@@ -3343,3 +3343,42 @@ TEST_CASE("LLVM  Codegen initialization", "[LLVM]")
         }
     }
 }
+
+TEST_CASE("LLVM codegen variably modified types", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    auto module = std::make_unique<llvm::Module>("", context);
+    SECTION("Variably modified type declaration")
+    {
+        auto program = generateProgram("int function(int n) {\n"
+                                       "    int (*r[n])[n*2];\n"
+                                       "    return (int)r;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int(int)>(std::move(module), "function", 3) != 0);
+    }
+    SECTION("array of a variable length array declaration")
+    {
+        auto program = generateProgram("int function(int n) {\n"
+                                       "    int r[n][5][3];\n"
+                                       "    return (int)r;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int(int)>(std::move(module), "function", 3) != 0);
+    }
+    SECTION("variable length array of an array declaration")
+    {
+        auto program = generateProgram("int function(int n) {\n"
+                                       "    int r[3][5][n][4];\n"
+                                       "    return (int)r;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int(int)>(std::move(module), "function", 3) != 0);
+    }
+}

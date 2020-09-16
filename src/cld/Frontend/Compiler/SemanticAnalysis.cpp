@@ -258,7 +258,7 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
     auto functionScope = pushFunctionScope(*ptr);
 
     auto comp = visit(node.getCompoundStatement(), false);
-    ptr->setCompoundStatement(cld::get<CompoundStatement>(std::move(*comp).getVariant()));
+    ptr->setCompoundStatement(std::move(*comp));
     return result;
 }
 
@@ -737,7 +737,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
     return decls;
 }
 
-std::unique_ptr<cld::Semantics::Statement>
+std::unique_ptr<cld::Semantics::CompoundStatement>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::CompoundStatement& node, bool pushScope)
 {
     std::optional<decltype(this->pushScope())> scope;
@@ -751,7 +751,7 @@ std::unique_ptr<cld::Semantics::Statement>
         auto tmp = visit(iter);
         result.insert(result.end(), std::move_iterator(tmp.begin()), std::move_iterator(tmp.end()));
     }
-    return std::make_unique<Statement>(CompoundStatement(m_currentScope, std::move(result)));
+    return std::make_unique<CompoundStatement>(m_currentScope, std::move(result));
 }
 
 std::vector<cld::Semantics::CompoundStatement::Variant>
@@ -781,9 +781,9 @@ std::unique_ptr<cld::Semantics::Statement> cld::Semantics::SemanticAnalysis::vis
         [&](const Syntax::ExpressionStatement& node) -> std::unique_ptr<Statement> {
             if (!node.getOptionalExpression())
             {
-                return std::make_unique<Statement>(ExpressionStatement({}));
+                return std::make_unique<ExpressionStatement>(m_currentScope, std::optional<Expression>{});
             }
-            return std::make_unique<Statement>(ExpressionStatement(visit(*node.getOptionalExpression())));
+            return std::make_unique<ExpressionStatement>(m_currentScope, visit(*node.getOptionalExpression()));
         });
 }
 

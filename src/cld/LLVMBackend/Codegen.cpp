@@ -8,6 +8,7 @@
 
 #include <cld/Common/Filesystem.hpp>
 #include <cld/Frontend/Compiler/Program.hpp>
+#include <cld/Frontend/Compiler/SemanticUtil.hpp>
 
 namespace
 {
@@ -114,6 +115,8 @@ class CodeGenerator final
     llvm::Function* m_currentFunction = nullptr;
     llvm::Value* m_returnSlot = nullptr;
     llvm::DIBuilder m_debugInfo{m_module};
+    std::unordered_map<std::shared_ptr<const cld::Semantics::Expression>, llvm::Value*> m_valSizes;
+    std::unordered_map<const cld::Semantics::Declaration * CLD_NON_NULL, llvm::AllocaInst*> m_stackSaves;
 
     llvm::Value* toBool(llvm::Value* value)
     {
@@ -859,6 +862,37 @@ class CodeGenerator final
         }}(type, llvmType, constants);
     }
 
+    void runDestructors(std::int64_t from, std::int64_t toExclusive)
+    {
+        while (from > 0 && from != toExclusive)
+        {
+            // Destructors must be run backwards in order of declaration
+            for (auto iter = m_programInterface.getScopes()[from].declarations.rbegin();
+                 iter != m_programInterface.getScopes()[from].declarations.rend(); iter++)
+            {
+                if (!std::holds_alternative<const cld::Semantics::Declaration*>(iter->second.declared))
+                {
+                    continue;
+                }
+                const auto* decl = cld::get<const cld::Semantics::Declaration*>(iter->second.declared);
+                if (cld::Semantics::isVariableLengthArray(decl->getType()))
+                {
+                    auto* alloca = m_stackSaves[decl];
+                    CLD_ASSERT(alloca);
+                    auto* loaded = m_builder.CreateLoad(alloca);
+                    m_builder.CreateIntrinsic(llvm::Intrinsic::stackrestore, {}, {loaded});
+                    continue;
+                }
+            }
+            from = m_programInterface.getScopes()[from].previousScope;
+        }
+    }
+
+    void runDestructors(std::int64_t scope)
+    {
+        runDestructors(scope, m_programInterface.getScopes()[scope].previousScope);
+    }
+
 public:
     explicit CodeGenerator(llvm::Module& module, const cld::Semantics::ProgramInterface& programInterface,
                            const cld::SourceInterface& sourceInterface, cld::Triple triple)
@@ -937,6 +971,10 @@ public:
             },
             [&](const cld::Semantics::ArrayType& arrayType) -> llvm::Type* {
                 auto* elementType = visit(arrayType.getType());
+                if (cld::Semantics::isVariableLengthArray(arrayType.getType()))
+                {
+                    return elementType;
+                }
                 return llvm::ArrayType::get(elementType, arrayType.getSize());
             },
             [&](const cld::Semantics::FunctionType& functionType) -> llvm::Type* {
@@ -1044,9 +1082,19 @@ public:
             },
             [&](const cld::Semantics::AnonymousEnumType& enumType) -> llvm::Type* { return visit(enumType.getType()); },
             [&](const cld::Semantics::ValArrayType& valArrayType) -> llvm::Type* {
-                // TODO:
-                (void)valArrayType;
-                CLD_UNREACHABLE;
+                auto expression = m_valSizes.find(valArrayType.getExpression());
+                if (expression == m_valSizes.end())
+                {
+                    expression = m_valSizes
+                                     .emplace(valArrayType.getExpression(),
+                                              m_builder.CreateIntCast(
+                                                  visit(*valArrayType.getExpression()), m_builder.getInt64Ty(),
+                                                  cld::get<cld::Semantics::PrimitiveType>(
+                                                      valArrayType.getExpression()->getType().getVariant())
+                                                      .isSigned()))
+                                     .first;
+                }
+                return visit(valArrayType.getType());
             });
     }
 
@@ -1115,19 +1163,62 @@ public:
             m_lvalues.emplace(&declaration, global);
             return global;
         }
-        // Place all allocas up top
-        // TODO: Except VAL Arrays
-        llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(), m_currentFunction->getEntryBlock().begin());
-        auto* var = temp.CreateAlloca(type, nullptr, llvm::StringRef{declaration.getNameToken()->getText()});
-        var->setAlignment(llvm::Align(declaration.getType().getAlignOf(m_programInterface)));
+        // Place all allocas up top except variably modified types
+        llvm::AllocaInst* var = nullptr;
+        if (cld::Semantics::isVariableLengthArray(declaration.getType()))
+        {
+            llvm::Value* value = nullptr;
+            cld::Semantics::RecursiveVisitor visitor(declaration.getType(), cld::Semantics::ARRAY_TYPE_NEXT_FN);
+            bool valSeen = false;
+            for (auto& iter : visitor)
+            {
+                if (std::holds_alternative<cld::Semantics::ValArrayType>(iter.getVariant()))
+                {
+                    valSeen = true;
+                    if (!value)
+                    {
+                        value = m_valSizes[cld::get<cld::Semantics::ValArrayType>(iter.getVariant()).getExpression()];
+                        continue;
+                    }
+                    value = m_builder.CreateMul(
+                        value, m_valSizes[cld::get<cld::Semantics::ValArrayType>(iter.getVariant()).getExpression()]);
+                }
+                else
+                {
+                    if (!value)
+                    {
+                        value = m_builder.getInt64(cld::get<cld::Semantics::ArrayType>(iter.getVariant()).getSize());
+                        continue;
+                    }
+                    else if (!valSeen)
+                    {
+                        value = m_builder.CreateMul(
+                            m_builder.getInt64(cld::get<cld::Semantics::ArrayType>(iter.getVariant()).getSize()),
+                            value);
+                        continue;
+                    }
+                    break;
+                }
+            }
+            llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(), m_currentFunction->getEntryBlock().begin());
+            auto* stackSave = temp.CreateAlloca(m_builder.getInt8PtrTy(0), nullptr, "stack.save");
+            m_stackSaves[&declaration] = stackSave;
+            auto* stack = m_builder.CreateIntrinsic(llvm::Intrinsic::stacksave, {}, {});
+            m_builder.CreateStore(stack, stackSave);
+            var = m_builder.CreateAlloca(type, value, llvm::StringRef{declaration.getNameToken()->getText()});
+            var->setAlignment(m_module.getDataLayout().getStackAlignment());
+        }
+        else
+        {
+            llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(), m_currentFunction->getEntryBlock().begin());
+            var = temp.CreateAlloca(type, nullptr, llvm::StringRef{declaration.getNameToken()->getText()});
+            var->setAlignment(llvm::Align(declaration.getType().getAlignOf(m_programInterface)));
+        }
+
         m_lvalues.emplace(&declaration, var);
         if (m_builder.GetInsertBlock())
         {
-            if (cld::Semantics::isVariableLengthArray(declaration.getType()))
-            {
-                m_builder.CreateLifetimeStart(var);
-            }
-            else
+            if (!cld::Semantics::isVariableLengthArray(declaration.getType()))
             {
                 auto* size = m_builder.getInt64(declaration.getType().getSizeOf(m_programInterface));
                 m_builder.CreateLifetimeStart(var, llvm::cast<llvm::ConstantInt>(size));
@@ -1261,7 +1352,13 @@ public:
         {
             if (std::holds_alternative<std::shared_ptr<const cld::Semantics::Expression>>(iter))
             {
-                // TODO: Evaluate val array expression
+                auto& expr = cld::get<std::shared_ptr<const cld::Semantics::Expression>>(iter);
+                auto result = m_valSizes.emplace(
+                    expr, m_builder.CreateIntCast(
+                              visit(*expr), m_builder.getInt64Ty(),
+                              cld::get<cld::Semantics::PrimitiveType>(expr->getType().getVariant()).isSigned()));
+                (void)result;
+                CLD_ASSERT(result.second);
             }
             else if (std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(iter))
             {
@@ -1272,29 +1369,22 @@ public:
                 visit(*cld::get<std::unique_ptr<cld::Semantics::Statement>>(iter));
             }
         }
+        if (m_builder.GetInsertBlock() && !m_builder.GetInsertBlock()->getTerminator())
+        {
+            runDestructors(compoundStatement.getScope());
+        }
     }
 
     void visit(const cld::Semantics::Statement& statement)
     {
         cld::match(
-            statement.getVariant(),
-            [&](const auto& statement) {
-                using T = std::decay_t<decltype(statement)>;
-                if constexpr (cld::IsUniquePtr<T>{})
-                {
-                    visit(*statement);
-                }
-                else
-                {
-                    visit(statement);
-                }
-            },
-            [&](const cld::Semantics::ExpressionStatement& expressionStatement) {
-                if (!expressionStatement.getExpression() || !m_builder.GetInsertBlock())
+            statement.getVariant(), [&](const auto* statement) { visit(*statement); },
+            [&](const cld::Semantics::ExpressionStatement* expressionStatement) {
+                if (!expressionStatement->getExpression() || !m_builder.GetInsertBlock())
                 {
                     return;
                 }
-                auto* instr = visit(*expressionStatement.getExpression());
+                auto* instr = visit(*expressionStatement->getExpression());
                 if (llvm::isa_and_nonnull<llvm::Instruction>(instr) && instr->getNumUses() == 0
                     && !llvm::cast<llvm::Instruction>(instr)->mayHaveSideEffects())
                 {
@@ -1311,6 +1401,7 @@ public:
         }
         if (!returnStatement.getExpression())
         {
+            runDestructors(returnStatement.getScope(), 0);
             m_builder.CreateRetVoid();
             m_builder.ClearInsertionPoint();
             return;
@@ -1323,6 +1414,7 @@ public:
         if (transformation->second.returnType == ABITransformations::PointerToTemporary)
         {
             m_builder.CreateStore(value, function->getArg(0));
+            runDestructors(returnStatement.getScope(), 0);
             m_builder.CreateRetVoid();
         }
         else if (transformation->second.returnType == ABITransformations::Flattened
@@ -1331,10 +1423,12 @@ public:
             auto* bitCast = m_builder.CreateBitCast(m_returnSlot, llvm::PointerType::getUnqual(value->getType()));
             m_builder.CreateStore(value, bitCast);
             auto* ret = m_builder.CreateLoad(m_returnSlot);
+            runDestructors(returnStatement.getScope(), 0);
             m_builder.CreateRet(ret);
         }
         else
         {
+            runDestructors(returnStatement.getScope(), 0);
             m_builder.CreateRet(value);
         }
         m_builder.ClearInsertionPoint();
@@ -1391,6 +1485,13 @@ public:
             m_builder.CreateBr(controlling);
         }
         m_builder.SetInsertPoint(contBlock);
+        if (std::holds_alternative<std::vector<std::unique_ptr<cld::Semantics::Declaration>>>(
+                forStatement.getInitial()))
+        {
+            // If the for statement held declarations we must run the destructors for those declarations as soon as we
+            // leave the statement
+            runDestructors(forStatement.getScope());
+        }
     }
 
     void visit(const cld::Semantics::IfStatement& ifStatement)
@@ -1492,6 +1593,8 @@ public:
         {
             return;
         }
+        runDestructors(breakStatement.getScope(),
+                       cld::match(breakStatement.getBreakableStatement(), [](auto* ptr) { return ptr->getScope(); }));
         m_builder.CreateBr(m_breakTargets[breakStatement.getBreakableStatement()]);
         m_builder.ClearInsertionPoint();
     }
@@ -1502,6 +1605,8 @@ public:
         {
             return;
         }
+        runDestructors(continueStatement.getScope(),
+                       cld::match(continueStatement.getLoopStatement(), [](auto* ptr) { return ptr->getScope(); }));
         m_builder.CreateBr(m_continueTargets[continueStatement.getLoopStatement()]);
         m_builder.ClearInsertionPoint();
     }
@@ -1569,6 +1674,25 @@ public:
         {
             return;
         }
+        // Unlike in loops and other constructs a label can be anywhere in the whole function and the goto
+        // can be anywhere in the whole function. Therefore we must find the first scope that both are part of.
+        // That scope is the exclusive end of all scopes whose declarations must be destructed
+        std::unordered_set<std::int64_t> labelScopes;
+        {
+            auto currScope = gotoStatement.getLabel()->getScope();
+            while (currScope >= 0)
+            {
+                labelScopes.insert(currScope);
+                currScope = m_programInterface.getScopes()[currScope].previousScope;
+            }
+        }
+        auto commonScope = gotoStatement.getScope();
+        while (commonScope >= 0 && labelScopes.count(commonScope) == 0)
+        {
+            commonScope = m_programInterface.getScopes()[commonScope].previousScope;
+        }
+
+        runDestructors(gotoStatement.getScope(), commonScope);
         auto* bb = m_labels[gotoStatement.getLabel()];
         if (!bb)
         {
@@ -1654,14 +1778,16 @@ public:
         {
             case cld::Semantics::Conversion::LValue:
             {
-                if (cld::Semantics::isArray(conversion.getExpression().getType()))
+                if (std::holds_alternative<cld::Semantics::ArrayType>(conversion.getExpression().getType().getVariant())
+                    && !cld::Semantics::isVariableLengthArray(conversion.getExpression().getType()))
                 {
                     auto* zero = llvm::ConstantInt::get(m_builder.getIntPtrTy(m_module.getDataLayout()), 0);
                     return m_builder.CreateInBoundsGEP(value, {zero, zero});
                 }
                 else if (std::holds_alternative<cld::Semantics::FunctionType>(
                              conversion.getExpression().getType().getVariant())
-                         || m_programInterface.isBitfieldAccess(conversion.getExpression()))
+                         || m_programInterface.isBitfieldAccess(conversion.getExpression())
+                         || cld::Semantics::isVariableLengthArray(conversion.getExpression().getType()))
                 {
                     return value;
                 }

@@ -31,7 +31,7 @@ class SemanticAnalysis final : public ProgramInterface
     std::vector<FunctionScope> m_functionScopes;
     bool m_inStaticInitializer = false;
     bool m_inFunctionPrototype = false;
-    std::vector<std::pair<Lexer::CTokenIterator, Statement * CLD_NON_NULL>> m_scheduledGotos;
+    std::vector<std::pair<Lexer::CTokenIterator, GotoStatement * CLD_NON_NULL>> m_scheduledGotos;
     std::vector<LoopStatements> m_loopStatements;
     std::vector<BreakableStatements> m_breakableStatements;
     struct SwitchStack
@@ -360,33 +360,34 @@ public:
     Initializer visit(const Syntax::InitializerList& node, const Type& type, bool staticLifetime = false,
                       std::size_t* size = nullptr);
 
-    [[nodiscard]] std::unique_ptr<Statement> visit(const Syntax::CompoundStatement& node, bool pushScope = true);
+    [[nodiscard]] std::unique_ptr<CompoundStatement> visit(const Syntax::CompoundStatement& node,
+                                                           bool pushScope = true);
 
     [[nodiscard]] std::vector<CompoundStatement::Variant> visit(const Syntax::CompoundItem& node);
 
-    [[nodiscard]] std::unique_ptr<Statement> visit(const Syntax::ReturnStatement& node);
+    [[nodiscard]] std::unique_ptr<ReturnStatement> visit(const Syntax::ReturnStatement& node);
 
-    [[nodiscard]] std::unique_ptr<Statement> visit(const Syntax::IfStatement& node);
+    [[nodiscard]] std::unique_ptr<IfStatement> visit(const Syntax::IfStatement& node);
 
-    [[nodiscard]] std::unique_ptr<Statement> visit(const Syntax::ForStatement& node);
+    [[nodiscard]] std::unique_ptr<ForStatement> visit(const Syntax::ForStatement& node);
 
-    [[nodiscard]] std::unique_ptr<Statement> visit(const Syntax::HeadWhileStatement& node);
+    [[nodiscard]] std::unique_ptr<HeadWhileStatement> visit(const Syntax::HeadWhileStatement& node);
 
-    [[nodiscard]] std::unique_ptr<Statement> visit(const Syntax::FootWhileStatement& node);
+    [[nodiscard]] std::unique_ptr<FootWhileStatement> visit(const Syntax::FootWhileStatement& node);
 
-    [[nodiscard]] std::unique_ptr<Statement> visit(const Syntax::BreakStatement& node);
+    [[nodiscard]] std::unique_ptr<BreakStatement> visit(const Syntax::BreakStatement& node);
 
-    [[nodiscard]] std::unique_ptr<Statement> visit(const Syntax::ContinueStatement& node);
+    [[nodiscard]] std::unique_ptr<ContinueStatement> visit(const Syntax::ContinueStatement& node);
 
-    [[nodiscard]] std::unique_ptr<Statement> visit(const Syntax::SwitchStatement& node);
+    [[nodiscard]] std::unique_ptr<SwitchStatement> visit(const Syntax::SwitchStatement& node);
 
-    [[nodiscard]] std::unique_ptr<Statement> visit(const Syntax::DefaultStatement& node);
+    [[nodiscard]] std::unique_ptr<DefaultStatement> visit(const Syntax::DefaultStatement& node);
 
-    [[nodiscard]] std::unique_ptr<Statement> visit(const Syntax::CaseStatement& node);
+    [[nodiscard]] std::unique_ptr<CaseStatement> visit(const Syntax::CaseStatement& node);
 
-    [[nodiscard]] std::unique_ptr<Statement> visit(const Syntax::GotoStatement& node);
+    [[nodiscard]] std::unique_ptr<GotoStatement> visit(const Syntax::GotoStatement& node);
 
-    [[nodiscard]] std::unique_ptr<Statement> visit(const Syntax::LabelStatement& node);
+    [[nodiscard]] std::unique_ptr<LabelStatement> visit(const Syntax::LabelStatement& node);
 };
 
 } // namespace cld::Semantics
