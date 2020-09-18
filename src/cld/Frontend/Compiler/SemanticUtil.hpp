@@ -114,12 +114,12 @@ constexpr auto ARRAY_TYPE_NEXT_FN = [](const Type& type) -> const Type* {
         if constexpr (std::is_same_v<ArrayType,
                                      T> || std::is_same_v<AbstractArrayType, T> || std::is_same_v<ValArrayType, T>)
         {
-            return &value.getType();
+            if (isArray(value.getType()))
+            {
+                return &value.getType();
+            }
         }
-        else
-        {
-            return nullptr;
-        }
+        return nullptr;
     });
 };
 

@@ -497,18 +497,33 @@ class CodeGenerator final
         }
         else
         {
-            if (lhs->getType()->isPointerTy())
+            auto* pointer = lhs->getType()->isPointerTy() ? lhs : rhs;
+            auto* integer = pointer == lhs ? rhs : lhs;
+            auto& pointerType = pointer == lhs ? lhsType : rhsType;
+            integer = m_builder.CreateIntCast(
+                integer, m_builder.getInt64Ty(),
+                cld::get<cld::Semantics::PrimitiveType>((pointer == lhs ? rhsType : lhsType).getVariant()).isSigned());
+            if (!cld::Semantics::isVariableLengthArray(
+                    cld::get<cld::Semantics::PointerType>(pointerType.getVariant()).getElementType()))
             {
-                rhs = m_builder.CreateIntCast(rhs, m_builder.getInt64Ty(),
-                                              cld::get<cld::Semantics::PrimitiveType>(rhsType.getVariant()).isSigned());
-                return m_builder.CreateGEP(lhs, rhs);
+                return m_builder.CreateGEP(pointer, integer);
             }
-            else
+            auto& array = cld::get<cld::Semantics::PointerType>(pointerType.getVariant()).getElementType();
+            llvm::Value* product = integer;
+            for (auto& iter : cld::Semantics::RecursiveVisitor(array, cld::Semantics::ARRAY_TYPE_NEXT_FN))
             {
-                lhs = m_builder.CreateIntCast(lhs, m_builder.getInt64Ty(),
-                                              cld::get<cld::Semantics::PrimitiveType>(lhsType.getVariant()).isSigned());
-                return m_builder.CreateGEP(rhs, lhs);
+                llvm::Value* value;
+                if (std::holds_alternative<cld::Semantics::ArrayType>(iter.getVariant()))
+                {
+                    value = m_builder.getInt64(cld::get<cld::Semantics::ArrayType>(iter.getVariant()).getSize());
+                }
+                else
+                {
+                    value = m_valSizes[cld::get<cld::Semantics::ValArrayType>(iter.getVariant()).getExpression()];
+                }
+                product = m_builder.CreateMul(product, value);
             }
+            return m_builder.CreateGEP(pointer, product);
         }
     }
 

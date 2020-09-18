@@ -3402,4 +3402,25 @@ TEST_CASE("LLVM Codegen variably modified types", "[LLVM]")
         REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
         CHECK(cld::Tests::computeInJIT<int(int)>(std::move(module), "function", 5) == 69);
     }
+    SECTION("Pointer arithmetic")
+    {
+        auto program = generateProgram("int function(int n) {\n"
+                                       "    int r[3][5][n],counter = 0;\n"
+                                       "    for (int i = 0; i < 3; i++)\n"
+                                       "    {\n"
+                                       "        for (int i2 = 0; i2 < 5; i2++)\n"
+                                       "        {\n"
+                                       "            for (int i3 = 0; i3 < n; i3++)\n"
+                                       "            {\n"
+                                       "                *(*(*(r + i) + i2)+i3) = counter++;\n"
+                                       "            }\n"
+                                       "        }\n"
+                                       "    }\n"
+                                       "    return *(*(*(r + 2)+3)+4);\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int(int)>(std::move(module), "function", 5) == 69);
+    }
 }
