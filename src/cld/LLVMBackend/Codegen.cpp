@@ -29,16 +29,18 @@ class CodeGenerator final
 
     struct TypeHasher
     {
+        const cld::Semantics::ProgramInterface& programInterface;
+
         std::size_t operator()(const TypeVariantKey& variant) const noexcept
         {
             return cld::rawHashCombine(std::hash<std::size_t>{}(variant.index()),
                                        cld::match(
                                            variant,
-                                           [](const cld::Semantics::StructType& structType) -> std::size_t {
-                                               return cld::hashCombine(structType.getScopeOrId(), structType.getName());
+                                           [&](const cld::Semantics::StructType& structType) -> std::size_t {
+                                               return std::hash<std::string_view>{}(structType.getName());
                                            },
-                                           [](const cld::Semantics::UnionType& unionType) -> std::size_t {
-                                               return cld::hashCombine(unionType.getScopeOrId(), unionType.getName());
+                                           [&](const cld::Semantics::UnionType& unionType) -> std::size_t {
+                                               return std::hash<std::string_view>{}(unionType.getName());
                                            },
                                            [](const cld::Semantics::AnonymousStructType& structType) -> std::size_t {
                                                return std::hash<std::uint64_t>{}(structType.getId());
@@ -81,7 +83,9 @@ class CodeGenerator final
         }
     };
 
-    std::unordered_map<TypeVariantKey, llvm::Type*, TypeHasher, TypeEqual> m_types{0, {}, {m_programInterface}};
+    std::unordered_map<TypeVariantKey, llvm::Type*, TypeHasher, TypeEqual> m_types{0,
+                                                                                   {m_programInterface},
+                                                                                   {m_programInterface}};
 
     struct ABITransformations
     {
@@ -1023,19 +1027,19 @@ public:
                 }
                 auto* structDef =
                     m_programInterface.getStructDefinition(structType.getName(), structType.getScopeOrId());
+                auto* type = llvm::StructType::create(m_module.getContext(), structType.getName());
+                m_types.insert({structType, type});
                 if (!structDef)
                 {
-                    auto* type = llvm::StructType::create(m_module.getContext(), structType.getName());
-                    m_types.insert({structType, type});
                     return type;
                 }
+
                 std::vector<llvm::Type*> fields;
                 for (auto& iter : structDef->getLayout())
                 {
                     fields.push_back(visit(iter));
                 }
-                auto* type = llvm::StructType::create(m_module.getContext(), fields, structType.getName());
-                m_types.insert({structType, type});
+                type->setBody(fields);
                 return type;
             },
             [&](const cld::Semantics::UnionType& unionType) -> llvm::Type* {
@@ -1341,7 +1345,7 @@ public:
         }
 
         visit(functionDefinition.getCompoundStatement());
-        if (m_builder.GetInsertBlock() && !m_builder.GetInsertBlock()->getTerminator())
+        if (m_builder.GetInsertBlock())
         {
             if (cld::Semantics::isVoid(ft.getReturnType()))
             {
@@ -1386,7 +1390,7 @@ public:
                 visit(*cld::get<std::unique_ptr<cld::Semantics::Statement>>(iter));
             }
         }
-        if (m_builder.GetInsertBlock() && !m_builder.GetInsertBlock()->getTerminator())
+        if (m_builder.GetInsertBlock())
         {
             runDestructors(compoundStatement.getScope());
         }
@@ -1494,7 +1498,10 @@ public:
                               controlling;
         m_continueTargets[&forStatement] = iteration;
         visit(forStatement.getStatement());
-        m_builder.CreateBr(iteration);
+        if (m_builder.GetInsertBlock())
+        {
+            m_builder.CreateBr(iteration);
+        }
         if (forStatement.getIteration())
         {
             m_builder.SetInsertPoint(iteration);
@@ -1513,45 +1520,58 @@ public:
 
     void visit(const cld::Semantics::IfStatement& ifStatement)
     {
-        auto* expression = visit(ifStatement.getExpression());
-        expression = m_builder.CreateTrunc(expression, m_builder.getInt1Ty());
-        auto* trueBranch = llvm::BasicBlock::Create(m_module.getContext(), "if.true", m_currentFunction);
+        llvm::Value* expression = nullptr;
+        llvm::BasicBlock* trueBranch = nullptr;
+        if (m_builder.GetInsertBlock())
+        {
+            expression = visit(ifStatement.getExpression());
+            expression = m_builder.CreateTrunc(expression, m_builder.getInt1Ty());
+            trueBranch = llvm::BasicBlock::Create(m_module.getContext(), "if.true", m_currentFunction);
+        }
         if (!ifStatement.getFalseBranch())
         {
             auto* contBranch = llvm::BasicBlock::Create(m_module.getContext(), "if.continue", m_currentFunction);
             if (m_builder.GetInsertBlock())
             {
                 m_builder.CreateCondBr(expression, trueBranch, contBranch);
+                m_builder.SetInsertPoint(trueBranch);
             }
-            m_builder.SetInsertPoint(trueBranch);
             visit(ifStatement.getTrueBranch());
-            if (!trueBranch->getTerminator())
+            if (m_builder.GetInsertBlock())
             {
                 m_builder.CreateBr(contBranch);
             }
             m_builder.SetInsertPoint(contBranch);
             return;
         }
-        auto* falseBranch = llvm::BasicBlock::Create(m_module.getContext(), "if.false", m_currentFunction);
+        llvm::BasicBlock* falseBranch = nullptr;
         if (m_builder.GetInsertBlock())
         {
+            falseBranch = llvm::BasicBlock::Create(m_module.getContext(), "if.false", m_currentFunction);
             m_builder.CreateCondBr(expression, trueBranch, falseBranch);
+            m_builder.SetInsertPoint(trueBranch);
         }
-        m_builder.SetInsertPoint(trueBranch);
         visit(ifStatement.getTrueBranch());
-        m_builder.SetInsertPoint(falseBranch);
+        auto* trueBlock = m_builder.GetInsertBlock();
+        auto* trueTerminator = m_builder.GetInsertBlock() ? m_builder.GetInsertBlock()->getTerminator() : nullptr;
+        if (falseBranch)
+        {
+            m_builder.SetInsertPoint(falseBranch);
+        }
         visit(*ifStatement.getFalseBranch());
-        if (!falseBranch->getTerminator() || !trueBranch->getTerminator())
+        auto* falseBlock = m_builder.GetInsertBlock();
+        auto* falseTerminator = m_builder.GetInsertBlock() ? m_builder.GetInsertBlock()->getTerminator() : nullptr;
+        if ((trueBlock && !trueTerminator) || (falseBlock && !falseTerminator))
         {
             auto* contBranch = llvm::BasicBlock::Create(m_module.getContext(), "if.continue", m_currentFunction);
-            if (!falseBranch->getTerminator())
+            if (trueBlock && !trueTerminator)
             {
-                m_builder.SetInsertPoint(falseBranch);
+                m_builder.SetInsertPoint(trueBlock);
                 m_builder.CreateBr(contBranch);
             }
-            if (!trueBranch->getTerminator())
+            if (falseBlock && !falseTerminator)
             {
-                m_builder.SetInsertPoint(trueBranch);
+                m_builder.SetInsertPoint(falseBlock);
                 m_builder.CreateBr(contBranch);
             }
             m_builder.SetInsertPoint(contBranch);
@@ -1579,7 +1599,10 @@ public:
         m_builder.SetInsertPoint(body);
         m_breakTargets[&headWhileStatement] = contBlock;
         visit(headWhileStatement.getStatement());
-        m_builder.CreateBr(controlling);
+        if (m_builder.GetInsertBlock())
+        {
+            m_builder.CreateBr(controlling);
+        }
         m_builder.SetInsertPoint(contBlock);
     }
 
@@ -1596,7 +1619,10 @@ public:
         m_breakTargets[&footWhileStatement] = contBlock;
         m_builder.SetInsertPoint(body);
         visit(footWhileStatement.getStatement());
-        m_builder.CreateBr(controlling);
+        if (m_builder.GetInsertBlock())
+        {
+            m_builder.CreateBr(controlling);
+        }
         m_builder.SetInsertPoint(controlling);
         auto* expression = visit(footWhileStatement.getExpression());
         expression = m_builder.CreateTrunc(expression, m_builder.getInt1Ty());
@@ -1642,6 +1668,7 @@ public:
             expression ? m_builder.CreateSwitch(
                 expression, switchData.defaultBlock ? switchData.defaultBlock : contBlock, switchData.cases.size()) :
                          nullptr;
+        m_builder.ClearInsertionPoint();
         for (auto& [value, theCase] : switchStatement.getCases())
         {
             auto iter = switchData.cases.emplace(
@@ -1654,7 +1681,7 @@ public:
         }
         m_breakTargets[&switchStatement] = contBlock;
         visit(switchStatement.getStatement());
-        if (m_builder.GetInsertBlock() && !m_builder.GetInsertBlock()->getTerminator())
+        if (m_builder.GetInsertBlock())
         {
             m_builder.CreateBr(contBlock);
         }
@@ -1665,7 +1692,7 @@ public:
     {
         auto& switchData = m_switches[&defaultStatement.getSwitchStatement()];
         auto* bb = switchData.defaultBlock;
-        if (m_builder.GetInsertBlock() && !m_builder.GetInsertBlock()->getTerminator())
+        if (m_builder.GetInsertBlock())
         {
             m_builder.CreateBr(bb);
         }
@@ -1677,7 +1704,7 @@ public:
     {
         auto& switchData = m_switches[&caseStatement.getSwitchStatement()];
         auto* bb = switchData.cases[&caseStatement];
-        if (m_builder.GetInsertBlock() && !m_builder.GetInsertBlock()->getTerminator())
+        if (m_builder.GetInsertBlock())
         {
             m_builder.CreateBr(bb);
         }
@@ -1729,7 +1756,7 @@ public:
             bb = m_labels[&labelStatement] = llvm::BasicBlock::Create(
                 m_module.getContext(), llvm::StringRef{labelStatement.getIdentifier()->getText()}, m_currentFunction);
         }
-        if (m_builder.GetInsertBlock() && !m_builder.GetInsertBlock()->getTerminator())
+        if (m_builder.GetInsertBlock())
         {
             m_builder.CreateBr(bb);
         }

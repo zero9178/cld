@@ -3424,3 +3424,111 @@ TEST_CASE("LLVM Codegen variably modified types", "[LLVM]")
         CHECK(cld::Tests::computeInJIT<int(int)>(std::move(module), "function", 5) == 69);
     }
 }
+
+TEST_CASE("LLVM codegen c-testsuite", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    auto module = std::make_unique<llvm::Module>("", context);
+    SECTION("0019.c")
+    {
+        auto program = generateProgram("int\n"
+                                       "function()\n"
+                                       "{\n"
+                                       "struct S { struct S *p; int x; } s;\n"
+                                       "\n"
+                                       "s.x = 0;\n"
+                                       "s.p = &s;\n"
+                                       "return s.p->p->p->p->p->x;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 0);
+    }
+    SECTION("00033.c")
+    {
+        auto program = generateProgram("int g;\n"
+                                       "\n"
+                                       "int\n"
+                                       "effect()\n"
+                                       "{\n"
+                                       "\tg = 1;\n"
+                                       "\treturn 1;\n"
+                                       "}\n"
+                                       "\n"
+                                       "int\n"
+                                       "function()\n"
+                                       "{\n"
+                                       "    int x;\n"
+                                       "    \n"
+                                       "    g = 0;\n"
+                                       "    x = 0;\n"
+                                       "    if(x && effect())\n"
+                                       "    \treturn 1;\n"
+                                       "    if(g)\n"
+                                       "    \treturn 2;\n"
+                                       "    x = 1;\n"
+                                       "    if(x && effect()) {\n"
+                                       "    \tif(g != 1)\n"
+                                       "    \t\treturn 3;\n"
+                                       "    } else {\n"
+                                       "    \treturn 4;\n"
+                                       "    }\n"
+                                       "    g = 0;\n"
+                                       "    x = 1;\n"
+                                       "    if(x || effect()) {\n"
+                                       "    \tif(g)\n"
+                                       "    \t\treturn 5;\n"
+                                       "    } else {\n"
+                                       "    \treturn 6;\n"
+                                       "    }\n"
+                                       "    x = 0;\n"
+                                       "    if(x || effect()) {\n"
+                                       "    \tif(g != 1)\n"
+                                       "    \t\treturn 7;\n"
+                                       "    } else {\n"
+                                       "    \treturn 8;\n"
+                                       "    } \n"
+                                       "    return 0;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 0);
+    }
+    SECTION("00034.c")
+    {
+        auto program = generateProgram("int function() {\n"
+                                       "  int x;\n"
+                                       "\n"
+                                       "  x = 0;\n"
+                                       "  while (1) break;\n"
+                                       "  while (1) {\n"
+                                       "    if (x == 5) {\n"
+                                       "      break;\n"
+                                       "    }\n"
+                                       "    x = x + 1;\n"
+                                       "    continue;\n"
+                                       "  }\n"
+                                       "  for (;;) {\n"
+                                       "    if (x == 10) {\n"
+                                       "      break;\n"
+                                       "    }\n"
+                                       "    x = x + 1;\n"
+                                       "    continue;\n"
+                                       "  }\n"
+                                       "  do {\n"
+                                       "    if (x == 15) {\n"
+                                       "      break;\n"
+                                       "    }\n"
+                                       "    x = x + 1;\n"
+                                       "    continue;\n"
+                                       "  } while (1);\n"
+                                       "  return x - 15;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 0);
+    }
+}
