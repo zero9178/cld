@@ -165,7 +165,7 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
                     lifetime = Lifetime ::Register;
                 }
             }
-            auto paramType = ft.getArguments()[i].first;
+            auto paramType = adjustParameterType(ft.getArguments()[i].first);
             auto& ptr = parameterDeclarations.emplace_back(std::make_unique<Declaration>(
                 std::move(paramType), Linkage::None, lifetime, loc, Declaration::Kind::Definition));
             auto [prev, notRedefined] =
@@ -1074,6 +1074,17 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::defaultArgumentPromotion(
 
 cld::Semantics::Type cld::Semantics::SemanticAnalysis::integerPromotion(const Type& type) const
 {
+    if (isEnum(type))
+    {
+        if (std::holds_alternative<AnonymousEnumType>(type.getVariant()))
+        {
+            return cld::get<AnonymousEnumType>(type.getVariant()).getType();
+        }
+        auto& enumType = cld::get<EnumType>(type.getVariant());
+        auto* enumDef = getEnumDefinition(enumType.getName(), enumType.getScopeOrId());
+        CLD_ASSERT(enumDef);
+        return enumDef->getType();
+    }
     if (!std::holds_alternative<PrimitiveType>(type.getVariant()))
     {
         return type;

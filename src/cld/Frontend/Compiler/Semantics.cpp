@@ -80,7 +80,7 @@ std::size_t cld::Semantics::ArrayType::getSizeOf(const ProgramInterface& program
 
 std::size_t cld::Semantics::ArrayType::getAlignOf(const ProgramInterface& program) const
 {
-    return m_type->getSizeOf(program);
+    return m_type->getAlignOf(program);
 }
 
 std::size_t cld::Semantics::AbstractArrayType::getAlignOf(const ProgramInterface& program) const
@@ -515,8 +515,10 @@ bool cld::Semantics::isInteger(const Type& type)
 
 bool cld::Semantics::isArithmetic(const Type& type)
 {
-    return std::holds_alternative<PrimitiveType>(type.getVariant())
-           && cld::get<PrimitiveType>(type.getVariant()).getBitCount() != 0;
+    return (std::holds_alternative<PrimitiveType>(type.getVariant())
+            && cld::get<PrimitiveType>(type.getVariant()).getBitCount() != 0)
+           || std::holds_alternative<EnumType>(type.getVariant())
+           || std::holds_alternative<AnonymousEnumType>(type.getVariant());
 }
 
 bool cld::Semantics::isScalar(const Type& type)
@@ -539,6 +541,12 @@ bool cld::Semantics::isUnion(const cld::Semantics::Type& type)
 {
     return std::holds_alternative<UnionType>(type.getVariant())
            || std::holds_alternative<AnonymousUnionType>(type.getVariant());
+}
+
+bool cld::Semantics::isEnum(const Type& type)
+{
+    return std::holds_alternative<EnumType>(type.getVariant())
+           || std::holds_alternative<AnonymousEnumType>(type.getVariant());
 }
 
 bool cld::Semantics::isBool(const cld::Semantics::Type& type)

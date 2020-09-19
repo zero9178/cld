@@ -73,6 +73,8 @@ int main(int, char** argv)
     }
     llvm::LLVMContext context;
     llvm::Module module("", context);
+    module.setPICLevel(llvm::PICLevel::Level::BigPIC);
+    module.setPIELevel(llvm::PIELevel::Level::Large);
     cld::CGLLVM::generateLLVM(module, program);
     std::error_code ec;
     llvm::raw_fd_ostream os("output.o", ec, llvm::sys::fs::OpenFlags::OF_None);
@@ -89,7 +91,7 @@ int main(int, char** argv)
         return 1;
     }
     auto machine = std::unique_ptr<llvm::TargetMachine>(
-        targetM->createTargetMachine(module.getTargetTriple(), "generic", "", {}, {}));
+        targetM->createTargetMachine(module.getTargetTriple(), "generic", "", {}, llvm::Reloc::Model::PIC_));
     llvm::legacy::PassManager pass;
     if (machine->addPassesToEmitFile(pass, os, nullptr, llvm::CodeGenFileType::CGFT_ObjectFile))
     {

@@ -1059,6 +1059,32 @@ TEST_CASE("LLVM codegen types", "[LLVM]")
     }
 }
 
+TEST_CASE("LLVM codegen literals", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    auto module = std::make_unique<llvm::Module>("", context);
+    SECTION("String literal")
+    {
+        auto program = generateProgram("int function(void) {\n"
+                                       "char * s;\n"
+                                       "s = \"abc\" \"def\";\n"
+                                       "if (s[0] != 'a') return 1;\n"
+                                       "if (s[1] != 'b') return 2;\n"
+                                       "if (s[2] != 'c') return 3;\n"
+                                       "if (s[3] != 'd') return 4;\n"
+                                       "if (s[4] != 'e') return 5;\n"
+                                       "if (s[5] != 'f') return 6;\n"
+                                       "if (s[6] != 0) return 7;\n"
+                                       "\n"
+                                       "return 0;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int(void)>(std::move(module), "function") == 0);
+    }
+}
+
 TEST_CASE("LLVM codegen unary expressions", "[LLVM]")
 {
     llvm::LLVMContext context;
@@ -3526,6 +3552,157 @@ TEST_CASE("LLVM codegen c-testsuite", "[LLVM]")
                                        "  } while (1);\n"
                                        "  return x - 15;\n"
                                        "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 0);
+    }
+    SECTION("00072.c")
+    {
+        auto program = generateProgram("int function(void) {\n"
+                                       "    int arr[2];\n"
+                                       "    int* p;\n"
+                                       "    p = &arr[0];\n"
+                                       "    p += 1;\n"
+                                       "    *p = 123;\n"
+                                       "    if(arr[1] != 123)\n"
+                                       "        return 1;\n"
+                                       "    return 0;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 0);
+    }
+    SECTION("00077.c")
+    {
+        auto program = generateProgram(
+            "int foo(int x[100])\n{"
+            "\n"
+            "    int y[100];\n"
+            "    int* p;\n"
+            "    y[0] = 2000;\n\n    if (x[0] != 1000)\n    {\n        return 1;\n    }\n\n    p = x;\n\n    if (p[0] != 1000)\n    {\n        return 2;\n    }\n\n    p = y;\n\n    if (p[0] != 2000)\n    {\n        return 3;\n    }\n\n    if (sizeof(x) != sizeof(void*))\n    {\n        return 4;\n    }\n\n    if (sizeof(y) <= sizeof(x))\n    {\n        return 5;\n    }\n\n    return 0;\n}\n\nint function(void)\n{\n    int x[100];\n    x[0] = 1000;\n\n    return foo(x);\n}"
+            "");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 0);
+    }
+    SECTION("00078.c")
+    {
+        auto program = generateProgram("int f1(char* p)\n"
+                                       "{\n"
+                                       "    return *p + 1;\n"
+                                       "}\n"
+                                       "\n"
+                                       "int function(void) {\n"
+                                       "    char s = 1;\n"
+                                       "    int v[1000];\n"
+                                       "    int f1(char*);\n"
+                                       "    if (f1(&s) != 2)\n"
+                                       "        return 1;\n"
+                                       "    return 0;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 0);
+    }
+    SECTION("00089.c")
+    {
+        auto program = generateProgram("int zero()\n"
+                                       "{\n"
+                                       "return 0;\n"
+                                       "}\n"
+                                       "\n"
+                                       "struct S {\n"
+                                       "int (*zerofunc)();\n"
+                                       "} s = { &zero };\n"
+                                       "\n"
+                                       "struct S *\n"
+                                       "anon()\n"
+                                       "{\n"
+                                       "return &s;\n"
+                                       "}\n"
+                                       "\n"
+                                       "typedef struct S* (*fty)();\n"
+                                       "\n"
+                                       "fty\n"
+                                       "go()\n"
+                                       "{\n"
+                                       "return &anon;\n"
+                                       "}\n"
+                                       "\n"
+                                       "int\n"
+                                       "function()\n"
+                                       "{\n"
+                                       "return go()()->zerofunc();\n"
+                                       "}\n");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 0);
+    }
+    SECTION("00091.c")
+    {
+        auto program = generateProgram("typedef struct {\n"
+                                       "int v;\n"
+                                       "int sub[2];\n"
+                                       "} S;\n"
+                                       "\n"
+                                       "S a[1] = {{1,{2,3}}};\n"
+                                       "\n"
+                                       "int function()\n"
+                                       "{\n"
+                                       "if (a[0].v != 1)\n"
+                                       "    return 1;\n"
+                                       "if (a[0].sub[0] != 2)\n"
+                                       "    return 2;\n"
+                                       "if (a[0].sub[1] != 3)\n"
+                                       "    return 3;\n"
+                                       "return 0;\n"
+                                       "}\n");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 0);
+    }
+    SECTION("00115.c")
+    {
+        auto program = generateProgram("#define B \"b\"\n"
+                                       "\n"
+                                       "char s[] = \"a\" B \"c\";\n"
+                                       "\n"
+                                       "int\n"
+                                       "function()\n"
+                                       "{\n"
+                                       "    if(s[0] != 'a')\n"
+                                       "        return 1;\n"
+                                       "    if(s[1] != 'b')\n"
+                                       "        return 2;\n"
+                                       "    if(s[2] != 'c')\n"
+                                       "        return 3;\n"
+                                       "    if(s[3] != '\\0')\n"
+                                       "        return 4;\n"
+                                       "    return 0;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 0);
+    }
+    SECTION("00121.c")
+    {
+        auto program = generateProgram("int f(int a), g(int a), a;\n"
+                                       "\n"
+                                       "\n"
+                                       "int function() \n"
+                                       "{\n"
+                                       "return f(1) - g(1);\n"
+                                       "}\n"
+                                       "\n"
+                                       "int f(int a) { return a; }\n"
+                                       "int g(int a) { return a; }\n");
         cld::CGLLVM::generateLLVM(*module, program);
         CAPTURE(*module);
         REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));

@@ -2059,6 +2059,8 @@ Program analyse(const Syntax::TranslationUnit& parseTree, CSourceObject&& ctoken
 
 [[nodiscard]] bool isUnion(const Type& type);
 
+[[nodiscard]] bool isEnum(const Type& type);
+
 [[nodiscard]] bool isBool(const Type& type);
 
 [[nodiscard]] bool isCharType(const Type& type);

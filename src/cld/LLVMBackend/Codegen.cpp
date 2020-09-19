@@ -1145,9 +1145,15 @@ public:
         }
         if (std::holds_alternative<cld::Semantics::FunctionType>(declaration.getType().getVariant()))
         {
+            auto* function = m_module.getFunction(declaration.getNameToken()->getText());
+            if (function)
+            {
+                m_lvalues.emplace(&declaration, function);
+                return function;
+            }
             auto* ft = llvm::cast<llvm::FunctionType>(visit(declaration.getType()));
-            auto* function = llvm::Function::Create(ft, linkageType, -1,
-                                                    llvm::StringRef{declaration.getNameToken()->getText()}, &m_module);
+            function = llvm::Function::Create(ft, linkageType, -1,
+                                              llvm::StringRef{declaration.getNameToken()->getText()}, &m_module);
             applyFunctionAttributes(*function, ft,
                                     cld::get<cld::Semantics::FunctionType>(declaration.getType().getVariant()));
             m_lvalues.emplace(&declaration, function);
@@ -1792,6 +1798,7 @@ public:
             auto* global =
                 new llvm::GlobalVariable(m_module, array->getType(), true, llvm::GlobalValue::PrivateLinkage, array);
             global->setAlignment(llvm::MaybeAlign(1));
+            global->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
             return global;
         }
         else
@@ -1931,7 +1938,11 @@ public:
         if (std::holds_alternative<cld::Semantics::PointerType>(
                 memberAccess.getRecordExpression().getType().getVariant()))
         {
-            value = m_builder.CreateLoad(value, memberAccess.getRecordExpression().getType().isVolatile());
+            if (!std::holds_alternative<cld::Semantics::CallExpression>(
+                    memberAccess.getRecordExpression().getVariant()))
+            {
+                value = m_builder.CreateLoad(value, memberAccess.getRecordExpression().getType().isVolatile());
+            }
         }
         else if (std::holds_alternative<cld::Semantics::CallExpression>(
                      memberAccess.getRecordExpression().getVariant()))
@@ -2478,7 +2489,11 @@ public:
             {
                 llvm::Value* load = m_builder.CreateLoad(lhs->getType()->getPointerElementType(), lhs,
                                                          assignment.getLeftExpression().getType().isVolatile());
-                load = cast(load, assignment.getLeftExpression().getType(), assignment.getRightExpression().getType());
+                if (cld::Semantics::isArithmetic(assignment.getLeftExpression().getType()))
+                {
+                    load =
+                        cast(load, assignment.getLeftExpression().getType(), assignment.getRightExpression().getType());
+                }
                 switch (assignment.getKind())
                 {
                     case cld::Semantics::Assignment::Simple: CLD_UNREACHABLE;
@@ -2806,6 +2821,20 @@ public:
                 {
                     m_builder.CreateStore(visit(expression), cld::get<llvm::Value*>(pointer), type.isVolatile());
                     return nullptr;
+                }
+                if (cld::Semantics::isStringLiteralExpr(expression))
+                {
+                    auto& constant = cld::get<cld::Semantics::Constant>(expression.getVariant());
+                    if (std::holds_alternative<std::string>(constant.getValue()))
+                    {
+                        return llvm::ConstantDataArray::getString(m_module.getContext(),
+                                                                  cld::get<std::string>(constant.getValue()));
+                    }
+                    else
+                    {
+                        // TODO: Wide strings
+                        CLD_UNREACHABLE;
+                    }
                 }
                 return visit(expression);
             },

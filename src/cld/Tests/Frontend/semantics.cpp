@@ -4249,3 +4249,30 @@ TEST_CASE("Semantics break and continue", "[semantics]")
                   "}",
                   ProducesNoErrors());
 }
+
+TEST_CASE("Semantics enum type", "[semantics]")
+{
+    SEMA_PRODUCES("enum E {\n"
+                  "\tx,\n"
+                  "\ty,\n"
+                  "\tz,\n"
+                  "};\n"
+                  "\n"
+                  "int\n"
+                  "main()\n"
+                  "{\n"
+                  "\tenum E e;\n"
+                  "\n"
+                  "\tif(x != 0)\n"
+                  "\t\treturn 1;\n"
+                  "\tif(y != 1)\n"
+                  "\t\treturn 2;\n"
+                  "\tif(z != 2)\n"
+                  "\t\treturn 3;\n"
+                  "\t\n"
+                  "\te = x;\n"
+                  "\treturn e;\n"
+                  "}\n"
+                  "",
+                  ProducesNoErrors());
+}
