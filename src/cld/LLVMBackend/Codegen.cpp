@@ -704,6 +704,49 @@ class CodeGenerator final
         return m_builder.CreateFPCast(value, visit(to));
     }
 
+    llvm::Constant* getStringLiteralData(llvm::Type* elementType, const cld::Semantics::Constant::Variant& value)
+    {
+        if (std::holds_alternative<std::string>(value))
+        {
+            return llvm::ConstantDataArray::getString(m_module.getContext(), cld::get<std::string>(value));
+        }
+        else
+        {
+            auto& str = cld::get<cld::Lexer::NonCharString>(value);
+            std::uint8_t size = 0;
+            switch (m_sourceInterface.getLanguageOptions().wcharUnderlyingType)
+            {
+                case cld::LanguageOptions::WideCharType ::UnsignedShort:
+                    size = m_sourceInterface.getLanguageOptions().sizeOfShort;
+                    break;
+                case cld::LanguageOptions::WideCharType ::Int:
+                    size = m_sourceInterface.getLanguageOptions().sizeOfInt;
+                    break;
+            }
+            switch (size)
+            {
+                case 2:
+                {
+                    std::vector<std::uint16_t> convertedData(str.characters.size());
+                    std::transform(str.characters.begin(), str.characters.end(), convertedData.begin(),
+                                   [](std::uint32_t value) -> std::uint16_t { return value; });
+                    std::vector<char> rawData(convertedData.size() * 2);
+                    std::memcpy(rawData.data(), convertedData.data(), rawData.size());
+                    return llvm::ConstantDataArray::getRaw(llvm::StringRef(rawData.data(), rawData.size()),
+                                                           convertedData.size(), elementType);
+                }
+                case 4:
+                {
+                    std::vector<char> rawData(str.characters.size() * 4);
+                    std::memcpy(rawData.data(), str.characters.data(), rawData.size());
+                    return llvm::ConstantDataArray::getRaw(llvm::StringRef(rawData.data(), rawData.size()),
+                                                           str.characters.size(), elementType);
+                }
+            }
+            CLD_UNREACHABLE;
+        }
+    }
+
     llvm::Value* visitStaticInitializerList(const cld::Semantics::InitializerList& initializerList,
                                             const cld::Semantics::Type& type, llvm::Type* llvmType)
     {
@@ -746,7 +789,7 @@ class CodeGenerator final
         for (auto& [path, expression] : initializerList.getFields())
         {
             auto* replacement = visit(expression);
-            llvm::Constant*& value = [&, &path = path]() -> llvm::Constant*& {
+            llvm::Constant** value = [&, &path = path, &expression = expression]() -> llvm::Constant** {
                 Aggregate* current = &constants;
                 const cld::Semantics::Type* currentType = &type;
                 for (auto& iter : llvm::ArrayRef(path).drop_back())
@@ -779,9 +822,54 @@ class CodeGenerator final
                     }
                     current = &cld::get<Aggregate>(current->vector[iter]);
                 }
-                return cld::get<llvm::Constant*>(current->vector[path.back()]);
+                if (cld::Semantics::isStringLiteralExpr(expression))
+                {
+                    auto& constant = cld::get<cld::Semantics::Constant>(expression.getVariant());
+                    auto& aggregate = cld::get<Aggregate>(current->vector[path.back()]);
+                    auto size = std::min(aggregate.vector.size(),
+                                         cld::match(
+                                             constant.getValue(),
+                                             [](const std::string& str) -> std::size_t { return str.size() + 1; },
+                                             [](const cld::Lexer::NonCharString& nonCharString) -> std::size_t {
+                                                 return nonCharString.characters.size();
+                                             },
+                                             [](const auto&) -> std::size_t { CLD_UNREACHABLE; }));
+                    auto* elementType = cld::match(
+                        constant.getValue(),
+                        [&](const std::string&) -> llvm::Type* {
+                            return visit(cld::Semantics::PrimitiveType::createChar(
+                                false, false, m_programInterface.getLanguageOptions()));
+                        },
+                        [&](const cld::Lexer::NonCharString&) -> llvm::Type* {
+                            return visit(cld::Semantics::PrimitiveType::createWcharT(
+                                false, false, m_programInterface.getLanguageOptions()));
+                        },
+                        [](const auto&) -> llvm::Type* { CLD_UNREACHABLE; });
+                    for (std::size_t i = 0; i < size; i++)
+                    {
+                        auto* constantValue = cld::match(
+                            constant.getValue(),
+                            [&](const std::string& str) -> llvm::Constant* {
+                                if (i == str.size())
+                                {
+                                    return llvm::ConstantInt::get(elementType, 0);
+                                }
+                                return llvm::ConstantInt::get(elementType, str[i], true);
+                            },
+                            [&](const cld::Lexer::NonCharString& str) -> llvm::Constant* {
+                                return llvm::ConstantInt::get(elementType, str.characters[i], false);
+                            },
+                            [](const auto&) -> llvm::Constant* { CLD_UNREACHABLE; });
+                        aggregate.vector[i] = constantValue;
+                    }
+                    return nullptr;
+                }
+                return &cld::get<llvm::Constant*>(current->vector[path.back()]);
             }();
-            value = llvm::cast<llvm::Constant>(replacement);
+            if (value)
+            {
+                *value = llvm::cast<llvm::Constant>(replacement);
+            }
         }
 
         return cld::YComb{[&](auto&& self, const cld::Semantics::Type& type, llvm::Type* llvmType,
@@ -1809,22 +1897,14 @@ public:
         {
             return llvm::ConstantFP::get(type, cld::get<llvm::APFloat>(constant.getValue()));
         }
-        else if (std::holds_alternative<std::string>(constant.getValue()))
+        else
         {
-            auto* array =
-                llvm::ConstantDataArray::getString(m_module.getContext(), cld::get<std::string>(constant.getValue()));
+            auto* array = getStringLiteralData(type->getArrayElementType(), constant.getValue());
             auto* global =
                 new llvm::GlobalVariable(m_module, array->getType(), true, llvm::GlobalValue::PrivateLinkage, array);
             global->setAlignment(llvm::MaybeAlign(1));
             global->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
             return global;
-        }
-        else
-        {
-            auto& str = cld::get<cld::Lexer::NonCharString>(constant.getValue());
-            // TODO: Wide strings
-            (void)str;
-            CLD_UNREACHABLE;
         }
     }
 
@@ -2398,8 +2478,37 @@ public:
                 cld::Semantics::PrimitiveType::createSizeT(false, false, m_programInterface.getLanguageOptions()));
             return llvm::ConstantInt::get(type, *sizeofOperator.getSize());
         }
-        // TODO:
-        CLD_UNREACHABLE;
+        const cld::Semantics::Type& type = cld::match(
+            sizeofOperator.getVariant(),
+            [](const cld::Semantics::SizeofOperator::TypeVariant& typeVariant) -> const cld::Semantics::Type& {
+                return typeVariant.type;
+            },
+            [](const std::unique_ptr<cld::Semantics::Expression>& expression) -> const cld::Semantics::Type& {
+                return expression->getType();
+            });
+        auto& elementType = [&]() -> decltype(auto) {
+            auto* currType = &type;
+            while (cld::Semantics::isArray(*currType))
+            {
+                currType = &cld::Semantics::getArrayElementType(*currType);
+            }
+            return *currType;
+        }();
+        llvm::Value* value = m_builder.getInt64(elementType.getSizeOf(m_programInterface));
+        for (auto& iter : cld::Semantics::RecursiveVisitor(type, cld::Semantics::ARRAY_TYPE_NEXT_FN))
+        {
+            llvm::Value* temp;
+            if (std::holds_alternative<cld::Semantics::ArrayType>(iter.getVariant()))
+            {
+                temp = m_builder.getInt64(cld::get<cld::Semantics::ArrayType>(iter.getVariant()).getSize());
+            }
+            else
+            {
+                temp = m_valSizes[cld::get<cld::Semantics::ValArrayType>(iter.getVariant()).getExpression()];
+            }
+            value = m_builder.CreateMul(value, temp);
+        }
+        return value;
     }
 
     llvm::Value* visit(const cld::Semantics::Expression&, const cld::Semantics::SubscriptOperator& subscriptOperator)
@@ -2837,22 +2946,21 @@ public:
             [&](const cld::Semantics::Expression& expression) -> llvm::Value* {
                 if (std::holds_alternative<llvm::Value*>(pointer))
                 {
-                    m_builder.CreateStore(visit(expression), cld::get<llvm::Value*>(pointer), type.isVolatile());
+                    auto* value = visit(expression);
+                    if (cld::Semantics::isStringLiteralExpr(expression))
+                    {
+                        m_builder.CreateMemCpy(cld::get<llvm::Value*>(pointer), llvm::MaybeAlign(), value,
+                                               llvm::MaybeAlign(), expression.getType().getSizeOf(m_programInterface));
+                        return nullptr;
+                    }
+                    m_builder.CreateStore(value, cld::get<llvm::Value*>(pointer), type.isVolatile());
                     return nullptr;
                 }
                 if (cld::Semantics::isStringLiteralExpr(expression))
                 {
                     auto& constant = cld::get<cld::Semantics::Constant>(expression.getVariant());
-                    if (std::holds_alternative<std::string>(constant.getValue()))
-                    {
-                        return llvm::ConstantDataArray::getString(m_module.getContext(),
-                                                                  cld::get<std::string>(constant.getValue()));
-                    }
-                    else
-                    {
-                        // TODO: Wide strings
-                        CLD_UNREACHABLE;
-                    }
+                    return getStringLiteralData(visit(expression.getType())->getArrayElementType(),
+                                                constant.getValue());
                 }
                 return visit(expression);
             },
@@ -2897,6 +3005,12 @@ public:
                     }
                     if (!bitFieldBounds)
                     {
+                        if (cld::Semantics::isStringLiteralExpr(expression))
+                        {
+                            m_builder.CreateMemCpy(currentPointer, llvm::MaybeAlign(), subValue, llvm::MaybeAlign(),
+                                                   expression.getType().getSizeOf(m_programInterface));
+                            continue;
+                        }
                         m_builder.CreateStore(subValue, currentPointer, type.isVolatile());
                         continue;
                     }

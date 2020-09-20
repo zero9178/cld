@@ -3311,6 +3311,33 @@ TEST_CASE("LLVM Codegen initialization", "[LLVM]")
             REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
             CHECK(cld::Tests::computeInJIT<int(void)>(std::move(module), "foo") != 0);
         }
+        SECTION("String literals")
+        {
+            auto program = generateProgram("char c[] = \"text\";\n"
+                                           "\n"
+                                           "int foo(void) {\n"
+                                           "return sizeof(c);\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int(void)>(std::move(module), "foo") == 5);
+        }
+        SECTION("Nested string literal")
+        {
+            auto program = generateProgram("struct S {\n"
+                                           "char c[50];\n"
+                                           "};\n"
+                                           "struct S s = {.c = \"text\",.c[0] = '4'};\n"
+                                           "\n"
+                                           "int foo(void) {\n"
+                                           "return s.c[2] == 'x' && s.c[0] == '4';\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int(void)>(std::move(module), "foo") != 0);
+        }
     }
     SECTION("automatic lifetime")
     {
@@ -3366,6 +3393,32 @@ TEST_CASE("LLVM Codegen initialization", "[LLVM]")
             CAPTURE(*module);
             REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
             CHECK(cld::Tests::computeInJIT<int(void)>(std::move(module), "foo") != 0);
+        }
+        SECTION("String literals")
+        {
+            auto program = generateProgram("int foo(void) {\n"
+                                           "char c[] = \"text\";\n"
+                                           "return sizeof(c);\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int(void)>(std::move(module), "foo") == 5);
+        }
+        SECTION("Nested string literal")
+        {
+            auto program = generateProgram("struct S {\n"
+                                           "char c[50];\n"
+                                           "};"
+                                           "\n"
+                                           "int foo(void) {\n"
+                                           "struct S s = {.c = \"text\"};"
+                                           "return s.c[2];\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int(void)>(std::move(module), "foo") == 'x');
         }
     }
 }
@@ -3448,6 +3501,17 @@ TEST_CASE("LLVM Codegen variably modified types", "[LLVM]")
         CAPTURE(*module);
         REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
         CHECK(cld::Tests::computeInJIT<int(int)>(std::move(module), "function", 5) == 69);
+    }
+    SECTION("Sizeof")
+    {
+        auto program = generateProgram("int function(int n) {\n"
+                                       "    int r[3][5][n];\n"
+                                       "    return sizeof(r);\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int(int)>(std::move(module), "function", 5) == 75 * sizeof(int));
     }
 }
 
