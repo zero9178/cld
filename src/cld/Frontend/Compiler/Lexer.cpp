@@ -2316,7 +2316,8 @@ std::optional<std::pair<CToken::ValueType, CToken::Type>>
     std::unordered_set<std::string_view> set;
     if (!isFloat)
     {
-        set = {"u", "U", "ul", "Ul", "uL", "UL", "uLL", "ULL", "ull", "Ull", "l", "L", "ll", "LL", ""};
+        set = {"u",  "U",  "ul",  "Ul",  "uL",  "UL",  "uLL", "ULL", "ull", "Ull", "lu", "lU",
+               "Lu", "LU", "LLu", "LLU", "llu", "llU", "l",   "L",   "ll",  "LL",  ""};
     }
     else
     {

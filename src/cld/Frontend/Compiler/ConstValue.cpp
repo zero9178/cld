@@ -224,6 +224,14 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::divide(const cld::Semanti
             return {floating / cld::get<llvm::APFloat>(rhs.getValue())};
         },
         [&rhs, issues](const llvm::APSInt& integer) -> ConstValue {
+            if (cld::get<llvm::APSInt>(rhs.getValue()) == 0)
+            {
+                if (issues)
+                {
+                    *issues = IntDivByZero;
+                }
+                return {};
+            }
             bool overflow = false;
             auto apsInt = integer.isSigned() ? integer.sdiv_ov(cld::get<llvm::APSInt>(rhs.getValue()), overflow) :
                                                integer.udiv(cld::get<llvm::APSInt>(rhs.getValue()));

@@ -1035,6 +1035,16 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
         CHECK(value.getBitWidth() == 8 * sizeof(unsigned long long));
         CHECK(value.isUnsigned());
 
+        result = lexes("534534llu");
+        REQUIRE_FALSE(result.data().empty());
+        CHECK(result.data().size() == 1);
+        CHECK(result.data()[0].getType() == cld::Lexer::CToken::Type::UnsignedLongLong);
+        REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::Literal);
+        value = std::get<llvm::APSInt>(result.data()[0].getValue());
+        CHECK(value == 534534);
+        CHECK(value.getBitWidth() == 8 * sizeof(unsigned long long));
+        CHECK(value.isUnsigned());
+
         LEXER_OUTPUTS_WITH("534534lL", ProducesError(INVALID_LITERAL_SUFFIX, "lL"));
         LEXER_OUTPUTS_WITH("534534Ll", ProducesError(INVALID_LITERAL_SUFFIX, "Ll"));
     }

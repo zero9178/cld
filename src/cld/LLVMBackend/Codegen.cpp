@@ -123,6 +123,7 @@ class CodeGenerator final
     llvm::DIBuilder m_debugInfo{m_module};
     std::unordered_map<std::shared_ptr<const cld::Semantics::Expression>, llvm::Value*> m_valSizes;
     std::unordered_map<const cld::Semantics::Declaration * CLD_NON_NULL, llvm::AllocaInst*> m_stackSaves;
+    std::unordered_map<std::string_view, llvm::GlobalVariable*> m_cGlobalVariables;
 
     llvm::Value* toBool(llvm::Value* value)
     {
@@ -1119,18 +1120,23 @@ public:
             });
     }
 
-    void visit(const cld::Semantics::TranslationUnit&)
+    void visit(const cld::Semantics::TranslationUnit& translationUnit)
     {
-        for (auto& [id, iter] : m_programInterface.getScopes()[0].declarations)
+        for (auto& iter : translationUnit.getGlobals())
         {
-            (void)id;
             cld::match(
-                iter.declared,
-                [&](const cld::Semantics::FunctionDefinition* CLD_NON_NULL functionDefinition) {
+                iter,
+                [&](const std::unique_ptr<cld::Semantics::FunctionDefinition>& functionDefinition) {
                     visit(*functionDefinition);
                 },
-                [&](const cld::Semantics::Declaration* CLD_NON_NULL declaration) { visit(*declaration); },
-                [](const auto&) {});
+                [&](const std::unique_ptr<cld::Semantics::Declaration>& declaration) {
+                    auto* global = visit(*declaration);
+                    if (llvm::isa<llvm::GlobalVariable>(global))
+                    {
+                        m_cGlobalVariables.emplace(declaration->getNameToken()->getText(),
+                                                   llvm::cast<llvm::GlobalVariable>(global));
+                    }
+                });
         }
     }
 
@@ -1173,7 +1179,7 @@ public:
             {
                 constant = llvm::Constant::getNullValue(type);
             }
-            if (m_currentFunction)
+            if (m_currentFunction && declaration.getKind() != cld::Semantics::Declaration::DeclarationOnly)
             {
                 linkageType = llvm::GlobalValue::InternalLinkage;
             }
@@ -1183,10 +1189,22 @@ public:
                 linkageType = llvm::GlobalValue::CommonLinkage;
             }
 
-            auto* global = new llvm::GlobalVariable(
-                m_module, type, declaration.getType().isConst() && linkageType != llvm::GlobalValue::CommonLinkage,
-                linkageType, constant, llvm::StringRef{declaration.getNameToken()->getText()});
-            global->setAlignment(llvm::MaybeAlign(declaration.getType().getAlignOf(m_programInterface)));
+            llvm::GlobalVariable* global = nullptr;
+            if (m_currentFunction || m_cGlobalVariables.count(declaration.getNameToken()->getText()) == 0)
+            {
+                global = new llvm::GlobalVariable(
+                    m_module, type, declaration.getType().isConst() && linkageType != llvm::GlobalValue::CommonLinkage,
+                    linkageType, constant, llvm::StringRef{declaration.getNameToken()->getText()});
+                global->setAlignment(llvm::MaybeAlign(declaration.getType().getAlignOf(m_programInterface)));
+            }
+            else
+            {
+                global = m_cGlobalVariables[declaration.getNameToken()->getText()];
+                global->setConstant(declaration.getType().isConst() && linkageType != llvm::GlobalValue::CommonLinkage);
+                global->setLinkage(linkageType);
+                global->setInitializer(constant);
+            }
+
             m_lvalues.emplace(&declaration, global);
             return global;
         }

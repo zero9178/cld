@@ -585,6 +585,7 @@ TEST_CASE("Const eval term", "[constEval]")
             CHECK(result == 1);
             CHECK(result.isSigned());
             CHECK(result.getBitWidth() == sizeof(int) * 8);
+            INT_EVAL_PRODUCES("0/0", ProducesError(INTEGER_DIVISION_BY_ZERO_NOT_ALLOWED_IN_CONSTANT_EXPRESSION));
         }
         SECTION("Modulo")
         {

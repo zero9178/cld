@@ -3708,4 +3708,39 @@ TEST_CASE("LLVM codegen c-testsuite", "[LLVM]")
         REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
         CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 0);
     }
+    SECTION("00138.c")
+    {
+        auto program = generateProgram("#define M(x) x\n"
+                                       "#define A(a,b) a(b)\n"
+                                       "\n"
+                                       "int function(void) {\n"
+                                       "char *a = A(M,\"hi\");\n"
+                                       "\n"
+                                       "return (a[1] == 'i') ? 0 : 1;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 0);
+    }
+    SECTION("00145.c")
+    {
+        auto program = generateProgram("#if 0 != (0 && (0/0))\n"
+                                       "#error 0 != (0 && (0/0))\n"
+                                       "#endif\n"
+                                       "\n"
+                                       "#if 1 != (-1 || (0/0))\n"
+                                       "#error 1 != (-1 || (0/0))\n"
+                                       "#endif\n"
+                                       "\n"
+                                       "#if 3 != (-1 ? 3 : (0/0))\n"
+                                       "#error 3 != (-1 ? 3 : (0/0))\n"
+                                       "#endif\n"
+                                       "\n"
+                                       "int function(void) { return 0; }");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 0);
+    }
 }

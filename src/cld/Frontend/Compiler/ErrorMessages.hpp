@@ -634,6 +634,9 @@ CREATE_ERROR(FUNCTION_CALL_NOT_ALLOWED_IN_CONSTANT_EXPRESSION, "Function call no
 CREATE_ERROR(COMPOUND_LITERAL_NOT_ALLOWED_IN_CONSTANT_EXPRESSION, "Initializer not allowed in constant expression",
              Underline<0>);
 
+CREATE_ERROR(INTEGER_DIVISION_BY_ZERO_NOT_ALLOWED_IN_CONSTANT_EXPRESSION,
+             "Integer division by zero not allowed in constant expression", PointAt<0>, Annotate<1, 2>);
+
 CREATE_ERROR(ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS,
              "Only integers allowed in integer constant expressions", Underline<0>);
 

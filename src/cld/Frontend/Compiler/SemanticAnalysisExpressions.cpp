@@ -2201,6 +2201,10 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::doSingleElementInit
             return Expression(node);
         }
     }
+    else
+    {
+        expression = lvalueConversion(std::move(expression));
+    }
 
     if (staticLifetime)
     {

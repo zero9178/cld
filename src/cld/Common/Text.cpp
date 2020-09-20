@@ -19,6 +19,10 @@ bool cld::isWhitespace(std::uint32_t c) noexcept
 
 int cld::unsafeCharWidth(std::uint32_t UCS)
 {
+    if (UCS == '\t')
+    {
+        return 4;
+    }
     // Sorted list of non-spacing and enclosing combining mark intervals as
     // defined in "3.6 Combination" of
     // http://www.unicode.org/versions/Unicode6.2.0/UnicodeStandard-6.2.pdf

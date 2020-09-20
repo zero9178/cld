@@ -34,7 +34,8 @@ public:
     enum Issue
     {
         NoIssue,
-        NotRepresentable
+        NotRepresentable,
+        IntDivByZero
     };
 
     ConstValue() = default;

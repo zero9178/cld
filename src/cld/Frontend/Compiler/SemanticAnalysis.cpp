@@ -1365,6 +1365,82 @@ cld::Semantics::ConstValue
         [&](const BinaryOperator& binaryOperator) -> ConstValue {
             auto lhs = evaluate(binaryOperator.getLeftExpression(), mode, logger);
             bool integer = typeCheck(binaryOperator.getLeftExpression(), lhs);
+            if (binaryOperator.getKind() == BinaryOperator::LogicAnd
+                || binaryOperator.getKind() == BinaryOperator::LogicOr)
+            {
+                if (!integer)
+                {
+                    return {};
+                }
+                switch (binaryOperator.getKind())
+                {
+                    default: CLD_UNREACHABLE;
+                    case BinaryOperator::LogicAnd:
+                    {
+                        if (!lhs)
+                        {
+                            if (mode == Integer
+                                && std::holds_alternative<Conversion>(binaryOperator.getRightExpression().getVariant())
+                                && cld::get<Conversion>(binaryOperator.getRightExpression().getVariant()).getKind()
+                                       == Conversion::Implicit
+                                && cld::Semantics::isBool(binaryOperator.getRightExpression().getType()))
+                            {
+                                auto& rExpr = cld::get<Conversion>(binaryOperator.getRightExpression().getVariant())
+                                                  .getExpression();
+                                if (!rExpr.getType().isUndefined() && !isInteger(rExpr.getType()))
+                                {
+                                    logger(
+                                        Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS.args(
+                                            rExpr, m_sourceInterface, rExpr));
+                                }
+                            }
+                            return {llvm::APSInt(llvm::APInt(m_sourceInterface.getLanguageOptions().sizeOfInt * 8, 0),
+                                                 false)};
+                        }
+
+                        auto rhs = evaluate(binaryOperator.getRightExpression(), mode, logger);
+                        if (!typeCheck(binaryOperator.getRightExpression(), rhs))
+                        {
+                            return {};
+                        }
+                        return {llvm::APSInt(
+                            llvm::APInt(m_sourceInterface.getLanguageOptions().sizeOfInt * 8, static_cast<bool>(rhs)),
+                            false)};
+                    }
+                    case BinaryOperator::LogicOr:
+                    {
+                        if (lhs)
+                        {
+                            if (mode == Integer
+                                && std::holds_alternative<Conversion>(binaryOperator.getRightExpression().getVariant())
+                                && cld::get<Conversion>(binaryOperator.getRightExpression().getVariant()).getKind()
+                                       == Conversion::Implicit
+                                && cld::Semantics::isBool(binaryOperator.getRightExpression().getType()))
+                            {
+                                auto& rExpr = cld::get<Conversion>(binaryOperator.getRightExpression().getVariant())
+                                                  .getExpression();
+                                if (!rExpr.getType().isUndefined() && !isInteger(rExpr.getType()))
+                                {
+                                    logger(
+                                        Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS.args(
+                                            rExpr, m_sourceInterface, rExpr));
+                                }
+                            }
+                            return {llvm::APSInt(llvm::APInt(m_sourceInterface.getLanguageOptions().sizeOfInt * 8, 1),
+                                                 false)};
+                        }
+
+                        auto rhs = evaluate(binaryOperator.getRightExpression(), mode, logger);
+                        if (!typeCheck(binaryOperator.getRightExpression(), rhs))
+                        {
+                            return {};
+                        }
+                        return {llvm::APSInt(
+                            llvm::APInt(m_sourceInterface.getLanguageOptions().sizeOfInt * 8, static_cast<bool>(rhs)),
+                            false)};
+                    }
+                }
+            }
             auto rhs = evaluate(binaryOperator.getRightExpression(), mode, logger);
             if (!integer || !typeCheck(binaryOperator.getRightExpression(), rhs))
             {
@@ -1372,6 +1448,8 @@ cld::Semantics::ConstValue
             }
             switch (binaryOperator.getKind())
             {
+                case BinaryOperator::LogicOr:
+                case BinaryOperator::LogicAnd: CLD_UNREACHABLE;
                 case BinaryOperator::Addition:
                 {
                     ConstValue::Issue issue = ConstValue::NoIssue;
@@ -1416,6 +1494,12 @@ cld::Semantics::ConstValue
                     {
                         // TODO:
                     }
+                    if (issue == ConstValue::IntDivByZero)
+                    {
+                        logger(Errors::Semantics::INTEGER_DIVISION_BY_ZERO_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
+                            binaryOperator, m_sourceInterface, binaryOperator, binaryOperator.getRightExpression(),
+                            rhs));
+                    }
                     return result;
                 }
                 case BinaryOperator::Modulo: return lhs.modulo(rhs, m_sourceInterface.getLanguageOptions());
@@ -1451,26 +1535,6 @@ cld::Semantics::ConstValue
                 case BinaryOperator::BitOr: return lhs.bitOr(rhs, m_sourceInterface.getLanguageOptions());
                 case BinaryOperator::BitAnd: return lhs.bitAnd(rhs, m_sourceInterface.getLanguageOptions());
                 case BinaryOperator::BitXor: return lhs.bitXor(rhs, m_sourceInterface.getLanguageOptions());
-                case BinaryOperator::LogicAnd:
-                    if (lhs && rhs)
-                    {
-                        return {
-                            llvm::APSInt(llvm::APInt(m_sourceInterface.getLanguageOptions().sizeOfInt * 8, 1), false)};
-                    }
-                    else
-                    {
-                        return {llvm::APSInt(m_sourceInterface.getLanguageOptions().sizeOfInt * 8, false)};
-                    }
-                case BinaryOperator::LogicOr:
-                    if (lhs || rhs)
-                    {
-                        return {
-                            llvm::APSInt(llvm::APInt(m_sourceInterface.getLanguageOptions().sizeOfInt * 8, 1), false)};
-                    }
-                    else
-                    {
-                        return {llvm::APSInt(m_sourceInterface.getLanguageOptions().sizeOfInt * 8, false)};
-                    }
             }
             CLD_UNREACHABLE;
         },
