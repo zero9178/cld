@@ -1439,12 +1439,91 @@ std::optional<cld::Syntax::DirectAbstractDeclarator>
                     }
                 })};
                 begin++;
-                if (begin < end && begin->getTokenType() == Lexer::TokenType::Asterisk)
+                if (begin == end)
+                {
+                    return {};
+                }
+                if (begin->getTokenType() == Lexer::TokenType::StaticKeyword)
+                {
+                    const auto* staticLoc = begin++;
+                    std::vector<TypeQualifier> typeQualifiers;
+                    while (begin < end
+                           && (begin->getTokenType() == Lexer::TokenType::ConstKeyword
+                               || begin->getTokenType() == Lexer::TokenType::RestrictKeyword
+                               || begin->getTokenType() == Lexer::TokenType::VolatileKeyword))
+                    {
+                        switch (begin->getTokenType())
+                        {
+                            case Lexer::TokenType::ConstKeyword:
+                                typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Const);
+                                break;
+                            case Lexer::TokenType::RestrictKeyword:
+                                typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Restrict);
+                                break;
+                            case Lexer::TokenType::VolatileKeyword:
+                                typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Volatile);
+                                break;
+                            default: CLD_UNREACHABLE;
+                        }
+                        begin++;
+                    }
+                    auto assignmentExpression = cld::Parser::parseAssignmentExpression(
+                        begin, end,
+                        context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseSquareBracket)));
+                    closeParenth.reset();
+                    if (assignmentExpression)
+                    {
+                        directAbstractDeclarator =
+                            std::make_unique<DirectAbstractDeclarator>(DirectAbstractDeclaratorStatic(
+                                start, begin, std::move(directAbstractDeclarator), staticLoc, std::move(typeQualifiers),
+                                std::move(*assignmentExpression)));
+                    }
+                    break;
+                }
+                else if (begin->getTokenType() == Lexer::TokenType::Asterisk)
                 {
                     const auto* asterisk = begin++;
                     closeParenth.reset();
                     directAbstractDeclarator = std::make_unique<DirectAbstractDeclarator>(
                         DirectAbstractDeclaratorAsterisk(start, begin, std::move(directAbstractDeclarator), asterisk));
+                    break;
+                }
+
+                std::vector<TypeQualifier> typeQualifiers;
+                while (begin < end
+                       && (begin->getTokenType() == Lexer::TokenType::ConstKeyword
+                           || begin->getTokenType() == Lexer::TokenType::RestrictKeyword
+                           || begin->getTokenType() == Lexer::TokenType::VolatileKeyword))
+                {
+                    switch (begin->getTokenType())
+                    {
+                        case Lexer::TokenType::ConstKeyword:
+                            typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Const);
+                            break;
+                        case Lexer::TokenType::RestrictKeyword:
+                            typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Restrict);
+                            break;
+                        case Lexer::TokenType::VolatileKeyword:
+                            typeQualifiers.emplace_back(begin, begin + 1, TypeQualifier::Volatile);
+                            break;
+                        default: CLD_UNREACHABLE;
+                    }
+                    begin++;
+                }
+
+                if (begin < end && begin->getTokenType() == Lexer::TokenType::StaticKeyword)
+                {
+                    const auto* staticLoc = begin++;
+                    auto assignment = cld::Parser::parseAssignmentExpression(
+                        begin, end,
+                        context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseSquareBracket)));
+                    closeParenth.reset();
+                    if (assignment)
+                    {
+                        directAbstractDeclarator = std::make_unique<DirectAbstractDeclarator>(
+                            DirectAbstractDeclaratorStatic(start, begin, std::move(directAbstractDeclarator), staticLoc,
+                                                           std::move(typeQualifiers), std::move(*assignment)));
+                    }
                     break;
                 }
 
@@ -1458,7 +1537,7 @@ std::optional<cld::Syntax::DirectAbstractDeclarator>
                     {
                         directAbstractDeclarator =
                             std::make_unique<DirectAbstractDeclarator>(DirectAbstractDeclaratorAssignmentExpression(
-                                start, begin, std::move(directAbstractDeclarator),
+                                start, begin, std::move(directAbstractDeclarator), std::move(typeQualifiers),
                                 std::make_unique<AssignmentExpression>(std::move(*assignment))));
                     }
                 }
@@ -1467,7 +1546,7 @@ std::optional<cld::Syntax::DirectAbstractDeclarator>
                     closeParenth.reset();
                     directAbstractDeclarator =
                         std::make_unique<DirectAbstractDeclarator>(DirectAbstractDeclaratorAssignmentExpression(
-                            start, begin, std::move(directAbstractDeclarator), nullptr));
+                            start, begin, std::move(directAbstractDeclarator), std::move(typeQualifiers), nullptr));
                 }
 
                 break;

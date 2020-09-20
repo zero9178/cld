@@ -1381,6 +1381,9 @@ TEST_CASE("Semantics type compatibility", "[semantics]")
         SEMA_PRODUCES("int foo(float (*a)(int));\n"
                       "int foo(float a(int));",
                       ProducesNothing());
+        SEMA_PRODUCES("void foor(int x[restrict 5]);\n"
+                      "void foor(int[restrict 5]);",
+                      ProducesNothing());
     }
     SECTION("Records")
     {

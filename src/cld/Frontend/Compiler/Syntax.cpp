@@ -1036,9 +1036,11 @@ const cld::Syntax::DirectDeclarator& cld::Syntax::Declarator::getDirectDeclarato
 cld::Syntax::DirectAbstractDeclaratorAssignmentExpression::DirectAbstractDeclaratorAssignmentExpression(
     Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
     std::unique_ptr<cld::Syntax::DirectAbstractDeclarator>&& directAbstractDeclarator,
+    std::vector<TypeQualifier>&& typeQualifiers,
     std::unique_ptr<cld::Syntax::AssignmentExpression>&& assignmentExpression)
     : Node(begin, end),
       m_directAbstractDeclarator(std::move(directAbstractDeclarator)),
+      m_typeQualifiers(std::move(typeQualifiers)),
       m_assignmentExpression(std::move(assignmentExpression))
 {
 }
@@ -1047,6 +1049,12 @@ const cld::Syntax::DirectAbstractDeclarator*
     cld::Syntax::DirectAbstractDeclaratorAssignmentExpression::getDirectAbstractDeclarator() const
 {
     return m_directAbstractDeclarator.get();
+}
+
+const std::vector<cld::Syntax::TypeQualifier>&
+    cld::Syntax::DirectAbstractDeclaratorAssignmentExpression::getTypeQualifiers() const
+{
+    return m_typeQualifiers;
 }
 
 const cld::Syntax::AssignmentExpression*
@@ -1302,4 +1310,37 @@ cld::Syntax::UnaryExpressionDefined::UnaryExpressionDefined(Lexer::CTokenIterato
 std::string_view cld::Syntax::UnaryExpressionDefined::getIdentifier() const
 {
     return m_identifier;
+}
+
+cld::Syntax::DirectAbstractDeclaratorStatic::DirectAbstractDeclaratorStatic(
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
+    std::unique_ptr<DirectAbstractDeclarator>&& directAbstractDeclarator, Lexer::CTokenIterator staticLoc,
+    std::vector<TypeQualifier>&& typeQualifiers, AssignmentExpression&& assignmentExpression)
+    : Node(begin, end),
+      m_directAbstractDeclarator(std::move(directAbstractDeclarator)),
+      m_staticLoc(staticLoc),
+      m_typeQualifiers(std::move(typeQualifiers)),
+      m_assignmentExpression(std::move(assignmentExpression))
+{
+}
+
+const cld::Syntax::DirectAbstractDeclarator*
+    cld::Syntax::DirectAbstractDeclaratorStatic::getDirectAbstractDeclarator() const
+{
+    return m_directAbstractDeclarator.get();
+}
+
+const std::vector<cld::Syntax::TypeQualifier>& cld::Syntax::DirectAbstractDeclaratorStatic::getTypeQualifiers() const
+{
+    return m_typeQualifiers;
+}
+
+const cld::Syntax::AssignmentExpression& cld::Syntax::DirectAbstractDeclaratorStatic::getAssignmentExpression() const
+{
+    return m_assignmentExpression;
+}
+
+cld::Lexer::CTokenIterator cld::Syntax::DirectAbstractDeclaratorStatic::getStaticLoc() const
+{
+    return m_staticLoc;
 }

@@ -143,6 +143,8 @@ class DirectAbstractDeclaratorAsterisk;
 
 class DirectAbstractDeclaratorAssignmentExpression;
 
+class DirectAbstractDeclaratorStatic;
+
 class Pointer;
 
 class ParameterTypeList;
@@ -1321,10 +1323,12 @@ public:
  *                              | <DirectAbstractDeclaratorAssignmentExpression>
  *                              | <DirectAbstractDeclaratorAsterisk>
  *                              | <DirectAbstractDeclaratorParameterTypeList>
+ *                              | <DirectAbstractDeclaratorStatic>
  */
 using DirectAbstractDeclarator =
     std::variant<DirectAbstractDeclaratorParentheses, DirectAbstractDeclaratorAssignmentExpression,
-                 DirectAbstractDeclaratorAsterisk, DirectAbstractDeclaratorParameterTypeList>;
+                 DirectAbstractDeclaratorAsterisk, DirectAbstractDeclaratorParameterTypeList,
+                 DirectAbstractDeclaratorStatic>;
 
 /**
  * <DirectAbstractDeclaratorParentheses> ::= <TokenType::OpenParentheses> <AbstractDeclarator>
@@ -1343,21 +1347,54 @@ public:
 
 /**
  * <DirectAbstractDeclaratorAssignmentExpression> ::= [<DirectAbstractDeclarator>] <TokenType::OpenSquareBracket>
- *                                                    [<AssignmentExpression>] <TokenType::CloseSquareBracket>
+ *                                                    {<TypeQualifier> } [<AssignmentExpression>]
+ * <TokenType::CloseSquareBracket>
  */
 class DirectAbstractDeclaratorAssignmentExpression final : public Node
 {
     std::unique_ptr<DirectAbstractDeclarator> m_directAbstractDeclarator;
+    std::vector<TypeQualifier> m_typeQualifiers;
     std::unique_ptr<AssignmentExpression> m_assignmentExpression;
 
 public:
     DirectAbstractDeclaratorAssignmentExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                                  std::unique_ptr<DirectAbstractDeclarator>&& directAbstractDeclarator,
+                                                 std::vector<TypeQualifier>&& typeQualifiers,
                                                  std::unique_ptr<AssignmentExpression>&& assignmentExpression);
 
     [[nodiscard]] const DirectAbstractDeclarator* getDirectAbstractDeclarator() const;
 
+    [[nodiscard]] const std::vector<TypeQualifier>& getTypeQualifiers() const;
+
     [[nodiscard]] const AssignmentExpression* getAssignmentExpression() const;
+};
+
+/**
+ * <DirectAbstractDeclaratorStatic> ::= [<DirectAbstractDeclarator>] <TokenType::OpenSquareBracket>
+ *                                      (<TokenType::StaticKeyword> {<TypeQualifiers>} | <TypeQualifiers>
+ *                                      {<TypeQualifiers>} <TokenType::StaticKeyword>)
+ *                                      <AssignmentExpression> <TokenType::CloseSquareBracket>
+ */
+class DirectAbstractDeclaratorStatic final : public Node
+{
+    std::unique_ptr<DirectAbstractDeclarator> m_directAbstractDeclarator;
+    Lexer::CTokenIterator m_staticLoc;
+    std::vector<TypeQualifier> m_typeQualifiers;
+    AssignmentExpression m_assignmentExpression;
+
+public:
+    DirectAbstractDeclaratorStatic(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
+                                   std::unique_ptr<DirectAbstractDeclarator>&& directAbstractDeclarator,
+                                   Lexer::CTokenIterator staticLoc, std::vector<TypeQualifier>&& typeQualifiers,
+                                   AssignmentExpression&& assignmentExpression);
+
+    [[nodiscard]] const DirectAbstractDeclarator* getDirectAbstractDeclarator() const;
+
+    [[nodiscard]] const std::vector<TypeQualifier>& getTypeQualifiers() const;
+
+    [[nodiscard]] const AssignmentExpression& getAssignmentExpression() const;
+
+    [[nodiscard]] Lexer::CTokenIterator getStaticLoc() const;
 };
 
 /**
@@ -1584,10 +1621,9 @@ public:
 };
 
 /**
- * <DirectDeclaratorStatic> ::= <DirectDeclarator> <TokenType::OpenSquareBracket> <TokenType::StaticKeyword>
- *                              {<TypeQualifier>} <AssignmentExpression> <TokenType::CloseSquareBracket>
- *                            | <DirectDeclarator> <TokenType::OpenSquareBracket> <TypeQualifier> {<TypeQualifier>}
- *                              <TokenType::StaticKeyword> <AssignmentExpression> <TokenType::CloseSquareBracket>
+ * <DirectDeclaratorStatic> ::= <DirectDeclarator> <TokenType::OpenSquareBracket> (<TokenType::StaticKeyword>
+ *                              {<TypeQualifier>} | <TypeQualifier> {<TypeQualifier>}
+ *                              <TokenType::StaticKeyword>) <AssignmentExpression> <TokenType::CloseSquareBracket>
  */
 class DirectDeclaratorStatic final : public Node
 {

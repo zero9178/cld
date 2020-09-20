@@ -449,13 +449,13 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                 });
                 if (expression.getDirectAbstractDeclarator())
                 {
-                    handleArray(type, {}, expression.getAssignmentExpression(), false, false,
-                                *expression.getDirectAbstractDeclarator());
+                    handleArray(type, expression.getTypeQualifiers(), expression.getAssignmentExpression(), false,
+                                false, *expression.getDirectAbstractDeclarator());
                 }
                 else
                 {
-                    handleArray(type, {}, expression.getAssignmentExpression(), false, false,
-                                declarationOrSpecifierQualifiers);
+                    handleArray(type, expression.getTypeQualifiers(), expression.getAssignmentExpression(), false,
+                                false, declarationOrSpecifierQualifiers);
                 }
             },
             [&](auto&& self, const Syntax::DirectAbstractDeclaratorParameterTypeList& parameterTypeList) {
@@ -466,6 +466,16 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                     }
                 });
                 handleParameterList(type, parameterTypeList.getParameterTypeList(), declarationOrSpecifierQualifiers);
+            },
+            [&](auto&& self, const Syntax::DirectAbstractDeclaratorStatic& declaratorStatic) {
+                auto scope = cld::ScopeExit([&] {
+                    if (declaratorStatic.getDirectAbstractDeclarator())
+                    {
+                        cld::match(*declaratorStatic.getDirectAbstractDeclarator(), self);
+                    }
+                });
+                handleArray(type, declaratorStatic.getTypeQualifiers(), &declaratorStatic.getAssignmentExpression(),
+                            true, false, declaratorStatic.getAssignmentExpression());
             });
     }
     return type;
