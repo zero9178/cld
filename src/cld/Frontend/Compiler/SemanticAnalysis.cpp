@@ -76,7 +76,42 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
         storageClassSpecifier = &storage;
     }
     auto scope = pushScope();
-    auto type = declaratorsToType(node.getDeclarationSpecifiers(), node.getDeclarator(), node.getDeclarations(), true);
+    std::vector<std::unique_ptr<Declaration>> parameterDeclarations;
+    auto type = declaratorsToType(
+        node.getDeclarationSpecifiers(), node.getDeclarator(), node.getDeclarations(), true,
+        [&](Type paramType, Lexer::CTokenIterator loc,
+            const std::vector<Syntax::DeclarationSpecifier>& declarationSpecifiers, bool) {
+            if (loc->getText() == "__func__")
+            {
+                log(Errors::Semantics::DECLARING_PARAMETERS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR.args(
+                    *loc, m_sourceInterface, *loc));
+                return;
+            }
+            Lifetime lifetime = Lifetime ::Automatic;
+            for (auto& iter : declarationSpecifiers)
+            {
+                if (!std::holds_alternative<Syntax::StorageClassSpecifier>(iter))
+                {
+                    continue;
+                }
+                if (cld::get<Syntax::StorageClassSpecifier>(iter).getSpecifier()
+                    == Syntax::StorageClassSpecifier::Register)
+                {
+                    lifetime = Lifetime ::Register;
+                }
+            }
+            paramType = adjustParameterType(std::move(paramType));
+            auto& ptr = parameterDeclarations.emplace_back(std::make_unique<Declaration>(
+                std::move(paramType), Linkage::None, lifetime, loc, Declaration::Kind::Definition));
+            auto [prev, notRedefined] =
+                getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, ptr.get()}});
+            if (!notRedefined)
+            {
+                log(Errors::REDEFINITION_OF_SYMBOL_N.args(*loc, m_sourceInterface, *loc));
+                log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
+                                                         *prev->second.identifier));
+            }
+        });
     if (!std::holds_alternative<FunctionType>(type.getVariant()))
     {
         log(Errors::Semantics::FUNCTION_DEFINITION_MUST_HAVE_FUNCTION_TYPE.args(
@@ -128,96 +163,12 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
         return {};
     }
 
-    std::vector<std::unique_ptr<Declaration>> parameterDeclarations;
     if (parameters)
     {
         if (!node.getDeclarations().empty())
         {
             log(Errors::Semantics::FUNCTION_DEFINITION_WITH_A_PARAMETER_LIST_MUST_NOT_HAVE_DECLARATIONS_FOLLOWING_IT
                     .args(node.getDeclarations(), m_sourceInterface, node.getDeclarations()));
-        }
-        const auto& parameterSyntaxDecls = parameters->getParameterTypeList().getParameters();
-        // Parameters that have some kind of error in their declaration should still be inserted in the function
-        // type except when parameterSyntaxDecls is 0
-        CLD_ASSERT(parameterSyntaxDecls.size() == ft.getArguments().size() || ft.getArguments().size() == 0);
-        for (std::size_t i = 0; i < ft.getArguments().size(); i++)
-        {
-            // Assured by the parser which should error otherwise
-            CLD_ASSERT(std::holds_alternative<std::unique_ptr<Syntax::Declarator>>(parameterSyntaxDecls[i].declarator));
-            auto& declarator = *cld::get<std::unique_ptr<Syntax::Declarator>>(parameterSyntaxDecls[i].declarator);
-            auto* loc = declaratorToLoc(declarator);
-            if (loc->getText() == "__func__")
-            {
-                log(Errors::Semantics::DECLARING_PARAMETERS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR.args(
-                    *loc, m_sourceInterface, *loc));
-                continue;
-            }
-            Lifetime lifetime = Lifetime ::Automatic;
-            for (auto& iter : parameterSyntaxDecls[i].declarationSpecifiers)
-            {
-                if (!std::holds_alternative<Syntax::StorageClassSpecifier>(iter))
-                {
-                    continue;
-                }
-                if (cld::get<Syntax::StorageClassSpecifier>(iter).getSpecifier()
-                    == Syntax::StorageClassSpecifier::Register)
-                {
-                    lifetime = Lifetime ::Register;
-                }
-            }
-            auto paramType = adjustParameterType(ft.getArguments()[i].first);
-            auto& ptr = parameterDeclarations.emplace_back(std::make_unique<Declaration>(
-                std::move(paramType), Linkage::None, lifetime, loc, Declaration::Kind::Definition));
-            auto [prev, notRedefined] =
-                getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, ptr.get()}});
-            if (!notRedefined)
-            {
-                log(Errors::REDEFINITION_OF_SYMBOL_N.args(*loc, m_sourceInterface, *loc));
-                log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
-                                                         *prev->second.identifier));
-            }
-        }
-    }
-    else
-    {
-        std::unordered_map<std::string_view, Type> parameterNameToType;
-        for (auto& [type, name] : ft.getArguments())
-        {
-            parameterNameToType.emplace(name, type);
-        }
-        for (auto& iter : node.getDeclarations())
-        {
-            Lifetime lifetime = Lifetime::Automatic;
-            for (auto& iter2 : iter.getDeclarationSpecifiers())
-            {
-                if (!std::holds_alternative<Syntax::StorageClassSpecifier>(iter2))
-                {
-                    continue;
-                }
-                if (cld::get<Syntax::StorageClassSpecifier>(iter2).getSpecifier()
-                    == Syntax::StorageClassSpecifier::Register)
-                {
-                    lifetime = Lifetime::Register;
-                }
-            }
-            for (auto& [decl, init] : iter.getInitDeclarators())
-            {
-                (void)init;
-                if (!decl)
-                {
-                    continue;
-                }
-                const auto* loc = declaratorToLoc(*decl);
-                auto result = parameterNameToType.find(loc->getText());
-                if (result == parameterNameToType.end())
-                {
-                    continue;
-                }
-                auto& ptr = parameterDeclarations.emplace_back(std::make_unique<Declaration>(
-                    result->second, Linkage::None, lifetime, loc, Declaration::Kind::Definition));
-                getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, ptr.get()}});
-                // Don't check for duplicates again. We already did that when processing the identifier list
-            }
         }
     }
 

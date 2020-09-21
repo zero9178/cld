@@ -1193,7 +1193,7 @@ const cld::Semantics::Statement& cld::Semantics::DefaultStatement::getStatement(
     return *m_statement;
 }
 
-cld::Semantics::Type cld::Semantics::adjustParameterType(const cld::Semantics::Type& type)
+cld::Semantics::Type cld::Semantics::adjustParameterType(Type type)
 {
     if (isArray(type))
     {

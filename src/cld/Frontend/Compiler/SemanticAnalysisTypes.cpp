@@ -6,9 +6,10 @@
 #include "SemanticUtil.hpp"
 
 template <class T>
-void cld::Semantics::SemanticAnalysis::handleParameterList(Type& type,
-                                                           const Syntax::ParameterTypeList* parameterTypeList,
-                                                           T&& returnTypeLoc)
+void cld::Semantics::SemanticAnalysis::handleParameterList(
+    Type& type, const Syntax::ParameterTypeList* parameterTypeList, T&& returnTypeLoc,
+    cld::function_ref<void(const Type&, Lexer::CTokenIterator, const std::vector<Syntax::DeclarationSpecifier>&, bool)>
+        paramCallback)
 {
     if (std::holds_alternative<FunctionType>(type.getVariant()))
     {
@@ -101,9 +102,11 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(Type& type,
                                                                                iter.declarator));
         }
         std::string_view name;
+        const Lexer::CToken* loc = nullptr;
         if (std::holds_alternative<std::unique_ptr<Syntax::Declarator>>(iter.declarator))
         {
-            name = declaratorToLoc(*cld::get<std::unique_ptr<Syntax::Declarator>>(iter.declarator))->getText();
+            loc = declaratorToLoc(*cld::get<std::unique_ptr<Syntax::Declarator>>(iter.declarator));
+            name = loc->getText();
         }
         // Not transforming array types to pointers here as we might still want to use that information
         // to warn callers.
@@ -111,7 +114,11 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(Type& type,
         {
             paramType = PointerType::create(false, false, false, std::move(paramType));
         }
-        parameters.emplace_back(std::move(paramType), std::move(name));
+        auto& ret = parameters.emplace_back(std::move(paramType), name);
+        if (paramCallback && loc)
+        {
+            paramCallback(ret.first, loc, iter.declarationSpecifiers, true);
+        }
     }
     type = FunctionType::create(std::move(type), std::move(parameters), parameterTypeList->hasEllipse(), false);
 }
@@ -119,7 +126,9 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(Type& type,
 cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
     const std::vector<DeclarationOrSpecifierQualifier>& declarationOrSpecifierQualifiers,
     const PossiblyAbstractQualifierRef& declarator, const std::vector<Syntax::Declaration>& declarations,
-    bool inFunctionDefinition)
+    bool inFunctionDefinition,
+    cld::function_ref<void(const Type&, Lexer::CTokenIterator, const std::vector<Syntax::DeclarationSpecifier>&, bool)>
+        paramCallback)
 {
     bool isConst = false;
     bool isVolatile = false;
@@ -351,8 +360,13 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                         }
                         else
                         {
-                            parameters[result->second].first = paramType;
+                            parameters[result->second].first = std::move(paramType);
                             element = loc;
+                            if (paramCallback)
+                            {
+                                paramCallback(parameters[result->second].first, loc, iter.getDeclarationSpecifiers(),
+                                              false);
+                            }
                         }
                     }
                 }
@@ -376,7 +390,8 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                 }
                 handleParameterList(
                     type, &parameterList.getParameterTypeList(),
-                    std::forward_as_tuple(declarationOrSpecifierQualifiers, parameterList.getDirectDeclarator()));
+                    std::forward_as_tuple(declarationOrSpecifierQualifiers, parameterList.getDirectDeclarator()),
+                    inFunctionDefinition ? paramCallback : std::decay_t<decltype(paramCallback)>{});
             });
     }
     else
@@ -465,7 +480,8 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                         cld::match(*parameterTypeList.getDirectAbstractDeclarator(), self);
                     }
                 });
-                handleParameterList(type, parameterTypeList.getParameterTypeList(), declarationOrSpecifierQualifiers);
+                handleParameterList(type, parameterTypeList.getParameterTypeList(), declarationOrSpecifierQualifiers,
+                                    {});
             },
             [&](auto&& self, const Syntax::DirectAbstractDeclaratorStatic& declaratorStatic) {
                 auto scope = cld::ScopeExit([&] {

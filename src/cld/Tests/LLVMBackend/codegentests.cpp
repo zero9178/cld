@@ -3513,6 +3513,22 @@ TEST_CASE("LLVM Codegen variably modified types", "[LLVM]")
         REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
         CHECK(cld::Tests::computeInJIT<int(int)>(std::move(module), "function", 5) == 75 * sizeof(int));
     }
+    SECTION("Function parameter")
+    {
+        auto program = generateProgram("static int bar(int n,int r[3][5][n]) {\n"
+                                       "  return r[n/2][2][2];"
+                                       "}\n"
+                                       "\n"
+                                       "int function(int n) {\n"
+                                       "    int r[3][5][n];\n"
+                                       "    r[n/2][2][2] = 5;\n"
+                                       "    return bar(n,r);\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int(int)>(std::move(module), "function", 5) == 5);
+    }
 }
 
 TEST_CASE("LLVM codegen c-testsuite", "[LLVM]")

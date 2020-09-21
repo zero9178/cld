@@ -1179,6 +1179,7 @@ TEST_CASE("Semantics enums", "[semantics]")
 
 TEST_CASE("Semantics function definitions")
 {
+    SEMA_PRODUCES("static int bar(int n,int r[3][5][n]) {}", ProducesNothing());
     SECTION("Identifier list")
     {
         SEMA_PRODUCES("void foo(voi)\n"

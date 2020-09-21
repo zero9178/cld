@@ -2045,7 +2045,7 @@ Program analyse(const Syntax::TranslationUnit& parseTree, CSourceObject&& ctoken
 
 [[nodiscard]] const Type& getArrayElementType(const Type& type);
 
-[[nodiscard]] Type adjustParameterType(const Type& type);
+[[nodiscard]] Type adjustParameterType(Type type);
 
 [[nodiscard]] bool isInteger(const Type& type);
 
