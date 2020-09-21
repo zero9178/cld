@@ -3516,11 +3516,11 @@ TEST_CASE("LLVM Codegen variably modified types", "[LLVM]")
     SECTION("Function parameter")
     {
         auto program = generateProgram("static int bar(int n,int r[3][5][n]) {\n"
-                                       "  return r[n/2][2][2];"
+                                       "    return r[n/2][2][2];\n"
                                        "}\n"
                                        "\n"
                                        "int function(int n) {\n"
-                                       "    int r[3][5][n];\n"
+                                       "    int r[3][5][n],counter = 0;\n"
                                        "    r[n/2][2][2] = 5;\n"
                                        "    return bar(n,r);\n"
                                        "}");

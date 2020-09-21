@@ -1193,16 +1193,14 @@ public:
             [&](const cld::Semantics::AnonymousEnumType& enumType) -> llvm::Type* { return visit(enumType.getType()); },
             [&](const cld::Semantics::ValArrayType& valArrayType) -> llvm::Type* {
                 auto expression = m_valSizes.find(valArrayType.getExpression());
-                if (expression == m_valSizes.end())
+                if (expression == m_valSizes.end() && m_currentFunction)
                 {
-                    expression = m_valSizes
-                                     .emplace(valArrayType.getExpression(),
-                                              m_builder.CreateIntCast(
-                                                  visit(*valArrayType.getExpression()), m_builder.getInt64Ty(),
-                                                  cld::get<cld::Semantics::PrimitiveType>(
-                                                      valArrayType.getExpression()->getType().getVariant())
-                                                      .isSigned()))
-                                     .first;
+                    m_valSizes.emplace(valArrayType.getExpression(),
+                                       m_builder.CreateIntCast(visit(*valArrayType.getExpression()),
+                                                               m_builder.getInt64Ty(),
+                                                               cld::get<cld::Semantics::PrimitiveType>(
+                                                                   valArrayType.getExpression()->getType().getVariant())
+                                                                   .isSigned()));
                 }
                 return visit(valArrayType.getType());
             });
@@ -1454,6 +1452,14 @@ public:
                 }
                 i += multiArg.size;
             }
+        }
+        for (auto& [type, name] : ft.getArguments())
+        {
+            // Go through the visit of each parameter again in case one them of was a variably modified type.
+            // The expressions of these could previously not be evaluated as there was no function block to
+            // evaluate the expressions nor parameters transferred that's why we're doing it now
+            (void)name;
+            visit(type);
         }
 
         visit(functionDefinition.getCompoundStatement());
