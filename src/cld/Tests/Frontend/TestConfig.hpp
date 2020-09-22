@@ -24,10 +24,10 @@ template <class Diagnostic, class... Args>
 std::string args(const Diagnostic&, Args&&... args)
 {
     std::array<std::string, sizeof...(Args)> strArgs = {{cld::to_string(args)...}};
-    static_assert(cld::detail::getBiggestPercentArg(Diagnostic::getFormat()) == sizeof...(Args));
+    static_assert(cld::detail::Diagnostic::getBiggestPercentArg(Diagnostic::getFormat()) == sizeof...(Args));
     std::string result;
     std::u32string_view stringView = Diagnostic::getFormat();
-    for (auto& iter : ctre::range<cld::detail::DIAG_ARG_PATTERN>(stringView))
+    for (auto& iter : ctre::range<cld::detail::Diagnostic::DIAG_ARG_PATTERN>(stringView))
     {
         auto view = iter.view();
         const char32_t* start = stringView.data();

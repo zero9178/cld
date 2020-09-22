@@ -3,6 +3,7 @@
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/Support/Unicode.h>
 
+#include <cld/Common/Constexpr.hpp>
 #include <cld/Common/Text.hpp>
 #include <cld/Common/Util.hpp>
 
@@ -29,9 +30,9 @@ struct AnnotateExpr;
 template <std::size_t index, char character = '~', bool continuous = true>
 struct Underline;
 
-namespace detail
+namespace detail::Diagnostic
 {
-constexpr static auto DIAG_ARG_PATTERN = ctll::fixed_string{"%([^\\s\\\\]*)(\\d)"};
+constexpr auto DIAG_ARG_PATTERN = ctll::fixed_string{"%([^\\s\\\\]*)(\\d)"};
 
 template <class... Args>
 constexpr std::int64_t getBiggestPercentArg(std::u32string_view text)
@@ -210,7 +211,7 @@ public:
     }
 };
 
-} // namespace detail
+} // namespace detail::Diagnostic
 
 // Move the non-type template parameters to become members in C++20
 
@@ -300,7 +301,7 @@ struct AnnotateExpr
 };
 
 template <std::size_t N, auto& format, class... Mods>
-class Diagnostic : public detail::DiagnosticBase
+class Diagnostic : public detail::Diagnostic::DiagnosticBase
 {
 public:
     enum Constraint : std::uint8_t
@@ -312,11 +313,6 @@ public:
     };
 
 private:
-    template <std::size_t... ints>
-    constexpr static auto integerSequenceToTuple(std::index_sequence<ints...>)
-    {
-        return std::make_tuple(std::integral_constant<std::size_t, ints>{}...);
-    }
 
     constexpr static std::array<std::underlying_type_t<Constraint>, N> getConstraints();
 
@@ -585,7 +581,7 @@ private:
         constexpr std::size_t amountOfCustomModifiers = [] {
             std::size_t count = 0;
             auto text = getFormat();
-            while (auto result = ctre::search<detail::DIAG_ARG_PATTERN>(text))
+            while (auto result = ctre::search<detail::Diagnostic::DIAG_ARG_PATTERN>(text))
             {
                 const auto end = result.get_end_position();
                 text.remove_prefix(end - text.begin());
@@ -602,7 +598,7 @@ private:
         std::array<std::u32string_view, amountOfCustomModifiers> result{};
         std::size_t count = 0;
         auto text = getFormat();
-        while (auto search = ctre::search<detail::DIAG_ARG_PATTERN>(text))
+        while (auto search = ctre::search<detail::Diagnostic::DIAG_ARG_PATTERN>(text))
         {
             const auto end = search.get_end_position();
             text.remove_prefix(end - text.begin());
@@ -618,7 +614,8 @@ private:
     }
 
     template <std::size_t i1, std::size_t i2, class Tuple>
-    constexpr static void convertCustomModifier(std::array<detail::DiagnosticBase::Argument, N>& result, Tuple& args)
+    constexpr static void convertCustomModifier(std::array<detail::Diagnostic::DiagnosticBase::Argument, N>& result,
+                                                Tuple& args)
     {
         constexpr std::tuple tuple = std::apply(
             [](auto... stringIndices) {
@@ -642,7 +639,10 @@ private:
     }
 
 public:
-    constexpr Diagnostic(Severity severity, std::string_view name) : detail::DiagnosticBase(severity), m_name(name) {}
+    constexpr Diagnostic(Severity severity, std::string_view name)
+        : detail::Diagnostic::DiagnosticBase(severity), m_name(name)
+    {
+    }
 
     constexpr static std::size_t getSize()
     {
@@ -680,10 +680,10 @@ std::tuple<const Lexer::TokenBase&, std::uint64_t> after(const Lexer::TokenBase&
 template <const auto& text, class... Args>
 constexpr auto makeDiagnostic(Severity category, std::string_view name)
 {
-    constexpr auto n = detail::getBiggestPercentArg<Args...>({text.begin(), text.size()});
-    constexpr bool tmp = detail::checkForNoHoles<n, Args...>({text.begin(), text.size()});
+    constexpr auto n = detail::Diagnostic::getBiggestPercentArg<Args...>({text.begin(), text.size()});
+    constexpr bool tmp = detail::Diagnostic::checkForNoHoles<n, Args...>({text.begin(), text.size()});
     static_assert(tmp, "Not allowed to have any holes between % indices");
-    constexpr bool duplicates = detail::checkForNoDuplicates<n, Args...>();
+    constexpr bool duplicates = detail::Diagnostic::checkForNoDuplicates<n, Args...>();
     static_assert(duplicates, "Not allowed to have any duplicate indices in Modifiers");
     return Diagnostic<n, text, Args...>(category, name);
 }
@@ -724,7 +724,7 @@ constexpr auto Diagnostic<N, format, Mods...>::getConstraints() -> std::array<st
     std::array<std::underlying_type_t<Constraint>, N> result{};
     auto text = getFormat();
     std::uint8_t i = 0;
-    while (auto search = ctre::search<detail::DIAG_ARG_PATTERN>(text))
+    while (auto search = ctre::search<detail::Diagnostic::DIAG_ARG_PATTERN>(text))
     {
         auto index = search.template get<2>().view().back() - '0';
         auto mods = search.template get<1>().view();
@@ -743,20 +743,20 @@ constexpr auto Diagnostic<N, format, Mods...>::getConstraints() -> std::array<st
     (
         [&result](auto value) {
             using T = decltype(value);
-            if constexpr (detail::IsUnderline<T>{})
+            if constexpr (detail::Diagnostic::IsUnderline<T>{})
             {
                 result[T::affects] |= Constraint::LocationConstraint;
             }
-            else if constexpr (detail::IsAnnotate<T>{})
+            else if constexpr (detail::Diagnostic::IsAnnotate<T>{})
             {
                 result[T::indices[0]] |= Constraint::LocationConstraint;
                 result[T::indices[1]] |= Constraint::StringConstraint;
             }
-            else if constexpr (detail::IsAnnotateExpr<T>{})
+            else if constexpr (detail::Diagnostic::IsAnnotateExpr<T>{})
             {
                 result[T::affects] |= Constraint::LocationConstraint | Constraint::TypeConstraint;
             }
-            else if constexpr (detail::IsInsertAfter<T>{})
+            else if constexpr (detail::Diagnostic::IsInsertAfter<T>{})
             {
                 result[T::affects] |= Constraint::LocationConstraint;
                 if constexpr (T::indices.size() > 1)
@@ -829,19 +829,19 @@ constexpr auto Diagnostic<N, format, Mods...>::getModifiers(std::index_sequence<
         [&result](auto value) {
             constexpr std::size_t i = decltype(value)::value;
             using T = std::tuple_element_t<i, std::tuple<Mods...>>;
-            if constexpr (detail::IsUnderline<T>{})
+            if constexpr (detail::Diagnostic::IsUnderline<T>{})
             {
                 result[i] = Modifiers{DiagnosticBase::Underline{T::getIndex(), T::getCharacter(), T::isContinuous()}};
             }
-            else if constexpr (detail::IsAnnotate<T>{})
+            else if constexpr (detail::Diagnostic::IsAnnotate<T>{})
             {
                 result[i] = Modifiers{DiagnosticBase::Annotate{T::getIndex(), T::getText()}};
             }
-            else if constexpr (detail::IsAnnotateExpr<T>{})
+            else if constexpr (detail::Diagnostic::IsAnnotateExpr<T>{})
             {
                 result[i] = Modifiers{DiagnosticBase::Annotate{T::getIndex(), T::getIndex()}};
             }
-            else if constexpr (detail::IsInsertAfter<T>{})
+            else if constexpr (detail::Diagnostic::IsInsertAfter<T>{})
             {
                 result[i] = Modifiers{DiagnosticBase::InsertAfter{T::getIndex(), T::getText()}};
             }

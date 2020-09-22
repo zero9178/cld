@@ -9,7 +9,7 @@
 
 namespace
 {
-using PointLocation = cld::detail::DiagnosticBase::PointLocation;
+using PointLocation = cld::detail::Diagnostic::DiagnosticBase::PointLocation;
 
 std::pair<PointLocation, PointLocation> toMacroId0Range(std::pair<PointLocation, PointLocation> location,
                                                         const cld::SourceInterface& sourceInterface)
@@ -257,10 +257,11 @@ auto cld::diag::after(const Lexer::TokenBase& token) -> std::tuple<const Lexer::
     return std::make_tuple(std::cref(token), token.getOffset() + token.getLength());
 }
 
-cld::Message cld::detail::DiagnosticBase::print(std::pair<PointLocation, PointLocation> location,
-                                                std::string_view message, llvm::MutableArrayRef<Argument> arguments,
-                                                llvm::ArrayRef<Modifiers> modifiers,
-                                                const SourceInterface& sourceInterface) const
+cld::Message cld::detail::Diagnostic::DiagnosticBase::print(std::pair<PointLocation, PointLocation> location,
+                                                            std::string_view message,
+                                                            llvm::MutableArrayRef<Argument> arguments,
+                                                            llvm::ArrayRef<Modifiers> modifiers,
+                                                            const SourceInterface& sourceInterface) const
 {
     std::string result;
     // TODO: Right now the colour is useless. Just putting it here to know what the colour when and were.

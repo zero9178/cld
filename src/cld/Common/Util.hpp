@@ -151,6 +151,12 @@ struct YComb
 template <typename G>
 YComb(G) -> YComb<G>;
 
+template <class T>
+struct type_identity
+{
+    using type = T;
+};
+
 namespace detail
 {
 template <class... Ts>
@@ -160,12 +166,6 @@ struct overload : Ts...
 };
 template <class... Ts>
 overload(Ts...) -> overload<Ts...>;
-
-template <class T>
-struct Identity
-{
-    using type = T;
-};
 
 template <typename G, class Ret>
 struct YWithRet
@@ -184,11 +184,11 @@ struct YWithRet
     }
 
     G g;
-    Identity<Ret> id;
+    type_identity<Ret> id;
 };
 
 template <typename G, class T>
-YWithRet(G, Identity<T>) -> YWithRet<G, T>;
+YWithRet(G, type_identity<T>) -> YWithRet<G, T>;
 
 template <std::size_t i, class Callable, class Variant>
 constexpr decltype(auto) visitImpl(Callable&& callable, Variant&& variant,
@@ -437,7 +437,7 @@ template <class Ret, typename Variant, typename... Matchers>
 constexpr Ret matchWithSelf(Variant&& variant, Matchers&&... matchers)
 {
     static_assert(std::is_void_v<Ret>, "Only explicit return type of void allowed");
-    detail::visit(detail::YWithRet{detail::overload{std::forward<Matchers>(matchers)...}, detail::Identity<Ret>{}},
+    detail::visit(detail::YWithRet{detail::overload{std::forward<Matchers>(matchers)...}, type_identity<Ret>{}},
                   std::forward<Variant>(variant));
 }
 
@@ -470,66 +470,5 @@ constexpr std::size_t rawHashCombine(Args... args)
     ((seed ^= args + 0x9e3779b9 + (seed << 6) + (seed >> 2)), ...);
     return seed;
 }
-
-template <class T, typename = void>
-struct IsTupleLike : std::false_type
-{
-};
-
-template <class T>
-struct IsTupleLike<T, std::void_t<typename std::tuple_size<T>::type>> : std::true_type
-{
-};
-
-template <class T>
-struct IsVariant : std::false_type
-{
-};
-
-template <class... T>
-struct IsVariant<std::variant<T...>> : std::true_type
-{
-};
-
-template <class T>
-struct IsUniquePtr : std::false_type
-{
-};
-
-template <class T>
-struct IsUniquePtr<std::unique_ptr<T>> : std::true_type
-{
-};
-
-template <class T>
-struct IsSharedPtr : std::false_type
-{
-};
-
-template <class T>
-struct IsSharedPtr<std::shared_ptr<T>> : std::true_type
-{
-};
-
-template <class T>
-struct IsSmartPtr : std::disjunction<IsUniquePtr<T>, IsSharedPtr<T>>
-{
-};
-
-template <class T, class U, typename = void>
-struct IsEqualComparable : std::false_type
-{
-};
-
-template <class T, class U>
-struct IsEqualComparable<T, U, std::void_t<decltype(std::declval<T>() == std::declval<U>())>> : std::true_type
-{
-};
-
-template <typename, typename = void>
-constexpr bool IsTypeCompleteV = false;
-
-template <typename T>
-constexpr bool IsTypeCompleteV<T, std::void_t<decltype(sizeof(T))>> = true;
 
 } // namespace cld
