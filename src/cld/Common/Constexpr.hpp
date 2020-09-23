@@ -23,6 +23,16 @@ struct IsTupleLike<T, std::void_t<typename std::tuple_size<T>::type>> : std::tru
 };
 
 template <class T>
+struct IsTuple : std::false_type
+{
+};
+
+template <class... T>
+struct IsTuple<std::tuple<T...>> : std::true_type
+{
+};
+
+template <class T>
 struct IsVariant : std::false_type
 {
 };

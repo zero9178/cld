@@ -1,21 +1,14 @@
-#include <llvm/Support/raw_ostream.h>
-
 #include <cld/Common/CommandLine.hpp>
 
-#include <ctre.hpp>
+#include <iostream>
 
-constexpr static auto first = ::ctll::fixed_string{"-D<macro>=<value>"};
-constexpr static auto second = ::ctll::fixed_string{"-D<macro>"};
-constexpr static auto third = ::ctll::fixed_string{"--define-macro <macro>"};
-constexpr static auto fourth = ::ctll::fixed_string{"--define-macro=<macro>"};
+CLD_CLI_OPT(outputFile, ("-o <file>", "--output=<file>"), (std::string_view, file))();
 
-constexpr static auto name1 = ::ctll::fixed_string{"macro"};
-constexpr static auto name2 = ::ctll::fixed_string{"value"};
+CLD_CLI_OPT(compileOnly, ("-c", "--compile"))();
 
-constexpr static auto rdfg =
-    cld::detail::CommandLine::parseOptions<cld::detail::CommandLine::Pack<first, second, third, fourth>, name1,
-                                           std::in_place_type<std::string_view>, name2,
-                                           std::in_place_type<std::string_view>>();
+CLD_CLI_OPT(defineMacro, ("-D<macro>=<value>", "-D<macro>", "--define-macro <macro>", "--define-macro=<macro>"),
+            (std::string_view, macro), (std::string_view, value))
+();
 
 int main(int argc, char** argv)
 {
@@ -25,7 +18,20 @@ int main(int argc, char** argv)
         elements[i - 1] = argv[i];
     }
 
-    auto cli = cld::CommandLine::parse<rdfg>(elements);
+    auto cli = cld::parseCommandLine<outputFile, compileOnly, defineMacro>(elements);
+
+    std::string_view executable = "a.out";
+    bool b = cli.get<compileOnly>().has_value();
+    if (cli.get<outputFile>())
+    {
+        executable = *cli.get<outputFile>();
+    }
+    std::cout << executable << std::endl;
+    if (cli.get<defineMacro>())
+    {
+        auto& [macroName, maybeValue] = *cli.get<defineMacro>();
+        std::cout << macroName << std::endl;
+    }
 }
 
 #ifdef __clang__

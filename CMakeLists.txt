@@ -177,6 +177,9 @@ else ()
             # Promoted warnings to errors.
             -we4238 # Promote 'nonstandard extension used : class rvalue used as lvalue' to error.
             )
+    if (NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+        add_compile_options(/Zc:preprocessor)
+    endif ()
 endif ()
 
 if (${CLD_BUILD_TESTS})

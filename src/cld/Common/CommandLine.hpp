@@ -8,6 +8,8 @@
 #include <tuple>
 #include <variant>
 
+#include <ctre.hpp>
+
 #include "Constexpr.hpp"
 #include "Util.hpp"
 
@@ -282,14 +284,22 @@ struct Pack
                 return std::apply([](auto&&... input) { return filterOutArgs(input...); }, std::tuple_cat(input...));
             },
             tuple);
-        constexpr auto allArgsSVArray = std::apply(
-            [](auto&&... input) { return std::array<std::u32string_view, sizeof...(input)>{input.value...}; },
-            allArgsTuple);
-        constexpr std::size_t setSize = unique<false>(allArgsSVArray);
-        constexpr auto uniqueSet = unique<true, allArgsSVArray.size(), setSize>(allArgsSVArray);
+        // libc++ until either version LLVM 11 or 12 does not support constexpr std::array<T,0>
+        if constexpr (std::tuple_size_v<std::decay_t<decltype(allArgsTuple)>> != 0)
+        {
+            constexpr auto allArgsSVArray = std::apply(
+                [](auto&&... input) { return std::array<std::u32string_view, sizeof...(input)>{input.value...}; },
+                allArgsTuple);
+            constexpr std::size_t setSize = unique<false>(allArgsSVArray);
+            constexpr auto uniqueSet = unique<true, allArgsSVArray.size(), setSize>(allArgsSVArray);
 
-        constexpr auto foundOptionals = evaluateOptional(uniqueSet, tuple);
-        return std::pair{tuple, foundOptionals};
+            constexpr auto foundOptionals = evaluateOptional(uniqueSet, tuple);
+            return std::pair{tuple, foundOptionals};
+        }
+        else
+        {
+            return std::pair{tuple, std::make_tuple()};
+        }
     }
 };
 
@@ -312,14 +322,32 @@ constexpr bool isOptional(std::u32string_view text, std::array<std::pair<std::u3
     return true;
 }
 
+constexpr bool isOptional(std::u32string_view, std::tuple<>)
+{
+    return true;
+}
+
 template <class T, auto&... args>
 constexpr auto parseOptions()
 {
-    constexpr auto lexems = T::parseOptionsImpl().first;
-    constexpr auto tuple = toPair<args...>();
+    constexpr auto pair = T::parseOptionsImpl();
+    constexpr auto lexems = pair.first;
+    constexpr auto arguments = pair.second;
+    constexpr auto tuple = [] {
+        if constexpr (sizeof...(args) == 0)
+        {
+            return std::make_tuple();
+        }
+        else
+        {
+            return toPair<args...>();
+        }
+    }();
     constexpr auto value = std::apply(
-        [](auto&&... values) {
+        [&](auto&&... values) {
+#if defined(_MSC_VER) && !defined(__clang__)
             constexpr auto arguments = T::parseOptionsImpl().second;
+#endif
             using Tuple =
                 std::tuple<std::conditional_t<isOptional(std::u32string_view(
                                                              std::decay_t<decltype(values.first)>::pointer->begin(),
@@ -327,14 +355,21 @@ constexpr auto parseOptions()
                                                          arguments),
                                               std::optional<typename decltype(unpack(values.second))::type>,
                                               typename decltype(unpack(values.second))::type>...>;
-            return type_identity<Tuple>{};
+            if constexpr (std::tuple_size_v<Tuple> == 1)
+            {
+                return type_identity<std::tuple_element_t<0, Tuple>>{};
+            }
+            else
+            {
+                return type_identity<Tuple>{};
+            }
         },
         tuple);
 
     return CommandLineOption(value, lexems,
                              std::apply(
                                  [](auto&&... values) {
-                                     return std::array{
+                                     return std::array<std::u32string_view, sizeof...(values)>{
                                          std::u32string_view(std::decay_t<decltype(values.first)>::pointer->begin(),
                                                              std::decay_t<decltype(values.first)>::pointer->size())...};
                                  },
@@ -382,192 +417,230 @@ constexpr auto utf32ToUtf8(std::u32string_view stringView)
     }
 }
 
-} // namespace detail::CommandLine
-
-class CommandLine
+template <std::size_t size>
+constexpr static std::size_t indexOf(std::array<std::u32string_view, size> array, std::u32string_view text)
 {
-    template <std::size_t size>
-    constexpr static std::size_t indexOf(std::array<std::u32string_view, size> array, std::u32string_view text)
+    for (std::size_t i = 0; i < size; i++)
     {
-        for (std::size_t i = 0; i < size; i++)
+        if (array[i] == text)
         {
-            if (array[i] == text)
-            {
-                return i;
-            }
+            return i;
         }
-        CLD_UNREACHABLE;
     }
+    CLD_UNREACHABLE;
+}
 
-    template <auto* cliOption, std::size_t i, class Storage>
-    static bool checkAlternative(llvm::MutableArrayRef<std::string_view>& commandLine, Storage& storage)
-    {
-        constexpr auto alternative = std::get<i>(cliOption->getAlternatives());
-        constexpr static auto array = detail::CommandLine::tupleToArray(alternative);
-        storage.emplace();
-        auto copy = commandLine;
-        std::vector<std::string_view> contents(commandLine.begin(),
-                                               commandLine.begin() + std::min(array.size(), commandLine.size()));
-        bool success = YComb{[&, &storage = storage](auto&& self, auto indexT) -> bool {
-            constexpr std::size_t index = decltype(indexT)::value;
-            constexpr auto curr = array[index];
-            if constexpr (std::holds_alternative<detail::CommandLine::Text>(curr))
+template <auto* cliOption, std::size_t i, class Storage>
+static bool checkAlternative(llvm::MutableArrayRef<std::string_view>& commandLine, Storage& storage)
+{
+    constexpr auto alternative = std::get<i>(cliOption->getAlternatives());
+    constexpr static auto array = detail::CommandLine::tupleToArray(alternative);
+    storage.emplace();
+    auto copy = commandLine;
+    std::vector<std::string_view> contents(commandLine.begin(),
+                                           commandLine.begin() + std::min(array.size(), commandLine.size()));
+    bool success = YComb{[&, &storage = storage](auto&& self, auto indexT) -> bool {
+        constexpr std::size_t index = decltype(indexT)::value;
+        constexpr auto curr = array[index];
+        if constexpr (std::holds_alternative<detail::CommandLine::Text>(curr))
+        {
+            constexpr auto utf32 = cld::get<detail::CommandLine::Text>(curr).value;
+            constexpr std::size_t utf8Size = detail::CommandLine::utf32ToUtf8<false, utf32.size() * 4>(utf32);
+            constexpr static auto utf8Array = detail::CommandLine::utf32ToUtf8<true, utf8Size>(utf32);
+            constexpr std::string_view prefix(utf8Array.data(), utf8Array.size());
+            if (commandLine.empty())
             {
-                constexpr auto utf32 = cld::get<detail::CommandLine::Text>(curr).value;
-                constexpr std::size_t utf8Size = detail::CommandLine::utf32ToUtf8<false, utf32.size() * 4>(utf32);
-                constexpr static auto utf8Array = detail::CommandLine::utf32ToUtf8<true, utf8Size>(utf32);
-                constexpr std::string_view prefix(utf8Array.data(), utf8Array.size());
-                if (commandLine.empty())
-                {
-                    return false;
-                }
-                if (commandLine.front().substr(0, prefix.size()) == prefix)
-                {
-                    commandLine.front().remove_prefix(prefix.size());
-                }
-                else
-                {
-                    return false;
-                }
+                return false;
             }
-            else if constexpr (std::holds_alternative<detail::CommandLine::Arg>(curr))
+            if (commandLine.front().substr(0, prefix.size()) == prefix)
             {
-                constexpr std::size_t storageIndex =
-                    indexOf(cliOption->getArgNames(), cld::get<detail::CommandLine::Arg>(curr).value);
-                using ArgType = std::tuple_element_t<storageIndex, std::decay_t<decltype(*storage)>>;
-                std::string_view text;
-                if (commandLine.empty())
-                {
-                    return false;
-                }
-                if constexpr (index + 1 == array.size())
-                {
-                    text = commandLine.front();
-                    commandLine.front().remove_prefix(commandLine.front().size());
-                }
-                else if constexpr (std::holds_alternative<detail::CommandLine::Whitespace>(array[index + 1]))
-                {
-                    text = commandLine.front();
-                    commandLine.front().remove_prefix(commandLine.front().size());
-                }
-                else if constexpr (std::holds_alternative<detail::CommandLine::Text>(array[index + 1]))
-                {
-                    auto end =
-                        std::find_if(commandLine.front().begin(), commandLine.front().end(),
-                                     [separator = cld::get<detail::CommandLine::Text>(array[index + 1]).value[0]](
-                                         char c) { return c == (char)separator; });
-                    text = commandLine.front().substr(0, end - commandLine.front().begin());
-                    commandLine.front().remove_prefix(text.size());
-                }
-                else
-                {
-                    CLD_UNREACHABLE;
-                }
-                if constexpr (std::is_same_v<std::string, ArgType> || std::is_same_v<std::string_view, ArgType>)
-                {
-                    std::get<storageIndex>(*storage) = text;
-                }
-                else if constexpr (std::is_integral_v<ArgType>)
-                {
-                    std::get<storageIndex>(*storage) = 0;
-                    if constexpr (IsOptional<std::decay_t<decltype(std::get<storageIndex>(*storage))>>{})
-                    {
-                        std::from_chars(text.begin(), text.end(), &*std::get<storageIndex>(*storage));
-                    }
-                    else
-                    {
-                        std::from_chars(text.begin(), text.end(), std::get<storageIndex>(*storage));
-                    }
-                }
-            }
-            else if constexpr (std::holds_alternative<detail::CommandLine::Whitespace>(curr))
-            {
-                if (!commandLine.empty() && !commandLine.front().empty())
-                {
-                    return false;
-                }
-                else if (!commandLine.empty())
-                {
-                    commandLine = commandLine.drop_front();
-                }
-            }
-
-            if constexpr (index + 1 != array.size())
-            {
-                return self(std::integral_constant<std::size_t, index + 1>{});
+                commandLine.front().remove_prefix(prefix.size());
             }
             else
             {
-                if (commandLine.empty())
-                {
-                    return true;
-                }
-                if (commandLine.front().empty())
-                {
-                    commandLine = commandLine.drop_front();
-                    return true;
-                }
                 return false;
             }
-        }}(std::integral_constant<std::size_t, 0>{});
-        if (success)
-        {
-            return true;
         }
-        storage.reset();
-        commandLine = copy;
-        std::move(contents.begin(), contents.end(), commandLine.begin());
-        return false;
-    }
+        else if constexpr (std::holds_alternative<detail::CommandLine::Arg>(curr))
+        {
+            constexpr std::size_t storageIndex =
+                indexOf(cliOption->getArgNames(), cld::get<detail::CommandLine::Arg>(curr).value);
+            using ArgType =
+                typename std::conditional_t<IsTuple<std::decay_t<decltype(*storage)>>{},
+                                            std::tuple_element<storageIndex, std::decay_t<decltype(*storage)>>,
+                                            std::decay<decltype(*storage)>>::type;
+            std::string_view text;
+            if (commandLine.empty())
+            {
+                return false;
+            }
+            if constexpr (index + 1 == array.size())
+            {
+                text = commandLine.front();
+                commandLine.front().remove_prefix(commandLine.front().size());
+            }
+            else if constexpr (std::holds_alternative<detail::CommandLine::Whitespace>(array[index + 1]))
+            {
+                text = commandLine.front();
+                commandLine.front().remove_prefix(commandLine.front().size());
+            }
+            else if constexpr (std::holds_alternative<detail::CommandLine::Text>(array[index + 1]))
+            {
+                auto end = std::find_if(commandLine.front().begin(), commandLine.front().end(),
+                                        [separator = cld::get<detail::CommandLine::Text>(array[index + 1]).value[0]](
+                                            char c) { return c == (char)separator; });
+                text = commandLine.front().substr(0, end - commandLine.front().begin());
+                commandLine.front().remove_prefix(text.size());
+            }
+            else
+            {
+                CLD_UNREACHABLE;
+            }
+            auto& element = [&]() -> decltype(auto) {
+                if constexpr (IsTuple<std::decay_t<decltype(*storage)>>{})
+                {
+                    // MSVC
+#if defined(_MSC_VER) && !defined(__clang__)
+                    constexpr std::size_t index = decltype(indexT)::value;
+                    constexpr auto curr = array[index];
+                    constexpr std::size_t storageIndex =
+                        indexOf(cliOption->getArgNames(), cld::get<detail::CommandLine::Arg>(curr).value);
+#endif
+                    return std::get<storageIndex>(*storage);
+                }
+                else
+                {
+                    return *storage;
+                }
+            }();
+            if constexpr (std::is_same_v<std::string, ArgType> || std::is_same_v<std::string_view, ArgType>)
+            {
+                element = text;
+            }
+            else if constexpr (std::is_integral_v<ArgType>)
+            {
+                element = 0;
+                if constexpr (IsOptional<std::decay_t<decltype(std::get<storageIndex>(*storage))>>{})
+                {
+                    std::from_chars(text.begin(), text.end(), &*element);
+                }
+                else
+                {
+                    std::from_chars(text.begin(), text.end(), element);
+                }
+            }
+        }
+        else if constexpr (std::holds_alternative<detail::CommandLine::Whitespace>(curr))
+        {
+            if (!commandLine.empty() && !commandLine.front().empty())
+            {
+                return false;
+            }
+            else if (!commandLine.empty())
+            {
+                commandLine = commandLine.drop_front();
+            }
+        }
 
-    template <auto* cliOption, class Storage>
-    static bool checkAllAlternatives(llvm::MutableArrayRef<std::string_view>& commandLine, Storage& storage)
+        if constexpr (index + 1 != array.size())
+        {
+            return self(std::integral_constant<std::size_t, index + 1>{});
+        }
+        else
+        {
+            if (commandLine.empty())
+            {
+                return true;
+            }
+            if (commandLine.front().empty())
+            {
+                commandLine = commandLine.drop_front();
+                return true;
+            }
+            return false;
+        }
+    }}(std::integral_constant<std::size_t, 0>{});
+    if (success)
     {
-        using AllAlternatives = std::decay_t<decltype(cliOption->getAlternatives())>;
-        return std::apply(
-            [&](auto&&... indices) -> bool {
-                return ([&](auto index) -> bool {
-                    using Index = decltype(index);
-                    constexpr std::size_t i = Index::value;
-                    constexpr auto alternative = std::get<i>(cliOption->getAlternatives());
-                    using Tuple = std::decay_t<decltype(alternative)>;
-                    constexpr std::u32string_view u32prefix = std::get<0>(alternative).value;
-                    constexpr std::size_t utf8Size =
-                        detail::CommandLine::utf32ToUtf8<false, u32prefix.size() * 4>(u32prefix);
-                    constexpr static auto utf8Prefix = detail::CommandLine::utf32ToUtf8<true, utf8Size>(u32prefix);
+        return true;
+    }
+    storage.reset();
+    commandLine = copy;
+    std::move(contents.begin(), contents.end(), commandLine.begin());
+    return false;
+}
 
-                    constexpr std::string_view prefix(utf8Prefix.data(), utf8Prefix.size());
-                    if (commandLine.front() == prefix)
+template <auto* cliOption, class Storage>
+static bool checkAllAlternatives(llvm::MutableArrayRef<std::string_view>& commandLine, Storage& storage)
+{
+    using AllAlternatives = std::decay_t<decltype(cliOption->getAlternatives())>;
+    return std::apply(
+        [&](auto&&... indices) -> bool {
+            return ([&](auto index) -> bool {
+                using Index = decltype(index);
+                constexpr std::size_t i = Index::value;
+                constexpr auto alternative = std::get<i>(cliOption->getAlternatives());
+                using Tuple = std::decay_t<decltype(alternative)>;
+                constexpr std::u32string_view u32prefix = std::get<0>(alternative).value;
+                constexpr std::size_t utf8Size =
+                    detail::CommandLine::utf32ToUtf8<false, u32prefix.size() * 4>(u32prefix);
+                constexpr static auto utf8Prefix = detail::CommandLine::utf32ToUtf8<true, utf8Size>(u32prefix);
+
+                constexpr std::string_view prefix(utf8Prefix.data(), utf8Prefix.size());
+                if (commandLine.front() == prefix)
+                {
+                    return checkAlternative<cliOption, i>(commandLine, storage);
+                }
+                else if constexpr (std::tuple_size_v<Tuple> >= 2)
+                {
+                    if constexpr (std::is_same_v<std::tuple_element_t<1, Tuple>, detail::CommandLine::Arg>)
                     {
-                        return checkAlternative<cliOption, i>(commandLine, storage);
-                    }
-                    else if constexpr (std::tuple_size_v<Tuple> >= 2)
-                    {
-                        if constexpr (std::is_same_v<std::tuple_element_t<1, Tuple>, detail::CommandLine::Arg>)
+                        if (commandLine.front().substr(0, prefix.size()) == prefix)
                         {
-                            if (commandLine.front().substr(0, prefix.size()) == prefix)
-                            {
-                                return checkAlternative<cliOption, i>(commandLine, storage);
-                            }
+                            return checkAlternative<cliOption, i>(commandLine, storage);
                         }
                     }
-                    return false;
-                }(indices) || ...);
-            },
-            integerSequenceToTuple(std::make_index_sequence<std::tuple_size_v<AllAlternatives>>{}));
-    }
+                }
+                return false;
+            }(indices) || ...);
+        },
+        integerSequenceToTuple(std::make_index_sequence<std::tuple_size_v<AllAlternatives>>{}));
+}
+
+} // namespace detail::CommandLine
+
+template <class Storage>
+class CommandLine
+{
+    Storage m_storage;
+    std::vector<std::string_view> m_unrecognized;
 
 public:
-    template <auto&... options>
-    static CommandLine parse(llvm::MutableArrayRef<std::string_view> commandLine);
+    CommandLine(Storage storage, std::vector<std::string_view> unrecognized)
+        : m_storage(std::move(storage)), m_unrecognized(std::move(unrecognized))
+    {
+    }
+
+    [[nodiscard]] const std::vector<std::string_view>& getUnrecognized() const noexcept
+    {
+        return m_unrecognized;
+    }
+
+    template <auto& option>
+    [[nodiscard]] const auto& get() const noexcept
+    {
+        return std::get<decltype(
+            std::pair{&option, std::optional<typename std::decay_t<decltype(option)>::value_type>{}})>(m_storage)
+            .second;
+    }
 };
 
 template <auto&... options>
-CommandLine CommandLine::parse(llvm::MutableArrayRef<std::string_view> commandLine)
+auto parseCommandLine(llvm::MutableArrayRef<std::string_view> commandLine)
 {
     constexpr auto tuple = std::make_tuple(detail::CommandLine::Pointer<&options>{}...);
     auto storage =
-        std::make_tuple(std::pair{options, std::optional<typename std::decay_t<decltype(options)>::value_type>{}}...);
+        std::make_tuple(std::pair{&options, std::optional<typename std::decay_t<decltype(options)>::value_type>{}}...);
     std::vector<std::string_view> unrecognized;
     while (!commandLine.empty())
     {
@@ -575,8 +648,9 @@ CommandLine CommandLine::parse(llvm::MutableArrayRef<std::string_view> commandLi
                 [&](auto&&... indices) -> bool {
                     return ([&](auto index) -> bool {
                         constexpr std::size_t i = decltype(index)::value;
-                        return checkAllAlternatives<std::tuple_element_t<i, decltype(tuple)>::pointer>(
-                            commandLine, std::get<i>(storage).second);
+                        return detail::CommandLine::checkAllAlternatives<
+                            std::tuple_element_t<i, decltype(tuple)>::pointer>(commandLine,
+                                                                               std::get<i>(storage).second);
                     }(indices) || ...);
                 },
                 integerSequenceToTuple(std::make_index_sequence<sizeof...(options)>{})))
@@ -585,6 +659,168 @@ CommandLine CommandLine::parse(llvm::MutableArrayRef<std::string_view> commandLi
             commandLine = commandLine.drop_front();
         }
     }
-    return CommandLine();
+    return CommandLine(std::move(storage), std::move(unrecognized));
 }
 } // namespace cld
+
+// See https://gitlab.inria.fr/gustedt/p99/-/tree/master. Code was copy pasted out of multiple header files without
+// modifications to any macros that start with the P99_ or P00_ prefix. Copyright notice follows:
+
+/* This may look like nonsense, but it really is -*- mode: C; coding: utf-8 -*- */
+/*                                                                              */
+/* Except for parts copied from previous work and as explicitly stated below,   */
+/* the authors and copyright holders for this work are as follows:              */
+/* (C) copyright  2010-2013 Jens Gustedt, INRIA, France                         */
+/* (C) copyright  2013 Pierre-Nicolas Clauss                                    */
+/* (C) copyright  2012 William Morris                                           */
+/*                                                                              */
+/* This file is free software; it is part of the P99 project.                   */
+/*                                                                              */
+/* Licensed under the Apache License, Version 2.0 (the "License");              */
+/* you may not use this file except in compliance with the License.             */
+/* You may obtain a copy of the License at                                      */
+/*                                                                              */
+/*     http://www.apache.org/licenses/LICENSE-2.0                               */
+/*                                                                              */
+/* Unless required by applicable law or agreed to in writing, software          */
+/* distributed under the License is distributed on an "AS IS" BASIS,            */
+/* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.     */
+/* See the License for the specific language governing permissions and          */
+/* limitations under the License.                                               */
+/*                                                                              */
+
+#define P99_PRED(N) P00_PRED(N)
+#define P00_PRED(N) P00__PRED(P00_PRED_, N)
+#define P00__PRED(P, N) P##N
+
+#define P00_PRED_1 0
+#define P00_PRED_2 1
+#define P00_PRED_3 2
+#define P00_PRED_4 3
+#define P00_PRED_5 4
+#define P00_PRED_6 5
+
+#define P99_LAST(...) P99_CHS(P99_PRED(P00_NARG(__VA_ARGS__)), __VA_ARGS__, )
+#define P99_ALLBUTLAST(...) P99_PASTE2(P00_PRE, P99_PRED(P00_NARG(__VA_ARGS__)))(__VA_ARGS__, )
+
+#define P99_CHS(N, ...) P00_CHS(P99_SKP(N, __VA_ARGS__))
+#define P00_CHS(...) P00_CHS_(__VA_ARGS__, )
+#define P00_CHS_(X, ...) X
+
+#define P99_SKP(N, ...) P99_PASTE2(P00_SKP, N)(__VA_ARGS__)
+#define P00_SKP0(...) __VA_ARGS__
+#define P00_SKP1(_0, ...) __VA_ARGS__
+#define P00_SKP2(_0, ...) P00_SKP1(__VA_ARGS__)
+#define P00_SKP3(_0, ...) P00_SKP2(__VA_ARGS__)
+#define P00_SKP4(_0, ...) P00_SKP3(__VA_ARGS__)
+#define P00_SKP5(_0, ...) P00_SKP4(__VA_ARGS__)
+
+#define P00_NARG(...) P00_NARG_1(__VA_ARGS__)
+#define P00_ARG(_1, _2, _3, _4, _5, _6, ...) _6
+#define P00_NARG_1(...) P00_ARG(__VA_ARGS__, 5, 4, 3, 2, 1, 0, )
+#define P00_NARG_2(...) P00_ARG(__VA_ARGS__, P00_INV(2), 2, P00_INV(2), 1, P00_INV(2), 0, )
+#define P00_NARG_3(...) P00_ARG(__VA_ARGS__, P00_INV(3), P00_INV(3), 1, P00_INV(3), P00_INV(3), 0, )
+#define P00_NARG_4(...) P00_ARG(__VA_ARGS__, P00_INV(4), 1, P00_INV(4), P00_INV(4), P00_INV(4), 0, )
+
+#define P00_PRE0(...)
+#define P00_PRE1(_0, ...) _0
+#define P00_PRE2(_0, ...) _0, P00_PRE1(__VA_ARGS__)
+#define P00_PRE3(_0, ...) _0, P00_PRE2(__VA_ARGS__)
+#define P00_PRE4(_0, ...) _0, P00_PRE3(__VA_ARGS__)
+#define P00_PRE5(_0, ...) _0, P00_PRE4(__VA_ARGS__)
+
+#define P00_FOR0(NAME, OP, FUNC, ...)
+#define P00_FOR1(NAME, OP, FUNC, ...) FUNC(NAME, P00_PRE1(__VA_ARGS__, ), 0)
+#define P00_FOR2(NAME, OP, FUNC, ...) \
+    OP(NAME, 1, P00_FOR1(NAME, OP, FUNC, P99_ALLBUTLAST(__VA_ARGS__)), FUNC(NAME, P99_LAST(__VA_ARGS__), 1))
+#define P00_FOR3(NAME, OP, FUNC, ...) \
+    OP(NAME, 2, P00_FOR2(NAME, OP, FUNC, P99_ALLBUTLAST(__VA_ARGS__)), FUNC(NAME, P99_LAST(__VA_ARGS__), 2))
+#define P00_FOR4(NAME, OP, FUNC, ...) \
+    OP(NAME, 3, P00_FOR3(NAME, OP, FUNC, P99_ALLBUTLAST(__VA_ARGS__)), FUNC(NAME, P99_LAST(__VA_ARGS__), 3))
+#define P00_FOR5(NAME, OP, FUNC, ...) \
+    OP(NAME, 4, P00_FOR4(NAME, OP, FUNC, P99_ALLBUTLAST(__VA_ARGS__)), FUNC(NAME, P99_LAST(__VA_ARGS__), 4))
+#define P00_FOR6(NAME, OP, FUNC, ...) \
+    OP(NAME, 5, P00_FOR5(NAME, OP, FUNC, P99_ALLBUTLAST(__VA_ARGS__)), FUNC(NAME, P99_LAST(__VA_ARGS__), 5))
+#define P99_CAT2(_1, _2) _1##_2
+#define P99_PASTE2(_1, _2) P99_CAT2(_1, _2)
+#define P99_FOR(NAME, N, OP, FUNC, ...) P99_PASTE2(P00_FOR, N)(NAME, OP, FUNC, __VA_ARGS__)
+
+// End of code copied from P99
+// Code starting here is subject to the license as seen in the LICENSE file of the root directory of this project
+
+#define CLD_MACRO_NULL_SEP(NAME, i, REC, RES) REC RES
+
+#define CLD_MACRO_COUNT_ARGUMENTS(...) CLD_MACRO_COUNT_ARGUMENTS_(__VA_ARGS__, PP_RSEQ_N())
+#define CLD_MACRO_COUNT_ARGUMENTS_(...) CLD_MACRO_ARGUMENTS_N(__VA_ARGS__)
+#define CLD_MACRO_ARGUMENTS_N(_1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, \
+                              _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36,  \
+                              _37, _38, _39, _40, _41, _42, _43, _44, _45, _46, _47, _48, _49, _50, _51, _52, _53,  \
+                              _54, _55, _56, _57, _58, _59, _60, _61, _62, _63, N, ...)                             \
+    N
+#define PP_RSEQ_N()                                                                                                   \
+    63, 62, 61, 60, 59, 58, 57, 56, 55, 54, 53, 52, 51, 50, 49, 48, 47, 46, 45, 44, 43, 42, 41, 40, 39, 38, 37, 36,   \
+        35, 34, 33, 32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, \
+        7, 6, 5, 4, 3, 2, 1, 0
+
+#define CLD_MACRO_GEN_STRING(NAME, STRING, INDEX) constexpr static auto NAME##arg##INDEX = ::ctll::fixed_string{STRING};
+
+#define CLD_MACRO_GEN_STRINGS(NAME, ...) \
+    P99_FOR(NAME, CLD_MACRO_COUNT_ARGUMENTS(__VA_ARGS__), CLD_MACRO_NULL_SEP, CLD_MACRO_GEN_STRING, __VA_ARGS__)
+
+#define CLD_MACRO_REMOVE_PAREN(...) __VA_ARGS__
+
+#define CLD_MACRO_GEN_STRINGS2(NAME, PACK) CLD_MACRO_GEN_STRINGS(NAME, CLD_MACRO_REMOVE_PAREN PACK)
+
+#define CLD_MACRO_COMMA_SEP(NAME, i, REC, RES) REC, RES
+
+#define CLD_MACRO_LIST_STRING(NAME, STRING, INDEX) detail::NAME##arg##INDEX
+
+#define CLD_MACRO_LIST_STRINGS(NAME, ...) \
+    P99_FOR(NAME, CLD_MACRO_COUNT_ARGUMENTS(__VA_ARGS__), CLD_MACRO_COMMA_SEP, CLD_MACRO_LIST_STRING, __VA_ARGS__)
+
+#define CLD_MACRO_LIST_STRINGS2(NAME, PACK) CLD_MACRO_LIST_STRINGS(NAME, CLD_MACRO_REMOVE_PAREN PACK)
+
+#define CLD_MACRO_STRINGIFY_SECOND(x, y) #y
+
+#define CLD_MACRO_GEN_BIND(NAME, STRING, INDEX) \
+    constexpr static auto NAME##bind##INDEX = ::ctll::fixed_string{CLD_MACRO_STRINGIFY_SECOND STRING};
+
+#define CLD_MACRO_GEN_BINDS(NAME, ...) \
+    P99_FOR(NAME, CLD_MACRO_COUNT_ARGUMENTS(__VA_ARGS__), CLD_MACRO_NULL_SEP, CLD_MACRO_GEN_BIND, __VA_ARGS__)
+
+#define CLD_MACRO_LIST_BIND_DEFER(index, type, name) detail::name##bind##index, ::std::in_place_type<type>
+
+#define CLD_MACRO_GET_FIRST(x, y) x
+
+#define CLD_MACRO_LIST_BIND(NAME, ARG, INDEX) CLD_MACRO_LIST_BIND_DEFER(INDEX, CLD_MACRO_GET_FIRST ARG, NAME)
+
+#define CLD_MACRO_LIST_BINDS(NAME, ...) \
+    P99_FOR(NAME, CLD_MACRO_COUNT_ARGUMENTS(__VA_ARGS__), CLD_MACRO_COMMA_SEP, CLD_MACRO_LIST_BIND, __VA_ARGS__)
+
+#define CLD_MACRO_CLI_OPT_2(NAME, PACK)                                    \
+    namespace detail                                                       \
+    {                                                                      \
+    CLD_MACRO_GEN_STRINGS2(NAME, PACK)                                     \
+    }                                                                      \
+    constexpr static auto NAME = ::cld::detail::CommandLine::parseOptions< \
+        ::cld::detail::CommandLine::Pack<CLD_MACRO_LIST_STRINGS2(NAME, PACK)>>
+
+#define CLD_MACRO_CLI_OPT_3(...) CLD_CLI_OPT_VARARG(__VA_ARGS__)
+#define CLD_MACRO_CLI_OPT_4(...) CLD_CLI_OPT_VARARG(__VA_ARGS__)
+#define CLD_MACRO_CLI_OPT_5(...) CLD_CLI_OPT_VARARG(__VA_ARGS__)
+#define CLD_MACRO_CLI_OPT_6(...) CLD_CLI_OPT_VARARG(__VA_ARGS__)
+#define CLD_MACRO_CLI_OPT_7(...) CLD_CLI_OPT_VARARG(__VA_ARGS__)
+#define CLD_MACRO_CLI_OPT_8(...) CLD_CLI_OPT_VARARG(__VA_ARGS__)
+#define CLD_MACRO_CLI_OPT_9(...) CLD_CLI_OPT_VARARG(__VA_ARGS__)
+
+#define CLD_CLI_OPT_VARARG(NAME, PACK, ...)                                    \
+    namespace detail                                                           \
+    {                                                                          \
+    CLD_MACRO_GEN_STRINGS2(NAME, PACK)                                         \
+    CLD_MACRO_GEN_BINDS(NAME, __VA_ARGS__)                                     \
+    }                                                                          \
+    constexpr static auto NAME = ::cld::detail::CommandLine::parseOptions<     \
+        ::cld::detail::CommandLine::Pack<CLD_MACRO_LIST_STRINGS2(NAME, PACK)>, \
+        CLD_MACRO_LIST_BINDS(NAME, __VA_ARGS__)>
+
+#define CLD_CLI_OPT(...) P99_PASTE2(CLD_MACRO_CLI_OPT_, CLD_MACRO_COUNT_ARGUMENTS(__VA_ARGS__))(__VA_ARGS__)
