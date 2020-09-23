@@ -6,33 +6,77 @@
 
 #include "TestConfig.hpp"
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wgnu-zero-variadic-macro-arguments"
+#define CREATE_NOTE_2(variableName, format)                           \
+    namespace detail                                                  \
+    {                                                                 \
+    constexpr auto variableName##Text = ::ctll::fixed_string{format}; \
+    }                                                                 \
+    constexpr auto variableName = ::cld::makeDiagnostic<detail::variableName##Text>(::cld::Severity::Note, "")
 
-// TODO: Use __VA_OPT__(,) in C++20
-#define CREATE_ERROR(variableName, format, ...)                       \
+#define CREATE_NOTE_3(...) CREATE_NOTE_VAARG(__VA_ARGS__)
+#define CREATE_NOTE_4(...) CREATE_NOTE_VAARG(__VA_ARGS__)
+#define CREATE_NOTE_5(...) CREATE_NOTE_VAARG(__VA_ARGS__)
+#define CREATE_NOTE_6(...) CREATE_NOTE_VAARG(__VA_ARGS__)
+#define CREATE_NOTE_7(...) CREATE_NOTE_VAARG(__VA_ARGS__)
+#define CREATE_NOTE_8(...) CREATE_NOTE_VAARG(__VA_ARGS__)
+
+#define CREATE_NOTE(...) P99_PASTE2(CREATE_NOTE_, CLD_MACRO_COUNT_ARGUMENTS(__VA_ARGS__))(__VA_ARGS__)
+
+#define CREATE_NOTE_VAARG(variableName, format, ...)                  \
     namespace detail                                                  \
     {                                                                 \
     constexpr auto variableName##Text = ::ctll::fixed_string{format}; \
     }                                                                 \
     constexpr auto variableName =                                     \
-        ::cld::makeDiagnostic<detail::variableName##Text, ##__VA_ARGS__>(::cld::Severity::Error, "")
+        ::cld::makeDiagnostic<detail::variableName##Text, __VA_ARGS__>(::cld::Severity::Note, "")
 
-#define CREATE_NOTE(variableName, format, ...)                        \
+#define CREATE_WARNING_3(variableName, cliName, format)               \
+    namespace detail                                                  \
+    {                                                                 \
+    constexpr auto variableName##Text = ::ctll::fixed_string{format}; \
+    }                                                                 \
+    constexpr auto variableName = ::cld::makeDiagnostic<detail::variableName##Text>(::cld::Severity::Warning, cliName)
+
+#define CREATE_WARNING_4(...) CREATE_WARNING_VAARG(__VA_ARGS__)
+#define CREATE_WARNING_5(...) CREATE_WARNING_VAARG(__VA_ARGS__)
+#define CREATE_WARNING_6(...) CREATE_WARNING_VAARG(__VA_ARGS__)
+#define CREATE_WARNING_7(...) CREATE_WARNING_VAARG(__VA_ARGS__)
+#define CREATE_WARNING_8(...) CREATE_WARNING_VAARG(__VA_ARGS__)
+#define CREATE_WARNING_9(...) CREATE_WARNING_VAARG(__VA_ARGS__)
+
+#define CREATE_WARNING(...) P99_PASTE2(CREATE_WARNING_, CLD_MACRO_COUNT_ARGUMENTS(__VA_ARGS__))(__VA_ARGS__)
+
+#define CREATE_WARNING_VAARG(variableName, cliName, format, ...)      \
     namespace detail                                                  \
     {                                                                 \
     constexpr auto variableName##Text = ::ctll::fixed_string{format}; \
     }                                                                 \
     constexpr auto variableName =                                     \
-        ::cld::makeDiagnostic<detail::variableName##Text, ##__VA_ARGS__>(::cld::Severity::Note, "")
+        ::cld::makeDiagnostic<detail::variableName##Text, __VA_ARGS__>(::cld::Severity::Warning, cliName)
 
-#define CREATE_WARNING(variableName, cliName, format, ...)            \
+#define CREATE_ERROR_2(variableName, format)                          \
+    namespace detail                                                  \
+    {                                                                 \
+    constexpr auto variableName##Text = ::ctll::fixed_string{format}; \
+    }                                                                 \
+    constexpr auto variableName = ::cld::makeDiagnostic<detail::variableName##Text>(::cld::Severity::Error, "")
+
+#define CREATE_ERROR_3(...) CREATE_ERROR_VAARG(__VA_ARGS__)
+#define CREATE_ERROR_4(...) CREATE_ERROR_VAARG(__VA_ARGS__)
+#define CREATE_ERROR_5(...) CREATE_ERROR_VAARG(__VA_ARGS__)
+#define CREATE_ERROR_6(...) CREATE_ERROR_VAARG(__VA_ARGS__)
+#define CREATE_ERROR_7(...) CREATE_ERROR_VAARG(__VA_ARGS__)
+#define CREATE_ERROR_8(...) CREATE_ERROR_VAARG(__VA_ARGS__)
+
+#define CREATE_ERROR(...) P99_PASTE2(CREATE_ERROR_, CLD_MACRO_COUNT_ARGUMENTS(__VA_ARGS__))(__VA_ARGS__)
+
+#define CREATE_ERROR_VAARG(variableName, format, ...)                 \
     namespace detail                                                  \
     {                                                                 \
     constexpr auto variableName##Text = ::ctll::fixed_string{format}; \
     }                                                                 \
     constexpr auto variableName =                                     \
-        ::cld::makeDiagnostic<detail::variableName##Text, ##__VA_ARGS__>(::cld::Severity::Warning, cliName)
+        ::cld::makeDiagnostic<detail::variableName##Text, __VA_ARGS__>(::cld::Severity::Error, "")
 
 namespace
 {
@@ -439,8 +483,3 @@ TEST_CASE("Diag line and file diretive")
         llvm::errs() << message;
     }
 }
-
-#undef CREATE_ERROR
-#undef CREATE_WARNING
-#undef CREATE_NOTE
-#pragma clang diagnostic pop
