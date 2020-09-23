@@ -203,5 +203,9 @@ add_subdirectory(src/cld/Common)
 add_subdirectory(src/cld/Frontend)
 add_subdirectory(src/cld/LLVMBackend)
 
+llvm_map_components_to_libnames(llvm_all ${LLVM_TARGETS_TO_BUILD})
+
+message(STATUS "${llvm_all}")
+
 add_executable(cld src/cld/main.cpp)
-target_link_libraries(cld LLVMBackend)
+target_link_libraries(cld LLVMBackend ${llvm_all})

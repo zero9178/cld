@@ -629,8 +629,8 @@ public:
     template <auto& option>
     [[nodiscard]] const auto& get() const noexcept
     {
-        return std::get<decltype(
-            std::pair{&option, std::optional<typename std::decay_t<decltype(option)>::value_type>{}})>(m_storage)
+        return std::get<std::pair<detail::CommandLine::Pointer<&option>,
+                                  std::optional<typename std::decay_t<decltype(option)>::value_type>>>(m_storage)
             .second;
     }
 };
@@ -639,8 +639,8 @@ template <auto&... options>
 auto parseCommandLine(llvm::MutableArrayRef<std::string_view> commandLine)
 {
     constexpr auto tuple = std::make_tuple(detail::CommandLine::Pointer<&options>{}...);
-    auto storage =
-        std::make_tuple(std::pair{&options, std::optional<typename std::decay_t<decltype(options)>::value_type>{}}...);
+    auto storage = std::make_tuple(std::pair{detail::CommandLine::Pointer<&options>{},
+                                             std::optional<typename std::decay_t<decltype(options)>::value_type>{}}...);
     std::vector<std::string_view> unrecognized;
     while (!commandLine.empty())
     {

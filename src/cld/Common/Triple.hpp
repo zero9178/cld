@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string_view>
+
 namespace cld
 {
 enum class Architecture
@@ -30,6 +32,8 @@ class Triple
     Environment m_environment;
 
 public:
+    static Triple fromString(std::string_view string);
+
     Triple(Architecture architecture, Platform operatingSystem, Environment environment);
 
     Architecture getArchitecture() const

@@ -1,36 +1,244 @@
+#include <llvm/IR/LegacyPassManager.h>
+#include <llvm/Support/FileSystem.h>
+#include <llvm/Support/TargetSelect.h>
+
 #include <cld/Common/CommandLine.hpp>
+#include <cld/Common/Filesystem.hpp>
+#include <cld/Common/Triple.hpp>
+#include <cld/Frontend/Compiler/LanguageOptions.hpp>
+#include <cld/Frontend/Compiler/Parser.hpp>
+#include <cld/Frontend/Compiler/Program.hpp>
+#include <cld/Frontend/Preprocessor/Preprocessor.hpp>
+#include <cld/LLVMBackend/Codegen.hpp>
 
-#include <iostream>
+CLD_CLI_OPT(OUTPUT_FILE, ("-o <file>", "--output=<file>", "--output <file>"), (std::string_view, file))();
 
-CLD_CLI_OPT(outputFile, ("-o <file>", "--output=<file>"), (std::string_view, file))();
+CLD_CLI_OPT(COMPILE_ONLY, ("-c", "--compile"))();
 
-CLD_CLI_OPT(compileOnly, ("-c", "--compile"))();
+CLD_CLI_OPT(ASSEMBLY_OUTPUT, ("-S", "--assemble"))();
 
-CLD_CLI_OPT(defineMacro, ("-D<macro>=<value>", "-D<macro>", "--define-macro <macro>", "--define-macro=<macro>"),
+CLD_CLI_OPT(PREPROCESS_ONLY, ("-E", "--preprocess"))();
+
+CLD_CLI_OPT(TARGET, ("--target=<arg>", "-target <arg>"), (std::string_view, arg))();
+
+CLD_CLI_OPT(DEFINE_MACRO, ("-D<macro>=<value>", "-D<macro>", "--define-macro <macro>", "--define-macro=<macro>"),
             (std::string_view, macro), (std::string_view, value))
 ();
 
+CLD_CLI_OPT(EMIT_LLVM, ("-emit-llvm"))();
+
+CLD_CLI_OPT(OPT, ("-O<level>", "-O", "--optimize", "--optimize=<level>"), (std::uint8_t, level))();
+
+CLD_CLI_OPT(INCLUDES, ("-I<dir>", "--include-directory <dir>", "--include-directory=<dir>"), (std::string_view, dir))();
+
+namespace
+{
+enum class Action
+{
+    Compile,
+    Preprocess,
+    AssemblyOutput
+};
+
+template <class CL>
+std::optional<cld::fs::path> compileCFile(Action action, const cld::fs::path& cSourceFile,
+                                          const cld::LanguageOptions& languageOptions, const CL& cli)
+{
+    cld::fs::ifstream file(cSourceFile, std::ios_base::binary | std::ios_base::ate | std::ios_base::in);
+    if (!file.is_open())
+    {
+        // TODO: Error
+        return {};
+    }
+
+    std::size_t size = file.tellg();
+    file.seekg(0);
+    std::string input(size, '\0');
+    file.read(input.data(), size);
+    file.close();
+
+    bool errors = false;
+    auto pptokens =
+        cld::Lexer::tokenize(std::move(input), languageOptions, &llvm::errs(), &errors, cSourceFile.u8string());
+    if (errors)
+    {
+        return {};
+    }
+    pptokens = cld::PP::preprocess(std::move(pptokens), &llvm::errs(), &errors);
+    if (errors)
+    {
+        return {};
+    }
+    if (action == Action::Preprocess)
+    {
+        auto reconstruction =
+            cld::PP::reconstruct(pptokens.data().data(), pptokens.data().data() + pptokens.data().size(), pptokens);
+        if (!cli.template get<OUTPUT_FILE>())
+        {
+            llvm::outs() << reconstruction;
+            llvm::outs().flush();
+            return cld::fs::path{};
+        }
+        else
+        {
+            cld::fs::ofstream outputFile(cld::to_string(*cli.template get<OUTPUT_FILE>()), std::ios_base::out);
+            if (!outputFile.is_open())
+            {
+                // TODO: Error
+                return {};
+            }
+            outputFile << reconstruction;
+            outputFile.close();
+            return cld::fs::u8path(*cli.template get<OUTPUT_FILE>());
+        }
+    }
+    auto ctokens = cld::Lexer::toCTokens(pptokens, &llvm::errs(), &errors);
+    if (errors)
+    {
+        return {};
+    }
+    auto tree = cld::Parser::buildTree(ctokens, &llvm::errs(), &errors);
+    if (errors)
+    {
+        return {};
+    }
+    auto program = cld::Semantics::analyse(tree, std::move(ctokens), &llvm::errs(), &errors);
+    if (errors)
+    {
+        return {};
+    }
+
+    llvm::LLVMContext context;
+    llvm::Module module("", context);
+    auto targetMachine = cld::CGLLVM::generateLLVM(module, program);
+    std::string outputFile;
+    if (cli.template get<OUTPUT_FILE>())
+    {
+        outputFile = *cli.template get<OUTPUT_FILE>();
+    }
+    else
+    {
+        auto path = cSourceFile;
+        if (action == Action::AssemblyOutput)
+        {
+            path.replace_extension("s");
+        }
+        else
+        {
+            path.replace_extension("o");
+        }
+        outputFile = path.u8string();
+    }
+
+    std::error_code ec;
+    llvm::raw_fd_ostream os(outputFile, ec, llvm::sys::fs::OpenFlags::OF_None);
+    if (ec)
+    {
+        // TODO: Error
+        return {};
+    }
+
+    llvm::legacy::PassManager pass;
+    if (targetMachine->addPassesToEmitFile(pass, os, nullptr,
+                                           action == Action::AssemblyOutput ? llvm::CodeGenFileType::CGFT_AssemblyFile :
+                                                                              llvm::CodeGenFileType::CGFT_ObjectFile))
+    {
+        return {};
+    }
+    pass.run(module);
+    os.flush();
+    os.close();
+
+    return cld::fs::u8path(outputFile);
+}
+
+template <class CL>
+int doActionOnAllFiles(Action action, const cld::LanguageOptions& languageOptions,
+                       llvm::ArrayRef<std::string_view> files, const CL& cli)
+{
+    std::vector<cld::fs::path> linkableFiles;
+    for (auto& iter : files)
+    {
+        auto path = cld::fs::u8path(iter);
+        auto extension = path.extension();
+        if (extension == ".c")
+        {
+            auto objectFile = compileCFile(action, iter, languageOptions, cli);
+            if (!objectFile)
+            {
+                return -1;
+            }
+            if (action == Action::Compile)
+            {
+                linkableFiles.push_back(*objectFile);
+            }
+        }
+    }
+    return 0;
+}
+} // namespace
+
 int main(int argc, char** argv)
 {
+    llvm::InitializeAllTargetInfos();
+    llvm::InitializeAllTargets();
+    llvm::InitializeAllTargetMCs();
+    llvm::InitializeAllAsmPrinters();
+    llvm::InitializeAllAsmParsers();
+
     std::vector<std::string_view> elements(argc - 1);
     for (int i = 1; i < argc; i++)
     {
         elements[i - 1] = argv[i];
     }
 
-    auto cli = cld::parseCommandLine<outputFile, compileOnly, defineMacro>(elements);
-
-    std::string_view executable = "a.out";
-    bool b = cli.get<compileOnly>().has_value();
-    if (cli.get<outputFile>())
+    auto cli = cld::parseCommandLine<OUTPUT_FILE, COMPILE_ONLY, ASSEMBLY_OUTPUT, PREPROCESS_ONLY, TARGET, EMIT_LLVM,
+                                     OPT, DEFINE_MACRO, INCLUDES>(elements);
+    auto triple = cld::Triple::defaultTarget();
+    if (cli.get<TARGET>())
     {
-        executable = *cli.get<outputFile>();
+        triple = cld::Triple::fromString(*cli.get<TARGET>());
     }
-    std::cout << executable << std::endl;
-    if (cli.get<defineMacro>())
+    auto options = cld::LanguageOptions::fromTriple(triple);
+    if (cli.get<INCLUDES>())
     {
-        auto& [macroName, maybeValue] = *cli.get<defineMacro>();
-        std::cout << macroName << std::endl;
+        // TODO: vector instead of single value
+        options.includeDirectories.emplace_back(*cli.get<INCLUDES>());
+    }
+
+    if (cli.getUnrecognized().empty())
+    {
+        // TODO: Error
+        return -1;
+    }
+    if ((cli.get<COMPILE_ONLY>() || cli.get<ASSEMBLY_OUTPUT>() || cli.get<PREPROCESS_ONLY>()) && cli.get<OUTPUT_FILE>())
+    {
+        // TODO: Error
+        return -1;
+    }
+    if (cli.get<COMPILE_ONLY>())
+    {
+        if (cli.get<ASSEMBLY_OUTPUT>())
+        {
+            // TODO: Error
+        }
+        if (cli.get<PREPROCESS_ONLY>())
+        {
+            // TODO: Error
+        }
+        return doActionOnAllFiles(Action::Compile, options, cli.getUnrecognized(), cli);
+    }
+    else if (cli.get<ASSEMBLY_OUTPUT>())
+    {
+        if (cli.get<PREPROCESS_ONLY>())
+        {
+            // TODO: Error
+        }
+        return doActionOnAllFiles(Action::AssemblyOutput, options, cli.getUnrecognized(), cli);
+    }
+    else
+    {
+        return doActionOnAllFiles(Action::Preprocess, options, cli.getUnrecognized(), cli);
     }
 }
 

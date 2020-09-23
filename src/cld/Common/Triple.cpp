@@ -1,5 +1,7 @@
 #include "Triple.hpp"
 
+#include "Util.hpp"
+
 cld::Triple::Triple(cld::Architecture architecture, cld::Platform operatingSystem, cld::Environment environment)
     : m_architecture(architecture), m_operatingSystem(operatingSystem), m_environment(environment)
 {
@@ -8,7 +10,8 @@ cld::Triple::Triple(cld::Architecture architecture, cld::Platform operatingSyste
 cld::Triple cld::Triple::defaultTarget()
 {
 #ifdef CLD_DEFAULT_TARGET
-    // TODO:
+    static auto target = fromString(CLD_DEFAULT_TARGET);
+    return target;
 #endif
     return native();
 }
@@ -36,4 +39,11 @@ cld::Triple cld::Triple::native()
     environment = Environment ::GNU;
 #endif
     return Triple(architecture, operatingSystem, environment);
+}
+
+cld::Triple cld::Triple::fromString(std::string_view)
+{
+    // TODO:
+    // return cld::Triple(cld::Architecture::x86, cld::Platform::Unknown, cld::Environment::GNU);
+    CLD_UNREACHABLE;
 }
