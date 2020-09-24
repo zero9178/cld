@@ -15,20 +15,29 @@
 
 namespace cld
 {
-// "-D<macro>=<value>","-D<macro>","--define-macro <macro>","--define-macro=<macro>"
-// pair{"<macro>",std::in_place_type<std::string_view>},pair{"<value>",std::in_place_type<std::string_view>}
-// Return type -> std::optional<std::tuple<std::string_view,std::optional<std::string_view>>>
+enum class CLIMultiArg
+{
+    Overwrite,
+    List,
+    BitwiseMerge
+};
 
 template <class ReturnType, std::size_t args, class... Alternatives>
 class CommandLineOption
 {
     std::tuple<Alternatives...> m_alternatives;
     std::array<std::u32string_view, args> m_argNameToRetTypePos;
+    std::string_view m_description;
+    CLIMultiArg m_multiArg;
 
 public:
     constexpr CommandLineOption(type_identity<ReturnType>, std::tuple<Alternatives...> alternatives,
-                                std::array<std::u32string_view, args> argNameToRetTypePos)
-        : m_alternatives(std::move(alternatives)), m_argNameToRetTypePos(argNameToRetTypePos)
+                                std::array<std::u32string_view, args> argNameToRetTypePos, std::string_view description,
+                                CLIMultiArg multiArg)
+        : m_alternatives(std::move(alternatives)),
+          m_argNameToRetTypePos(argNameToRetTypePos),
+          m_description(description),
+          m_multiArg(multiArg)
     {
     }
 
@@ -42,6 +51,16 @@ public:
     constexpr const std::tuple<Alternatives...>& getAlternatives() const
     {
         return m_alternatives;
+    }
+
+    constexpr CLIMultiArg getMultiArg() const
+    {
+        return m_multiArg;
+    }
+
+    constexpr std::string_view getDescription() const
+    {
+        return m_description;
     }
 };
 
@@ -328,7 +347,7 @@ constexpr bool isOptional(std::u32string_view, std::tuple<>)
 }
 
 template <class T, auto&... args>
-constexpr auto parseOptions()
+constexpr auto parseOptions(std::string_view description, CLIMultiArg multiArg = CLIMultiArg::Overwrite)
 {
     constexpr auto pair = T::parseOptionsImpl();
     constexpr auto lexems = pair.first;
@@ -373,7 +392,8 @@ constexpr auto parseOptions()
                                          std::u32string_view(std::decay_t<decltype(values.first)>::pointer->begin(),
                                                              std::decay_t<decltype(values.first)>::pointer->size())...};
                                  },
-                                 tuple));
+                                 tuple),
+                             description, multiArg);
 }
 
 template <bool sizeOrArray, std::size_t maxSize>
@@ -430,12 +450,36 @@ constexpr static std::size_t indexOf(std::array<std::u32string_view, size> array
     CLD_UNREACHABLE;
 }
 
+template <class T>
+struct ValueType
+{
+    using type = typename T::value_type;
+};
+
 template <auto* cliOption, std::size_t i, class Storage>
 static bool checkAlternative(llvm::MutableArrayRef<std::string_view>& commandLine, Storage& storage)
 {
+    auto thisElement = [](auto& storage) -> decltype(auto) {
+        if constexpr (cliOption->getMultiArg() == CLIMultiArg::List)
+        {
+            return storage.back();
+        }
+        else
+        {
+            return *storage;
+        }
+    };
+
     constexpr auto alternative = std::get<i>(cliOption->getAlternatives());
     constexpr static auto array = detail::CommandLine::tupleToArray(alternative);
-    storage.emplace();
+    if constexpr (cliOption->getMultiArg() == CLIMultiArg::List)
+    {
+        storage.emplace_back();
+    }
+    else
+    {
+        storage.emplace();
+    }
     auto copy = commandLine;
     std::vector<std::string_view> contents(commandLine.begin(),
                                            commandLine.begin() + std::min(array.size(), commandLine.size()));
@@ -465,10 +509,12 @@ static bool checkAlternative(llvm::MutableArrayRef<std::string_view>& commandLin
         {
             constexpr std::size_t storageIndex =
                 indexOf(cliOption->getArgNames(), cld::get<detail::CommandLine::Arg>(curr).value);
+            using ArgTypeT = typename std::conditional_t<
+                IsTuple<std::decay_t<decltype(thisElement(storage))>>{},
+                std::tuple_element<storageIndex, std::decay_t<decltype(thisElement(storage))>>,
+                std::decay<decltype(thisElement(storage))>>::type;
             using ArgType =
-                typename std::conditional_t<IsTuple<std::decay_t<decltype(*storage)>>{},
-                                            std::tuple_element<storageIndex, std::decay_t<decltype(*storage)>>,
-                                            std::decay<decltype(*storage)>>::type;
+                typename std::conditional_t<IsOptional<ArgTypeT>{}, ValueType<ArgTypeT>, type_identity<ArgTypeT>>::type;
             std::string_view text;
             if (commandLine.empty())
             {
@@ -497,7 +543,7 @@ static bool checkAlternative(llvm::MutableArrayRef<std::string_view>& commandLin
                 CLD_UNREACHABLE;
             }
             auto& element = [&]() -> decltype(auto) {
-                if constexpr (IsTuple<std::decay_t<decltype(*storage)>>{})
+                if constexpr (IsTuple<std::decay_t<decltype(thisElement(storage))>>{})
                 {
                     // MSVC
 #if defined(_MSC_VER) && !defined(__clang__)
@@ -506,11 +552,11 @@ static bool checkAlternative(llvm::MutableArrayRef<std::string_view>& commandLin
                     constexpr std::size_t storageIndex =
                         indexOf(cliOption->getArgNames(), cld::get<detail::CommandLine::Arg>(curr).value);
 #endif
-                    return std::get<storageIndex>(*storage);
+                    return std::get<storageIndex>(thisElement(storage));
                 }
                 else
                 {
-                    return *storage;
+                    return thisElement(storage);
                 }
             }();
             if constexpr (std::is_same_v<std::string, ArgType> || std::is_same_v<std::string_view, ArgType>)
@@ -520,9 +566,9 @@ static bool checkAlternative(llvm::MutableArrayRef<std::string_view>& commandLin
             else if constexpr (std::is_integral_v<ArgType>)
             {
                 element = 0;
-                if constexpr (IsOptional<std::decay_t<decltype(std::get<storageIndex>(*storage))>>{})
+                if constexpr (IsOptional<std::decay_t<decltype(element)>>{})
                 {
-                    std::from_chars(text.begin(), text.end(), &*element);
+                    std::from_chars(text.begin(), text.end(), *element);
                 }
                 else
                 {
@@ -564,7 +610,14 @@ static bool checkAlternative(llvm::MutableArrayRef<std::string_view>& commandLin
     {
         return true;
     }
-    storage.reset();
+    if constexpr (cliOption->getMultiArg() == CLIMultiArg::List)
+    {
+        storage.pop_back();
+    }
+    else
+    {
+        storage.reset();
+    }
     commandLine = copy;
     std::move(contents.begin(), contents.end(), commandLine.begin());
     return false;
@@ -629,8 +682,12 @@ public:
     template <auto& option>
     [[nodiscard]] const auto& get() const noexcept
     {
-        return std::get<std::pair<detail::CommandLine::Pointer<&option>,
-                                  std::optional<typename std::decay_t<decltype(option)>::value_type>>>(m_storage)
+        return std::get<
+                   std::pair<detail::CommandLine::Pointer<&option>,
+                             std::conditional_t<option.getMultiArg() == CLIMultiArg::List,
+                                                std::vector<typename std::decay_t<decltype(option)>::value_type>,
+                                                std::optional<typename std::decay_t<decltype(option)>::value_type>>>>(
+                   m_storage)
             .second;
     }
 };
@@ -639,8 +696,11 @@ template <auto&... options>
 auto parseCommandLine(llvm::MutableArrayRef<std::string_view> commandLine)
 {
     constexpr auto tuple = std::make_tuple(detail::CommandLine::Pointer<&options>{}...);
-    auto storage = std::make_tuple(std::pair{detail::CommandLine::Pointer<&options>{},
-                                             std::optional<typename std::decay_t<decltype(options)>::value_type>{}}...);
+    auto storage = std::make_tuple(
+        std::pair{detail::CommandLine::Pointer<&options>{},
+                  std::conditional_t<options.getMultiArg() == CLIMultiArg::List,
+                                     std::vector<typename std::decay_t<decltype(options)>::value_type>,
+                                     std::optional<typename std::decay_t<decltype(options)>::value_type>>{}}...);
     std::vector<std::string_view> unrecognized;
     while (!commandLine.empty())
     {

@@ -11,25 +11,27 @@
 #include <cld/Frontend/Preprocessor/Preprocessor.hpp>
 #include <cld/LLVMBackend/Codegen.hpp>
 
-CLD_CLI_OPT(OUTPUT_FILE, ("-o <file>", "--output=<file>", "--output <file>"), (std::string_view, file))();
+CLD_CLI_OPT(OUTPUT_FILE, ("-o <file>", "--output=<file>", "--output <file>"), (std::string_view, file))
+("Path of the output file");
 
-CLD_CLI_OPT(COMPILE_ONLY, ("-c", "--compile"))();
+CLD_CLI_OPT(COMPILE_ONLY, ("-c", "--compile"))("Stop after compiling object files");
 
-CLD_CLI_OPT(ASSEMBLY_OUTPUT, ("-S", "--assemble"))();
+CLD_CLI_OPT(ASSEMBLY_OUTPUT, ("-S", "--assemble"))("Stop after compiling and output assembly files");
 
-CLD_CLI_OPT(PREPROCESS_ONLY, ("-E", "--preprocess"))();
+CLD_CLI_OPT(PREPROCESS_ONLY, ("-E", "--preprocess"))("Preprocess to stdout or output file");
 
-CLD_CLI_OPT(TARGET, ("--target=<arg>", "-target <arg>"), (std::string_view, arg))();
+CLD_CLI_OPT(TARGET, ("--target=<arg>", "-target <arg>"), (std::string_view, arg))("Compiler target triple to use");
 
 CLD_CLI_OPT(DEFINE_MACRO, ("-D<macro>=<value>", "-D<macro>", "--define-macro <macro>", "--define-macro=<macro>"),
             (std::string_view, macro), (std::string_view, value))
-();
+("Define macro for the whole translation unit", cld::CLIMultiArg::List);
 
-CLD_CLI_OPT(EMIT_LLVM, ("-emit-llvm"))();
+CLD_CLI_OPT(EMIT_LLVM, ("-emit-llvm"))("Use LLVM IR instead of machine code and assembly");
 
-CLD_CLI_OPT(OPT, ("-O<level>", "-O", "--optimize", "--optimize=<level>"), (std::uint8_t, level))();
+CLD_CLI_OPT(OPT, ("-O<level>", "-O", "--optimize", "--optimize=<level>"), (std::uint8_t, level))("Optimization level");
 
-CLD_CLI_OPT(INCLUDES, ("-I<dir>", "--include-directory <dir>", "--include-directory=<dir>"), (std::string_view, dir))();
+CLD_CLI_OPT(INCLUDES, ("-I<dir>", "--include-directory <dir>", "--include-directory=<dir>"), (std::string_view, dir))
+("Additional include directories", cld::CLIMultiArg::List);
 
 namespace
 {
@@ -200,10 +202,13 @@ int main(int argc, char** argv)
         triple = cld::Triple::fromString(*cli.get<TARGET>());
     }
     auto options = cld::LanguageOptions::fromTriple(triple);
-    if (cli.get<INCLUDES>())
+    for (auto& iter : cli.get<INCLUDES>())
     {
-        // TODO: vector instead of single value
-        options.includeDirectories.emplace_back(*cli.get<INCLUDES>());
+        options.includeDirectories.emplace_back(iter);
+    }
+    for (auto& [name, maybeValue] : cli.get<DEFINE_MACRO>())
+    {
+        options.additionalMacros.emplace_back(name, maybeValue.value_or(""));
     }
 
     if (cli.getUnrecognized().empty())
