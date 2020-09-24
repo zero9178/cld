@@ -15,7 +15,7 @@ namespace CGLLVM
 {
 std::unique_ptr<llvm::TargetMachine> generateLLVM(llvm::Module& module, const Semantics::Program& program,
                                                   Triple triple = Triple::native(),
-                                                  llvm::Optional<llvm::CodeModel::Model> cm = llvm::None,
+                                                  llvm::Optional<llvm::Reloc::Model> reloc = llvm::None,
                                                   llvm::CodeGenOpt::Level ol = llvm::CodeGenOpt::None);
 } // namespace CGLLVM
 } // namespace cld

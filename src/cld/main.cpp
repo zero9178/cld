@@ -47,7 +47,7 @@ enum class Action
 };
 
 template <class CL>
-std::optional<cld::fs::path> compileCFile(Action action, const cld::fs::path& cSourceFile,
+std::optional<cld::fs::path> compileCFile(Action action, const cld::fs::path& cSourceFile, const cld::Triple& triple,
                                           const cld::LanguageOptions& languageOptions, const CL& cli)
 {
     cld::fs::ifstream file(cSourceFile, std::ios_base::binary | std::ios_base::ate | std::ios_base::in);
@@ -116,7 +116,31 @@ std::optional<cld::fs::path> compileCFile(Action action, const cld::fs::path& cS
 
     llvm::LLVMContext context;
     llvm::Module module("", context);
-    auto targetMachine = cld::CGLLVM::generateLLVM(module, program);
+    llvm::Optional<llvm::Reloc::Model> cm;
+    if (triple.getArchitecture() == cld::Architecture::x86_64 && triple.getPlatform() == cld::Platform::Windows)
+    {
+        cm = llvm::Reloc::Model::PIC_;
+    }
+    else if (cli.template get<PIE>() || cli.template get<PIC>())
+    {
+        cm = llvm::Reloc::Model::PIC_;
+    }
+    llvm::CodeGenOpt::Level ol;
+    if (cli.template get<OPT>())
+    {
+        switch (cli.template get<OPT>()->value_or(0))
+        {
+            case 0: ol = llvm::CodeGenOpt::None; break;
+            case 1: ol = llvm::CodeGenOpt::Less; break;
+            case 2: ol = llvm::CodeGenOpt::Default; break;
+            default: ol = llvm::CodeGenOpt::Aggressive; break;
+        }
+    }
+    else
+    {
+        ol = llvm::CodeGenOpt::None;
+    }
+    auto targetMachine = cld::CGLLVM::generateLLVM(module, program, triple, cm, ol);
     std::string outputFile;
     if (cli.template get<OUTPUT_FILE>())
     {
@@ -153,13 +177,12 @@ std::optional<cld::fs::path> compileCFile(Action action, const cld::fs::path& cS
     }
     pass.run(module);
     os.flush();
-    os.close();
 
     return cld::fs::u8path(outputFile);
 }
 
 template <class CL>
-int doActionOnAllFiles(Action action, const cld::LanguageOptions& languageOptions,
+int doActionOnAllFiles(Action action, const cld::LanguageOptions& languageOptions, const cld::Triple& triple,
                        llvm::ArrayRef<std::string_view> files, const CL& cli)
 {
     std::vector<cld::fs::path> linkableFiles;
@@ -169,7 +192,7 @@ int doActionOnAllFiles(Action action, const cld::LanguageOptions& languageOption
         auto extension = path.extension();
         if (extension == ".c")
         {
-            auto objectFile = compileCFile(action, iter, languageOptions, cli);
+            auto objectFile = compileCFile(action, iter, triple, languageOptions, cli);
             if (!objectFile)
             {
                 return -1;
@@ -235,7 +258,7 @@ int main(int argc, char** argv)
         {
             // TODO: Error
         }
-        return doActionOnAllFiles(Action::Compile, options, cli.getUnrecognized(), cli);
+        return doActionOnAllFiles(Action::Compile, options, triple, cli.getUnrecognized(), cli);
     }
     else if (cli.get<ASSEMBLY_OUTPUT>())
     {
@@ -243,11 +266,11 @@ int main(int argc, char** argv)
         {
             // TODO: Error
         }
-        return doActionOnAllFiles(Action::AssemblyOutput, options, cli.getUnrecognized(), cli);
+        return doActionOnAllFiles(Action::AssemblyOutput, options, triple, cli.getUnrecognized(), cli);
     }
     else
     {
-        return doActionOnAllFiles(Action::Preprocess, options, cli.getUnrecognized(), cli);
+        return doActionOnAllFiles(Action::Preprocess, options, triple, cli.getUnrecognized(), cli);
     }
 }
 

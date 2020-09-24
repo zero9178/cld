@@ -3010,7 +3010,7 @@ public:
 } // namespace
 
 std::unique_ptr<llvm::TargetMachine> cld::CGLLVM::generateLLVM(llvm::Module& module, const Semantics::Program& program,
-                                                               Triple triple, llvm::Optional<llvm::CodeModel::Model> cm,
+                                                               Triple triple, llvm::Optional<llvm::Reloc::Model> reloc,
                                                                llvm::CodeGenOpt::Level ol)
 {
     llvm::Triple llvmTriple;
@@ -3041,7 +3041,7 @@ std::unique_ptr<llvm::TargetMachine> cld::CGLLVM::generateLLVM(llvm::Module& mod
         return {};
     }
     auto machine = std::unique_ptr<llvm::TargetMachine>(
-        targetM->createTargetMachine(module.getTargetTriple(), "generic", "", {}, {}, cm, ol));
+        targetM->createTargetMachine(module.getTargetTriple(), "generic", "", {}, reloc, {}, ol));
     module.setDataLayout(machine->createDataLayout());
     CodeGenerator codeGenerator(module, program, program.getSourceObject(), triple);
     codeGenerator.visit(program.getTranslationUnit());
