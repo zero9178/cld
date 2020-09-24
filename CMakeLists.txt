@@ -50,7 +50,7 @@ if (WIN32)
 endif ()
 
 
-find_package(LLVM REQUIRED)
+find_package(LLVM REQUIRED 11)
 
 include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
 include_directories(SYSTEM 3rdParty)
