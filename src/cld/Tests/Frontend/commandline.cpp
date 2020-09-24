@@ -11,6 +11,7 @@ CLD_CLI_OPT(INCLUDES, ("-I<dir>", "--include-directory <dir>", "--include-direct
 CLD_CLI_OPT(STRING_ARG, ("--prefix=<arg>", "--prefix <arg>"), (std::string, arg))("A std::string arg");
 CLD_CLI_OPT(STRING_VIEW_ARG, ("--prefix=<arg>", "--prefix <arg>"), (std::string_view, arg))("A std::string_view arg");
 CLD_CLI_OPT(OPT, ("-O<level>", "-O", "--optimize", "--optimize=<level>"), (std::uint8_t, level))("Optimization level");
+CLD_CLI_OPT(PIE, ("-f[no-]pie"))("Position independent executable");
 } // namespace
 
 TEST_CASE("Commandline without args", "[cli]")
@@ -94,4 +95,23 @@ TEST_CASE("Commandline with multi arg", "[cli]")
             CHECK_THAT(cli.get<INCLUDES>(), Catch::Equals(std::vector<std::string_view>{"awdawd", "wadawdaw", "test"}));
         }
     }
+}
+
+TEST_CASE("Commandline negate", "[cli]")
+{
+    std::vector<std::string_view> elements = {"awdawd", "wadawdaw", "test"};
+    auto cli = cld::parseCommandLine<PIE>(elements);
+    CHECK_FALSE(cli.get<PIE>());
+    elements = {"awdawd", "-fpie", "test"};
+    cli = cld::parseCommandLine<PIE>(elements);
+    CHECK(cli.get<PIE>());
+    elements = {"-fpie", "-fpie", "-fpie"};
+    cli = cld::parseCommandLine<PIE>(elements);
+    CHECK(cli.get<PIE>());
+    elements = {"-fpie", "-fpie", "-fno-pie"};
+    cli = cld::parseCommandLine<PIE>(elements);
+    CHECK_FALSE(cli.get<PIE>());
+    elements = {"-fpie", "-fno-pie", "-fpie"};
+    cli = cld::parseCommandLine<PIE>(elements);
+    CHECK(cli.get<PIE>());
 }

@@ -84,13 +84,19 @@ struct Ellipsis
 {
 };
 
+struct NegationOption
+{
+    std::u32string_view value;
+};
+
 template <class... Args>
-constexpr std::array<std::variant<Whitespace, Arg, Text, Ellipsis>, sizeof...(Args)>
+constexpr std::array<std::variant<Whitespace, Arg, Text, Ellipsis, NegationOption>, sizeof...(Args)>
     tupleToArray(const std::tuple<Args...>& tuple)
 {
     return std::apply(
         [](auto&&... values) {
-            return std::array<std::variant<Whitespace, Arg, Text, Ellipsis>, sizeof...(Args)>{values...};
+            return std::array<std::variant<Whitespace, Arg, Text, Ellipsis, NegationOption>, sizeof...(Args)>{
+                values...};
         },
         tuple);
 }
@@ -127,7 +133,17 @@ constexpr const char32_t* skipWhitespace(std::u32string_view arg)
 constexpr const char32_t* skipLetters(std::u32string_view arg)
 {
     const char32_t* start = arg.data();
-    while (start != arg.data() + arg.size() && (*start != U'<' && *start != U' '))
+    while (start != arg.data() + arg.size() && (*start != U'<' && *start != U' ' && *start != U'[' && *start != U'.'))
+    {
+        start++;
+    }
+    return start;
+}
+
+constexpr const char32_t* findClosingSquareBracket(std::u32string_view arg)
+{
+    const char32_t* start = arg.data();
+    while (start != arg.data() + arg.size() && *start != U']')
     {
         start++;
     }
@@ -156,6 +172,12 @@ constexpr auto parseOption()
         {
             constexpr auto nextNonWhitespace = skipWhitespace(view);
             return std::tuple_cat(std::make_tuple(Whitespace{}), parseOption<arg, nextNonWhitespace - arg.begin()>());
+        }
+        else if constexpr (*(arg.begin() + offset) == U'[')
+        {
+            constexpr auto closing = findClosingSquareBracket(view);
+            return std::tuple_cat(std::make_tuple(NegationOption{{view.substr(1, closing - view.data() - 1)}}),
+                                  parseOption<arg, closing - arg.begin() + 1>());
         }
         else if constexpr (*(arg.begin() + offset) == U'.' && offset + 2 < arg.size()
                            && *(arg.begin() + offset + 1) == U'.' && *(arg.begin() + offset + 2) == U'.')
@@ -472,6 +494,16 @@ static bool checkAlternative(llvm::MutableArrayRef<std::string_view>& commandLin
 
     constexpr auto alternative = std::get<i>(cliOption->getAlternatives());
     constexpr static auto array = detail::CommandLine::tupleToArray(alternative);
+    auto storageCopy = [&] {
+        if constexpr (cliOption->getMultiArg() == CLIMultiArg::List)
+        {
+            return 0;
+        }
+        else
+        {
+            return storage;
+        }
+    }();
     if constexpr (cliOption->getMultiArg() == CLIMultiArg::List)
     {
         storage.emplace_back();
@@ -488,14 +520,14 @@ static bool checkAlternative(llvm::MutableArrayRef<std::string_view>& commandLin
         constexpr auto curr = array[index];
         if constexpr (std::holds_alternative<detail::CommandLine::Text>(curr))
         {
-            constexpr auto utf32 = cld::get<detail::CommandLine::Text>(curr).value;
-            constexpr std::size_t utf8Size = detail::CommandLine::utf32ToUtf8<false, utf32.size() * 4>(utf32);
-            constexpr static auto utf8Array = detail::CommandLine::utf32ToUtf8<true, utf8Size>(utf32);
-            constexpr std::string_view prefix(utf8Array.data(), utf8Array.size());
             if (commandLine.empty())
             {
                 return false;
             }
+            constexpr auto utf32 = cld::get<detail::CommandLine::Text>(curr).value;
+            constexpr std::size_t utf8Size = detail::CommandLine::utf32ToUtf8<false, utf32.size() * 4>(utf32);
+            constexpr static auto utf8Array = detail::CommandLine::utf32ToUtf8<true, utf8Size>(utf32);
+            constexpr std::string_view prefix(utf8Array.data(), utf8Array.size());
             if (commandLine.front().substr(0, prefix.size()) == prefix)
             {
                 commandLine.front().remove_prefix(prefix.size());
@@ -503,6 +535,28 @@ static bool checkAlternative(llvm::MutableArrayRef<std::string_view>& commandLin
             else
             {
                 return false;
+            }
+        }
+        else if constexpr (std::holds_alternative<detail::CommandLine::NegationOption>(curr))
+        {
+            static_assert(!std::holds_alternative<detail::CommandLine::NegationOption>(curr)
+                              || cliOption->getMultiArg() == CLIMultiArg::Overwrite,
+                          "Negate option requires 'Overwrite' as multi arg option");
+            if (commandLine.empty())
+            {
+                return true;
+            }
+            constexpr auto utf32 = cld::get<detail::CommandLine::NegationOption>(curr).value;
+            constexpr std::size_t utf8Size = detail::CommandLine::utf32ToUtf8<false, utf32.size() * 4>(utf32);
+            constexpr static auto utf8Array = detail::CommandLine::utf32ToUtf8<true, utf8Size>(utf32);
+            constexpr std::string_view prefix(utf8Array.data(), utf8Array.size());
+            if (commandLine.front().substr(0, prefix.size()) == prefix)
+            {
+                commandLine.front().remove_prefix(prefix.size());
+                if constexpr (cliOption->getMultiArg() == CLIMultiArg::Overwrite)
+                {
+                    storage.reset();
+                }
             }
         }
         else if constexpr (std::holds_alternative<detail::CommandLine::Arg>(curr))
@@ -616,7 +670,7 @@ static bool checkAlternative(llvm::MutableArrayRef<std::string_view>& commandLin
     }
     else
     {
-        storage.reset();
+        storage = storageCopy;
     }
     commandLine = copy;
     std::move(contents.begin(), contents.end(), commandLine.begin());
@@ -646,7 +700,7 @@ static bool checkAllAlternatives(llvm::MutableArrayRef<std::string_view>& comman
                 }
                 else if constexpr (std::tuple_size_v<Tuple> >= 2)
                 {
-                    if constexpr (std::is_same_v<std::tuple_element_t<1, Tuple>, detail::CommandLine::Arg>)
+                    if constexpr (!std::is_same_v<std::tuple_element_t<1, Tuple>, detail::CommandLine::Whitespace>)
                     {
                         if (commandLine.front().substr(0, prefix.size()) == prefix)
                         {
