@@ -33,6 +33,10 @@ CLD_CLI_OPT(OPT, ("-O<level>", "-O", "--optimize", "--optimize=<level>"), (std::
 CLD_CLI_OPT(INCLUDES, ("-I<dir>", "--include-directory <dir>", "--include-directory=<dir>"), (std::string_view, dir))
 ("Additional include directories", cld::CLIMultiArg::List);
 
+CLD_CLI_OPT(PIE, ("-f[no-]PIE"))("Build a position independent executable");
+
+CLD_CLI_OPT(PIC, ("-f[no-]PIC"))("Build position independent code");
+
 namespace
 {
 enum class Action
@@ -195,7 +199,7 @@ int main(int argc, char** argv)
     }
 
     auto cli = cld::parseCommandLine<OUTPUT_FILE, COMPILE_ONLY, ASSEMBLY_OUTPUT, PREPROCESS_ONLY, TARGET, EMIT_LLVM,
-                                     OPT, DEFINE_MACRO, INCLUDES>(elements);
+                                     OPT, DEFINE_MACRO, INCLUDES, PIE, PIC>(elements);
     auto triple = cld::Triple::defaultTarget();
     if (cli.get<TARGET>())
     {

@@ -481,7 +481,7 @@ struct ValueType
 template <auto* cliOption, std::size_t i, class Storage>
 static bool checkAlternative(llvm::MutableArrayRef<std::string_view>& commandLine, Storage& storage)
 {
-    auto thisElement = [](auto& storage) -> decltype(auto) {
+    auto thisElement = [](auto& storage) -> typename ValueType<Storage>::type& {
         if constexpr (cliOption->getMultiArg() == CLIMultiArg::List)
         {
             return storage.back();
@@ -564,9 +564,9 @@ static bool checkAlternative(llvm::MutableArrayRef<std::string_view>& commandLin
             constexpr std::size_t storageIndex =
                 indexOf(cliOption->getArgNames(), cld::get<detail::CommandLine::Arg>(curr).value);
             using ArgTypeT = typename std::conditional_t<
-                IsTuple<std::decay_t<decltype(thisElement(storage))>>{},
-                std::tuple_element<storageIndex, std::decay_t<decltype(thisElement(storage))>>,
-                std::decay<decltype(thisElement(storage))>>::type;
+                IsTuple<std::decay_t<typename ValueType<Storage>::type>>{},
+                std::tuple_element<storageIndex, std::decay_t<typename ValueType<Storage>::type>>,
+                std::decay<typename ValueType<Storage>::type>>::type;
             using ArgType =
                 typename std::conditional_t<IsOptional<ArgTypeT>{}, ValueType<ArgTypeT>, type_identity<ArgTypeT>>::type;
             std::string_view text;
@@ -597,7 +597,7 @@ static bool checkAlternative(llvm::MutableArrayRef<std::string_view>& commandLin
                 CLD_UNREACHABLE;
             }
             auto& element = [&]() -> decltype(auto) {
-                if constexpr (IsTuple<std::decay_t<decltype(thisElement(storage))>>{})
+                if constexpr (IsTuple<std::decay_t<typename ValueType<Storage>::type>>{})
                 {
                     // MSVC
 #if defined(_MSC_VER) && !defined(__clang__)
@@ -622,11 +622,11 @@ static bool checkAlternative(llvm::MutableArrayRef<std::string_view>& commandLin
                 element = 0;
                 if constexpr (IsOptional<std::decay_t<decltype(element)>>{})
                 {
-                    std::from_chars(text.begin(), text.end(), *element);
+                    std::from_chars(text.data(), text.data() + text.size(), *element);
                 }
                 else
                 {
-                    std::from_chars(text.begin(), text.end(), element);
+                    std::from_chars(text.data(), text.data() + text.size(), element);
                 }
             }
         }
