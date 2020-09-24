@@ -4,9 +4,11 @@
 
 #include <type_traits>
 
-#include "SourceInterface.hpp"
+namespace cld
+{
+class SourceInterface;
 
-namespace cld::diag
+namespace diag
 {
 template <class T>
 struct StringConverter
@@ -40,4 +42,5 @@ struct CustomFormat<U's'>
         return "";
     }
 };
-} // namespace cld::diag
+} // namespace diag
+} // namespace cld

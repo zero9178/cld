@@ -85,18 +85,16 @@ std::optional<cld::fs::path> compileCFile(Action action, const cld::fs::path& cS
             llvm::outs().flush();
             return cld::fs::path{};
         }
-        else
+
+        cld::fs::ofstream outputFile(cld::to_string(*cli.template get<OUTPUT_FILE>()), std::ios_base::out);
+        if (!outputFile.is_open())
         {
-            cld::fs::ofstream outputFile(cld::to_string(*cli.template get<OUTPUT_FILE>()), std::ios_base::out);
-            if (!outputFile.is_open())
-            {
-                // TODO: Error
-                return {};
-            }
-            outputFile << reconstruction;
-            outputFile.close();
-            return cld::fs::u8path(*cli.template get<OUTPUT_FILE>());
+            // TODO: Error
+            return {};
         }
+        outputFile << reconstruction;
+        outputFile.close();
+        return cld::fs::u8path(*cli.template get<OUTPUT_FILE>());
     }
     auto ctokens = cld::Lexer::toCTokens(pptokens, &llvm::errs(), &errors);
     if (errors)

@@ -263,6 +263,10 @@ cld::Message cld::detail::Diagnostic::DiagnosticBase::print(std::pair<PointLocat
                                                             llvm::ArrayRef<Modifiers> modifiers,
                                                             const SourceInterface& sourceInterface) const
 {
+    if (sourceInterface.getLanguageOptions().disabledWarnings.count(to_string(m_name)))
+    {
+        return {};
+    }
     std::string result;
     // TODO: Right now the colour is useless. Just putting it here to know what the colour when and were.
     // Will have to create a segment map or so in cld::Message that stores the colour and boldness information

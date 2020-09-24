@@ -175,25 +175,25 @@ cld::PP::ControlLine cld::PP::parseControlLine(Lexer::PPTokenIterator& begin, Le
         {
             return {ControlLine::IncludeTag{lineStart - 1, {lineStart, eol - 1}}};
         }
-        else if (value == "line")
+        if (value == "line")
         {
             return {ControlLine::LineTag{lineStart - 1, {lineStart, eol - 1}}};
         }
-        else if (value == "error")
+        if (value == "error")
         {
             return {ControlLine::ErrorTag{lineStart - 1, {lineStart, eol - 1}}};
         }
-        else if (value == "pragma")
+        if (value == "pragma")
         {
             return {ControlLine::PragmaTag{{lineStart, eol - 1}}};
         }
-        else if (value == "define")
+        if (value == "define")
         {
             return {DefineDirective{lineStart - 1, {lineStart, eol - 1}}};
         }
         CLD_UNREACHABLE;
     }
-    else if (value == "undef")
+    if (value == "undef")
     {
         begin++;
         if (!expect(Lexer::TokenType::Identifier, begin, end, context))

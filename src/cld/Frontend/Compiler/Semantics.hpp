@@ -2034,7 +2034,7 @@ public:
 
 class Program;
 
-Program analyse(const Syntax::TranslationUnit& parseTree, CSourceObject&& ctokens,
+Program analyse(const Syntax::TranslationUnit& parseTree, CSourceObject&& cTokens,
                 llvm::raw_ostream* reporter = &llvm::errs(), bool* errors = nullptr);
 
 [[nodiscard]] Lexer::CTokenIterator declaratorToLoc(const cld::Syntax::Declarator& declarator);

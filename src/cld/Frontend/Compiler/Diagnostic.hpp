@@ -18,6 +18,11 @@
 
 namespace cld
 {
+namespace Lexer
+{
+class TokenBase;
+} // namespace Lexer
+
 template <std::size_t index, std::int64_t text = -1>
 struct InsertAfter;
 
@@ -157,6 +162,7 @@ constexpr bool checkForNoDuplicates()
 class DiagnosticBase
 {
     Severity m_severity;
+    std::string_view m_name;
 
 public:
     struct PointLocation
@@ -203,11 +209,16 @@ protected:
     static std::string stringFromToken(const SourceInterface& sourceInterface, const Lexer::TokenBase& token);
 
 public:
-    constexpr DiagnosticBase(Severity severity) : m_severity(severity) {}
+    constexpr DiagnosticBase(Severity severity, std::string_view name) : m_severity(severity), m_name(name) {}
 
     constexpr Severity getSeverity() const noexcept
     {
         return m_severity;
+    }
+
+    constexpr std::string_view getName() const
+    {
+        return m_name;
     }
 };
 
@@ -573,8 +584,6 @@ private:
     static std::array<Argument, N> createArgumentArray(const SourceInterface& sourceInterface, Tuple&& args,
                                                        std::index_sequence<ints...>);
 
-    std::string_view m_name;
-
     template <std::size_t i>
     constexpr static auto customModifiersFor()
     {
@@ -639,8 +648,7 @@ private:
     }
 
 public:
-    constexpr Diagnostic(Severity severity, std::string_view name)
-        : detail::Diagnostic::DiagnosticBase(severity), m_name(name)
+    constexpr Diagnostic(Severity severity, std::string_view name) : detail::Diagnostic::DiagnosticBase(severity, name)
     {
     }
 
@@ -658,11 +666,6 @@ public:
     Message args(const T& location, const SourceInterface& sourceInterface, Args&&... args) const;
 
     constexpr static auto constraints = getConstraints();
-
-    std::string_view getName() const
-    {
-        return m_name;
-    }
 
 private:
     constexpr static auto modifiers = getModifiers(std::index_sequence_for<Mods...>{});
@@ -697,10 +700,6 @@ Message Diagnostic<N, format, Mods...>::args(const T& location, const SourceInte
     [[maybe_unused]] auto* v = this->checkConstraints<constraints, 0, Args...>; // Instantiate but don't call the
                                                                                 // function to improve debug perf a lil
     static_assert(locationConstraintCheck<T>(), "First argument must denote a location");
-    if (sourceInterface.getLanguageOptions().disabledWarnings.count(to_string(m_name)))
-    {
-        return {};
-    }
     constexpr auto u32string = getFormat();
     const char32_t* start = u32string.data();
     std::array<char, u32string.size() * 4> result;

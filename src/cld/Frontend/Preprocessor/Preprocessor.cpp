@@ -405,7 +405,7 @@ class Preprocessor final : private cld::PPSourceInterface
             log(cld::Notes::PREVIOUSLY_DECLARED_HERE.args(*macro.identifierPos, *this, *macro.identifierPos));
             return {};
         }
-        else if (arguments.size() > identifierCount && !macro.hasEllipse)
+        if (arguments.size() > identifierCount && !macro.hasEllipse)
         {
             auto firstRedundant = arguments.begin() + identifierCount;
             log(cld::Errors::PP::TOO_MANY_ARGUMENTS_FOR_MACRO_N_EXPECTED_N_GOT_N.args(
@@ -505,7 +505,7 @@ class Preprocessor final : private cld::PPSourceInterface
                 output.clear();
                 continue;
             }
-            else if (iter->getTokenType() != cld::Lexer::TokenType::Identifier)
+            if (iter->getTokenType() != cld::Lexer::TokenType::Identifier)
             {
                 iter++;
                 continue;
@@ -731,7 +731,7 @@ class Preprocessor final : private cld::PPSourceInterface
                 *defineDirective.defineToken, *this, cld::Lexer::TokenType::Identifier, *defineDirective.defineToken));
             return {};
         }
-        else if (defineDirective.tokens[0].getTokenType() != cld::Lexer::TokenType::Identifier)
+        if (defineDirective.tokens[0].getTokenType() != cld::Lexer::TokenType::Identifier)
         {
             log(cld::Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(
                 defineDirective.tokens[0], *this, cld::Lexer::TokenType::Identifier, defineDirective.tokens[0]));
@@ -783,7 +783,7 @@ class Preprocessor final : private cld::PPSourceInterface
                     log(cld::Notes::TO_MATCH_N_HERE.args(*openP, *this, *openP));
                     return {};
                 }
-                else if (curr->getTokenType() != cld::Lexer::TokenType::CloseParentheses)
+                if (curr->getTokenType() != cld::Lexer::TokenType::CloseParentheses)
                 {
                     log(cld::Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(
                         *curr, *this, cld::Lexer::TokenType::CloseParentheses, *curr));
@@ -820,7 +820,7 @@ class Preprocessor final : private cld::PPSourceInterface
                                                          *(curr - 1)));
                 return {};
             }
-            else if (curr->getTokenType() != cld::Lexer::TokenType::Identifier)
+            if (curr->getTokenType() != cld::Lexer::TokenType::Identifier)
             {
                 log(cld::Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(*curr, *this, cld::Lexer::TokenType::Identifier,
                                                                       *curr));
@@ -846,7 +846,7 @@ class Preprocessor final : private cld::PPSourceInterface
             log(cld::Notes::TO_MATCH_N_HERE.args(*openP, *this, *openP));
             return {};
         }
-        else if (curr->getTokenType() != cld::Lexer::TokenType::CloseParentheses)
+        if (curr->getTokenType() != cld::Lexer::TokenType::CloseParentheses)
         {
             log(cld::Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(*curr, *this, cld::Lexer::TokenType::CloseParentheses,
                                                                   *curr));
@@ -1440,7 +1440,7 @@ public:
                                                                                                   result[1]));
                     return;
                 }
-                else if (result[1].getRepresentation(*this).front() != '"')
+                if (result[1].getRepresentation(*this).front() != '"')
                 {
                     log(cld::Errors::PP::STRING_MUST_BE_NORMAL_IN_LINE_DIRECTIVE.args(result[1], *this, result[1]));
                     return;

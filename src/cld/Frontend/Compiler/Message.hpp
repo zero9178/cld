@@ -2,7 +2,7 @@
 
 #include <llvm/Support/raw_ostream.h>
 
-#include "SourceInterface.hpp"
+#include <string>
 
 namespace cld
 {
@@ -34,9 +34,9 @@ public:
         return m_text;
     }
 
-    friend llvm::raw_ostream& operator<<(llvm::raw_ostream& os, const cld::Message& message);
+    friend llvm::raw_ostream& operator<<(llvm::raw_ostream& os, const Message& message);
 };
 
-llvm::raw_ostream& operator<<(llvm::raw_ostream& os, const cld::Message& message);
+llvm::raw_ostream& operator<<(llvm::raw_ostream& os, const Message& message);
 
 } // namespace cld

@@ -6,6 +6,7 @@
 #include <variant>
 
 #include "CustomDiag.hpp"
+#include "LanguageOptions.hpp"
 
 namespace cld::Semantics
 {

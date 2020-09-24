@@ -808,11 +808,9 @@ std::string typeToString(const cld::Semantics::Type& arg)
                     declarators = "(" + temp + declarators + ")";
                     return {std::move(curr)};
                 }
-                else
-                {
-                    qualifiersAndSpecifiers = typeToString(curr) + " " + temp;
-                    return {};
-                }
+
+                qualifiersAndSpecifiers = typeToString(curr) + " " + temp;
+                return {};
             },
             [&](const ValArrayType& valArrayType) -> std::optional<Type> {
                 declarators += "[";
@@ -1220,10 +1218,10 @@ cld::Semantics::Type cld::Semantics::adjustParameterType(Type type)
     return type;
 }
 
-cld::Semantics::Program cld::Semantics::analyse(const Syntax::TranslationUnit& parseTree, CSourceObject&& ctokens,
+cld::Semantics::Program cld::Semantics::analyse(const Syntax::TranslationUnit& parseTree, CSourceObject&& cTokens,
                                                 llvm::raw_ostream* reporter, bool* errors)
 {
-    SemanticAnalysis analysis(ctokens, reporter, errors);
+    SemanticAnalysis analysis(cTokens, reporter, errors);
     auto translationUnit = analysis.visit(parseTree);
-    return Program(std::move(translationUnit), std::move(ctokens), std::move(analysis));
+    return Program(std::move(translationUnit), std::move(cTokens), std::move(analysis));
 }

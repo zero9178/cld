@@ -113,7 +113,7 @@ class SemanticAnalysis final : public ProgramInterface
     template <class T>
     void handleArray(Type& type, const std::vector<Syntax::TypeQualifier>& typeQualifiers,
                      const Syntax::AssignmentExpression* CLD_NULLABLE assignmentExpression, bool isStatic,
-                     bool valarray, T&& returnTypeLoc);
+                     bool valArray, T&& returnTypeLoc);
 
     [[nodiscard]] bool isTypedef(std::string_view name) const;
 

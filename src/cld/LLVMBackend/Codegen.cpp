@@ -131,15 +131,13 @@ class CodeGenerator final
         {
             return m_builder.CreateICmpNE(value, llvm::ConstantInt::get(value->getType(), 0));
         }
-        else if (value->getType()->isPointerTy())
+        if (value->getType()->isPointerTy())
         {
             return m_builder.CreateICmpNE(
                 value, llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(value->getType())));
         }
-        else
-        {
-            return m_builder.CreateFCmpUNE(value, llvm::ConstantFP::get(value->getType(), 0));
-        }
+
+        return m_builder.CreateFCmpUNE(value, llvm::ConstantFP::get(value->getType(), 0));
     }
 
     std::vector<llvm::Type*> flatten(llvm::Type* type)
@@ -223,29 +221,28 @@ class CodeGenerator final
                     return {type->isStructTy() ? ABITransformations::OnStack : ABITransformations::Unchanged, type,
                             nullptr};
                 }
+
+                takenIntegerRegisters++;
+                if (type->isStructTy() && !std::holds_alternative<ABITransformations::MultipleArgs>(dest))
+                {
+                    dest = ABITransformations::MultipleArgs{};
+                }
+                if (type->isStructTy())
+                {
+                    ret[retIndex++] = m_builder.getIntNTy(size * 8);
+                }
                 else
                 {
-                    takenIntegerRegisters++;
-                    if (type->isStructTy() && !std::holds_alternative<ABITransformations::MultipleArgs>(dest))
-                    {
-                        dest = ABITransformations::MultipleArgs{};
-                    }
-                    if (type->isStructTy())
-                    {
-                        ret[retIndex++] = m_builder.getIntNTy(size * 8);
-                    }
-                    else
-                    {
-                        ret[retIndex++] = type;
-                    }
-                    if (std::holds_alternative<ABITransformations::MultipleArgs>(dest))
-                    {
-                        cld::get<ABITransformations::MultipleArgs>(dest).size++;
-                    }
+                    ret[retIndex++] = type;
                 }
+                if (std::holds_alternative<ABITransformations::MultipleArgs>(dest))
+                {
+                    cld::get<ABITransformations::MultipleArgs>(dest).size++;
+                }
+
                 continue;
             }
-            else if (std::distance(begin, iter) == 2 && (*begin)->isFloatTy() && ((*(begin + 1))->isFloatTy()))
+            if (std::distance(begin, iter) == 2 && (*begin)->isFloatTy() && ((*(begin + 1))->isFloatTy()))
             {
                 // Two floats can be packed as a single 64 bit value into a xmm register. This is represented as
                 // a vector in LLVM IR
@@ -490,46 +487,40 @@ class CodeGenerator final
                 {
                     return m_builder.CreateNSWAdd(lhs, rhs);
                 }
-                else
-                {
-                    return m_builder.CreateAdd(lhs, rhs);
-                }
+
+                return m_builder.CreateAdd(lhs, rhs);
+            }
+
+            return m_builder.CreateFAdd(lhs, rhs);
+        }
+
+        auto* pointer = lhs->getType()->isPointerTy() ? lhs : rhs;
+        auto* integer = pointer == lhs ? rhs : lhs;
+        auto& pointerType = pointer == lhs ? lhsType : rhsType;
+        integer = m_builder.CreateIntCast(
+            integer, m_builder.getInt64Ty(),
+            cld::get<cld::Semantics::PrimitiveType>((pointer == lhs ? rhsType : lhsType).getVariant()).isSigned());
+        if (!cld::Semantics::isVariableLengthArray(
+                cld::get<cld::Semantics::PointerType>(pointerType.getVariant()).getElementType()))
+        {
+            return m_builder.CreateGEP(pointer, integer);
+        }
+        auto& array = cld::get<cld::Semantics::PointerType>(pointerType.getVariant()).getElementType();
+        llvm::Value* product = integer;
+        for (auto& iter : cld::Semantics::RecursiveVisitor(array, cld::Semantics::ARRAY_TYPE_NEXT_FN))
+        {
+            llvm::Value* value;
+            if (std::holds_alternative<cld::Semantics::ArrayType>(iter.getVariant()))
+            {
+                value = m_builder.getInt64(cld::get<cld::Semantics::ArrayType>(iter.getVariant()).getSize());
             }
             else
             {
-                return m_builder.CreateFAdd(lhs, rhs);
+                value = m_valSizes[cld::get<cld::Semantics::ValArrayType>(iter.getVariant()).getExpression()];
             }
+            product = m_builder.CreateMul(product, value);
         }
-        else
-        {
-            auto* pointer = lhs->getType()->isPointerTy() ? lhs : rhs;
-            auto* integer = pointer == lhs ? rhs : lhs;
-            auto& pointerType = pointer == lhs ? lhsType : rhsType;
-            integer = m_builder.CreateIntCast(
-                integer, m_builder.getInt64Ty(),
-                cld::get<cld::Semantics::PrimitiveType>((pointer == lhs ? rhsType : lhsType).getVariant()).isSigned());
-            if (!cld::Semantics::isVariableLengthArray(
-                    cld::get<cld::Semantics::PointerType>(pointerType.getVariant()).getElementType()))
-            {
-                return m_builder.CreateGEP(pointer, integer);
-            }
-            auto& array = cld::get<cld::Semantics::PointerType>(pointerType.getVariant()).getElementType();
-            llvm::Value* product = integer;
-            for (auto& iter : cld::Semantics::RecursiveVisitor(array, cld::Semantics::ARRAY_TYPE_NEXT_FN))
-            {
-                llvm::Value* value;
-                if (std::holds_alternative<cld::Semantics::ArrayType>(iter.getVariant()))
-                {
-                    value = m_builder.getInt64(cld::get<cld::Semantics::ArrayType>(iter.getVariant()).getSize());
-                }
-                else
-                {
-                    value = m_valSizes[cld::get<cld::Semantics::ValArrayType>(iter.getVariant()).getExpression()];
-                }
-                product = m_builder.CreateMul(product, value);
-            }
-            return m_builder.CreateGEP(pointer, product);
-        }
+        return m_builder.CreateGEP(pointer, product);
     }
 
     llvm::Value* sub(llvm::Value* lhs, const cld::Semantics::Type& lhsType, llvm::Value* rhs,
@@ -543,49 +534,35 @@ class CodeGenerator final
                 {
                     return m_builder.CreateNSWSub(lhs, rhs);
                 }
-                else
-                {
-                    return m_builder.CreateSub(lhs, rhs);
-                }
+
+                return m_builder.CreateSub(lhs, rhs);
             }
-            else
-            {
-                return m_builder.CreateFSub(lhs, rhs);
-            }
+
+            return m_builder.CreateFSub(lhs, rhs);
         }
-        else
+
+        if (lhs->getType()->isPointerTy())
         {
-            if (lhs->getType()->isPointerTy())
+            if (rhs->getType()->isIntegerTy())
             {
-                if (rhs->getType()->isIntegerTy())
-                {
-                    rhs = m_builder.CreateNeg(rhs);
-                    rhs = m_builder.CreateIntCast(
-                        rhs, m_builder.getInt64Ty(),
-                        cld::get<cld::Semantics::PrimitiveType>(rhsType.getVariant()).isSigned());
-                    return m_builder.CreateGEP(lhs, rhs);
-                }
-                else
-                {
-                    return m_builder.CreatePtrDiff(lhs, rhs);
-                }
+                rhs = m_builder.CreateNeg(rhs);
+                rhs = m_builder.CreateIntCast(rhs, m_builder.getInt64Ty(),
+                                              cld::get<cld::Semantics::PrimitiveType>(rhsType.getVariant()).isSigned());
+                return m_builder.CreateGEP(lhs, rhs);
             }
-            else
-            {
-                if (rhs->getType()->isIntegerTy())
-                {
-                    lhs = m_builder.CreateNeg(lhs);
-                    lhs = m_builder.CreateIntCast(
-                        lhs, m_builder.getInt64Ty(),
-                        cld::get<cld::Semantics::PrimitiveType>(lhsType.getVariant()).isSigned());
-                    return m_builder.CreateGEP(rhs, lhs);
-                }
-                else
-                {
-                    return m_builder.CreatePtrDiff(lhs, rhs);
-                }
-            }
+
+            return m_builder.CreatePtrDiff(lhs, rhs);
         }
+
+        if (rhs->getType()->isIntegerTy())
+        {
+            lhs = m_builder.CreateNeg(lhs);
+            lhs = m_builder.CreateIntCast(lhs, m_builder.getInt64Ty(),
+                                          cld::get<cld::Semantics::PrimitiveType>(lhsType.getVariant()).isSigned());
+            return m_builder.CreateGEP(rhs, lhs);
+        }
+
+        return m_builder.CreatePtrDiff(lhs, rhs);
     }
 
     llvm::Value* mul(llvm::Value* lhs, const cld::Semantics::Type& lhsType, llvm::Value* rhs,
@@ -595,10 +572,8 @@ class CodeGenerator final
         {
             return m_builder.CreateNSWMul(lhs, rhs);
         }
-        else
-        {
-            return m_builder.CreateFMul(lhs, rhs);
-        }
+
+        return m_builder.CreateFMul(lhs, rhs);
     }
 
     llvm::Value* div(llvm::Value* lhs, const cld::Semantics::Type& lhsType, llvm::Value* rhs,
@@ -610,15 +585,11 @@ class CodeGenerator final
             {
                 return m_builder.CreateSDiv(lhs, rhs);
             }
-            else
-            {
-                return m_builder.CreateUDiv(lhs, rhs);
-            }
+
+            return m_builder.CreateUDiv(lhs, rhs);
         }
-        else
-        {
-            return m_builder.CreateFDiv(lhs, rhs);
-        }
+
+        return m_builder.CreateFDiv(lhs, rhs);
     }
 
     llvm::Value* mod(llvm::Value* lhs, const cld::Semantics::Type& lhsType, llvm::Value* rhs,
@@ -628,10 +599,8 @@ class CodeGenerator final
         {
             return m_builder.CreateSRem(lhs, rhs);
         }
-        else
-        {
-            return m_builder.CreateURem(lhs, rhs);
-        }
+
+        return m_builder.CreateURem(lhs, rhs);
     }
 
     llvm::Value* shl(llvm::Value* lhs, const cld::Semantics::Type&, llvm::Value* rhs,
@@ -681,10 +650,8 @@ class CodeGenerator final
             {
                 return m_builder.CreateSIToFP(value, visit(to));
             }
-            else
-            {
-                return m_builder.CreateUIToFP(value, visit(to));
-            }
+
+            return m_builder.CreateUIToFP(value, visit(to));
         }
         if (cld::Semantics::isInteger(to))
         {
@@ -692,14 +659,12 @@ class CodeGenerator final
             {
                 return m_builder.CreatePtrToInt(value, visit(to));
             }
-            else if (cld::get<cld::Semantics::PrimitiveType>(to.getVariant()).isSigned())
+            if (cld::get<cld::Semantics::PrimitiveType>(to.getVariant()).isSigned())
             {
                 return m_builder.CreateFPToSI(value, visit(to));
             }
-            else
-            {
-                return m_builder.CreateFPToUI(value, visit(to));
-            }
+
+            return m_builder.CreateFPToUI(value, visit(to));
         }
         return m_builder.CreateFPCast(value, visit(to));
     }
@@ -710,41 +675,39 @@ class CodeGenerator final
         {
             return llvm::ConstantDataArray::getString(m_module.getContext(), cld::get<std::string>(value));
         }
-        else
+
+        auto& str = cld::get<cld::Lexer::NonCharString>(value);
+        std::uint8_t size = 0;
+        switch (m_sourceInterface.getLanguageOptions().wcharUnderlyingType)
         {
-            auto& str = cld::get<cld::Lexer::NonCharString>(value);
-            std::uint8_t size = 0;
-            switch (m_sourceInterface.getLanguageOptions().wcharUnderlyingType)
-            {
-                case cld::LanguageOptions::WideCharType ::UnsignedShort:
-                    size = m_sourceInterface.getLanguageOptions().sizeOfShort;
-                    break;
-                case cld::LanguageOptions::WideCharType ::Int:
-                    size = m_sourceInterface.getLanguageOptions().sizeOfInt;
-                    break;
-            }
-            switch (size)
-            {
-                case 2:
-                {
-                    std::vector<std::uint16_t> convertedData(str.characters.size());
-                    std::transform(str.characters.begin(), str.characters.end(), convertedData.begin(),
-                                   [](std::uint32_t value) -> std::uint16_t { return value; });
-                    std::vector<char> rawData(convertedData.size() * 2);
-                    std::memcpy(rawData.data(), convertedData.data(), rawData.size());
-                    return llvm::ConstantDataArray::getRaw(llvm::StringRef(rawData.data(), rawData.size()),
-                                                           convertedData.size(), elementType);
-                }
-                case 4:
-                {
-                    std::vector<char> rawData(str.characters.size() * 4);
-                    std::memcpy(rawData.data(), str.characters.data(), rawData.size());
-                    return llvm::ConstantDataArray::getRaw(llvm::StringRef(rawData.data(), rawData.size()),
-                                                           str.characters.size(), elementType);
-                }
-            }
-            CLD_UNREACHABLE;
+            case cld::LanguageOptions::WideCharType ::UnsignedShort:
+                size = m_sourceInterface.getLanguageOptions().sizeOfShort;
+                break;
+            case cld::LanguageOptions::WideCharType ::Int:
+                size = m_sourceInterface.getLanguageOptions().sizeOfInt;
+                break;
         }
+        switch (size)
+        {
+            case 2:
+            {
+                std::vector<std::uint16_t> convertedData(str.characters.size());
+                std::transform(str.characters.begin(), str.characters.end(), convertedData.begin(),
+                               [](std::uint32_t value) -> std::uint16_t { return value; });
+                std::vector<char> rawData(convertedData.size() * 2);
+                std::memcpy(rawData.data(), convertedData.data(), rawData.size());
+                return llvm::ConstantDataArray::getRaw(llvm::StringRef(rawData.data(), rawData.size()),
+                                                       convertedData.size(), elementType);
+            }
+            case 4:
+            {
+                std::vector<char> rawData(str.characters.size() * 4);
+                std::memcpy(rawData.data(), str.characters.data(), rawData.size());
+                return llvm::ConstantDataArray::getRaw(llvm::StringRef(rawData.data(), rawData.size()),
+                                                       str.characters.size(), elementType);
+            }
+        }
+        CLD_UNREACHABLE;
     }
 
     llvm::Value* visitStaticInitializerList(const cld::Semantics::InitializerList& initializerList,
@@ -812,7 +775,7 @@ class CodeGenerator final
                         current = &cld::get<Aggregate>(current->vector[0]);
                         continue;
                     }
-                    else if (cld::Semantics::isStruct(*currentType))
+                    if (cld::Semantics::isStruct(*currentType))
                     {
                         currentType = m_programInterface.getFields(*currentType)[iter].type.get();
                     }
@@ -931,7 +894,7 @@ class CodeGenerator final
                 }
                 return llvm::ConstantStruct::get(llvm::cast<llvm::StructType>(llvmType), elements);
             }
-            else if (cld::Semantics::isArray(type))
+            if (cld::Semantics::isArray(type))
             {
                 std::vector<llvm::Constant*> elements;
                 for (std::size_t i = 0; i < aggregate.vector.size(); i++)
@@ -952,23 +915,21 @@ class CodeGenerator final
                 }
                 return llvm::ConstantArray::get(llvm::cast<llvm::ArrayType>(llvmType), elements);
             }
-            else // Union
-            {
-                auto fields = m_programInterface.getFields(type);
-                auto* llvmSubType = visit(*fields[*aggregate.unionIndex].type);
-                llvm::Constant* element = cld::match(
-                    aggregate.vector[0], [](llvm::Constant* constant) -> llvm::Constant* { return constant; },
-                    [&](const Aggregate& subAggregate) -> llvm::Constant* {
-                        return self(*fields[*aggregate.unionIndex].type, llvmSubType, subAggregate);
-                    });
-                auto* padding = llvm::ArrayType::get(
-                    m_builder.getInt8Ty(),
-                    m_module.getDataLayout().getTypeAllocSize(llvmType).getKnownMinSize()
-                        - m_module.getDataLayout().getTypeAllocSize(element->getType()).getKnownMinSize());
-                auto* newType = llvm::StructType::get(element->getType(), padding);
+            // Union
+            auto fields = m_programInterface.getFields(type);
+            auto* llvmSubType = visit(*fields[*aggregate.unionIndex].type);
+            llvm::Constant* element = cld::match(
+                aggregate.vector[0], [](llvm::Constant* constant) -> llvm::Constant* { return constant; },
+                [&](const Aggregate& subAggregate) -> llvm::Constant* {
+                    return self(*fields[*aggregate.unionIndex].type, llvmSubType, subAggregate);
+                });
+            auto* padding = llvm::ArrayType::get(
+                m_builder.getInt8Ty(),
+                m_module.getDataLayout().getTypeAllocSize(llvmType).getKnownMinSize()
+                    - m_module.getDataLayout().getTypeAllocSize(element->getType()).getKnownMinSize());
+            auto* newType = llvm::StructType::get(element->getType(), padding);
 
-                return llvm::ConstantStruct::get(newType, {element, llvm::UndefValue::get(padding)});
-            }
+            return llvm::ConstantStruct::get(newType, {element, llvm::UndefValue::get(padding)});
         }}(type, llvmType, constants);
     }
 
@@ -1291,7 +1252,7 @@ public:
                         value = m_builder.getInt64(cld::get<cld::Semantics::ArrayType>(iter.getVariant()).getSize());
                         continue;
                     }
-                    else if (!valSeen)
+                    if (!valSeen)
                     {
                         value = m_builder.CreateMul(
                             m_builder.getInt64(cld::get<cld::Semantics::ArrayType>(iter.getVariant()).getSize()),
@@ -1869,19 +1830,17 @@ public:
         {
             return llvm::Constant::getIntegerValue(type, cld::get<llvm::APSInt>(constant.getValue()));
         }
-        else if (std::holds_alternative<llvm::APFloat>(constant.getValue()))
+        if (std::holds_alternative<llvm::APFloat>(constant.getValue()))
         {
             return llvm::ConstantFP::get(type, cld::get<llvm::APFloat>(constant.getValue()));
         }
-        else
-        {
-            auto* array = getStringLiteralData(type->getArrayElementType(), constant.getValue());
-            auto* global =
-                new llvm::GlobalVariable(m_module, array->getType(), true, llvm::GlobalValue::PrivateLinkage, array);
-            global->setAlignment(llvm::MaybeAlign(1));
-            global->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
-            return global;
-        }
+
+        auto* array = getStringLiteralData(type->getArrayElementType(), constant.getValue());
+        auto* global =
+            new llvm::GlobalVariable(m_module, array->getType(), true, llvm::GlobalValue::PrivateLinkage, array);
+        global->setAlignment(llvm::MaybeAlign(1));
+        global->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
+        return global;
     }
 
     llvm::Value* visit(const cld::Semantics::Expression&, const cld::Semantics::DeclarationRead& declarationRead)
@@ -1909,18 +1868,16 @@ public:
                     auto* zero = llvm::ConstantInt::get(m_builder.getIntPtrTy(m_module.getDataLayout()), 0);
                     return m_builder.CreateInBoundsGEP(value, {zero, zero});
                 }
-                else if (std::holds_alternative<cld::Semantics::FunctionType>(
-                             conversion.getExpression().getType().getVariant())
-                         || m_programInterface.isBitfieldAccess(conversion.getExpression())
-                         || cld::Semantics::isVariableLengthArray(conversion.getExpression().getType()))
+                if (std::holds_alternative<cld::Semantics::FunctionType>(
+                        conversion.getExpression().getType().getVariant())
+                    || m_programInterface.isBitfieldAccess(conversion.getExpression())
+                    || cld::Semantics::isVariableLengthArray(conversion.getExpression().getType()))
                 {
                     return value;
                 }
-                else
-                {
-                    return m_builder.CreateLoad(value->getType()->getPointerElementType(), value,
-                                                conversion.getExpression().getType().isVolatile());
-                }
+
+                return m_builder.CreateLoad(value->getType()->getPointerElementType(), value,
+                                            conversion.getExpression().getType().isVolatile());
             }
             case cld::Semantics::Conversion::IntegerPromotion:
             {
@@ -1963,10 +1920,8 @@ public:
                     {
                         return m_builder.CreateSIToFP(value, visit(newType));
                     }
-                    else
-                    {
-                        return m_builder.CreateUIToFP(value, visit(newType));
-                    }
+
+                    return m_builder.CreateUIToFP(value, visit(newType));
                 }
                 if (cld::Semantics::isInteger(newType))
                 {
@@ -1974,14 +1929,12 @@ public:
                     {
                         return m_builder.CreatePtrToInt(value, visit(newType));
                     }
-                    else if (cld::get<cld::Semantics::PrimitiveType>(newType.getVariant()).isSigned())
+                    if (cld::get<cld::Semantics::PrimitiveType>(newType.getVariant()).isSigned())
                     {
                         return m_builder.CreateFPToSI(value, visit(newType));
                     }
-                    else
-                    {
-                        return m_builder.CreateFPToUI(value, visit(newType));
-                    }
+
+                    return m_builder.CreateFPToUI(value, visit(newType));
                 }
                 return m_builder.CreateFPCast(value, visit(newType));
             }
@@ -2064,10 +2017,8 @@ public:
         {
             return m_builder.CreateAShr(shl, shrConstant);
         }
-        else
-        {
-            return m_builder.CreateLShr(shl, shrConstant);
-        }
+
+        return m_builder.CreateLShr(shl, shrConstant);
     }
 
     llvm::Value* visit(const cld::Semantics::Expression&, const cld::Semantics::BinaryOperator& binaryExpression)
@@ -2425,15 +2376,10 @@ public:
                     {
                         return m_builder.CreateNSWNeg(value);
                     }
-                    else
-                    {
-                        return m_builder.CreateNeg(value);
-                    }
+                    return m_builder.CreateNeg(value);
                 }
-                else
-                {
-                    return m_builder.CreateFNeg(value);
-                }
+
+                return m_builder.CreateFNeg(value);
             }
             case cld::Semantics::UnaryOperator::BooleanNegate:
             {

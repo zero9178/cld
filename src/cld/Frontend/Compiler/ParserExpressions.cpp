@@ -902,16 +902,14 @@ std::optional<cld::Syntax::UnaryExpression>
             return UnaryExpression(
                 UnaryExpressionSizeOf(start, begin, start, std::make_unique<TypeName>(std::move(*type))));
         }
-        else
+
+        auto unary = parseUnaryExpression(begin, end, context);
+        if (!unary)
         {
-            auto unary = parseUnaryExpression(begin, end, context);
-            if (!unary)
-            {
-                return {};
-            }
-            return UnaryExpression(
-                UnaryExpressionSizeOf(start, begin, start, std::make_unique<UnaryExpression>(std::move(*unary))));
+            return {};
         }
+        return UnaryExpression(
+            UnaryExpressionSizeOf(start, begin, start, std::make_unique<UnaryExpression>(std::move(*unary))));
     }
     else if (context.isInPreprocessor() && begin < end && begin->getTokenType() == Lexer::TokenType::Identifier
              && begin->getText() == "defined")

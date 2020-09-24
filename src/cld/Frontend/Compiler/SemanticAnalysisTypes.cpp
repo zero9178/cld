@@ -18,7 +18,7 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
         type = Type{};
         return;
     }
-    else if (isArray(type))
+    if (isArray(type))
     {
         log(Errors::Semantics::FUNCTION_RETURN_TYPE_MUST_NOT_BE_AN_ARRAY.args(returnTypeLoc, m_sourceInterface,
                                                                               returnTypeLoc, type));
@@ -32,7 +32,7 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
         type = Type{};
         return;
     }
-    else if (isArray(type))
+    if (isArray(type))
     {
         log(Errors::Semantics::FUNCTION_RETURN_TYPE_MUST_NOT_BE_AN_ARRAY.args(returnTypeLoc, m_sourceInterface,
                                                                               returnTypeLoc, type));
@@ -90,7 +90,7 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
             {
                 return cld::get<ValArrayType>(type.getVariant()).isStatic();
             }
-            else if (std::holds_alternative<ArrayType>(type.getVariant()))
+            if (std::holds_alternative<ArrayType>(type.getVariant()))
             {
                 return cld::get<ArrayType>(type.getVariant()).isStatic();
             }
@@ -255,7 +255,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                     type = Type{};
                     return;
                 }
-                else if (isArray(type))
+                if (isArray(type))
                 {
                     log(Errors::Semantics::FUNCTION_RETURN_TYPE_MUST_NOT_BE_AN_ARRAY.args(
                         std::forward_as_tuple(declarationOrSpecifierQualifiers[0], identifiers.getDirectDeclarator()),
@@ -556,25 +556,23 @@ cld::Semantics::Type
                 }
                 return UnionType::create(isConst, isVolatile, name, m_currentScope | IS_SCOPE);
             }
-            else
+
+            std::uint64_t id;
+            if (getStructDefinition(name, m_currentScope | IS_SCOPE, &id))
             {
-                std::uint64_t id;
-                if (getStructDefinition(name, m_currentScope | IS_SCOPE, &id))
-                {
-                    return StructType::create(isConst, isVolatile, name, id);
-                }
-                auto [prev, notRedefined] = getCurrentScope().types.insert(
-                    {name, TagTypeInScope{structOrUnion->getIdentifierLoc(), TagTypeInScope::StructDecl{}}});
-                if (!notRedefined && !std::holds_alternative<TagTypeInScope::StructDecl>(prev->second.tagType)
-                    && !std::holds_alternative<StructDefTag>(prev->second.tagType))
-                {
-                    log(Errors::REDEFINITION_OF_SYMBOL_N.args(*structOrUnion->getIdentifierLoc(), m_sourceInterface,
-                                                              *structOrUnion->getIdentifierLoc()));
-                    log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
-                                                             *prev->second.identifier));
-                }
-                return StructType::create(isConst, isVolatile, name, m_currentScope | IS_SCOPE);
+                return StructType::create(isConst, isVolatile, name, id);
             }
+            auto [prev, notRedefined] = getCurrentScope().types.insert(
+                {name, TagTypeInScope{structOrUnion->getIdentifierLoc(), TagTypeInScope::StructDecl{}}});
+            if (!notRedefined && !std::holds_alternative<TagTypeInScope::StructDecl>(prev->second.tagType)
+                && !std::holds_alternative<StructDefTag>(prev->second.tagType))
+            {
+                log(Errors::REDEFINITION_OF_SYMBOL_N.args(*structOrUnion->getIdentifierLoc(), m_sourceInterface,
+                                                          *structOrUnion->getIdentifierLoc()));
+                log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
+                                                         *prev->second.identifier));
+            }
+            return StructType::create(isConst, isVolatile, name, m_currentScope | IS_SCOPE);
         }
         // Originally an iterator pointing at the std::unorderd_map was used here. But in the loops over the fields
         // an insertion into the types scope could be made which causes iterator invalidation
@@ -901,12 +899,10 @@ cld::Semantics::Type
                                               reinterpret_cast<std::uintptr_t>(structOrUnion->begin()),
                                               std::move(fields), currentSize, currentAlignment);
         }
-        else
-        {
-            return AnonymousStructType::create(isConst, isVolatile,
-                                               reinterpret_cast<std::uintptr_t>(structOrUnion->begin()),
-                                               std::move(fields), std::move(layout), currentSize, currentAlignment);
-        }
+
+        return AnonymousStructType::create(isConst, isVolatile,
+                                           reinterpret_cast<std::uintptr_t>(structOrUnion->begin()), std::move(fields),
+                                           std::move(layout), currentSize, currentAlignment);
     }
     CLD_ASSERT(std::holds_alternative<std::unique_ptr<Syntax::EnumSpecifier>>(typeSpec[0]->getVariant()));
     if (typeSpec.size() != 1)
@@ -1199,7 +1195,7 @@ template <class T>
 void cld::Semantics::SemanticAnalysis::handleArray(cld::Semantics::Type& type,
                                                    const std::vector<Syntax::TypeQualifier>& typeQualifiers,
                                                    const cld::Syntax::AssignmentExpression* assignmentExpression,
-                                                   bool isStatic, bool valarray, T&& returnTypeLoc)
+                                                   bool isStatic, bool valArray, T&& returnTypeLoc)
 {
     if (std::holds_alternative<FunctionType>(type.getVariant()))
     {
@@ -1221,7 +1217,7 @@ void cld::Semantics::SemanticAnalysis::handleArray(cld::Semantics::Type& type,
     }
 
     auto [isConst, isVolatile, restricted] = getQualifiers(typeQualifiers);
-    if (valarray)
+    if (valArray)
     {
         type = ValArrayType::create(isConst, isVolatile, restricted, isStatic, std::move(type), {});
         return;

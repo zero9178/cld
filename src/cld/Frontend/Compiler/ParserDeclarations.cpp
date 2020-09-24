@@ -575,11 +575,8 @@ std::optional<cld::Syntax::DeclarationSpecifier>
                     context.skipUntil(begin, end);
                     return {};
                 }
-                else
-                {
-                    return DeclarationSpecifier{
-                        TypeSpecifier(start, begin, std::make_unique<EnumSpecifier>(std::move(*expected)))};
-                }
+                return DeclarationSpecifier{
+                    TypeSpecifier(start, begin, std::make_unique<EnumSpecifier>(std::move(*expected)))};
             }
             case Lexer::TokenType::Identifier:
             {
@@ -832,7 +829,7 @@ std::optional<cld::Syntax::SpecifierQualifier>
                 {
                     return Syntax::SpecifierQualifier{TypeSpecifier(start, ++begin, name)};
                 }
-                else if (context.isTypedef(name))
+                if (context.isTypedef(name))
                 {
                     auto* loc = context.getLocationOf(begin->getText());
                     CLD_ASSERT(loc);
@@ -1291,7 +1288,7 @@ cld::Syntax::ParameterList cld::Parser::parseParameterList(Lexer::CTokenIterator
                         }
                         break;
                     }
-                    else if (result < end && result->getTokenType() != Lexer::TokenType::OpenParentheses)
+                    if (result < end && result->getTokenType() != Lexer::TokenType::OpenParentheses)
                     {
                         auto abstractDeclarator = parseAbstractDeclarator(
                             begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Comma)));
@@ -1480,7 +1477,7 @@ std::optional<cld::Syntax::DirectAbstractDeclarator>
                     }
                     break;
                 }
-                else if (begin->getTokenType() == Lexer::TokenType::Asterisk)
+                if (begin->getTokenType() == Lexer::TokenType::Asterisk)
                 {
                     const auto* asterisk = begin++;
                     closeParenth.reset();
@@ -1613,10 +1610,7 @@ std::optional<cld::Syntax::EnumSpecifier> cld::Parser::parseEnumSpecifier(Lexer:
         }
         return EnumSpecifier(start, begin, name);
     }
-    else
-    {
-        begin++;
-    }
+    begin++;
 
     bool inLoop = false;
     std::vector<std::pair<Lexer::CTokenIterator, std::optional<ConstantExpression>>> values;
@@ -1667,13 +1661,10 @@ std::optional<cld::Syntax::EnumSpecifier> cld::Parser::parseEnumSpecifier(Lexer:
                 context.log(Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos));
                 return {};
             }
-            else
-            {
-                context.log(Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(*begin, context.getSourceInterface(),
-                                                                         Lexer::TokenType::Comma, *begin));
-                context.skipUntil(begin, end,
-                                  Context::fromTokenTypes(Lexer::TokenType::Identifier, Lexer::TokenType::CloseBrace));
-            }
+            context.log(Errors::Parser::EXPECTED_N_INSTEAD_OF_N.args(*begin, context.getSourceInterface(),
+                                                                     Lexer::TokenType::Comma, *begin));
+            context.skipUntil(begin, end,
+                              Context::fromTokenTypes(Lexer::TokenType::Identifier, Lexer::TokenType::CloseBrace));
         }
     }
     if (begin < end)
@@ -2077,14 +2068,12 @@ std::optional<cld::Syntax::Statement> cld::Parser::parseStatement(Lexer::CTokenI
         }
         return Statement(ExpressionStatement(start, begin, std::make_unique<Expression>(std::move(expression))));
     }
-    else
+
+    if (!expect(Lexer::TokenType::SemiColon, begin, end, context))
     {
-        if (!expect(Lexer::TokenType::SemiColon, begin, end, context))
-        {
-            context.skipUntil(begin, end);
-        }
-        return Statement(ExpressionStatement(start, begin));
+        context.skipUntil(begin, end);
     }
+    return Statement(ExpressionStatement(start, begin));
 }
 
 std::optional<cld::Syntax::HeadWhileStatement>
@@ -2211,7 +2200,7 @@ cld::Syntax::ReturnStatement cld::Parser::parseReturnStatement(Lexer::CTokenIter
         expect(Lexer::TokenType::SemiColon, begin, end, context);
         return ReturnStatement(start, begin, nullptr);
     }
-    else if (begin == end || !firstIsInExpression(*begin, context))
+    if (begin == end || !firstIsInExpression(*begin, context))
     {
         expect(Lexer::TokenType::SemiColon, begin, end, context);
         context.skipUntil(begin, end);
@@ -2278,10 +2267,7 @@ std::optional<cld::Syntax::IfStatement> cld::Parser::parseIfStatement(Lexer::CTo
         return IfStatement(start, begin, std::move(expression), std::make_unique<Statement>(std::move(*statement)),
                            std::make_unique<Statement>(std::move(*elseStatement)));
     }
-    else
-    {
-        return IfStatement(start, begin, std::move(expression), std::make_unique<Statement>(std::move(*statement)));
-    }
+    return IfStatement(start, begin, std::move(expression), std::make_unique<Statement>(std::move(*statement)));
 }
 
 std::optional<cld::Syntax::SwitchStatement>
@@ -2382,7 +2368,7 @@ std::optional<cld::Syntax::ForStatement> cld::Parser::parseForStatement(Lexer::C
                                                              *(begin - 1)));
         return {};
     }
-    else if (begin->getTokenType() != Lexer::TokenType::SemiColon)
+    if (begin->getTokenType() != Lexer::TokenType::SemiColon)
     {
         auto exp = parseExpression(
             begin, end,
@@ -2406,7 +2392,7 @@ std::optional<cld::Syntax::ForStatement> cld::Parser::parseForStatement(Lexer::C
                                                              *(begin - 1)));
         return {};
     }
-    else if (begin->getTokenType() != Lexer::TokenType::CloseParentheses)
+    if (begin->getTokenType() != Lexer::TokenType::CloseParentheses)
     {
         auto exp = parseExpression(begin, end, context);
         post = std::make_unique<Expression>(std::move(exp));

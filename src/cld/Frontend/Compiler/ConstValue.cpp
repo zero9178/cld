@@ -185,10 +185,7 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::castTo(const cld::Semanti
                         return {VoidStar{integer.getZExtValue(),
                                          static_cast<std::uint32_t>(pointerType.getElementType().getSizeOf(*program))}};
                     }
-                    else
-                    {
-                        return {VoidStar{integer.getZExtValue(), 0}};
-                    }
+                    return {VoidStar{integer.getZExtValue(), 0}};
                 });
         });
 }

@@ -1304,12 +1304,9 @@ cld::Semantics::ConstValue
                     conversion.getExpression(), m_sourceInterface, conversion.getExpression()));
                 return {};
             }
-            else if (conversion.getKind() == Conversion::Implicit)
+            if (conversion.getKind() == Conversion::Implicit && !typeCheck(conversion.getExpression(), exp))
             {
-                if (!typeCheck(conversion.getExpression(), exp))
-                {
-                    return {};
-                }
+                return {};
             }
             return exp.castTo(expression.getType(), this, m_sourceInterface.getLanguageOptions());
         },
@@ -1609,15 +1606,13 @@ cld::Semantics::ConstValue
                 }
                 return result.castTo(expression.getType(), this, m_sourceInterface.getLanguageOptions());
             }
-            else
+
+            auto result = evaluate(conditional.getFalseExpression(), mode, logger);
+            if (!typeCheck(conditional.getFalseExpression(), result))
             {
-                auto result = evaluate(conditional.getFalseExpression(), mode, logger);
-                if (!typeCheck(conditional.getFalseExpression(), result))
-                {
-                    return {};
-                }
-                return result.castTo(expression.getType(), this, m_sourceInterface.getLanguageOptions());
+                return {};
             }
+            return result.castTo(expression.getType(), this, m_sourceInterface.getLanguageOptions());
         },
         [&](const Assignment& assignment) -> ConstValue {
             logger(Errors::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(

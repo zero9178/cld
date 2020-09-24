@@ -130,7 +130,7 @@ bool cld::Semantics::SemanticAnalysis::doAssignmentLikeConstraints(
             notICE();
             return false;
         }
-        else if (constant->toUInt() != 0)
+        if (constant->toUInt() != 0)
         {
             notNull(*constant);
             return false;
@@ -567,7 +567,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
             pointerExpr, m_sourceInterface, elementType, pointerExpr));
         return Expression(node);
     }
-    else if (std::holds_alternative<FunctionType>(elementType.getVariant()))
+    if (std::holds_alternative<FunctionType>(elementType.getVariant()))
     {
         log(Errors::Semantics::POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_SUBSCRIPT_OPERATOR.args(
             pointerExpr, m_sourceInterface, pointerExpr));
@@ -1057,7 +1057,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                     *node.getUnaryToken(), m_sourceInterface, *node.getUnaryToken(), value));
                 return Expression(node);
             }
-            else if (value.getType().isUndefined())
+            if (value.getType().isUndefined())
             {
                 return Expression(node);
             }
@@ -1133,7 +1133,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                 log(Errors::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(exp, m_sourceInterface, type, exp));
                 return Expression(node);
             }
-            else if (std::holds_alternative<FunctionType>(type.getVariant()))
+            if (std::holds_alternative<FunctionType>(type.getVariant()))
             {
                 log(Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF.args(exp, m_sourceInterface, exp, type));
                 return Expression(node);
@@ -1150,13 +1150,10 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                     ValueCategory::Rvalue,
                     SizeofOperator(node.getSizeOfToken(), size, std::make_unique<Expression>(std::move(exp))));
             }
-            else
-            {
-                return Expression(
-                    PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()),
-                    ValueCategory::Rvalue,
-                    SizeofOperator(node.getSizeOfToken(), {}, std::make_unique<Expression>(std::move(exp))));
-            }
+
+            return Expression(PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()),
+                              ValueCategory::Rvalue,
+                              SizeofOperator(node.getSizeOfToken(), {}, std::make_unique<Expression>(std::move(exp))));
         },
         [&](const std::unique_ptr<Syntax::TypeName>& typeName) -> Expression {
             auto type = declaratorsToType(typeName->getSpecifierQualifiers(), typeName->getAbstractDeclarator());
@@ -1170,7 +1167,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                                                                          *typeName));
                 return Expression(node);
             }
-            else if (std::holds_alternative<FunctionType>(type.getVariant()))
+            if (std::holds_alternative<FunctionType>(type.getVariant()))
             {
                 log(Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF.args(*typeName, m_sourceInterface,
                                                                                  *typeName, type));
@@ -1185,14 +1182,12 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                                                  SizeofOperator::TypeVariant{node.getSizeOfToken() + 1, std::move(type),
                                                                              node.end() - 1}));
             }
-            else
-            {
-                return Expression(PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()),
-                                  ValueCategory::Rvalue,
-                                  SizeofOperator(node.getSizeOfToken(), {},
-                                                 SizeofOperator::TypeVariant{node.getSizeOfToken() + 1, std::move(type),
-                                                                             node.end() - 1}));
-            }
+
+            return Expression(PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()),
+                              ValueCategory::Rvalue,
+                              SizeofOperator(node.getSizeOfToken(), {},
+                                             SizeofOperator::TypeVariant{node.getSizeOfToken() + 1, std::move(type),
+                                                                         node.end() - 1}));
         });
 }
 
@@ -1204,11 +1199,9 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         return Expression(PrimitiveType::createLongLong(false, false), ValueCategory::Rvalue,
                           Constant(llvm::APSInt(llvm::APInt(64, 1), false), node.begin(), node.end()));
     }
-    else
-    {
-        return Expression(PrimitiveType::createLongLong(false, false), ValueCategory::Rvalue,
-                          Constant(llvm::APSInt(64, false), node.begin(), node.end()));
-    }
+
+    return Expression(PrimitiveType::createLongLong(false, false), ValueCategory::Rvalue,
+                      Constant(llvm::APSInt(64, false), node.begin(), node.end()));
 }
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::CastExpression& node)
@@ -2194,7 +2187,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::doSingleElementInit
                 expression, m_sourceInterface, expression));
             return Expression(node);
         }
-        else if (isCharType(elementType) && std::holds_alternative<Lexer::NonCharString>(str))
+        if (isCharType(elementType) && std::holds_alternative<Lexer::NonCharString>(str))
         {
             log(Errors::Semantics::CANNOT_INITIALIZE_CHAR_ARRAY_WITH_WIDE_STRING_LITERAL.args(
                 expression, m_sourceInterface, expression));
@@ -2595,7 +2588,7 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
                         finishRest(iter + 1, node.getNonCommaExpressionsAndBlocks().end());
                         return Expression(node);
                     }
-                    else if (current == &top && isAbstractArray)
+                    if (current == &top && isAbstractArray)
                     {
                         *size = std::max(*size, constant->toUInt() + 1);
                         auto prevSize = top.size();
