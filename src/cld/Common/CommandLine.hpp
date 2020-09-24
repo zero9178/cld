@@ -2,7 +2,6 @@
 
 #include <llvm/ADT/ArrayRef.h>
 
-#include <charconv>
 #include <optional>
 #include <string_view>
 #include <tuple>
@@ -11,6 +10,7 @@
 #include <ctre.hpp>
 
 #include "Constexpr.hpp"
+#include "Text.hpp"
 #include "Util.hpp"
 
 namespace cld
@@ -622,11 +622,25 @@ static bool checkAlternative(llvm::MutableArrayRef<std::string_view>& commandLin
                 element = 0;
                 if constexpr (IsOptional<std::decay_t<decltype(element)>>{})
                 {
-                    std::from_chars(text.data(), text.data() + text.size(), *element);
+                    if constexpr (std::is_signed_v<ArgType>)
+                    {
+                        *element = std::stoll(cld::to_string(text));
+                    }
+                    else
+                    {
+                        *element = std::stoull(cld::to_string(text));
+                    }
                 }
                 else
                 {
-                    std::from_chars(text.data(), text.data() + text.size(), element);
+                    if constexpr (std::is_signed_v<ArgType>)
+                    {
+                        element = std::stoll(cld::to_string(text));
+                    }
+                    else
+                    {
+                        element = std::stoull(cld::to_string(text));
+                    }
                 }
             }
         }
