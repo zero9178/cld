@@ -37,6 +37,8 @@ CLD_CLI_OPT(PIE, ("-f[no-]PIE"))("Build a position independent executable");
 
 CLD_CLI_OPT(PIC, ("-f[no-]PIC"))("Build position independent code");
 
+CLD_CLI_OPT(FREESTANDING, ("-ffreestanding"))("Compile in a freestanding environment");
+
 namespace
 {
 enum class Action
@@ -220,13 +222,14 @@ int main(int argc, char** argv)
     }
 
     auto cli = cld::parseCommandLine<OUTPUT_FILE, COMPILE_ONLY, ASSEMBLY_OUTPUT, PREPROCESS_ONLY, TARGET, EMIT_LLVM,
-                                     OPT, DEFINE_MACRO, INCLUDES, PIE, PIC>(elements);
+                                     OPT, DEFINE_MACRO, INCLUDES, PIE, PIC, FREESTANDING>(elements);
     auto triple = cld::Triple::defaultTarget();
     if (cli.get<TARGET>())
     {
         triple = cld::Triple::fromString(*cli.get<TARGET>());
     }
     auto options = cld::LanguageOptions::fromTriple(triple);
+    options.freeStanding = cli.get<FREESTANDING>().has_value();
     for (auto& iter : cli.get<INCLUDES>())
     {
         options.includeDirectories.emplace_back(iter);

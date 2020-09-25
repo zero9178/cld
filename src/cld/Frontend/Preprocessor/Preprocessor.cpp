@@ -1103,7 +1103,8 @@ public:
         scratchPadSource += "#define __TIME__ \"" + result + "\"\n";
 
         scratchPadSource += "#define __STDC__ 1\n";
-        scratchPadSource += "#define __STDC_HOSTED__ 0\n";
+        scratchPadSource += "#define __STDC_HOSTED__ ";
+        scratchPadSource += (options.freeStanding ? "0\n" : "1\n");
         scratchPadSource += "#define __STDC_MB_MIGHT_NEQ_WC__ 1\n";
         scratchPadSource += "#define __STDC_VERSION__ 199901L\n";
         for (auto& [name, def] : options.additionalMacros)

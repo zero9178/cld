@@ -47,6 +47,7 @@ struct LanguageOptions
     std::vector<std::string> includeQuoteDirectories{};
     std::vector<std::pair<std::string, std::string>> additionalMacros{};
     std::unordered_set<std::string> disabledWarnings{};
+    bool freeStanding{};
 
     static LanguageOptions native(Language language = Language::C99);
 
