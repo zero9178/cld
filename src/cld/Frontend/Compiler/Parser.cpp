@@ -38,13 +38,13 @@ bool cld::Parser::Context::isTypedef(std::string_view name) const
 
 bool cld::Parser::Context::log(const Message& message)
 {
-    if (message.getSeverity() == Severity::Error)
-    {
-        m_errorCount++;
-    }
     if (m_reporter)
     {
         *m_reporter << message;
+    }
+    if (message.getSeverity() == Severity::Error)
+    {
+        m_errorCount++;
     }
     return message.getSeverity() != Severity::None;
 }
