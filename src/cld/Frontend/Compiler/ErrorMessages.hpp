@@ -133,6 +133,10 @@ CREATE_ERROR(PARAMETER_LIST_REQUIRES_AT_LEAST_ONE_PARAMETER, "Parameter list req
              PointAt<0>);
 
 CREATE_ERROR(MAXIMUM_BRACKET_DEPTH_OF_N_EXCEEDED, "Maximum bracket depth of %0 exceeded", PointAt<1>);
+
+// GNU
+
+CREATE_ERROR(EXPECTED_ATTRIBUTE_NAME_INSTEAD_OF_N, "Expected attribute name instead of %0", PointAt<0>);
 } // namespace Parser
 
 CREATE_ERROR(REDEFINITION_OF_SYMBOL_N, "Redefinition of symbol %0", Underline<0>);

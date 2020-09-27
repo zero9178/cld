@@ -32,7 +32,8 @@ constexpr Context::TokenBitSet firstSpecifierQualifierSet = Context::fromTokenTy
     Lexer::TokenType::UnderlineBool, Lexer::TokenType::DoubleKeyword, Lexer::TokenType::SignedKeyword,
     Lexer::TokenType::UnsignedKeyword, Lexer::TokenType::EnumKeyword, Lexer::TokenType::StructKeyword,
     Lexer::TokenType::UnionKeyword, Lexer::TokenType::ConstKeyword, Lexer::TokenType::RestrictKeyword,
-    Lexer::TokenType::VolatileKeyword, Lexer::TokenType::InlineKeyword, Lexer::TokenType::Identifier);
+    Lexer::TokenType::VolatileKeyword, Lexer::TokenType::InlineKeyword, Lexer::TokenType::Identifier,
+    Lexer::TokenType::GNUAttribute);
 
 constexpr Context::TokenBitSet firstDeclarationSpecifierSet = Context::fromTokenTypes(
     Lexer::TokenType::TypedefKeyword, Lexer::TokenType::ExternKeyword, Lexer::TokenType::StaticKeyword,
@@ -42,7 +43,7 @@ constexpr Context::TokenBitSet firstDeclarationSpecifierSet = Context::fromToken
     Lexer::TokenType::DoubleKeyword, Lexer::TokenType::SignedKeyword, Lexer::TokenType::UnsignedKeyword,
     Lexer::TokenType::EnumKeyword, Lexer::TokenType::StructKeyword, Lexer::TokenType::UnionKeyword,
     Lexer::TokenType::ConstKeyword, Lexer::TokenType::RestrictKeyword, Lexer::TokenType::VolatileKeyword,
-    Lexer::TokenType::InlineKeyword, Lexer::TokenType::Identifier);
+    Lexer::TokenType::InlineKeyword, Lexer::TokenType::Identifier, Lexer::TokenType::GNUAttribute);
 
 constexpr Context::TokenBitSet firstPointerSet = Context::fromTokenTypes(Lexer::TokenType::Asterisk);
 

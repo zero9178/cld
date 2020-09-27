@@ -430,7 +430,7 @@ TEST_CASE("PP Builtin macros", "[PP]")
     SECTION("__STDC_HOSTED__")
     {
         auto ret = preprocessResult("__STDC_HOSTED__");
-        CHECK_THAT(ret, ProducesPP("0"));
+        CHECK_THAT(ret, ProducesPP("1"));
     }
     SECTION("__STDC_MB_MIGHT_NEQ_WC__")
     {

@@ -155,6 +155,8 @@ class GotoStatement;
 
 class LabelStatement;
 
+class GNUAttributes;
+
 class Node
 {
     Lexer::CTokenIterator m_begin;
@@ -506,7 +508,7 @@ public:
 /**
  * <UnaryExpressionSizeOf> ::= <TokenType::SizeOfKeyword> <UnaryExpression>
  *                           | <TokenType::SizeOfKeyword> <TokenType::OpenParentheses> <TypeName>
- * <TokenType::CloseParentheses>
+ *                             <TokenType::CloseParentheses>
  */
 class UnaryExpressionSizeOf final : public Node
 {
@@ -528,9 +530,9 @@ public:
 };
 
 /**
- * <UnaryExpressionDefined> ::= <TokenType::DefinedKeyword> <TokenType::Identifier>
+ * [PP] <UnaryExpressionDefined> ::= <TokenType::DefinedKeyword> <TokenType::Identifier>
  *                            | <TokenType::DefinedKeyword> <TokenType::OpenParentheses> <TokenType::Identifier>
- * <TokenType::CloseParentheses>
+ *                              <TokenType::CloseParentheses>
  */
 class UnaryExpressionDefined final : public Node
 {
@@ -566,8 +568,10 @@ public:
 
 /**
  * <SpecifierQualifier> ::= <TypeSpecifier> | <TypeQualifier>
+ *
+ * [GNU]: <SpecifierQualifier> ::= <TypeSpecifier> | <TypeQualifier> | <GNUAttributes>
  */
-using SpecifierQualifier = std::variant<TypeSpecifier, TypeQualifier>;
+using SpecifierQualifier = std::variant<TypeSpecifier, TypeQualifier, GNUAttributes>;
 
 /**
  * <TypeName> ::= <SpecifierQualifier> { <SpecifierQualifier> } [ <AbstractDeclarator> ]
@@ -988,6 +992,7 @@ public:
 
 /**
  * <ExpressionStatement> ::= [<Expression>] <TokenType::SemiColon>
+ *                         | <GNUAttribute> <TokenType::SemiColon>
  */
 class ExpressionStatement final : public Node
 {
@@ -1045,7 +1050,7 @@ public:
 
 /**
  * <SwitchStatement> ::= <TokenType::SwitchKeyword> <TokenType::OpenParentheses> <Expression>
- * <TokenType::CloseParentheses> <Statement>
+ *                       <TokenType::CloseParentheses> <Statement>
  */
 class SwitchStatement final : public Node
 {
@@ -1106,7 +1111,7 @@ public:
 };
 
 /**
- * <LabelStatement> ::= <TokenType::Identifier> <TokenType::Colon> <Statement>
+ * <LabelStatement> ::= <TokenType::Identifier> <TokenType::Colon> (<Statement> | <GNUAttribute>)
  */
 class LabelStatement final : public Node
 {
@@ -1199,14 +1204,20 @@ public:
 
 /**
  * <DeclarationSpecifier> ::= <StorageClassSpecifier> | <TypeSpecifier> | <TypeQualifier> | <FunctionSpecifier>
+ *
+ * [GNU] <DeclarationSpecifier> ::= <StorageClassSpecifier> | <TypeSpecifier> | <TypeQualifier> | <FunctionSpecifier> |
+ *                                  <GNUAttributes>
  */
-using DeclarationSpecifier = std::variant<StorageClassSpecifier, TypeSpecifier, TypeQualifier, FunctionSpecifier>;
+using DeclarationSpecifier =
+    std::variant<StorageClassSpecifier, TypeSpecifier, TypeQualifier, FunctionSpecifier, GNUAttributes>;
 
 /**
  * <InitDeclarator> ::= <Declarator> [ <TokenType::Assignment> <Initializer> ]
  *
+ * [GNU]: <InitDeclarator> ::= <Declarator> [<GNUAttribute>] [ <TokenType::Assignment> <Initializer> [<GNUAttribute>] ]
+ *
  * <Declaration> ::= <DeclarationSpecifier> {<DeclarationSpecifier>} [<InitDeclarator>
- *                   { <TokenType::Comma> <InitDeclarator> } ] <TokenType::SemiColon>
+ *                   { <TokenType::Comma> [<GNUAttribute>] <InitDeclarator> } ] <TokenType::SemiColon>
  */
 class Declaration final : public Node
 {
@@ -1456,6 +1467,10 @@ public:
 /**
  * <ParameterDeclaration> ::= <DeclarationSpecifier> { <DeclarationSpecifier> } <Declarator>
  *                          | <DeclarationSpecifier> { <DeclarationSpecifier> } [ <AbstractDeclarator> ]
+ *
+ * [GNU]: <ParameterDeclaration> ::= <DeclarationSpecifier> { <DeclarationSpecifier> } <Declarator> [<GNUAttribute>]
+ *                                 | <DeclarationSpecifier> { <DeclarationSpecifier> } [ <AbstractDeclarator> ]
+ *                                   [<GNUAttribute>]
  */
 struct ParameterDeclaration : public Node
 {
@@ -1526,6 +1541,9 @@ public:
 
 /**
  * <DirectDeclaratorParentheses> ::= <TokenType::OpenParentheses> <DirectDeclarator> <TokenType::CloseParentheses>
+ *
+ * [GNU]: <DirectDeclaratorParentheses> ::= <TokenType::OpenParentheses> [<GNUAttributes>] <DirectDeclarator>
+ *                                          <TokenType::CloseParentheses>
  */
 class DirectDeclaratorParentheses final : public Node
 {
@@ -1666,9 +1684,10 @@ public:
 /**
  * <StructOrUnion> ::= <TokenType::StructKeyword> | <TokenType::UnionKeyword>
  *
- * <StructOrUnionSpecifier> ::= <StructOrUnion> [ <TokenType::Identifier> ]
+ * <StructOrUnionSpecifier> ::= <StructOrUnion> [<GNUAttribute>] [ <TokenType::Identifier> ]
  *                              <TokenType::OpenBrace> <StructDeclaration> { <StructDeclaration> }
- *                              <TokenType::CloseBrace> | <StructOrUnion> <TokenType::Identifier>
+ *                              <TokenType::CloseBrace> [<GNUAttribute>] | <StructOrUnion> [<GNUAttribute>]
+ * <TokenType::Identifier>
  */
 class StructOrUnionSpecifier final : public Node
 {
@@ -1680,8 +1699,12 @@ public:
      *
      * <StructDeclarator> ::= <Declarator> | [<Declarator>] <TokenType::Colon> <ConstantExpression>
      *
+     * [GNU]: <StructDeclarator> ::= <Declarator> [<GNUAttributes>] | [<Declarator>] <TokenType::Colon>
+     *                               <ConstantExpression> [<GNUAttributes>]
+     *
      * <StructDeclaration> ::= <SpecifierQualifier> { <SpecifierQualifier> }
-     *                         <StructDeclarator> {<TokenType::Comma> <StructDeclarator> } <TokenType::SemiColon>
+     *                         <StructDeclarator> {<TokenType::Comma> [<GNUAttributes>] <StructDeclarator> }
+     *                         <TokenType::SemiColon>
      */
     struct StructDeclaration
     {
@@ -1706,8 +1729,14 @@ public:
 /**
  * <EnumDeclaration> ::= <TokenType::EnumKeyword> [ <TokenType::Identifier> ] <TokenType::OpenBrace>
  *                       <TokenType::Identifier> [ <TokenType::Assignment> <ConstantExpression> ]
- *                       { <TokenType::Comma> <TokenType::Identifier> [ <TokenType::Assignment> <ConstantExpression>
- * } [ <TokenType::Comma> ] <TokenType::CloseBrace>
+ *                       { <TokenType::Comma> <TokenType::Identifier> [ <TokenType::Assignment> <ConstantExpression> }
+ *                       [ <TokenType::Comma> ] <TokenType::CloseBrace>
+ *
+ * [GNU]: <EnumDeclaration> ::= <TokenType::EnumKeyword> [<GNUAttribute>] [ <TokenType::Identifier> ]
+ *                              <TokenType::OpenBrace> <TokenType::Identifier> [<GNUAttribute>] [<TokenType::Assignment>
+ *                              <ConstantExpression> ]
+ *                              { <TokenType::Comma> <TokenType::Identifier> [<GNUAttribute>] [ <TokenType::Assignment>
+ *                              <ConstantExpression> } [ <TokenType::Comma> ] <TokenType::CloseBrace> [<GNUAttribute>]
  */
 class EnumDeclaration final : public Node
 {
@@ -1726,6 +1755,8 @@ public:
 
 /**
  * <EnumSpecifier> ::= <EnumDeclaration> | <TokenType::EnumKeyword> <TokenType::Identifier>
+ *
+ * [GNU]: <EnumSpecifier> ::= <EnumDeclaration> | <TokenType::EnumKeyword> [<GNUAttributes>] <TokenType::Identifier>
  */
 class EnumSpecifier final : public Node
 {
@@ -1883,4 +1914,45 @@ public:
 
     [[nodiscard]] const std::vector<ExternalDeclaration>& getGlobals() const;
 };
+
+/**
+ *
+ * [GNU]:
+ *
+ * <GNUAttributes> ::= <GNUAttribute> { <GNUAttribute> }
+ *
+ * <GNUAttribute> ::= <TokenType::GNUAttribute> <TokenType::OpenParentheses> <TokenType::OpenParentheses>
+ *                    <GNUAttributeList> <TokenType::CloseParentheses> <TokenType::CloseParentheses>
+ *
+ * <GNUAttributeList> ::= [<GNUAttrib>] { <TokenType::Comma> [<GNUAttrib>] }
+ *
+ * <GNUAttrib> ::= <GNUAttribName>
+ *               | <GNUAttribName> <TokenType::OpenParentheses> <TokenType::Identifier> <TokenType::CloseParentheses>
+ *               | <GNUAttribName> <TokenType::OpenParentheses> <TokenType::Identifier> <TokenType::Comma>
+ *                 <NonCommaExpression> { <TokenType::Comma> <NonCommaExpression> } <TokenType::CloseParentheses>
+ *               | <GNUAttribName> <TokenType::OpenParentheses> [<NonCommaExpression> { <TokenType::Comma>
+ *                 <NonCommaExpression> } ] <TokenType::CloseParentheses>
+ *
+ * <GNUAttribName> ::= <TokenType::Identifier>
+ *                   | <TypeSpecifier>
+ *                   | <TypeQualifier>
+ *                   | <StorageClassSpecifier>
+ */
+class GNUAttributes final : public Node
+{
+public:
+    struct GNUAttribute
+    {
+        Lexer::CTokenIterator nameToken;
+        const Lexer::CToken* optionalFirstIdentifierArgument;
+        std::vector<AssignmentExpression> arguments;
+    };
+
+private:
+    std::vector<GNUAttribute> m_attributes;
+
+public:
+    GNUAttributes(const Lexer::CToken* begin, const Lexer::CToken* end, std::vector<GNUAttribute>&& attributes);
+};
+
 } // namespace cld::Syntax

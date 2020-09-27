@@ -117,6 +117,8 @@ public:
 
     [[nodiscard]] bool isTypedefInScope(std::string_view name) const;
 
+    [[nodiscard]] bool isBuiltin(std::string_view name) const;
+
     bool log(const Message& message);
 
     void addToScope(std::string_view name, DeclarationLocation declarator);
@@ -268,6 +270,9 @@ std::optional<Syntax::UnaryExpression> parseUnaryExpression(Lexer::CTokenIterato
 
 std::optional<Syntax::PostFixExpression> parsePostFixExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                                 Context& context);
+
+std::optional<Syntax::GNUAttributes> parseGNUAttributes(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
+                                                        Context& context);
 } // namespace cld::Parser
 
 template <class... Args>

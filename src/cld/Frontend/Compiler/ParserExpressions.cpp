@@ -911,8 +911,8 @@ std::optional<cld::Syntax::UnaryExpression>
         return UnaryExpression(
             UnaryExpressionSizeOf(start, begin, start, std::make_unique<UnaryExpression>(std::move(*unary))));
     }
-    else if (context.isInPreprocessor() && begin < end && begin->getTokenType() == Lexer::TokenType::Identifier
-             && begin->getText() == "defined")
+    if (context.isInPreprocessor() && begin < end && begin->getTokenType() == Lexer::TokenType::Identifier
+        && begin->getText() == "defined")
     {
         if (begin->isMacroInserted())
         {

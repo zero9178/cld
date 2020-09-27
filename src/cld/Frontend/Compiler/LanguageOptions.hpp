@@ -48,6 +48,12 @@ struct LanguageOptions
     std::vector<std::pair<std::string, std::string>> additionalMacros{};
     std::unordered_set<std::string> disabledWarnings{};
     bool freeStanding{};
+    enum class Extension
+    {
+        None,
+        GNU,
+        Microsoft
+    } extension{Extension::None};
 
     static LanguageOptions native(Language language = Language::C99);
 

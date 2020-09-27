@@ -177,6 +177,14 @@ TEST_CASE("Lexing Identifiers", "[lexer]")
                        [](const CToken& token) { return token.getTokenType(); });
         CHECK_THAT(tokens, Catch::Equals(correct));
     }
+    SECTION("GNU keywords")
+    {
+        auto options = cld::LanguageOptions::native();
+        options.extension = cld::LanguageOptions::Extension::GNU;
+        auto result = lexes("__attribute__", options);
+        REQUIRE(result.data().size() == 1);
+        CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::GNUAttribute);
+    }
 }
 
 TEST_CASE("Lexing backslashes", "[lexer]")

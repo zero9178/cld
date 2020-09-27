@@ -1344,3 +1344,9 @@ cld::Lexer::CTokenIterator cld::Syntax::DirectAbstractDeclaratorStatic::getStati
 {
     return m_staticLoc;
 }
+
+cld::Syntax::GNUAttributes::GNUAttributes(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
+                                          std::vector<GNUAttribute>&& attributes)
+    : Node(begin, end), m_attributes(std::move(attributes))
+{
+}

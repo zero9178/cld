@@ -138,8 +138,8 @@ class SemanticAnalysis final : public ProgramInterface
 
     using DeclarationOrSpecifierQualifier =
         std::variant<const Syntax::TypeSpecifier * CLD_NON_NULL, const Syntax::TypeQualifier * CLD_NON_NULL,
-                     const Syntax::StorageClassSpecifier * CLD_NON_NULL,
-                     const Syntax::FunctionSpecifier * CLD_NON_NULL>;
+                     const Syntax::StorageClassSpecifier * CLD_NON_NULL, const Syntax::FunctionSpecifier * CLD_NON_NULL,
+                     const Syntax::GNUAttributes * CLD_NON_NULL>;
 
     Type typeSpecifiersToType(bool isConst, bool isVolatile,
                               const std::vector<const Syntax::TypeSpecifier * CLD_NON_NULL>& typeSpec);

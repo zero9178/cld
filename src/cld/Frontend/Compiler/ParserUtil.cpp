@@ -82,6 +82,7 @@ bool cld::Parser::firstIsInDeclarationSpecifier(const Lexer::CToken& token, cons
 {
     switch (token.getTokenType())
     {
+        case Lexer::TokenType::GNUAttribute:
         case Lexer::TokenType::TypedefKeyword:
         case Lexer::TokenType::ExternKeyword:
         case Lexer::TokenType::StaticKeyword:
@@ -104,7 +105,8 @@ bool cld::Parser::firstIsInDeclarationSpecifier(const Lexer::CToken& token, cons
         case Lexer::TokenType::RestrictKeyword:
         case Lexer::TokenType::VolatileKeyword:
         case Lexer::TokenType::InlineKeyword: return true;
-        case Lexer::TokenType::Identifier: return context.isTypedefInScope(token.getText());
+        case Lexer::TokenType::Identifier:
+            return context.isTypedefInScope(token.getText()) || context.isBuiltin(token.getText());
         default: return false;
     }
 }
@@ -113,6 +115,7 @@ bool cld::Parser::firstIsInSpecifierQualifier(const Lexer::CToken& token, const 
 {
     switch (token.getTokenType())
     {
+        case Lexer::TokenType::GNUAttribute:
         case Lexer::TokenType::VoidKeyword:
         case Lexer::TokenType::CharKeyword:
         case Lexer::TokenType::ShortKeyword:
@@ -129,7 +132,8 @@ bool cld::Parser::firstIsInSpecifierQualifier(const Lexer::CToken& token, const 
         case Lexer::TokenType::ConstKeyword:
         case Lexer::TokenType::RestrictKeyword:
         case Lexer::TokenType::VolatileKeyword: return true;
-        case Lexer::TokenType::Identifier: return context.isTypedefInScope(token.getText());
+        case Lexer::TokenType::Identifier:
+            return context.isTypedefInScope(token.getText()) || context.isBuiltin(token.getText());
         default: return false;
     }
 }

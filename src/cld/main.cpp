@@ -43,6 +43,9 @@ CLD_CLI_OPT(VERSION, ("--version"))("Print version");
 
 CLD_CLI_OPT(HELP, ("--help", "-help"))("Display all options");
 
+CLD_CLI_OPT(STANDARD_VERSION, ("-std=<arg>", "--std=<arg>", "--std <arg>"), (std::string_view, arg))
+("C standard version");
+
 namespace
 {
 enum class Action
@@ -288,7 +291,7 @@ void applyTargetSpecificLanguageOptions(cld::LanguageOptions& languageOptions, c
 
     languageOptions.additionalMacros.emplace_back("__llvm__", "1");
     languageOptions.additionalMacros.emplace_back("__cld__", "1");
-    if (triple.getEnvironment() == cld::Environment::GNU)
+    if (languageOptions.extension == cld::LanguageOptions::Extension::GNU)
     {
         // TODO: Command line option for this
         languageOptions.additionalMacros.emplace_back("__GNUC__", "4");
@@ -474,14 +477,40 @@ int main(int argc, char** argv)
         elements[i - 1] = argv[i];
     }
 
-    auto cli = cld::parseCommandLine<OUTPUT_FILE, COMPILE_ONLY, ASSEMBLY_OUTPUT, PREPROCESS_ONLY, TARGET, EMIT_LLVM,
-                                     OPT, DEFINE_MACRO, INCLUDES, PIE, PIC, FREESTANDING, HELP, VERSION>(elements);
+    auto cli =
+        cld::parseCommandLine<OUTPUT_FILE, COMPILE_ONLY, ASSEMBLY_OUTPUT, PREPROCESS_ONLY, TARGET, EMIT_LLVM, OPT,
+                              DEFINE_MACRO, INCLUDES, PIE, PIC, FREESTANDING, HELP, VERSION, STANDARD_VERSION>(
+            elements);
     auto triple = cld::Triple::defaultTarget();
     if (cli.get<TARGET>())
     {
         triple = cld::Triple::fromString(*cli.get<TARGET>());
     }
-    auto options = cld::LanguageOptions::fromTriple(triple);
+    bool gnuExtensions = false;
+    auto language = cld::LanguageOptions::Language::C99;
+    if (cli.get<STANDARD_VERSION>())
+    {
+        auto str = *cli.get<STANDARD_VERSION>();
+        if (str == "gnu99")
+        {
+            language = cld::LanguageOptions::Language ::C99;
+            gnuExtensions = true;
+        }
+        else if (str == "c99")
+        {
+            language = cld::LanguageOptions::Language ::C99;
+            gnuExtensions = false;
+        }
+        else
+        {
+            // TODO: Error
+        }
+    }
+    auto options = cld::LanguageOptions::fromTriple(triple, language);
+    if (gnuExtensions)
+    {
+        options.extension = cld::LanguageOptions::Extension::GNU;
+    }
     options.freeStanding = cli.get<FREESTANDING>().has_value();
     for (auto& iter : cli.get<INCLUDES>())
     {

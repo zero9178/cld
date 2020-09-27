@@ -22,7 +22,7 @@ using namespace cld::Lexer;
 
 namespace
 {
-bool isKeyword(std::string_view characters)
+bool isKeyword(std::string_view characters, const cld::LanguageOptions& languageOptions)
 {
     return characters == "auto" || characters == "double" || characters == "int" || characters == "struct"
            || characters == "break" || characters == "else" || characters == "long" || characters == "switch"
@@ -32,7 +32,9 @@ bool isKeyword(std::string_view characters)
            || characters == "continue" || characters == "for" || characters == "signed" || characters == "void"
            || characters == "default" || characters == "goto" || characters == "sizeof" || characters == "volatile"
            || characters == "restrict" || characters == "do" || characters == "if" || characters == "static"
-           || characters == "while" || characters == "inline" || characters == "_Bool";
+           || characters == "while" || characters == "inline" || characters == "_Bool"
+           || (languageOptions.extension == cld::LanguageOptions::Extension::GNU
+               && (characters == "__attribute__" || characters == "__inline__"));
 }
 
 TokenType charactersToKeyword(std::string_view characters)
@@ -170,13 +172,17 @@ TokenType charactersToKeyword(std::string_view characters)
     {
         return TokenType::RestrictKeyword;
     }
-    if (characters == "inline")
+    if (characters == "inline" || characters == "__inline__")
     {
         return TokenType::InlineKeyword;
     }
     if (characters == "_Bool")
     {
         return TokenType::UnderlineBool;
+    }
+    if (characters == "__attribute__")
+    {
+        return TokenType::GNUAttribute;
     }
     CLD_UNREACHABLE;
 }
@@ -1107,24 +1113,25 @@ StateMachine Start::advance(std::uint32_t c, Context& context)
                 buffer.resize(std::distance(buffer.data(), start));
                 return Text{std::move(buffer)};
             }
-            else if (!cld::isWhitespace(c))
+            if (cld::isWhitespace(c))
             {
-                if (!llvm::sys::unicode::isPrintable(c))
-                {
-                    std::string buffer = "\\U";
-                    buffer.reserve(10);
-                    llvm::raw_string_ostream ss(buffer);
-                    ss << llvm::format_hex_no_prefix(c, 8);
-                    ss.flush();
-                    auto size = getNumUTF8ForUTF32(c);
-                    context.report(cld::Errors::Lexer::NON_PRINTABLE_CHARACTER_N, context.getOffset() - size, buffer,
-                                   std::pair{context.getOffset() - size, context.getOffset()});
-                }
-                else
-                {
-                    context.push(context.getOffset() - getNumUTF8ForUTF32(c), context.getOffset(),
-                                 TokenType::Miscellaneous);
-                }
+                return *this;
+            }
+            if (!llvm::sys::unicode::isPrintable(c))
+            {
+                std::string buffer = "\\U";
+                buffer.reserve(10);
+                llvm::raw_string_ostream ss(buffer);
+                ss << llvm::format_hex_no_prefix(c, 8);
+                ss.flush();
+                auto size = getNumUTF8ForUTF32(c);
+                context.report(cld::Errors::Lexer::NON_PRINTABLE_CHARACTER_N, context.getOffset() - size, buffer,
+                               std::pair{context.getOffset() - size, context.getOffset()});
+            }
+            else
+            {
+                context.push(context.getOffset() - getNumUTF8ForUTF32(c), context.getOffset(),
+                             TokenType::Miscellaneous);
             }
             return *this;
         }
@@ -1169,18 +1176,16 @@ std::pair<StateMachine, bool> L::advance(char c, Context&) noexcept
     {
         return {StringLiteral{true, {}}, true};
     }
-    else if (c == '\'')
+    if (c == '\'')
     {
         return {CharacterLiteral{true, {}}, true};
     }
-    else if (c == '\\')
+    if (c == '\\')
     {
         return {MaybeUC{std::make_unique<StateMachine>(L{})}, true};
     }
-    else
-    {
-        return {Text{"L"}, false};
-    }
+
+    return {Text{"L"}, false};
 }
 
 std::pair<StateMachine, bool> Text::advance(std::uint32_t c, Context& context)
@@ -1238,11 +1243,11 @@ std::pair<StateMachine, bool> MaybeUC::advance(std::uint32_t c, Context& context
         {
             return {UniversalCharacter{c == 'U', cld::get<Text>(std::move(*prevState))}, true};
         }
-        else if (std::holds_alternative<L>(*prevState))
+        if (std::holds_alternative<L>(*prevState))
         {
             return {UniversalCharacter{c == 'U', Text{"L"}}, true};
         }
-        else if (std::holds_alternative<PreprocessingNumber>(*prevState))
+        if (std::holds_alternative<PreprocessingNumber>(*prevState))
         {
             return {UniversalCharacter{c == 'U', cld::get<PreprocessingNumber>(std::move(*prevState))}, true};
         }
@@ -1320,11 +1325,9 @@ std::pair<StateMachine, bool> UniversalCharacter::advance(char c, Context& conte
             context.tokenStartOffset++;
             return {Text{(big ? "U" : "u") + characters}, true};
         }
-        else
-        {
-            context.report(cld::Errors::Lexer::UNEXPECTED_CHARACTER, ucStart, std::pair{ucStart, context.getOffset()});
-            return {Start{}, true};
-        }
+
+        context.report(cld::Errors::Lexer::UNEXPECTED_CHARACTER, ucStart, std::pair{ucStart, context.getOffset()});
+        return {Start{}, true};
     }
     // This line is needed because a text can start with a universal character. Luckily a Preprocessing number can't
     // So we only reach this line if suspHolder is either empty or contains a Text
@@ -2077,7 +2080,7 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view cha
             iter = hexEnd;
             continue;
         }
-        else if (iter[1] == 'x')
+        if (iter[1] == 'x')
         {
             iter += 2;
             const auto* lastHex = std::find_if(iter, end, [](char c) {
@@ -2490,7 +2493,7 @@ std::optional<std::pair<CToken::ValueType, CToken::Type>>
             }
             return {{std::move(number), CToken::Type::Double}};
         }
-        else if (suffix == "f" || suffix == "F")
+        if (suffix == "f" || suffix == "F")
         {
             llvm::APFloat number(llvm::APFloat::IEEEsingle());
             auto result = number.convertFromString(input, llvm::APFloat::rmNearestTiesToEven);
@@ -2500,7 +2503,7 @@ std::optional<std::pair<CToken::ValueType, CToken::Type>>
             }
             return {{std::move(number), CToken::Type::Float}};
         }
-        else if (suffix == "l" || suffix == "L")
+        if (suffix == "l" || suffix == "L")
         {
             switch (context.sourceInterface.getLanguageOptions().sizeOfLongDoubleBits)
             {
@@ -2588,7 +2591,7 @@ std::vector<cld::Lexer::CToken> cld::Lexer::toCTokens(PPTokenIterator begin, PPT
             case TokenType::Newline: break;
             case TokenType::Identifier:
                 // Identifiers need to always be valid
-                if (isKeyword(iter->getValue()))
+                if (isKeyword(iter->getValue(), sourceInterface.getLanguageOptions()))
                 {
                     result.emplace_back(charactersToKeyword(iter->getValue()), iter->getOffset(), iter->getLength(),
                                         iter->getFileId(), iter->getMacroId());
@@ -2847,6 +2850,7 @@ std::string_view cld::Lexer::tokenName(cld::Lexer::TokenType tokenType)
         case TokenType::PPNumber: return "preprocessing number";
         case TokenType::Miscellaneous: CLD_UNREACHABLE;
         case TokenType::Backslash: return "'\\'";
+        case TokenType::GNUAttribute: return "'__attribute__'";
     }
     CLD_UNREACHABLE;
 }
@@ -2945,6 +2949,7 @@ std::string_view cld::Lexer::tokenValue(cld::Lexer::TokenType tokenType)
         case TokenType::PPNumber: return "preprocessing number";
         case TokenType::Miscellaneous: CLD_UNREACHABLE;
         case TokenType::Backslash: return "\\";
+        case TokenType::GNUAttribute: return "__attribute__";
     }
     CLD_UNREACHABLE;
 }
@@ -3011,6 +3016,7 @@ bool cld::Lexer::needsWhitespaceInBetween(TokenType left, TokenType right) noexc
         case TokenType::EnumKeyword:
         case TokenType::GotoKeyword:
         case TokenType::UnderlineBool:
+        case TokenType::GNUAttribute:
             switch (right)
             {
                 case TokenType::Backslash:
@@ -3050,6 +3056,7 @@ bool cld::Lexer::needsWhitespaceInBetween(TokenType left, TokenType right) noexc
                 case TokenType::EnumKeyword:
                 case TokenType::GotoKeyword:
                 case TokenType::UnderlineBool:
+                case TokenType::GNUAttribute:
                 case TokenType::StringLiteral:
                 case TokenType::Literal:
                 case TokenType::PPNumber: return true;
@@ -3255,6 +3262,7 @@ bool cld::Lexer::needsWhitespaceInBetween(TokenType left, TokenType right) noexc
                 case TokenType::EnumKeyword:
                 case TokenType::GotoKeyword:
                 case TokenType::UnderlineBool:
+                case TokenType::GNUAttribute:
                 case TokenType::Plus:
                 case TokenType::Minus:
                 case TokenType::Increment:

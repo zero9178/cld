@@ -94,6 +94,15 @@ bool cld::Parser::Context::isTypedefInScope(std::string_view name) const
     return false;
 }
 
+bool cld::Parser::Context::isBuiltin(std::string_view name) const
+{
+    if (name == "__builtin_va_list")
+    {
+        return true;
+    }
+    return false;
+}
+
 cld::Parser::Context::Context(const SourceInterface& sourceInterface, llvm::raw_ostream* reporter, bool inPreprocessor)
     : m_sourceInterface(sourceInterface), m_reporter(reporter), m_inPreprocessor(inPreprocessor)
 {
