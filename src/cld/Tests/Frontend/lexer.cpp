@@ -181,9 +181,20 @@ TEST_CASE("Lexing Identifiers", "[lexer]")
     {
         auto options = cld::LanguageOptions::native();
         options.extension = cld::LanguageOptions::Extension::GNU;
-        auto result = lexes("__attribute__", options);
-        REQUIRE(result.data().size() == 1);
+        auto result = lexes(
+            "__attribute__ __extension__ __volatile__ __const__ asm __asm__ typeof __typeof__ __restrict__ __inline__",
+            options);
+        REQUIRE(result.data().size() == 10);
         CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::GNUAttribute);
+        CHECK(result.data()[1].getTokenType() == cld::Lexer::TokenType::GNUExtension);
+        CHECK(result.data()[2].getTokenType() == cld::Lexer::TokenType::VolatileKeyword);
+        CHECK(result.data()[3].getTokenType() == cld::Lexer::TokenType::ConstKeyword);
+        CHECK(result.data()[4].getTokenType() == cld::Lexer::TokenType::GNUASM);
+        CHECK(result.data()[5].getTokenType() == cld::Lexer::TokenType::GNUASM);
+        CHECK(result.data()[6].getTokenType() == cld::Lexer::TokenType::GNUTypeOf);
+        CHECK(result.data()[7].getTokenType() == cld::Lexer::TokenType::GNUTypeOf);
+        CHECK(result.data()[8].getTokenType() == cld::Lexer::TokenType::RestrictKeyword);
+        CHECK(result.data()[9].getTokenType() == cld::Lexer::TokenType::InlineKeyword);
     }
 }
 

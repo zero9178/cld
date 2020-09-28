@@ -157,6 +157,10 @@ class LabelStatement;
 
 class GNUAttributes;
 
+class GNUSimpleASM;
+
+class GNUASMStatement;
+
 class Node
 {
     Lexer::CTokenIterator m_begin;
@@ -473,6 +477,7 @@ public:
  *                                  | <TokenType::Minus> <CastExpression>
  *                                  | <TokenType::BitWiseNegation> <CastExpression>
  *                                  | <TokenType::LogicalNegation> <CastExpression>
+ *                         [GNU]:   | <TokenType::GNUExtension> <CastExpression>
  */
 class UnaryExpressionUnaryOperator final : public Node
 {
@@ -486,7 +491,8 @@ public:
         Plus,
         Minus,
         BitNot,
-        LogicalNot
+        LogicalNot,
+        GNUExtension // Does nothing semantically
     };
 
 private:
@@ -1129,6 +1135,8 @@ public:
 
 /**
  * <BlockItem> ::= <Statement> | <Declaration>
+ *
+ * [GNU]: <BlockItem> ::= <Statement> | { <TokenType::GNUExtension> } <Declaration>
  */
 using CompoundItem = std::variant<Statement, Declaration>;
 
@@ -1214,7 +1222,7 @@ using DeclarationSpecifier =
 /**
  * <InitDeclarator> ::= <Declarator> [ <TokenType::Assignment> <Initializer> ]
  *
- * [GNU]: <InitDeclarator> ::= <Declarator> [<GNUAttribute>] [ <TokenType::Assignment> <Initializer> [<GNUAttribute>] ]
+ * [GNU]: <InitDeclarator> ::= <Declarator> [ <TokenType::Assignment> <Initializer> ] [<GNUSimpleASM>] [<GNUAttribute>]
  *
  * <Declaration> ::= <DeclarationSpecifier> {<DeclarationSpecifier>} [<InitDeclarator>
  *                   { <TokenType::Comma> [<GNUAttribute>] <InitDeclarator> } ] <TokenType::SemiColon>
@@ -1684,10 +1692,13 @@ public:
 /**
  * <StructOrUnion> ::= <TokenType::StructKeyword> | <TokenType::UnionKeyword>
  *
- * <StructOrUnionSpecifier> ::= <StructOrUnion> [<GNUAttribute>] [ <TokenType::Identifier> ]
+ * <StructOrUnionSpecifier> ::= <StructOrUnion> [ <TokenType::Identifier> ]
  *                              <TokenType::OpenBrace> <StructDeclaration> { <StructDeclaration> }
- *                              <TokenType::CloseBrace> [<GNUAttribute>] | <StructOrUnion> [<GNUAttribute>]
- * <TokenType::Identifier>
+ *                              <TokenType::CloseBrace> | <StructOrUnion> <TokenType::Identifier>
+ *
+ * [GNU]: <StructOrUnionSpecifier> ::= { <TokenType::GNUExtension> } <StructOrUnion> [<GNUAttribute>] [
+ * <TokenType::Identifier> ] <TokenType::OpenBrace> <StructDeclaration> { <StructDeclaration> } <TokenType::CloseBrace>
+ * [<GNUAttribute>] | <StructOrUnion> [<GNUAttribute>] <TokenType::Identifier>
  */
 class StructOrUnionSpecifier final : public Node
 {
@@ -1874,7 +1885,7 @@ public:
 
 /**
  * <FunctionDefinition> ::= <DeclarationSpecifier> {<DeclarationSpecifier>} <Declarator> { <Declaration> }
- * <CompoundStatement>
+ *                          <CompoundStatement>
  */
 class FunctionDefinition final : public Node
 {
@@ -1899,8 +1910,11 @@ public:
 
 /**
  * <ExternalDeclaration> ::= <FunctionDefinition> | <Declaration>
+ *
+ * [GNU]: <ExternalDeclaration> ::= { <TokenType::GNUExtension> } (<FunctionDefinition> | <Declaration> | <GNUSimpleASM>
+ * <TokenType::SemiColon> )
  */
-using ExternalDeclaration = std::variant<Declaration, FunctionDefinition>;
+using ExternalDeclaration = std::variant<Declaration, FunctionDefinition, GNUSimpleASM>;
 
 /**
  * <TranslationUnit> ::= <ExternalDeclaration> {<ExternalDeclaration>}
@@ -1953,6 +1967,85 @@ private:
 
 public:
     GNUAttributes(const Lexer::CToken* begin, const Lexer::CToken* end, std::vector<GNUAttribute>&& attributes);
+};
+
+/**
+ * [GNU]:
+ *
+ * <GNUASMString> ::= <TokenType::StringLiteral>
+ * StringLiteral must be a vanilla string however (no suffixes)
+ *
+ * <GNUSimpleASM> ::= <TokenType::GNUASM> <TokenType::OpenParentheses> <GNUASMString>
+ *                    <TokenType::CloseParentheses>
+ */
+class GNUSimpleASM final : public Node
+{
+    std::string m_string;
+
+public:
+    GNUSimpleASM(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::string string);
+};
+
+/**
+ * <GNUASMQualifier> ::= <TokenType::VolatileKeyword>
+ *                      | <TokenType::InlineKeyword>
+ *                      | <TokenType::GotoKeyword>
+ */
+class GNUASMQualifier : public Node
+{
+public:
+    enum Qualifier
+    {
+        Volatile,
+        Inline,
+        Goto
+    };
+
+private:
+    Qualifier m_qualifier;
+
+public:
+    explicit GNUASMQualifier(Lexer::CTokenIterator qualifier);
+};
+
+/**
+ * [GNU]:
+ *
+ *
+ * <GNUASMStatement> ::= <TokenType::GNUASM> {<GNUASMQualifier>} <TokenType::OpenParentheses> <GNUASMArgument>
+ *                       <TokenType::CloseParentheses> <TokenType::SemiColon>
+ *
+ * <GNUASMArgument> ::= <GNUASMString>
+ *                    | <GNUASMString> <TokenType::Colon> [<GNUASMOperands>]
+ *                    | <GNUASMString> <TokenType::Colon> [<GNUASMOperands>] <TokenType::Colon> [<GNUASMOperands>]
+ *                    | <GNUASMString> <TokenType::Colon> [<GNUASMOperands>] <TokenType::Colon> [<GNUASMOperands>]
+ *                      <TokenType::Colon> <GNUASMClobbers>
+ *
+ * <GNUASMOperands> ::= <GNUASMOperand> { <TokenType::Comma> <GNUASMOperand> }
+ *
+ * <GNUASMOperand> ::= [ <TokenType::OpenSquareBracket> <TokenType::Identifier> <TokenType::CloseSquareBracket>]
+ *                     <GNUASMString> <TokenType::OpenParentheses> <Expression> <TokenType::CloseParentheses>
+ *
+ * <GNUASMClobbers> ::= <GNUASMString> { <TokenType::Colon> <GNUASMString> }
+ */
+class GNUASMStatement final : public Node
+{
+    std::vector<GNUASMQualifier> m_qualifiers;
+    std::string m_asmString;
+    struct GNUASMOperand
+    {
+        const Lexer::CToken* optionalIdentifier;
+        std::string string;
+        Expression expression;
+    };
+    std::vector<GNUASMOperand> m_firstList;
+    std::vector<GNUASMOperand> m_secondList;
+    std::vector<std::string> m_clobbers;
+
+public:
+    GNUASMStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::vector<GNUASMQualifier> qualifiers,
+                    std::string asmString, std::vector<GNUASMOperand> firstList, std::vector<GNUASMOperand> secondList,
+                    std::vector<std::string> clobbers);
 };
 
 } // namespace cld::Syntax

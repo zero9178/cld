@@ -271,8 +271,14 @@ std::optional<Syntax::UnaryExpression> parseUnaryExpression(Lexer::CTokenIterato
 std::optional<Syntax::PostFixExpression> parsePostFixExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                                 Context& context);
 
+Syntax::PrimaryExpressionConstant parseStringLiteral(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
+                                                     Context& context);
+
 std::optional<Syntax::GNUAttributes> parseGNUAttributes(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                         Context& context);
+
+std::optional<Syntax::GNUSimpleASM> parseGNUSimpleASM(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
+                                                      Context& context);
 } // namespace cld::Parser
 
 template <class... Args>

@@ -122,6 +122,9 @@ enum class TokenType : std::uint8_t
     GotoKeyword,    ///<[C,OpenCL]
     UnderlineBool,  ///<[C,OpenCL]
     GNUAttribute,   ///<[GNUC]
+    GNUExtension,   ///<[GNUC]
+    GNUTypeOf,      ///<[GNUC]
+    GNUASM,         ///<[GNUC]
     Ellipse,
     PPNumber,      ///<[PP]
     Backslash,     ///<[PP]

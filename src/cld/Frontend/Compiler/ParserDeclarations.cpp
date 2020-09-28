@@ -133,7 +133,11 @@ std::optional<cld::Syntax::Declaration>
                 initDeclarators.emplace_back(std::make_unique<Declarator>(std::move(**alreadyParsedDeclarator)),
                                              nullptr);
             }
-            // GNU Attribute for this case has already been parsed by the caller
+            // TODO: Store
+            // GNU Attribute for this case may have already been parsed by the caller if there was no asm statement
+            // but attributes
+            parseGNUSimpleASM(begin, end, context);
+            parseGNUAttributes(begin, end, context);
         }
         else
         {
@@ -152,6 +156,7 @@ std::optional<cld::Syntax::Declaration>
                                              nullptr);
             }
             // TODO: Store
+            parseGNUSimpleASM(begin, end, context);
             parseGNUAttributes(begin, end, context);
         }
     }
@@ -188,6 +193,7 @@ std::optional<cld::Syntax::Declaration>
                 initDeclarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)), nullptr);
             }
             // TODO: Store
+            parseGNUSimpleASM(begin, end, context);
             parseGNUAttributes(begin, end, context);
         }
         else
@@ -206,6 +212,7 @@ std::optional<cld::Syntax::Declaration>
                 initDeclarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)), nullptr);
             }
             // TODO: Store
+            parseGNUSimpleASM(begin, end, context);
             parseGNUAttributes(begin, end, context);
         }
     } while (true);
@@ -259,6 +266,19 @@ std::optional<cld::Syntax::ExternalDeclaration>
     cld::Parser::parseExternalDeclaration(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context)
 {
     const auto* start = begin;
+    begin = std::find_if_not(
+        begin, end, [](const Lexer::CToken& token) { return token.getTokenType() == Lexer::TokenType::GNUExtension; });
+
+    if (begin != end && begin->getTokenType() == Lexer::TokenType::GNUASM)
+    {
+        auto result = parseGNUSimpleASM(begin, end, context);
+        expect(Lexer::TokenType::SemiColon, begin, end, context);
+        if (result)
+        {
+            return {std::move(*result)};
+        }
+        return {};
+    }
 
     auto declarationSpecifiers = parseDeclarationSpecifierList(
         begin, end,
@@ -612,6 +632,11 @@ std::optional<cld::Syntax::StructOrUnionSpecifier>
         return {};
     }
 
+    const auto* temp = begin;
+    begin = std::find_if_not(
+        begin, end, [](const Lexer::CToken& token) { return token.getTokenType() == Lexer::TokenType::GNUExtension; });
+    bool hadExtension = temp != begin;
+
     // TODO: Store
     parseGNUAttributes(begin, end, context);
 
@@ -629,7 +654,8 @@ std::optional<cld::Syntax::StructOrUnionSpecifier>
         begin++;
     }
 
-    if (begin == end || begin->getTokenType() != Lexer::TokenType::OpenBrace)
+    // __extension__ only allowed for struct definitions, not declarations
+    if ((begin == end || begin->getTokenType() != Lexer::TokenType::OpenBrace) && !hadExtension)
     {
         if (!name)
         {
@@ -639,9 +665,12 @@ std::optional<cld::Syntax::StructOrUnionSpecifier>
         }
         return StructOrUnionSpecifier(start, begin, isUnion, name, {});
     }
+    const Lexer::CToken* openBrace = nullptr;
+    if (expect(Lexer::TokenType::OpenBrace, begin, end, context))
+    {
+        openBrace = begin - 1;
+    }
 
-    const auto* openBrace = begin;
-    begin++;
     std::vector<StructOrUnionSpecifier::StructDeclaration> structDeclarations;
     while (begin < end
            && (firstIsInSpecifierQualifier(*begin, context) || begin->getTokenType() == Lexer::TokenType::Identifier))
@@ -709,26 +738,36 @@ std::optional<cld::Syntax::StructOrUnionSpecifier>
         }
         structDeclarations.push_back({std::move(specifierQualifiers), std::move(declarators)});
     }
-    if (!expect(Lexer::TokenType::CloseBrace, begin, end, context))
+    if (openBrace)
     {
-        context.skipUntil(begin, end);
+        if (!expect(Lexer::TokenType::CloseBrace, begin, end, context,
+                    [&] { return Notes::TO_MATCH_N_HERE.args(*openBrace, context.getSourceInterface(), *openBrace); }))
+        {
+            context.skipUntil(begin, end);
+        }
     }
-    // TODO: Store
-    parseGNUAttributes(begin, end, context);
+    else
+    {
+        if (!expect(Lexer::TokenType::CloseBrace, begin, end, context))
+        {
+            context.skipUntil(begin, end);
+        }
+    }
     if (structDeclarations.empty())
     {
         if (isUnion)
         {
             context.log(Errors::Parser::UNION_REQUIRES_AT_LEAST_ONE_FIELD.args(
-                *openBrace, context.getSourceInterface(), std::forward_as_tuple(*openBrace, *(begin - 1))));
+                *start, context.getSourceInterface(), std::forward_as_tuple(*start, *(begin - 1))));
         }
         else
         {
             context.log(Errors::Parser::STRUCT_REQUIRES_AT_LEAST_ONE_FIELD.args(
-                *openBrace, context.getSourceInterface(), std::forward_as_tuple(*openBrace, *(begin - 1))));
+                *start, context.getSourceInterface(), std::forward_as_tuple(*start, *(begin - 1))));
         }
-        return {};
     }
+    // TODO: Store
+    parseGNUAttributes(begin, end, context);
     return StructOrUnionSpecifier(start, begin, isUnion, name, std::move(structDeclarations));
 }
 
@@ -1745,11 +1784,15 @@ std::optional<cld::Syntax::CompoundStatement> cld::Parser::parseCompoundStatemen
 std::optional<cld::Syntax::CompoundItem> cld::Parser::parseCompoundItem(Lexer::CTokenIterator& begin,
                                                                         Lexer::CTokenIterator end, Context& context)
 {
-    if (firstIsInDeclarationSpecifier(*begin, context)
-        && !(begin < end && begin->getTokenType() == Lexer::TokenType::Identifier && begin + 1 < end
-             && (begin + 1)->getTokenType() == Lexer::TokenType::Colon))
+    const auto* lookahead = std::find_if_not(
+        begin, end, [](const Lexer::CToken& token) { return token.getTokenType() == Lexer::TokenType::GNUExtension; });
+
+    if (lookahead != end && firstIsInDeclarationSpecifier(*lookahead, context)
+        && !(lookahead->getTokenType() == Lexer::TokenType::Identifier && lookahead + 1 < end
+             && (lookahead + 1)->getTokenType() == Lexer::TokenType::Colon))
     {
-        auto declaration = parseDeclaration(begin, end, context);
+        auto declaration = parseDeclaration(lookahead, end, context);
+        begin = lookahead;
         if (!declaration)
         {
             return {};
@@ -2607,4 +2650,61 @@ std::optional<cld::Syntax::GNUAttributes> cld::Parser::parseGNUAttributes(Lexer:
         }
     }
     return Syntax::GNUAttributes(start, begin, std::move(attributes));
+}
+
+std::optional<cld::Syntax::GNUSimpleASM> cld::Parser::parseGNUSimpleASM(Lexer::CTokenIterator& begin,
+                                                                        Lexer::CTokenIterator end, Context& context)
+{
+    if (context.getSourceInterface().getLanguageOptions().extension != cld::LanguageOptions::Extension::GNU
+        || begin == end || begin->getTokenType() != Lexer::TokenType::GNUASM)
+    {
+        return {};
+    }
+    const auto* start = begin++;
+    const Lexer::CToken* openParentheses = nullptr;
+    if (expect(Lexer::TokenType::OpenParentheses, begin, end, context))
+    {
+        openParentheses = begin - 1;
+    }
+    else
+    {
+        context.skipUntil(begin, end,
+                          Context::fromTokenTypes(Lexer::TokenType::CloseParentheses, Lexer::TokenType::StringLiteral));
+    }
+    if (!expect(Lexer::TokenType::StringLiteral, begin, end, context))
+    {
+        context.skipUntil(begin, end, Context::fromTokenTypes(Lexer::TokenType::CloseParentheses));
+        if (begin == end)
+        {
+            return {};
+        }
+        if (begin->getTokenType() == Lexer::TokenType::CloseParentheses)
+        {
+            begin++;
+        }
+        return {};
+    }
+    const auto* literalStart = begin;
+    auto literal = parseStringLiteral(begin, end, context);
+    std::string value;
+    if (!std::holds_alternative<std::string>(literal.getValue()))
+    {
+        context.log(Errors::Parser::EXPECTED_NORMAL_STRING_LITERAL_INSIDE_OF_ASM.args(
+            llvm::ArrayRef(literalStart, begin), context.getSourceInterface(), llvm::ArrayRef(literalStart, begin)));
+    }
+    else
+    {
+        value = cld::get<std::string>(literal.getValue());
+    }
+    if (openParentheses)
+    {
+        expect(Lexer::TokenType::CloseParentheses, begin, end, context, [&] {
+            return Notes::TO_MATCH_N_HERE.args(*openParentheses, context.getSourceInterface(), *openParentheses);
+        });
+    }
+    else
+    {
+        expect(Lexer::TokenType::CloseParentheses, begin, end, context);
+    }
+    return GNUSimpleASM(start, begin, std::move(value));
 }

@@ -1350,3 +1350,34 @@ cld::Syntax::GNUAttributes::GNUAttributes(Lexer::CTokenIterator begin, Lexer::CT
     : Node(begin, end), m_attributes(std::move(attributes))
 {
 }
+
+cld::Syntax::GNUSimpleASM::GNUSimpleASM(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::string string)
+    : Node(begin, end), m_string(std::move(string))
+{
+}
+
+cld::Syntax::GNUASMQualifier::GNUASMQualifier(Lexer::CTokenIterator qualifier)
+    : Node(qualifier, qualifier + 1), m_qualifier([qualifier] {
+          switch (qualifier->getTokenType())
+          {
+              case Lexer::TokenType::VolatileKeyword: return Qualifier::Volatile;
+              case Lexer::TokenType::InlineKeyword: return Qualifier::Inline;
+              case Lexer::TokenType::GotoKeyword: return Qualifier::Goto;
+              default: CLD_UNREACHABLE;
+          }
+      }())
+{
+}
+
+cld::Syntax::GNUASMStatement::GNUASMStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
+                                              std::vector<GNUASMQualifier> qualifiers, std::string asmString,
+                                              std::vector<GNUASMOperand> firstList,
+                                              std::vector<GNUASMOperand> secondList, std::vector<std::string> clobbers)
+    : Node(begin, end),
+      m_qualifiers(std::move(qualifiers)),
+      m_asmString(std::move(asmString)),
+      m_firstList(std::move(firstList)),
+      m_secondList(std::move(secondList)),
+      m_clobbers(std::move(clobbers))
+{
+}

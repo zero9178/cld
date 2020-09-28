@@ -49,6 +49,10 @@ cld::Semantics::TranslationUnit cld::Semantics::SemanticAnalysis::visit(const Sy
                             [](auto&& value) -> TranslationUnit::Variant { return {std::move(value)}; });
                     });
                 return ret;
+            },
+            [&](const Syntax::GNUSimpleASM&) -> std::vector<TranslationUnit::Variant> {
+                // TODO:
+                return {};
             });
         globals.insert(globals.end(), std::move_iterator(result.begin()), std::move_iterator(result.end()));
     }

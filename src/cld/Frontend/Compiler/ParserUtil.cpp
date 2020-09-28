@@ -178,7 +178,8 @@ bool cld::Parser::firstIsInPointer(const Lexer::CToken& token, const cld::Parser
 
 [[maybe_unused]] bool cld::Parser::firstIsInCompoundItem(const Lexer::CToken& token, const cld::Parser::Context& context)
 {
-    return firstIsInDeclaration(token, context) || firstIsInStatement(token, context);
+    return firstIsInDeclaration(token, context) || firstIsInStatement(token, context)
+           || token.getTokenType() == Lexer::TokenType::GNUExtension;
 }
 
 bool cld::Parser::firstIsInInitializer(const Lexer::CToken& token, const cld::Parser::Context& context)
@@ -293,7 +294,8 @@ bool cld::Parser::firstIsInUnaryExpression(const Lexer::CToken& token, const cld
            || token.getTokenType() == Lexer::TokenType::Minus
            || token.getTokenType() == Lexer::TokenType::BitWiseNegation
            || token.getTokenType() == Lexer::TokenType::LogicalNegation
-           || token.getTokenType() == Lexer::TokenType::SizeofKeyword;
+           || token.getTokenType() == Lexer::TokenType::SizeofKeyword
+           || token.getTokenType() == Lexer::TokenType::GNUExtension;
 }
 
 bool cld::Parser::firstIsInPostFixExpression(const Lexer::CToken& token, const cld::Parser::Context& context)

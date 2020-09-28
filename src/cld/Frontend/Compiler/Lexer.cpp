@@ -34,7 +34,10 @@ bool isKeyword(std::string_view characters, const cld::LanguageOptions& language
            || characters == "restrict" || characters == "do" || characters == "if" || characters == "static"
            || characters == "while" || characters == "inline" || characters == "_Bool"
            || (languageOptions.extension == cld::LanguageOptions::Extension::GNU
-               && (characters == "__attribute__" || characters == "__inline__"));
+               && (characters == "__attribute__" || characters == "__inline__" || characters == "__extension__"
+                   || characters == "asm" || characters == "typeof" || characters == "__typeof__"
+                   || characters == "__asm__" || characters == "__volatile__" || characters == "__const__"
+                   || characters == "__restrict__"));
 }
 
 TokenType charactersToKeyword(std::string_view characters)
@@ -104,7 +107,7 @@ TokenType charactersToKeyword(std::string_view characters)
     {
         return TokenType::UnionKeyword;
     }
-    if (characters == "const")
+    if (characters == "const" || characters == "__const__")
     {
         return TokenType::ConstKeyword;
     }
@@ -144,7 +147,7 @@ TokenType charactersToKeyword(std::string_view characters)
     {
         return TokenType::SizeofKeyword;
     }
-    if (characters == "volatile")
+    if (characters == "volatile" || characters == "__volatile__")
     {
         return TokenType::VolatileKeyword;
     }
@@ -168,7 +171,7 @@ TokenType charactersToKeyword(std::string_view characters)
     {
         return TokenType::VoidKeyword;
     }
-    if (characters == "restrict")
+    if (characters == "restrict" || characters == "__restrict__")
     {
         return TokenType::RestrictKeyword;
     }
@@ -183,6 +186,18 @@ TokenType charactersToKeyword(std::string_view characters)
     if (characters == "__attribute__")
     {
         return TokenType::GNUAttribute;
+    }
+    if (characters == "__extension__")
+    {
+        return TokenType::GNUExtension;
+    }
+    if (characters == "__typeof__" || characters == "typeof")
+    {
+        return TokenType::GNUTypeOf;
+    }
+    if (characters == "__asm__" || characters == "asm")
+    {
+        return TokenType::GNUASM;
     }
     CLD_UNREACHABLE;
 }
@@ -2851,6 +2866,9 @@ std::string_view cld::Lexer::tokenName(cld::Lexer::TokenType tokenType)
         case TokenType::Miscellaneous: CLD_UNREACHABLE;
         case TokenType::Backslash: return "'\\'";
         case TokenType::GNUAttribute: return "'__attribute__'";
+        case TokenType::GNUExtension: return "'__extension__'";
+        case TokenType::GNUASM: return "'asm'";
+        case TokenType::GNUTypeOf: return "'typeof'";
     }
     CLD_UNREACHABLE;
 }
@@ -2950,6 +2968,9 @@ std::string_view cld::Lexer::tokenValue(cld::Lexer::TokenType tokenType)
         case TokenType::Miscellaneous: CLD_UNREACHABLE;
         case TokenType::Backslash: return "\\";
         case TokenType::GNUAttribute: return "__attribute__";
+        case TokenType::GNUExtension: return "__extension__";
+        case TokenType::GNUASM: return "asm";
+        case TokenType::GNUTypeOf: return "typeof";
     }
     CLD_UNREACHABLE;
 }

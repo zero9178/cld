@@ -1113,6 +1113,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                               UnaryOperator(UnaryOperator::BooleanNegate, node.getUnaryToken(),
                                             std::make_unique<Expression>(std::move(value))));
         }
+        case Syntax::UnaryExpressionUnaryOperator::UnaryOperator ::GNUExtension: return value;
     }
     CLD_UNREACHABLE;
 }
