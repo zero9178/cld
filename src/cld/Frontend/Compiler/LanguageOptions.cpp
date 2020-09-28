@@ -132,5 +132,14 @@ cld::LanguageOptions cld::LanguageOptions::fromTriple(Triple triple, Language la
     {
         options.sizeTType = SizeTType ::UnsignedLong;
     }
+    if (triple.getArchitecture() == Architecture::x86_64 && triple.getPlatform() != Platform::Windows)
+    {
+        options.vaListKind = BuiltInVaList::x86_64ABI;
+    }
+    else if ((triple.getArchitecture() == Architecture::x86_64 && triple.getPlatform() == Platform::Windows)
+             || triple.getArchitecture() == Architecture::x86)
+    {
+        options.vaListKind = BuiltInVaList ::CharPtr;
+    }
     return options;
 }

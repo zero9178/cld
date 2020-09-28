@@ -506,9 +506,9 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                                               }),
                                    node.getIdentifier(), node.getIdentifier() + 1));
     }
-    auto type = std::holds_alternative<const Declaration*>(*result) ?
-                    cld::get<const Declaration*>(*result)->getType() :
-                    cld::get<const FunctionDefinition*>(*result)->getType();
+    auto type = cld::match(
+        *result, [](const std::pair<ConstValue, Type>&) -> Type { CLD_UNREACHABLE; },
+        [](const Type&) -> Type { CLD_UNREACHABLE; }, [](const auto* ptr) { return ptr->getType(); });
     return Expression(std::move(type), ValueCategory::Lvalue,
                       DeclarationRead(cld::match(*result,
                                                  [](auto&& value) -> DeclarationRead::Variant {
@@ -765,7 +765,8 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                 decl.getDeclRead(), [](const FunctionDefinition*) { return true; },
                 [](const Declaration* declaration) {
                     return std::holds_alternative<FunctionType>(declaration->getType().getVariant());
-                });
+                },
+                [](const BuiltinFunction*) { return true; });
         }();
         auto& argumentTypes = ft.getArguments();
         if (node.getOptionalAssignmentExpressions().size() < argumentTypes.size())

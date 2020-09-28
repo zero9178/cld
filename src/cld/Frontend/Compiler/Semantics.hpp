@@ -717,10 +717,13 @@ class FunctionDefinition;
 
 class Declaration;
 
+class BuiltinFunction;
+
 class DeclarationRead final
 {
 public:
-    using Variant = std::variant<const Declaration * CLD_NON_NULL, const FunctionDefinition * CLD_NON_NULL>;
+    using Variant = std::variant<const Declaration * CLD_NON_NULL, const FunctionDefinition * CLD_NON_NULL,
+                                 const BuiltinFunction * CLD_NON_NULL>;
 
 private:
     Variant m_declRead;
@@ -1390,10 +1393,12 @@ class ExpressionStatement;
 
 class GotoStatement;
 
-class Statement
-    : public MonadicInheritance<ForStatement, ReturnStatement, ExpressionStatement, IfStatement, CompoundStatement,
-                                HeadWhileStatement, FootWhileStatement, BreakStatement, ContinueStatement,
-                                SwitchStatement, DefaultStatement, CaseStatement, GotoStatement, LabelStatement>
+class GNUASMStatement;
+
+class Statement : public MonadicInheritance<ForStatement, ReturnStatement, ExpressionStatement, IfStatement,
+                                            CompoundStatement, HeadWhileStatement, FootWhileStatement, BreakStatement,
+                                            ContinueStatement, SwitchStatement, DefaultStatement, CaseStatement,
+                                            GotoStatement, LabelStatement, GNUASMStatement>
 {
     std::int64_t m_scope;
 
@@ -1792,6 +1797,12 @@ public:
     }
 };
 
+class GNUASMStatement final : public Statement
+{
+public:
+    GNUASMStatement(std::int64_t scope) : Statement(scope, std::in_place_type<GNUASMStatement>) {}
+};
+
 class StructDefinition
 {
     std::string_view m_name;
@@ -2048,6 +2059,35 @@ public:
     void setCompoundStatement(CompoundStatement&& compoundStatement)
     {
         m_compoundStatement = std::move(compoundStatement);
+    }
+};
+
+class BuiltinFunction final
+{
+    Type m_type;
+
+public:
+    enum Kind
+    {
+        VAStart,
+        VAEnd,
+        VACopy
+    };
+
+private:
+    Kind m_kind;
+
+public:
+    BuiltinFunction(Type type, Kind kind) : m_type(std::move(type)), m_kind(kind) {}
+
+    [[nodiscard]] const Type& getType() const noexcept
+    {
+        return m_type;
+    }
+
+    [[nodiscard]] Kind getKind() const noexcept
+    {
+        return m_kind;
     }
 };
 

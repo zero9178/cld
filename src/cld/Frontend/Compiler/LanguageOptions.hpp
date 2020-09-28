@@ -54,6 +54,12 @@ struct LanguageOptions
         GNU,
         Microsoft
     } extension{Extension::None};
+    enum class BuiltInVaList
+    {
+        CharPtr,
+        VoidPtr,
+        x86_64ABI
+    } vaListKind{};
 
     static LanguageOptions native(Language language = Language::C99);
 

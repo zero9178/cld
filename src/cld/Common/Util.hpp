@@ -198,7 +198,7 @@ constexpr decltype(auto) visitImpl(Callable&& callable, Variant&& variant,
     {
         return std::forward<Callable>(callable)(cld::get<i>(std::forward<Variant>(variant)));
     }
-    else if constexpr (i != 0)
+    if constexpr (i != 0)
     {
         return visitImpl<i - 1>(std::forward<Callable>(callable), std::forward<Variant>(variant));
     }

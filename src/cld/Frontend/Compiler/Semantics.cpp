@@ -1247,14 +1247,24 @@ cld::Semantics::Type cld::Semantics::BuiltinType::create(bool isConst, bool isVo
     return cld::Semantics::Type(isConst, isVolatile, BuiltinType(kind));
 }
 
-std::size_t cld::Semantics::BuiltinType::getSizeOf(const cld::Semantics::ProgramInterface&) const
+std::size_t cld::Semantics::BuiltinType::getSizeOf(const cld::Semantics::ProgramInterface& programInterface) const
 {
-    // TODO:
+    switch (programInterface.getLanguageOptions().vaListKind)
+    {
+        case LanguageOptions::BuiltInVaList::CharPtr:
+        case LanguageOptions::BuiltInVaList::VoidPtr:
+        case LanguageOptions::BuiltInVaList::x86_64ABI: return programInterface.getLanguageOptions().sizeOfVoidStar;
+    }
     CLD_UNREACHABLE;
 }
 
-std::size_t cld::Semantics::BuiltinType::getAlignOf(const cld::Semantics::ProgramInterface&) const
+std::size_t cld::Semantics::BuiltinType::getAlignOf(const cld::Semantics::ProgramInterface& programInterface) const
 {
-    // TODO:
+    switch (programInterface.getLanguageOptions().vaListKind)
+    {
+        case LanguageOptions::BuiltInVaList::CharPtr:
+        case LanguageOptions::BuiltInVaList::VoidPtr:
+        case LanguageOptions::BuiltInVaList::x86_64ABI: return programInterface.getLanguageOptions().sizeOfVoidStar;
+    }
     CLD_UNREACHABLE;
 }

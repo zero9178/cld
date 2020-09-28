@@ -514,8 +514,9 @@ std::unique_ptr<cld::Semantics::LabelStatement>
     return storage;
 }
 
-std::unique_ptr<cld::Semantics::Statement> cld::Semantics::SemanticAnalysis::visit(const cld::Syntax::GNUASMStatement&)
+std::unique_ptr<cld::Semantics::GNUASMStatement>
+    cld::Semantics::SemanticAnalysis::visit(const cld::Syntax::GNUASMStatement&)
 {
     // TODO:
-    return {};
+    return std::make_unique<GNUASMStatement>(m_currentScope);
 }

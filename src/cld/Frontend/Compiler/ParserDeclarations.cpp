@@ -2840,6 +2840,11 @@ std::optional<cld::Syntax::GNUASMStatement>
         expect(Lexer::TokenType::CloseParentheses, begin, end, context);
     }
 
+    if (!expect(Lexer::TokenType::SemiColon, begin, end, context))
+    {
+        context.skipUntil(begin, end);
+    }
+
     return GNUASMStatement(start, begin, std::move(qualifiers), std::move(asmString), std::move(first),
                            std::move(second), std::move(clobber));
 }

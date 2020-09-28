@@ -28,8 +28,8 @@ public:
     struct DeclarationInScope
     {
         Lexer::CTokenIterator identifier;
-        using Variant = std::variant<const Declaration * CLD_NON_NULL, const FunctionDefinition * CLD_NON_NULL, Type,
-                                     std::pair<ConstValue, Type>>;
+        using Variant = std::variant<const Declaration * CLD_NON_NULL, const FunctionDefinition * CLD_NON_NULL,
+                                     const BuiltinFunction * CLD_NON_NULL, Type, std::pair<ConstValue, Type>>;
         Variant declared;
     };
 

@@ -779,7 +779,7 @@ const cld::Semantics::Type* cld::Semantics::SemanticAnalysis::getTypedef(std::st
     return std::get_if<Type>(lookupDecl(name));
 }
 
-const cld::Semantics::Type* cld::Semantics::SemanticAnalysis::getBuiltin(std::string_view name) const
+const cld::Semantics::Type* cld::Semantics::SemanticAnalysis::getBuiltinType(std::string_view name) const
 {
     if (name == "__builtin_va_list")
     {
@@ -803,7 +803,7 @@ const cld::Semantics::SemanticAnalysis::DeclarationInScope::Variant*
         }
         curr = m_scopes[curr].previousScope;
     }
-    return nullptr;
+    return getBuiltinFuncDecl(name);
 }
 
 std::tuple<bool, bool, bool>
@@ -1292,7 +1292,11 @@ cld::Semantics::ConstValue
             if (mode != Initialization
                 || cld::match(
                     declRead.getDeclRead(), [](const FunctionDefinition*) { return false; },
-                    [](const Declaration* declaration) { return declaration->getLifetime() != Lifetime::Static; }))
+                    [](const Declaration* declaration) { return declaration->getLifetime() != Lifetime::Static; },
+                    [](const BuiltinFunction*) {
+                        // TODO:?
+                        return false;
+                    }))
             {
                 logger(Errors::Semantics::VARIABLE_ACCESS_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
                     declRead, m_sourceInterface, declRead));
@@ -1643,4 +1647,39 @@ cld::Semantics::ConstValue
             auto exp = evaluate(memberAccess.getRecordExpression(), mode, logger);
             return {};
         });
+}
+
+const cld::Semantics::ProgramInterface::DeclarationInScope::Variant*
+    cld::Semantics::SemanticAnalysis::getBuiltinFuncDecl(std::string_view name) const CLD_NULLABLE
+{
+    if (name == "__builtin_va_start")
+    {
+        static BuiltinFunction builtinVAStart(
+            FunctionType::create(PrimitiveType::createVoid(false, false),
+                                 {{BuiltinType::create(false, false, BuiltinType::BuiltinVaList), ""}}, true, false),
+            BuiltinFunction::VAStart);
+        static DeclarationInScope::Variant temp = &builtinVAStart;
+        return &temp;
+    }
+    if (name == "__builtin_va_end")
+    {
+        static BuiltinFunction builtinVAStart(
+            FunctionType::create(PrimitiveType::createVoid(false, false),
+                                 {{BuiltinType::create(false, false, BuiltinType::BuiltinVaList), ""}}, false, false),
+            BuiltinFunction::VAEnd);
+        static DeclarationInScope::Variant temp = &builtinVAStart;
+        return &temp;
+    }
+    if (name == "__builtin_va_copy")
+    {
+        static BuiltinFunction builtinVAStart(
+            FunctionType::create(PrimitiveType::createVoid(false, false),
+                                 {{BuiltinType::create(false, false, BuiltinType::BuiltinVaList), ""},
+                                  {BuiltinType::create(false, false, BuiltinType::BuiltinVaList), ""}},
+                                 false, false),
+            BuiltinFunction::VACopy);
+        static DeclarationInScope::Variant temp = &builtinVAStart;
+        return &temp;
+    }
+    return nullptr;
 }

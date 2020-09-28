@@ -516,7 +516,7 @@ cld::Semantics::Type
         const auto* type = getTypedef(*name);
         if (!type)
         {
-            type = getBuiltin(*name);
+            type = getBuiltinType(*name);
         }
         CLD_ASSERT(type);
         auto ret = Type(isConst, isVolatile, type->getVariant());
@@ -592,7 +592,8 @@ cld::Semantics::Type
             {
                 auto [prev, notRedefined] = getCurrentScope().types.insert(
                     {name, TagTypeInScope{structOrUnion->getIdentifierLoc(), TagTypeInScope::UnionDecl{}}});
-                if (!notRedefined && !std::holds_alternative<TagTypeInScope::UnionDecl>(prev->second.tagType))
+                if (!notRedefined && !std::holds_alternative<TagTypeInScope::UnionDecl>(prev->second.tagType)
+                    && structOrUnion->getIdentifierLoc() != prev->second.identifier)
                 {
                     log(Errors::REDEFINITION_OF_SYMBOL_N.args(*structOrUnion->getIdentifierLoc(), m_sourceInterface,
                                                               *structOrUnion->getIdentifierLoc()));
@@ -600,18 +601,31 @@ cld::Semantics::Type
                                                              *prev->second.identifier));
                     definitionIsValid = false;
                 }
+                else if (!notRedefined && !std::holds_alternative<TagTypeInScope::UnionDecl>(prev->second.tagType)
+                         && structOrUnion->getIdentifierLoc() == prev->second.identifier)
+                {
+                    return UnionType::create(isConst, isVolatile, name,
+                                             static_cast<std::size_t>(cld::get<UnionDefTag>(prev->second.tagType)));
+                }
             }
             else
             {
                 auto [prev, notRedefined] = getCurrentScope().types.insert(
                     {name, TagTypeInScope{structOrUnion->getIdentifierLoc(), TagTypeInScope::StructDecl{}}});
-                if (!notRedefined && !std::holds_alternative<TagTypeInScope::StructDecl>(prev->second.tagType))
+                if (!notRedefined && !std::holds_alternative<TagTypeInScope::StructDecl>(prev->second.tagType)
+                    && structOrUnion->getIdentifierLoc() != prev->second.identifier)
                 {
                     log(Errors::REDEFINITION_OF_SYMBOL_N.args(*structOrUnion->getIdentifierLoc(), m_sourceInterface,
                                                               *structOrUnion->getIdentifierLoc()));
                     log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
                                                              *prev->second.identifier));
                     definitionIsValid = false;
+                }
+                else if (!notRedefined && !std::holds_alternative<TagTypeInScope::StructDecl>(prev->second.tagType)
+                         && structOrUnion->getIdentifierLoc() == prev->second.identifier)
+                {
+                    return StructType::create(isConst, isVolatile, name,
+                                              static_cast<std::size_t>(cld::get<StructDefTag>(prev->second.tagType)));
                 }
             }
         }

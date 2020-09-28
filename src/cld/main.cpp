@@ -1,4 +1,5 @@
 #include <llvm/IR/LegacyPassManager.h>
+#include <llvm/IR/Verifier.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/TargetSelect.h>
 
@@ -148,6 +149,10 @@ std::optional<cld::fs::path> compileCFile(Action action, const cld::fs::path& cS
         ol = llvm::CodeGenOpt::None;
     }
     auto targetMachine = cld::CGLLVM::generateLLVM(module, program, triple, cm, ol);
+#ifndef NDEBUG
+    llvm::verifyModule(module, &llvm::errs());
+    module.print(llvm::errs(), nullptr);
+#endif
     std::string outputFile;
     if (cli.template get<OUTPUT_FILE>())
     {
@@ -527,7 +532,11 @@ int main(int argc, char** argv)
         // TODO: Error
         return -1;
     }
-    if ((cli.get<COMPILE_ONLY>() || cli.get<ASSEMBLY_OUTPUT>() || cli.get<PREPROCESS_ONLY>()) && cli.get<OUTPUT_FILE>())
+    if ((static_cast<int>(cli.get<COMPILE_ONLY>().has_value())
+         + static_cast<int>(cli.get<ASSEMBLY_OUTPUT>().has_value())
+         + static_cast<int>(cli.get<PREPROCESS_ONLY>().has_value()))
+            > 1
+        && cli.get<OUTPUT_FILE>())
     {
         // TODO: Error
         return -1;

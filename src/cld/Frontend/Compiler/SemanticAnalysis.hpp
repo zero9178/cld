@@ -121,7 +121,9 @@ class SemanticAnalysis final : public ProgramInterface
 
     [[nodiscard]] const Semantics::Type* CLD_NULLABLE getTypedef(std::string_view name) const;
 
-    [[nodiscard]] const Semantics::Type* CLD_NULLABLE getBuiltin(std::string_view name) const;
+    [[nodiscard]] const Semantics::Type* CLD_NULLABLE getBuiltinType(std::string_view name) const;
+
+    [[nodiscard]] const DeclarationInScope::Variant* CLD_NULLABLE getBuiltinFuncDecl(std::string_view name) const;
 
     [[nodiscard]] const DeclarationInScope::Variant* CLD_NULLABLE lookupDecl(std::string_view name) const
     {
@@ -403,7 +405,7 @@ public:
 
     [[nodiscard]] std::unique_ptr<LabelStatement> visit(const Syntax::LabelStatement& node);
 
-    [[nodiscard]] std::unique_ptr<Statement> visit(const Syntax::GNUASMStatement& node);
+    [[nodiscard]] std::unique_ptr<GNUASMStatement> visit(const Syntax::GNUASMStatement& node);
 };
 
 } // namespace cld::Semantics

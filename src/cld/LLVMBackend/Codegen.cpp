@@ -964,6 +964,39 @@ class CodeGenerator final
         runDestructors(scope, m_programInterface.getScopes()[scope].previousScope);
     }
 
+    llvm::Type* vaListType = nullptr;
+
+    static bool isBuiltinFunctionCall(const cld::Semantics::Expression& expression)
+    {
+        if (!std::holds_alternative<cld::Semantics::Conversion>(expression.getVariant()))
+        {
+            return false;
+        }
+        auto& conversion = cld::get<cld::Semantics::Conversion>(expression.getVariant());
+        if (conversion.getKind() != cld::Semantics::Conversion::LValue)
+        {
+            return false;
+        }
+        if (!std::holds_alternative<cld::Semantics::DeclarationRead>(conversion.getExpression().getVariant()))
+        {
+            return false;
+        }
+        auto& decl = cld::get<cld::Semantics::DeclarationRead>(conversion.getExpression().getVariant());
+        return cld::match(
+            decl.getDeclRead(), [](const auto*) { return false; },
+            [](const cld::Semantics::BuiltinFunction*) { return true; });
+    }
+
+    static const cld::Semantics::BuiltinFunction& getBuiltinFunctionCall(const cld::Semantics::Expression& expression)
+    {
+        CLD_ASSERT(std::holds_alternative<cld::Semantics::Conversion>(expression.getVariant()));
+        auto& conversion = cld::get<cld::Semantics::Conversion>(expression.getVariant());
+        CLD_ASSERT(conversion.getKind() == cld::Semantics::Conversion::LValue);
+        CLD_ASSERT(std::holds_alternative<cld::Semantics::DeclarationRead>(conversion.getExpression().getVariant()));
+        auto& decl = cld::get<cld::Semantics::DeclarationRead>(conversion.getExpression().getVariant());
+        return *cld::get<const cld::Semantics::BuiltinFunction*>(decl.getDeclRead());
+    }
+
 public:
     explicit CodeGenerator(llvm::Module& module, const cld::Semantics::ProgramInterface& programInterface,
                            const cld::SourceInterface& sourceInterface, cld::Triple triple)
@@ -1135,8 +1168,44 @@ public:
                 }
                 return visit(valArrayType.getType());
             },
-            [&](const cld::Semantics::BuiltinType&) -> llvm::Type* {
-                // TODO:
+            [&](const cld::Semantics::BuiltinType& builtinType) -> llvm::Type* {
+                switch (builtinType.getKind())
+                {
+                    case cld::Semantics::BuiltinType::BuiltinVaList:
+                    {
+                        if (vaListType)
+                        {
+                            return vaListType;
+                        }
+                        switch (m_programInterface.getLanguageOptions().vaListKind)
+                        {
+                            case cld::LanguageOptions::BuiltInVaList::CharPtr:
+                                return vaListType = visit(cld::Semantics::PointerType::create(
+                                           false, false, false,
+                                           cld::Semantics::PrimitiveType::createChar(
+                                               false, false, m_programInterface.getLanguageOptions())));
+                            case cld::LanguageOptions::BuiltInVaList::VoidPtr:
+                                return vaListType = visit(cld::Semantics::PointerType::create(
+                                           false, false, false,
+                                           cld::Semantics::PrimitiveType::createVoid(false, false)));
+                            case cld::LanguageOptions::BuiltInVaList::x86_64ABI:
+                            {
+                                std::array<llvm::Type*, 4> fields;
+                                fields[0] = visit(cld::Semantics::PrimitiveType::createUnsignedInt(
+                                    false, false, m_programInterface.getLanguageOptions()));
+                                fields[1] = visit(cld::Semantics::PrimitiveType::createUnsignedInt(
+                                    false, false, m_programInterface.getLanguageOptions()));
+                                fields[2] = visit(cld::Semantics::PointerType::create(
+                                    false, false, false, cld::Semantics::PrimitiveType::createVoid(false, false)));
+                                fields[3] = visit(cld::Semantics::PointerType::create(
+                                    false, false, false, cld::Semantics::PrimitiveType::createVoid(false, false)));
+                                return vaListType = llvm::PointerType::getUnqual(
+                                           llvm::StructType::create(fields, "__builtin_va_list"));
+                            }
+                        }
+                        CLD_UNREACHABLE;
+                    }
+                }
                 CLD_UNREACHABLE;
             });
     }
@@ -1817,6 +1886,11 @@ public:
         visit(labelStatement.getStatement());
     }
 
+    void visit(const cld::Semantics::GNUASMStatement&)
+    {
+        // TODO:
+    }
+
     llvm::Value* visit(const cld::Semantics::Expression& expression)
     {
         return cld::match(
@@ -1854,7 +1928,8 @@ public:
             [&](const cld::Semantics::Declaration* declaration) { return m_lvalues.find(declaration); },
             [&](const cld::Semantics::FunctionDefinition* functionDefinition) {
                 return m_lvalues.find(functionDefinition);
-            });
+            },
+            [&](const cld::Semantics::BuiltinFunction*) -> decltype(m_lvalues)::iterator { CLD_UNREACHABLE; });
         CLD_ASSERT(result != m_lvalues.end());
         return result->second;
     }
@@ -2690,6 +2765,58 @@ public:
 
     llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::CallExpression& call)
     {
+        if (isBuiltinFunctionCall(call.getFunctionExpression()))
+        {
+            auto builtin = getBuiltinFunctionCall(call.getFunctionExpression());
+            switch (builtin.getKind())
+            {
+                case cld::Semantics::BuiltinFunction::VAStart:
+                {
+                    auto* list = visit(call.getArgumentExpressions()[0]);
+                    if (llvm::isa<llvm::LoadInst>(list))
+                    {
+                        auto* prev = llvm::cast<llvm::LoadInst>(list);
+                        list = prev->getPointerOperand();
+                        prev->eraseFromParent();
+                    }
+                    list = m_builder.CreateBitCast(list, m_builder.getInt8PtrTy());
+                    return m_builder.CreateIntrinsic(llvm::Intrinsic::vastart, {}, {list});
+                }
+                case cld::Semantics::BuiltinFunction::VAEnd:
+                {
+                    auto* list = visit(call.getArgumentExpressions()[0]);
+                    if (llvm::isa<llvm::LoadInst>(list))
+                    {
+                        auto* prev = llvm::cast<llvm::LoadInst>(list);
+                        list = prev->getPointerOperand();
+                        prev->eraseFromParent();
+                    }
+                    list = m_builder.CreateBitCast(list, m_builder.getInt8PtrTy());
+                    return m_builder.CreateIntrinsic(llvm::Intrinsic::vaend, {}, {list});
+                }
+                case cld::Semantics::BuiltinFunction::VACopy:
+                {
+                    auto* list1 = visit(call.getArgumentExpressions()[0]);
+                    if (llvm::isa<llvm::LoadInst>(list1))
+                    {
+                        auto* prev = llvm::cast<llvm::LoadInst>(list1);
+                        list1 = prev->getPointerOperand();
+                        prev->eraseFromParent();
+                    }
+                    list1 = m_builder.CreateBitCast(list1, m_builder.getInt8PtrTy());
+                    auto* list2 = visit(call.getArgumentExpressions()[1]);
+                    if (llvm::isa<llvm::LoadInst>(list2))
+                    {
+                        auto* prev = llvm::cast<llvm::LoadInst>(list2);
+                        list2 = prev->getPointerOperand();
+                        prev->eraseFromParent();
+                    }
+                    list2 = m_builder.CreateBitCast(list2, m_builder.getInt8PtrTy());
+                    return m_builder.CreateIntrinsic(llvm::Intrinsic::vacopy, {}, {list1, list2});
+                }
+            }
+            CLD_UNREACHABLE;
+        }
         auto* function = visit(call.getFunctionExpression());
         auto cldFt = cld::get<cld::Semantics::FunctionType>(
             cld::get<cld::Semantics::PointerType>(call.getFunctionExpression().getType().getVariant())

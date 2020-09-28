@@ -792,6 +792,10 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
         CHECK(cld::get<cld::Semantics::StructType>(decl->getType().getVariant()).getName() == "A");
         CHECK(cld::get<cld::Semantics::StructType>(decl->getType().getVariant()).getScopeOrId() == 0);
     }
+    SECTION("Defining two variables with one struct definition")
+    {
+        SEMA_PRODUCES("struct A{ int i; float f, r; } a,b;", ProducesNothing());
+    }
     SECTION("Simple union")
     {
         auto [translationUnit, errors] = generateSemantics("union A{ int i; float f, r; } a;");
