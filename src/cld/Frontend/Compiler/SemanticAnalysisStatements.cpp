@@ -513,3 +513,9 @@ std::unique_ptr<cld::Semantics::LabelStatement>
 
     return storage;
 }
+
+std::unique_ptr<cld::Semantics::Statement> cld::Semantics::SemanticAnalysis::visit(const cld::Syntax::GNUASMStatement&)
+{
+    // TODO:
+    return {};
+}

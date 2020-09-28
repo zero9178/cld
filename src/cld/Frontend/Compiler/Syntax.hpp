@@ -1028,10 +1028,12 @@ public:
  *               | <SelectionStatement>
  *               | <IterationStatement>
  *               | <JumpStatement>
+ *        [GNU:] | <GNUASMStatement>
  */
-using Statement = std::variant<ReturnStatement, ExpressionStatement, IfStatement, CompoundStatement, ForStatement,
-                               HeadWhileStatement, FootWhileStatement, BreakStatement, ContinueStatement,
-                               SwitchStatement, DefaultStatement, CaseStatement, GotoStatement, LabelStatement>;
+using Statement =
+    std::variant<ReturnStatement, ExpressionStatement, IfStatement, CompoundStatement, ForStatement, HeadWhileStatement,
+                 FootWhileStatement, BreakStatement, ContinueStatement, SwitchStatement, DefaultStatement,
+                 CaseStatement, GotoStatement, LabelStatement, GNUASMStatement>;
 
 /**
  * <IfStatement> ::= <TokenType::IfKeyword> <TokenType::OpenParentheses> <Expression> <TokenType::CloseParentheses>
@@ -1542,7 +1544,8 @@ class DirectDeclaratorIdentifier final : public Node
     Lexer::CTokenIterator m_identifierLoc;
 
 public:
-    DirectDeclaratorIdentifier(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, Lexer::CTokenIterator identifierLoc);
+    DirectDeclaratorIdentifier(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
+                               Lexer::CTokenIterator identifierLoc);
 
     [[nodiscard]] Lexer::CTokenIterator getIdentifierLoc() const;
 };
@@ -2032,12 +2035,16 @@ class GNUASMStatement final : public Node
 {
     std::vector<GNUASMQualifier> m_qualifiers;
     std::string m_asmString;
+
+public:
     struct GNUASMOperand
     {
         const Lexer::CToken* optionalIdentifier;
         std::string string;
         Expression expression;
     };
+
+private:
     std::vector<GNUASMOperand> m_firstList;
     std::vector<GNUASMOperand> m_secondList;
     std::vector<std::string> m_clobbers;

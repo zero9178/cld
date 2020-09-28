@@ -228,7 +228,8 @@ Syntax::Expression parseExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIt
 std::optional<Syntax::AssignmentExpression> parseAssignmentExpression(Lexer::CTokenIterator& begin,
                                                                       Lexer::CTokenIterator end, Context& context);
 
-std::optional<Syntax::ConditionalExpression> parseConditionalExpression(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context);
+std::optional<Syntax::ConditionalExpression> parseConditionalExpression(Lexer::CTokenIterator& begin,
+                                                                        Lexer::CTokenIterator end, Context& context);
 
 std::optional<Syntax::LogicalOrExpression> parseLogicalOrExpression(Lexer::CTokenIterator& begin,
                                                                     Lexer::CTokenIterator end, Context& context);
@@ -279,6 +280,9 @@ std::optional<Syntax::GNUAttributes> parseGNUAttributes(Lexer::CTokenIterator& b
 
 std::optional<Syntax::GNUSimpleASM> parseGNUSimpleASM(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
                                                       Context& context);
+
+std::optional<Syntax::GNUASMStatement> parseGNUASMStatement(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end,
+                                                            Context& context);
 } // namespace cld::Parser
 
 template <class... Args>

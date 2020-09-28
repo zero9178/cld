@@ -400,6 +400,8 @@ public:
     [[nodiscard]] std::unique_ptr<GotoStatement> visit(const Syntax::GotoStatement& node);
 
     [[nodiscard]] std::unique_ptr<LabelStatement> visit(const Syntax::LabelStatement& node);
+
+    [[nodiscard]] std::unique_ptr<Statement> visit(const Syntax::GNUASMStatement& node);
 };
 
 } // namespace cld::Semantics
