@@ -1,3 +1,5 @@
+#include <llvm/Bitcode/BitcodeWriterPass.h>
+#include <llvm/IR/IRPrintingPasses.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/FileSystem.h>
@@ -151,7 +153,6 @@ std::optional<cld::fs::path> compileCFile(Action action, const cld::fs::path& cS
     auto targetMachine = cld::CGLLVM::generateLLVM(module, program, triple, cm, ol);
 #ifndef NDEBUG
     llvm::verifyModule(module, &llvm::errs());
-    module.print(llvm::errs(), nullptr);
 #endif
     std::string outputFile;
     if (cli.template get<OUTPUT_FILE>())
@@ -163,11 +164,25 @@ std::optional<cld::fs::path> compileCFile(Action action, const cld::fs::path& cS
         auto path = cSourceFile;
         if (action == Action::AssemblyOutput)
         {
-            path.replace_extension("s");
+            if (cli.template get<EMIT_LLVM>())
+            {
+                path.replace_extension("ll");
+            }
+            else
+            {
+                path.replace_extension("s");
+            }
         }
         else
         {
-            path.replace_extension("o");
+            if (cli.template get<EMIT_LLVM>())
+            {
+                path.replace_extension("bc");
+            }
+            else
+            {
+                path.replace_extension("o");
+            }
         }
         outputFile = path.u8string();
     }
@@ -181,11 +196,26 @@ std::optional<cld::fs::path> compileCFile(Action action, const cld::fs::path& cS
     }
 
     llvm::legacy::PassManager pass;
-    if (targetMachine->addPassesToEmitFile(pass, os, nullptr,
-                                           action == Action::AssemblyOutput ? llvm::CodeGenFileType::CGFT_AssemblyFile :
-                                                                              llvm::CodeGenFileType::CGFT_ObjectFile))
+    if (cli.template get<EMIT_LLVM>())
     {
-        return {};
+        if (action == Action::AssemblyOutput)
+        {
+            pass.add(llvm::createPrintModulePass(os));
+        }
+        else
+        {
+            pass.add(llvm::createBitcodeWriterPass(os));
+        }
+    }
+    else
+    {
+        if (targetMachine->addPassesToEmitFile(pass, os, nullptr,
+                                               action == Action::AssemblyOutput ?
+                                                   llvm::CodeGenFileType::CGFT_AssemblyFile :
+                                                   llvm::CodeGenFileType::CGFT_ObjectFile))
+        {
+            return {};
+        }
     }
     pass.run(module);
     os.flush();
