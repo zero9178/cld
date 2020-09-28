@@ -966,6 +966,21 @@ std::string typeToString(const cld::Semantics::Type& arg)
                 qualifiersAndSpecifiers += "enum <anonymous 0x" + llvm::utohexstr(enumType.getId()) + ">";
                 return {};
             },
+            [&](const BuiltinType& builtinType) -> std::optional<Type> {
+                if (maybeCurr->isConst())
+                {
+                    qualifiersAndSpecifiers += "const ";
+                }
+                if (maybeCurr->isVolatile())
+                {
+                    qualifiersAndSpecifiers += "volatile ";
+                }
+                switch (builtinType.getKind())
+                {
+                    case BuiltinType::BuiltinVaList: qualifiersAndSpecifiers += "va_list"; break;
+                }
+                return {};
+            },
             [&](std::monostate) -> std::optional<Type> {
                 if (maybeCurr->isConst())
                 {
@@ -1224,4 +1239,22 @@ cld::Semantics::Program cld::Semantics::analyse(const Syntax::TranslationUnit& p
     SemanticAnalysis analysis(cTokens, reporter, errors);
     auto translationUnit = analysis.visit(parseTree);
     return Program(std::move(translationUnit), std::move(cTokens), std::move(analysis));
+}
+
+cld::Semantics::Type cld::Semantics::BuiltinType::create(bool isConst, bool isVolatile,
+                                                         cld::Semantics::BuiltinType::Kind kind)
+{
+    return cld::Semantics::Type(isConst, isVolatile, BuiltinType(kind));
+}
+
+std::size_t cld::Semantics::BuiltinType::getSizeOf(const cld::Semantics::ProgramInterface&) const
+{
+    // TODO:
+    CLD_UNREACHABLE;
+}
+
+std::size_t cld::Semantics::BuiltinType::getAlignOf(const cld::Semantics::ProgramInterface&) const
+{
+    // TODO:
+    CLD_UNREACHABLE;
 }

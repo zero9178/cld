@@ -121,6 +121,8 @@ class SemanticAnalysis final : public ProgramInterface
 
     [[nodiscard]] const Semantics::Type* CLD_NULLABLE getTypedef(std::string_view name) const;
 
+    [[nodiscard]] const Semantics::Type* CLD_NULLABLE getBuiltin(std::string_view name) const;
+
     [[nodiscard]] const DeclarationInScope::Variant* CLD_NULLABLE lookupDecl(std::string_view name) const
     {
         return lookupDecl(name, m_currentScope);

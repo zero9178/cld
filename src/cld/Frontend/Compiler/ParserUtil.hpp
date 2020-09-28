@@ -81,7 +81,7 @@ constexpr Context::TokenBitSet firstStatementSet =
                             Lexer::TokenType::BreakKeyword, Lexer::TokenType::CaseKeyword,
                             Lexer::TokenType::DefaultKeyword, Lexer::TokenType::Identifier, Lexer::TokenType::DoKeyword,
                             Lexer::TokenType::WhileKeyword, Lexer::TokenType::ReturnKeyword,
-                            Lexer::TokenType::GotoKeyword, Lexer::TokenType::SemiColon)
+                            Lexer::TokenType::GotoKeyword, Lexer::TokenType::SemiColon, Lexer::TokenType::GNUASM)
     | firstExpressionSet;
 
 constexpr Context::TokenBitSet firstCompoundItem = firstDeclarationSet | firstStatementSet;

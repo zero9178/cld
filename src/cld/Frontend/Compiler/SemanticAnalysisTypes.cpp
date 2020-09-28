@@ -514,6 +514,10 @@ cld::Semantics::Type
                 *typeSpec[1], m_sourceInterface, llvm::ArrayRef(typeSpec).drop_front()));
         }
         const auto* type = getTypedef(*name);
+        if (!type)
+        {
+            type = getBuiltin(*name);
+        }
         CLD_ASSERT(type);
         auto ret = Type(isConst, isVolatile, type->getVariant());
         if (std::tuple(type->isConst(), type->isVolatile()) == std::tuple(isConst, isVolatile))

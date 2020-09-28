@@ -207,7 +207,7 @@ bool cld::Parser::firstIsInStatement(const Lexer::CToken& token, const cld::Pars
            || token.getTokenType() == Lexer::TokenType::DoKeyword
            || token.getTokenType() == Lexer::TokenType::WhileKeyword
            || token.getTokenType() == Lexer::TokenType::ReturnKeyword
-           || token.getTokenType() == Lexer::TokenType::GotoKeyword
+           || token.getTokenType() == Lexer::TokenType::GotoKeyword || token.getTokenType() == Lexer::TokenType::GNUASM
            || token.getTokenType() == Lexer::TokenType::SemiColon || firstIsInExpression(token, context);
 }
 

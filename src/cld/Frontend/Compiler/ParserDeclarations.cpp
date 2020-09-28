@@ -1370,22 +1370,29 @@ cld::Syntax::Pointer cld::Parser::parsePointer(Lexer::CTokenIterator& begin, Lex
     while (begin < end
            && (begin->getTokenType() == Lexer::TokenType::ConstKeyword
                || begin->getTokenType() == Lexer::TokenType::RestrictKeyword
-               || begin->getTokenType() == Lexer::TokenType::VolatileKeyword))
+               || begin->getTokenType() == Lexer::TokenType::VolatileKeyword
+               || begin->getTokenType() == Lexer::TokenType::GNUAttribute))
     {
         switch (begin->getTokenType())
         {
             case Lexer::TokenType::ConstKeyword:
                 typeQualifier.emplace_back(begin, begin + 1, TypeQualifier::Const);
+                begin++;
                 break;
             case Lexer::TokenType::RestrictKeyword:
                 typeQualifier.emplace_back(begin, begin + 1, TypeQualifier::Restrict);
+                begin++;
                 break;
             case Lexer::TokenType::VolatileKeyword:
                 typeQualifier.emplace_back(begin, begin + 1, TypeQualifier::Volatile);
+                begin++;
+                break;
+            case Lexer::TokenType::GNUAttribute:
+                // TODO: Store
+                parseGNUAttributes(begin, end, context);
                 break;
             default: CLD_UNREACHABLE;
         }
-        begin++;
     }
     return Pointer(start, begin, std::move(typeQualifier));
 }
@@ -2062,6 +2069,15 @@ std::optional<cld::Syntax::Statement> cld::Parser::parseStatement(Lexer::CTokenI
                 }
                 return Statement(GotoStatement(start, begin, id));
             }
+            case Lexer::TokenType::GNUASM:
+            {
+                auto statement = parseGNUASMStatement(begin, end, context);
+                if (statement)
+                {
+                    return Statement(std::move(*statement));
+                }
+                return {};
+            }
             case Lexer::TokenType::Identifier:
             {
                 if (begin + 1 < end && (begin + 1)->getTokenType() == Lexer::TokenType::Colon)
@@ -2078,15 +2094,6 @@ std::optional<cld::Syntax::Statement> cld::Parser::parseStatement(Lexer::CTokenI
                     return Statement(LabelStatement(start, begin, name, std::move(*statement)));
                 }
                 [[fallthrough]];
-            }
-            case Lexer::TokenType::GNUASM:
-            {
-                auto statement = parseGNUASMStatement(begin, end, context);
-                if (statement)
-                {
-                    return Statement(std::move(*statement));
-                }
-                return {};
             }
             default:
             {
@@ -2483,8 +2490,7 @@ std::optional<cld::Syntax::ForStatement> cld::Parser::parseForStatement(Lexer::C
 std::optional<cld::Syntax::GNUAttributes> cld::Parser::parseGNUAttributes(Lexer::CTokenIterator& begin,
                                                                           Lexer::CTokenIterator end, Context& context)
 {
-    if (context.getSourceInterface().getLanguageOptions().extension != cld::LanguageOptions::Extension::GNU
-        || begin == end || begin->getTokenType() != Lexer::TokenType::GNUAttribute)
+    if (begin == end || begin->getTokenType() != Lexer::TokenType::GNUAttribute)
     {
         return {};
     }
@@ -2701,8 +2707,7 @@ std::string parseGNUASMString(cld::Lexer::CTokenIterator& begin, cld::Lexer::CTo
 std::optional<cld::Syntax::GNUSimpleASM> cld::Parser::parseGNUSimpleASM(Lexer::CTokenIterator& begin,
                                                                         Lexer::CTokenIterator end, Context& context)
 {
-    if (context.getSourceInterface().getLanguageOptions().extension != cld::LanguageOptions::Extension::GNU
-        || begin == end || begin->getTokenType() != Lexer::TokenType::GNUASM)
+    if (begin == end || begin->getTokenType() != Lexer::TokenType::GNUASM)
     {
         return {};
     }
@@ -2758,6 +2763,81 @@ std::optional<cld::Syntax::GNUASMStatement>
     if (begin != end && begin->getTokenType() == Lexer::TokenType::Colon)
     {
         begin++;
+        auto parseASMOperand = [&context, &begin, end](std::vector<Syntax::GNUASMStatement::GNUASMOperand>& result) {
+            bool first = true;
+            while (begin != end
+                   && (first ? begin->getTokenType() == Lexer::TokenType::StringLiteral
+                                   || begin->getTokenType() == Lexer::TokenType::OpenSquareBracket :
+                               begin->getTokenType() == Lexer::TokenType::Comma))
+            {
+                if (first)
+                {
+                    first = false;
+                }
+                else
+                {
+                    begin++;
+                }
+                const Lexer::CToken* identifier = nullptr;
+                if (begin != end && begin->getTokenType() == Lexer::TokenType::OpenSquareBracket)
+                {
+                    const auto* openSquareBracket = begin++;
+                    if (expect(Lexer::TokenType::Identifier, begin, end, context))
+                    {
+                        identifier = begin - 1;
+                    }
+                    expect(Lexer::TokenType::CloseSquareBracket, begin, end, context, [&] {
+                        return Notes::TO_MATCH_N_HERE.args(*openSquareBracket, context.getSourceInterface(),
+                                                           *openSquareBracket);
+                    });
+                }
+                auto string = parseGNUASMString(begin, end, context);
+                const Lexer::CToken* subOpenParentheses = nullptr;
+                if (expect(Lexer::TokenType::OpenParentheses, begin, end, context))
+                {
+                    subOpenParentheses = begin - 1;
+                }
+                auto expression = parseExpression(begin, end, context);
+                if (subOpenParentheses)
+                {
+                    expect(Lexer::TokenType::CloseParentheses, begin, end, context, [&] {
+                        return Notes::TO_MATCH_N_HERE.args(*subOpenParentheses, context.getSourceInterface(),
+                                                           *subOpenParentheses);
+                    });
+                }
+                else
+                {
+                    expect(Lexer::TokenType::CloseParentheses, begin, end, context);
+                }
+                result.push_back({identifier, std::move(string), std::move(expression)});
+            }
+        };
+        parseASMOperand(first);
+        if (begin != end && begin->getTokenType() == Lexer::TokenType::Colon)
+        {
+            begin++;
+            parseASMOperand(second);
+            if (begin != end && begin->getTokenType() == Lexer::TokenType::Colon)
+            {
+                clobber.push_back(parseGNUASMString(begin, end, context));
+                while (begin != end && begin->getTokenType() == Lexer::TokenType::Comma)
+                {
+                    begin++;
+                    clobber.push_back(parseGNUASMString(begin, end, context));
+                }
+            }
+        }
+    }
+
+    if (openParentheses)
+    {
+        expect(Lexer::TokenType::CloseParentheses, begin, end, context, [&] {
+            return Notes::TO_MATCH_N_HERE.args(*openParentheses, context.getSourceInterface(), *openParentheses);
+        });
+    }
+    else
+    {
+        expect(Lexer::TokenType::CloseParentheses, begin, end, context);
     }
 
     return GNUASMStatement(start, begin, std::move(qualifiers), std::move(asmString), std::move(first),

@@ -779,6 +779,17 @@ const cld::Semantics::Type* cld::Semantics::SemanticAnalysis::getTypedef(std::st
     return std::get_if<Type>(lookupDecl(name));
 }
 
+const cld::Semantics::Type* cld::Semantics::SemanticAnalysis::getBuiltin(std::string_view name) const
+{
+    if (name == "__builtin_va_list")
+    {
+        static auto instance = BuiltinType::create(false, false, BuiltinType::BuiltinVaList);
+        return &instance;
+    }
+
+    return nullptr;
+}
+
 const cld::Semantics::SemanticAnalysis::DeclarationInScope::Variant*
     cld::Semantics::SemanticAnalysis::lookupDecl(std::string_view name, std::int64_t scope) const
 {

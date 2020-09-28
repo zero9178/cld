@@ -1134,6 +1134,10 @@ public:
                                                                    .isSigned()));
                 }
                 return visit(valArrayType.getType());
+            },
+            [&](const cld::Semantics::BuiltinType&) -> llvm::Type* {
+                // TODO:
+                CLD_UNREACHABLE;
             });
     }
 
