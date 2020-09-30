@@ -714,9 +714,100 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         MemberAccess(std::make_unique<Expression>(std::move(structOrUnionPtr)), index, node.getIdentifier()));
 }
 
+namespace
+{
+bool isBuiltinVAStart(const cld::Semantics::Expression& expression)
+{
+    auto* declRead = std::get_if<cld::Semantics::DeclarationRead>(&expression.getVariant());
+    if (!declRead)
+    {
+        return false;
+    }
+    auto* builtin = std::get_if<const cld::Semantics::BuiltinFunction*>(&declRead->getDeclRead());
+    if (!builtin)
+    {
+        return false;
+    }
+    return (*builtin)->getKind() == cld::Semantics::BuiltinFunction::VAStart;
+}
+
+bool isBuiltinFunction(const cld::Semantics::Expression& expression)
+{
+    auto* declRead = std::get_if<cld::Semantics::DeclarationRead>(&expression.getVariant());
+    if (!declRead)
+    {
+        return false;
+    }
+    return std::holds_alternative<const cld::Semantics::BuiltinFunction*>(declRead->getDeclRead());
+}
+} // namespace
+
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::PostFixExpressionFunctionCall& node)
 {
-    auto function = lvalueConversion(visit(node.getPostFixExpression()));
+    auto function = visit(node.getPostFixExpression());
+    if (isBuiltinVAStart(function))
+    {
+        std::vector<Expression> arguments;
+        if (node.getOptionalAssignmentExpressions().size() < 2)
+        {
+            log(Errors::Semantics::NOT_ENOUGH_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_N_GOT_N.args(
+                function, m_sourceInterface, std::string_view("va_start"), 2,
+                node.getOptionalAssignmentExpressions().size()));
+        }
+        else if (node.getOptionalAssignmentExpressions().size() > 2)
+        {
+            log(Errors::Semantics::TOO_MANY_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_N_GOT_N.args(
+                function, m_sourceInterface, std::string_view("va_start"), 2,
+                node.getOptionalAssignmentExpressions().size(),
+                llvm::ArrayRef(node.getOptionalAssignmentExpressions()).drop_front(2)));
+        }
+        else
+        {
+            arguments.push_back(lvalueConversion(visit(*node.getOptionalAssignmentExpressions()[0])));
+            if (!arguments[0].getType().isUndefined()
+                && arguments[0].getType() != BuiltinType::create(false, false, BuiltinType::BuiltinVaList))
+            {
+                log(Errors::Semantics::CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_N.args(
+                    arguments[0], m_sourceInterface, 1, BuiltinType::create(false, false, BuiltinType::BuiltinVaList),
+                    arguments[0]));
+            }
+            auto expression = visit(*node.getOptionalAssignmentExpressions()[1]);
+            if (!getCurrentFunctionScope())
+            {
+                log(Errors::Semantics::CANNOT_USE_VA_START_OUTSIDE_OF_A_FUNCTION.args(function, m_sourceInterface,
+                                                                                      function));
+            }
+            else if (!cld::get<FunctionType>(getCurrentFunctionScope()->currentFunction->getType().getVariant())
+                          .isLastVararg())
+            {
+                log(Errors::Semantics::CANNOT_USE_VA_START_IN_A_FUNCTION_WITH_FIXED_ARGUMENT_COUNT.args(
+                    function, m_sourceInterface, function));
+            }
+            else if (auto* declRead = std::get_if<DeclarationRead>(&expression.getVariant());
+                     !declRead
+                     || (!getCurrentFunctionScope()->currentFunction->getParameterDeclarations().empty()
+                         && declRead->getDeclRead()
+                                != DeclarationRead::Variant(getCurrentFunctionScope()
+                                                                ->currentFunction->getParameterDeclarations()
+                                                                .back()
+                                                                .get())))
+            {
+                log(Warnings::Semantics::SECOND_ARGUMENT_OF_VA_START_SHOULD_BE_THE_LAST_PARAMETER.args(
+                    expression, m_sourceInterface, expression));
+            }
+            arguments.push_back(lvalueConversion(std::move(expression)));
+        }
+        return Expression(
+            PrimitiveType::createVoid(false, false), ValueCategory::Rvalue,
+            CallExpression(std::make_unique<Expression>(
+                               PointerType::create(false, false, false, function.getType()), ValueCategory::Rvalue,
+                               Conversion(Conversion::LValue, std::make_unique<Expression>(std::move(function)))),
+                           node.getOpenParentheses(), std::move(arguments), node.getCloseParentheses()));
+    }
+    if (!isBuiltinFunction(function))
+    {
+        function = lvalueConversion(std::move(function));
+    }
     if (!std::holds_alternative<PointerType>(function.getType().getVariant())
         || !std::holds_alternative<FunctionType>(
             cld::get<PointerType>(function.getType().getVariant()).getElementType().getVariant()))
@@ -1982,6 +2073,11 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::lvalueConversion(Ex
     }
     if (std::holds_alternative<FunctionType>(expression.getType().getVariant()))
     {
+        if (isBuiltinFunction(expression))
+        {
+            log(Errors::Semantics::BUILTIN_FUNCTION_MAY_ONLY_BE_CALLED_DIRECTLY.args(expression, m_sourceInterface,
+                                                                                     expression));
+        }
         auto newType = PointerType::create(false, false, false, expression.getType());
         return Expression(std::move(newType), ValueCategory::Rvalue,
                           Conversion(Conversion::LValue, std::make_unique<Expression>(std::move(expression))));
@@ -2020,7 +2116,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::lvalueConversion(Type typ
     return Type(false, false, type.getVariant());
 }
 
-cld::Semantics::Expression cld::Semantics::SemanticAnalysis::defaultArgumentPromotion(Expression&& expression) const
+cld::Semantics::Expression cld::Semantics::SemanticAnalysis::defaultArgumentPromotion(Expression&& expression)
 {
     expression = integerPromotion(std::move(expression));
     if (!std::holds_alternative<PrimitiveType>(expression.getType().getVariant()))
@@ -2037,7 +2133,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::defaultArgumentProm
         Conversion(Conversion::DefaultArgumentPromotion, std::make_unique<Expression>(std::move(expression))));
 }
 
-cld::Semantics::Expression cld::Semantics::SemanticAnalysis::integerPromotion(Expression&& expression) const
+cld::Semantics::Expression cld::Semantics::SemanticAnalysis::integerPromotion(Expression&& expression)
 {
     expression = lvalueConversion(std::move(expression));
     if (!std::holds_alternative<PrimitiveType>(expression.getType().getVariant()))
@@ -2061,7 +2157,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::toBool(Expression&&
                       Conversion(Conversion::Implicit, std::make_unique<Expression>(std::move(expression))));
 }
 
-void cld::Semantics::SemanticAnalysis::arithmeticConversion(Expression& lhs, Expression& rhs) const
+void cld::Semantics::SemanticAnalysis::arithmeticConversion(Expression& lhs, Expression& rhs)
 {
     lhs = integerPromotion(std::move(lhs));
     rhs = integerPromotion(std::move(rhs));
@@ -2107,7 +2203,7 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(Expression& lhs, Exp
                      Conversion(Conversion::ArithmeticConversion, std::make_unique<Expression>(std::move(rhs))));
 }
 
-void cld::Semantics::SemanticAnalysis::arithmeticConversion(Type& lhs, Expression& rhs) const
+void cld::Semantics::SemanticAnalysis::arithmeticConversion(Type& lhs, Expression& rhs)
 {
     lhs = integerPromotion(std::move(lhs));
     rhs = integerPromotion(std::move(rhs));

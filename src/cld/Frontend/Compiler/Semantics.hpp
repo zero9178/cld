@@ -740,7 +740,7 @@ public:
         return m_identifierToken;
     }
 
-    [[nodiscard]] Variant getDeclRead() const
+    [[nodiscard]] const Variant& getDeclRead() const
     {
         return m_declRead;
     }

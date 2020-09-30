@@ -547,6 +547,16 @@ CREATE_ERROR(CANNOT_PASS_VOID_POINTER_TO_FUNCTION_POINTER_PARAMETER,
 CREATE_ERROR(CANNOT_PASS_FUNCTION_POINTER_TO_VOID_POINTER_PARAMETER,
              "Cannot assign function pointer to void pointer parameter", AnnotateExpr<0>);
 
+CREATE_ERROR(BUILTIN_FUNCTION_MAY_ONLY_BE_CALLED_DIRECTLY, "Builtin function may only be called directly",
+             Underline<0>);
+
+// VA Arg
+
+CREATE_ERROR(CANNOT_USE_VA_START_OUTSIDE_OF_A_FUNCTION, "Cannot use 'va_start' outside of a function", Underline<0>);
+
+CREATE_ERROR(CANNOT_USE_VA_START_IN_A_FUNCTION_WITH_FIXED_ARGUMENT_COUNT,
+             "Cannot use 'va_start' in a function with fixed argument count", Underline<0>);
+
 // Size of
 
 CREATE_ERROR(INCOMPLETE_TYPE_N_IN_SIZE_OF, "Incomplete type %full0 in 'sizeof'", Underline<1>);
@@ -940,6 +950,9 @@ namespace Semantics
 {
 CREATE_WARNING(VALUE_OF_N_IS_TO_LARGE_FOR_INTEGER_TYPE_N, "overflow",
                "Value of %0 is too large for integer type %full1", Underline<2>);
+
+CREATE_WARNING(SECOND_ARGUMENT_OF_VA_START_SHOULD_BE_THE_LAST_PARAMETER, "varargs",
+               "Second argument of 'va_start' should be the last parameter", Underline<0>);
 } // namespace Semantics
 namespace Lexer
 {
