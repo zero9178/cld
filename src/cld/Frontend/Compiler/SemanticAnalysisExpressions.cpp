@@ -750,15 +750,13 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         std::vector<Expression> arguments;
         if (node.getOptionalAssignmentExpressions().size() < 2)
         {
-            log(Errors::Semantics::NOT_ENOUGH_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_N_GOT_N.args(
-                function, m_sourceInterface, std::string_view("va_start"), 2,
-                node.getOptionalAssignmentExpressions().size()));
+            log(Errors::Semantics::NOT_ENOUGH_ARGUMENTS_FOR_CALLING_FUNCTION_VA_START_EXPECTED_N_GOT_N.args(
+                function, m_sourceInterface, 2, node.getOptionalAssignmentExpressions().size(), function));
         }
         else if (node.getOptionalAssignmentExpressions().size() > 2)
         {
-            log(Errors::Semantics::TOO_MANY_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_N_GOT_N.args(
-                function, m_sourceInterface, std::string_view("va_start"), 2,
-                node.getOptionalAssignmentExpressions().size(),
+            log(Errors::Semantics::TOO_MANY_ARGUMENTS_FOR_CALLING_FUNCTION_VA_START_EXPECTED_N_GOT_N.args(
+                function, m_sourceInterface, 2, node.getOptionalAssignmentExpressions().size(), function,
                 llvm::ArrayRef(node.getOptionalAssignmentExpressions()).drop_front(2)));
         }
         else

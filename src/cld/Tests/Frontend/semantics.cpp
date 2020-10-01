@@ -4284,3 +4284,31 @@ TEST_CASE("Semantics enum type", "[semantics]")
                   "",
                   ProducesNoErrors());
 }
+
+TEST_CASE("Semantics varargs", "[semantics]")
+{
+    SEMA_PRODUCES("void foo(int i,...) {\n"
+                  "__builtin_va_list list;\n"
+                  "__builtin_va_start(list);\n"
+                  "}",
+                  ProducesError(NOT_ENOUGH_ARGUMENTS_FOR_CALLING_FUNCTION_VA_START_EXPECTED_N_GOT_N, 2, 1));
+    SEMA_PRODUCES("void foo(int i,...) {\n"
+                  "__builtin_va_list list;\n"
+                  "__builtin_va_start(list,3,5);\n"
+                  "}",
+                  ProducesError(TOO_MANY_ARGUMENTS_FOR_CALLING_FUNCTION_VA_START_EXPECTED_N_GOT_N, 2, 3));
+    SEMA_PRODUCES("void foo(void) {\n"
+                  "__builtin_va_list list;\n"
+                  "__builtin_va_start(list,5);\n"
+                  "}",
+                  ProducesError(CANNOT_USE_VA_START_IN_A_FUNCTION_WITH_FIXED_ARGUMENT_COUNT));
+    SEMA_PRODUCES("void foo(int i,...) {\n"
+                  "__builtin_va_start(5,3);\n"
+                  "}",
+                  ProducesError(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_N, 1, "'va_list'"));
+    SEMA_PRODUCES("void foo(int i,...) {\n"
+                  "__builtin_va_list list;\n"
+                  "__builtin_va_start(list,5);\n"
+                  "}",
+                  ProducesWarning(SECOND_ARGUMENT_OF_VA_START_SHOULD_BE_THE_LAST_PARAMETER));
+}

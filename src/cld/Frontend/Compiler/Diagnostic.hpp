@@ -400,7 +400,7 @@ private:
                 return false;
             }
         }
-        else if constexpr (IsIterable<U>{})
+        else if constexpr (IsIterable<U>{} && !std::is_same_v<std::string, U> && !std::is_same_v<std::string_view, U>)
         {
             using ValueType = typename std::iterator_traits<decltype(std::begin(std::declval<U>()))>::value_type;
             if constexpr (IsSmartPtr<ValueType>{})
