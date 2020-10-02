@@ -451,7 +451,7 @@ TEST_CASE("Semantics declarations", "[semantics]")
 
 TEST_CASE("Semantics primitive declarations", "[semantics]")
 {
-    auto [isConst,isVolatile] = GENERATE(table<bool,bool>({std::tuple{false,true},std::tuple{false,true}}));
+    auto [isConst, isVolatile] = GENERATE(table<bool, bool>({std::tuple{false, true}, std::tuple{false, true}}));
     SECTION("void")
     {
         std::string text = "void ";
@@ -4287,28 +4287,74 @@ TEST_CASE("Semantics enum type", "[semantics]")
 
 TEST_CASE("Semantics varargs", "[semantics]")
 {
-    SEMA_PRODUCES("void foo(int i,...) {\n"
-                  "__builtin_va_list list;\n"
-                  "__builtin_va_start(list);\n"
-                  "}",
-                  ProducesError(NOT_ENOUGH_ARGUMENTS_FOR_CALLING_FUNCTION_VA_START_EXPECTED_N_GOT_N, 2, 1));
-    SEMA_PRODUCES("void foo(int i,...) {\n"
-                  "__builtin_va_list list;\n"
-                  "__builtin_va_start(list,3,5);\n"
-                  "}",
-                  ProducesError(TOO_MANY_ARGUMENTS_FOR_CALLING_FUNCTION_VA_START_EXPECTED_N_GOT_N, 2, 3));
-    SEMA_PRODUCES("void foo(void) {\n"
-                  "__builtin_va_list list;\n"
-                  "__builtin_va_start(list,5);\n"
-                  "}",
-                  ProducesError(CANNOT_USE_VA_START_IN_A_FUNCTION_WITH_FIXED_ARGUMENT_COUNT));
-    SEMA_PRODUCES("void foo(int i,...) {\n"
-                  "__builtin_va_start(5,3);\n"
-                  "}",
-                  ProducesError(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_N, 1, "'va_list'"));
-    SEMA_PRODUCES("void foo(int i,...) {\n"
-                  "__builtin_va_list list;\n"
-                  "__builtin_va_start(list,5);\n"
-                  "}",
-                  ProducesWarning(SECOND_ARGUMENT_OF_VA_START_SHOULD_BE_THE_LAST_PARAMETER));
+    SECTION("__builtin_va_start")
+    {
+        SEMA_PRODUCES("void foo(int i,...) {\n"
+                      "__builtin_va_list list;\n"
+                      "__builtin_va_start(list);\n"
+                      "}",
+                      ProducesError(NOT_ENOUGH_ARGUMENTS_FOR_CALLING_FUNCTION_VA_START_EXPECTED_N_GOT_N, 2, 1));
+        SEMA_PRODUCES("void foo(int i,...) {\n"
+                      "__builtin_va_list list;\n"
+                      "__builtin_va_start(list,3,5);\n"
+                      "}",
+                      ProducesError(TOO_MANY_ARGUMENTS_FOR_CALLING_FUNCTION_VA_START_EXPECTED_N_GOT_N, 2, 3));
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__builtin_va_list list;\n"
+                      "__builtin_va_start(list,5);\n"
+                      "}",
+                      ProducesError(CANNOT_USE_VA_START_IN_A_FUNCTION_WITH_FIXED_ARGUMENT_COUNT));
+        SEMA_PRODUCES("void foo(int i,...) {\n"
+                      "__builtin_va_start(5,3);\n"
+                      "}",
+                      ProducesError(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_N, 1, "'va_list'"));
+        SEMA_PRODUCES("void foo(int i,...) {\n"
+                      "__builtin_va_list list;\n"
+                      "__builtin_va_start(list,5);\n"
+                      "}",
+                      ProducesWarning(SECOND_ARGUMENT_OF_VA_START_SHOULD_BE_THE_LAST_PARAMETER));
+        SEMA_PRODUCES("void foo(int i,...) {\n"
+                      "__builtin_va_list list;\n"
+                      "__builtin_va_start(list,i);\n"
+                      "}",
+                      ProducesNothing());
+        SEMA_PRODUCES("void foo(int i,...) {\n"
+                      "const __builtin_va_list list;\n"
+                      "__builtin_va_start(list,i);\n"
+                      "}",
+                      ProducesError(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_N, 1, "'va_list'"));
+        SEMA_PRODUCES("void foo(int i,...) {\n"
+                      "void (*f)(int,...) = __builtin_va_start;\n"
+                      "}",
+                      ProducesError(BUILTIN_FUNCTION_MAY_ONLY_BE_CALLED_DIRECTLY));
+    }
+    SECTION("__builtin_va_arg")
+    {
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__builtin_va_list list;\n"
+                      "__builtin_va_arg(list,int);\n"
+                      "}",
+                      ProducesError(CANNOT_USE_VA_ARG_IN_A_FUNCTION_WITH_FIXED_ARGUMENT_COUNT));
+        SEMA_PRODUCES("void foo(int i,...) {\n"
+                      "__builtin_va_arg(5,int);\n"
+                      "}",
+                      ProducesError(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_N, 1, "'va_list'"));
+        SEMA_PRODUCES("void foo(int i,...) {\n"
+                      "__builtin_va_list list;\n"
+                      "__builtin_va_start(list,i);\n"
+                      "__builtin_va_arg(list,int);\n"
+                      "}",
+                      ProducesNothing());
+        SEMA_PRODUCES("void foo(int i,...) {\n"
+                      "const __builtin_va_list list;\n"
+                      "__builtin_va_arg(list,int);\n"
+                      "}",
+                      ProducesError(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_N, 1, "'va_list'"));
+        SEMA_PRODUCES("void foo(int i,...) {\n"
+                      "__builtin_va_list list;\n"
+                      "__builtin_va_start(list,i);\n"
+                      "__builtin_va_arg(list,struct I);\n"
+                      "}",
+                      ProducesError(INCOMPLETE_TYPE_N_IN_VA_ARG, "'struct I'"));
+    }
 }

@@ -26,7 +26,6 @@ class TranslationUnit;
 
 namespace cld::Semantics
 {
-
 class Type;
 
 class StructDefinition;
@@ -1280,6 +1279,51 @@ public:
     }
 };
 
+class BuiltinVAArg final
+{
+    Lexer::CTokenIterator m_builtinToken;
+    Lexer::CTokenIterator m_openParentheses;
+    std::unique_ptr<Expression> m_expression;
+    Lexer::CTokenIterator m_closeParentheses;
+
+public:
+    BuiltinVAArg(Lexer::CTokenIterator builtinToken, Lexer::CTokenIterator openParentheses,
+                 std::unique_ptr<Expression>&& expression, Lexer::CTokenIterator closeParentheses)
+        : m_builtinToken(builtinToken),
+          m_openParentheses(openParentheses),
+          m_expression(std::move(expression)),
+          m_closeParentheses(closeParentheses)
+    {
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator getBuiltinToken() const
+    {
+        return m_builtinToken;
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator getOpenParentheses() const
+    {
+        return m_openParentheses;
+    }
+
+    [[nodiscard]] const Expression& getExpression() const;
+
+    [[nodiscard]] Lexer::CTokenIterator getCloseParentheses() const
+    {
+        return m_closeParentheses;
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator begin() const
+    {
+        return m_builtinToken;
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator end() const
+    {
+        return m_closeParentheses + 1;
+    }
+};
+
 enum class ValueCategory : std::uint8_t
 {
     Lvalue,
@@ -1295,7 +1339,7 @@ public:
     using Variant =
         std::variant<std::pair<Lexer::CTokenIterator, Lexer::CTokenIterator>, Constant, DeclarationRead, Conversion,
                      MemberAccess, BinaryOperator, Cast, UnaryOperator, SizeofOperator, SubscriptOperator, Conditional,
-                     Assignment, CommaExpression, CallExpression, CompoundLiteral>;
+                     Assignment, CommaExpression, CallExpression, CompoundLiteral, BuiltinVAArg>;
 
 private:
     Variant m_expression;

@@ -557,11 +557,16 @@ CREATE_ERROR(CANNOT_USE_VA_START_OUTSIDE_OF_A_FUNCTION, "Cannot use 'va_start' o
 CREATE_ERROR(CANNOT_USE_VA_START_IN_A_FUNCTION_WITH_FIXED_ARGUMENT_COUNT,
              "Cannot use 'va_start' in a function with fixed argument count", Underline<0>);
 
+CREATE_ERROR(CANNOT_USE_VA_ARG_IN_A_FUNCTION_WITH_FIXED_ARGUMENT_COUNT,
+             "Cannot use 'va_arg' in a function with fixed argument count", Underline<0>);
+
 CREATE_ERROR(NOT_ENOUGH_ARGUMENTS_FOR_CALLING_FUNCTION_VA_START_EXPECTED_N_GOT_N,
              "Not enough arguments for calling function 'va_start'. Expected %0 got %1", Underline<2>);
 
 CREATE_ERROR(TOO_MANY_ARGUMENTS_FOR_CALLING_FUNCTION_VA_START_EXPECTED_N_GOT_N,
              "Too many arguments for calling function 'va_start'. Expected %0 got %1", Underline<2>, Underline<3>);
+
+CREATE_ERROR(INCOMPLETE_TYPE_N_IN_VA_ARG, "Incomplete type %full0 in 'va_arg'", Underline<1>);
 
 // Size of
 

@@ -678,7 +678,7 @@ void parsePostFixExpressionSuffix(cld::Lexer::CTokenIterator start, cld::Lexer::
             auto scope = context.parenthesesEntered(begin);
             const auto* openPpos = begin;
             begin++;
-            std::vector<std::unique_ptr<AssignmentExpression>> nonCommaExpressions;
+            std::vector<AssignmentExpression> nonCommaExpressions;
             bool first = true;
             while (begin < end && begin->getTokenType() != cld::Lexer::TokenType::CloseParentheses)
             {
@@ -705,7 +705,7 @@ void parsePostFixExpressionSuffix(cld::Lexer::CTokenIterator start, cld::Lexer::
                         cld::Lexer::TokenType::CloseParentheses, cld::Lexer::TokenType::Comma)));
                 if (assignment)
                 {
-                    nonCommaExpressions.push_back(std::make_unique<AssignmentExpression>(std::move(*assignment)));
+                    nonCommaExpressions.push_back(std::move(*assignment));
                 }
             }
 
@@ -942,6 +942,39 @@ std::optional<cld::Syntax::UnaryExpression>
             }
         }
         return UnaryExpression(UnaryExpressionDefined(start, begin, std::move(identifier)));
+    }
+    if (begin < end && begin->getTokenType() == Lexer::TokenType::Identifier && begin->getText() == "__builtin_va_arg")
+    {
+        const auto* builtInToken = begin++;
+        const Lexer::CToken* openParentheses = nullptr;
+        if (expect(Lexer::TokenType::OpenParentheses, begin, end, context))
+        {
+            openParentheses = begin - 1;
+        }
+        auto expression = parseAssignmentExpression(begin, end,
+                                                    context.withRecoveryTokens(Context::fromTokenTypes(
+                                                        Lexer::TokenType::Comma, Lexer::TokenType::CloseParentheses)));
+        expect(Lexer::TokenType::Comma, begin, end, context);
+        const auto* comma = begin - 1;
+        auto type = parseTypeName(
+            begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
+        if (openParentheses)
+        {
+            expect(Lexer::TokenType::CloseParentheses, begin, end, context, [&] {
+                return Notes::TO_MATCH_N_HERE.args(*openParentheses, context.getSourceInterface(), *openParentheses);
+            });
+        }
+        else
+        {
+            expect(Lexer::TokenType::CloseParentheses, begin, end, context);
+        }
+        if (!type || !expression || openParentheses == nullptr)
+        {
+            return {};
+        }
+        return UnaryExpression(UnaryExpressionBuiltinVAArg(
+            start, begin, builtInToken, openParentheses, std::make_unique<AssignmentExpression>(std::move(*expression)),
+            comma, std::move(*type), begin - 1));
     }
     if (begin < end
         && (begin->getTokenType() == Lexer::TokenType::Increment || begin->getTokenType() == Lexer::TokenType::Decrement

@@ -2991,6 +2991,12 @@ public:
         return var;
     }
 
+    llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::BuiltinVAArg& vaarg)
+    {
+        // TODO:
+        CLD_UNREACHABLE;
+    }
+
     llvm::Value* CLD_NULLABLE visit(const cld::Semantics::Initializer& initializer, const cld::Semantics::Type& type,
                                     std::variant<llvm::Value*, llvm::Type*> pointer)
     {

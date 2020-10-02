@@ -421,8 +421,7 @@ cld::Lexer::CTokenIterator cld::Semantics::declaratorToLoc(const cld::Syntax::De
         });
 }
 
-cld::Semantics::StructType::StructType(std::string_view name, int64_t scope) : m_name(name), m_scopeOrId(scope) {
-}
+cld::Semantics::StructType::StructType(std::string_view name, int64_t scope) : m_name(name), m_scopeOrId(scope) {}
 
 cld::Semantics::Type cld::Semantics::StructType::create(bool isConst, bool isVolatile, std::string_view name,
                                                         int64_t scope)
@@ -1267,4 +1266,9 @@ std::size_t cld::Semantics::BuiltinType::getAlignOf(const cld::Semantics::Progra
         case LanguageOptions::BuiltInVaList::x86_64ABI: return programInterface.getLanguageOptions().sizeOfVoidStar;
     }
     CLD_UNREACHABLE;
+}
+
+const cld::Semantics::Expression& cld::Semantics::BuiltinVAArg::getExpression() const
+{
+    return *m_expression;
 }

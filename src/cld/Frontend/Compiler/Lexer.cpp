@@ -32,12 +32,12 @@ bool isKeyword(std::string_view characters, const cld::LanguageOptions& language
            || characters == "continue" || characters == "for" || characters == "signed" || characters == "void"
            || characters == "default" || characters == "goto" || characters == "sizeof" || characters == "volatile"
            || characters == "restrict" || characters == "do" || characters == "if" || characters == "static"
-           || characters == "while" || characters == "inline" || characters == "_Bool"
+           || characters == "while" || characters == "inline" || characters == "_Bool" || characters == "__attribute__"
+           || characters == "__inline__" || characters == "__extension__" || characters == "__typeof__"
+           || characters == "__asm__" || characters == "__volatile__" || characters == "__const__"
+           || characters == "__restrict__"
            || (languageOptions.extension == cld::LanguageOptions::Extension::GNU
-               && (characters == "__attribute__" || characters == "__inline__" || characters == "__extension__"
-                   || characters == "asm" || characters == "typeof" || characters == "__typeof__"
-                   || characters == "__asm__" || characters == "__volatile__" || characters == "__const__"
-                   || characters == "__restrict__"));
+               && (characters == "asm" || characters == "typeof"));
 }
 
 TokenType charactersToKeyword(std::string_view characters)

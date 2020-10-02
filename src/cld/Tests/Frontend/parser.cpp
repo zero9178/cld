@@ -655,6 +655,7 @@ TEST_CASE("Parse Expressions", "[parser]")
         functionProduces(parseUnaryExpression, "-i", ProducesNothing());
         functionProduces(parseUnaryExpression, "!i", ProducesNothing());
         functionProduces(parseUnaryExpression, "~i", ProducesNothing());
+        functionProduces(parseUnaryExpression, "__builtin_va_arg(f,int)", ProducesNothing());
     }
     SECTION("Type name")
     {

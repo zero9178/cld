@@ -170,8 +170,7 @@ cld::Lexer::CTokenIterator cld::Syntax::PostFixExpressionArrow::getIdentifier() 
 
 cld::Syntax::PostFixExpressionFunctionCall::PostFixExpressionFunctionCall(
     Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::unique_ptr<PostFixExpression>&& postFixExpression,
-    Lexer::CTokenIterator openParentheses,
-    std::vector<std::unique_ptr<AssignmentExpression>>&& optionalAssignmentExpressions,
+    Lexer::CTokenIterator openParentheses, std::vector<AssignmentExpression>&& optionalAssignmentExpressions,
     Lexer::CTokenIterator closeParentheses)
     : Node(begin, end),
       m_postFixExpression(std::move(postFixExpression)),
@@ -652,7 +651,7 @@ const cld::Syntax::PostFixExpression& cld::Syntax::PostFixExpressionFunctionCall
     return *m_postFixExpression;
 }
 
-const std::vector<std::unique_ptr<cld::Syntax::AssignmentExpression>>&
+const std::vector<cld::Syntax::AssignmentExpression>&
     cld::Syntax::PostFixExpressionFunctionCall::getOptionalAssignmentExpressions() const
 {
     return m_optionalAssignmentExpressions;
@@ -1380,4 +1379,49 @@ cld::Syntax::GNUASMStatement::GNUASMStatement(Lexer::CTokenIterator begin, Lexer
       m_secondList(std::move(secondList)),
       m_clobbers(std::move(clobbers))
 {
+}
+
+cld::Syntax::UnaryExpressionBuiltinVAArg::UnaryExpressionBuiltinVAArg(
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, Lexer::CTokenIterator builtinToken,
+    Lexer::CTokenIterator openParentheses, std::unique_ptr<AssignmentExpression>&& assignmentExpression,
+    Lexer::CTokenIterator comma, cld::Syntax::TypeName&& typeName, Lexer::CTokenIterator closeParentheses)
+    : Node(begin, end),
+      m_builtinToken(builtinToken),
+      m_openParentheses(openParentheses),
+      m_assignmentExpression(std::move(assignmentExpression)),
+      m_comma(comma),
+      m_typeName(std::move(typeName)),
+      m_closeParentheses(closeParentheses)
+{
+    CLD_ASSERT(m_assignmentExpression);
+}
+
+cld::Lexer::CTokenIterator cld::Syntax::UnaryExpressionBuiltinVAArg::getBuiltinToken() const
+{
+    return m_builtinToken;
+}
+
+cld::Lexer::CTokenIterator cld::Syntax::UnaryExpressionBuiltinVAArg::getOpenParentheses() const
+{
+    return m_openParentheses;
+}
+
+const cld::Syntax::AssignmentExpression& cld::Syntax::UnaryExpressionBuiltinVAArg::getAssignmentExpression() const
+{
+    return *m_assignmentExpression;
+}
+
+cld::Lexer::CTokenIterator cld::Syntax::UnaryExpressionBuiltinVAArg::getComma() const
+{
+    return m_comma;
+}
+
+const cld::Syntax::TypeName& cld::Syntax::UnaryExpressionBuiltinVAArg::getTypeName() const
+{
+    return m_typeName;
+}
+
+cld::Lexer::CTokenIterator cld::Syntax::UnaryExpressionBuiltinVAArg::getCloseParentheses() const
+{
+    return m_closeParentheses;
 }

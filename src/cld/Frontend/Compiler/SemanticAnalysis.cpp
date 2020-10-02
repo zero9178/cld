@@ -1646,6 +1646,11 @@ cld::Semantics::ConstValue
         [&](const MemberAccess& memberAccess) -> ConstValue {
             auto exp = evaluate(memberAccess.getRecordExpression(), mode, logger);
             return {};
+        },
+        [&](const BuiltinVAArg& builtinVaArg) -> ConstValue {
+            logger(Errors::Semantics::FUNCTION_CALL_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
+                builtinVaArg, m_sourceInterface, builtinVaArg));
+            return {};
         });
 }
 

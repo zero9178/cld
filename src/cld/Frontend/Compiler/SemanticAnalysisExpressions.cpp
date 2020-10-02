@@ -761,7 +761,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         }
         else
         {
-            arguments.push_back(lvalueConversion(visit(*node.getOptionalAssignmentExpressions()[0])));
+            arguments.push_back(visit(node.getOptionalAssignmentExpressions()[0]));
             if (!arguments[0].getType().isUndefined()
                 && arguments[0].getType() != BuiltinType::create(false, false, BuiltinType::BuiltinVaList))
             {
@@ -769,7 +769,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                     arguments[0], m_sourceInterface, 1, BuiltinType::create(false, false, BuiltinType::BuiltinVaList),
                     arguments[0]));
             }
-            auto expression = visit(*node.getOptionalAssignmentExpressions()[1]);
+            auto expression = visit(node.getOptionalAssignmentExpressions()[1]);
             if (!getCurrentFunctionScope())
             {
                 log(Errors::Semantics::CANNOT_USE_VA_START_OUTSIDE_OF_A_FUNCTION.args(function, m_sourceInterface,
@@ -817,8 +817,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         }
         for (auto& iter : node.getOptionalAssignmentExpressions())
         {
-            CLD_ASSERT(iter);
-            visit(*iter);
+            visit(iter);
         }
         return Expression(node);
     }
@@ -829,8 +828,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
     {
         for (auto& iter : node.getOptionalAssignmentExpressions())
         {
-            CLD_ASSERT(iter);
-            arguments.push_back(defaultArgumentPromotion(visit(*iter)));
+            arguments.push_back(defaultArgumentPromotion(visit(iter)));
         }
     }
     else
@@ -922,11 +920,11 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                 auto paramType = removeQualifiers(adjustParameterType(argumentTypes[i].first));
                 if (paramType.isUndefined())
                 {
-                    visit(*node.getOptionalAssignmentExpressions()[i]);
-                    arguments.emplace_back(*node.getOptionalAssignmentExpressions()[i]);
+                    visit(node.getOptionalAssignmentExpressions()[i]);
+                    arguments.emplace_back(node.getOptionalAssignmentExpressions()[i]);
                     continue;
                 }
-                auto expression = lvalueConversion(visit(*node.getOptionalAssignmentExpressions()[i]));
+                auto expression = lvalueConversion(visit(node.getOptionalAssignmentExpressions()[i]));
                 if (expression.isUndefined())
                 {
                     arguments.push_back(std::move(expression));
@@ -978,7 +976,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
             }
             for (; i < node.getOptionalAssignmentExpressions().size(); i++)
             {
-                arguments.push_back(defaultArgumentPromotion(visit(*node.getOptionalAssignmentExpressions()[i])));
+                arguments.push_back(defaultArgumentPromotion(visit(node.getOptionalAssignmentExpressions()[i])));
             }
         }
     }
@@ -1293,6 +1291,38 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
 
     return Expression(PrimitiveType::createLongLong(false, false), ValueCategory::Rvalue,
                       Constant(llvm::APSInt(64, false), node.begin(), node.end()));
+}
+
+cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::UnaryExpressionBuiltinVAArg& vaArg)
+{
+    if (getCurrentFunctionScope())
+    {
+        if (!cld::get<FunctionType>(getCurrentFunctionScope()->currentFunction->getType().getVariant()).isLastVararg())
+        {
+            log(Errors::Semantics::CANNOT_USE_VA_ARG_IN_A_FUNCTION_WITH_FIXED_ARGUMENT_COUNT.args(
+                *vaArg.getBuiltinToken(), m_sourceInterface, *vaArg.getBuiltinToken()));
+        }
+    }
+    auto expression = visit(vaArg.getAssignmentExpression());
+    if (!expression.getType().isUndefined()
+        && expression.getType() != BuiltinType::create(false, false, BuiltinType::BuiltinVaList))
+    {
+        log(Errors::Semantics::CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_N.args(
+            expression, m_sourceInterface, 1, BuiltinType::create(false, false, BuiltinType::BuiltinVaList),
+            expression));
+    }
+    auto type =
+        declaratorsToType(vaArg.getTypeName().getSpecifierQualifiers(), vaArg.getTypeName().getAbstractDeclarator());
+    if (!isCompleteType(type))
+    {
+        log(Errors::Semantics::INCOMPLETE_TYPE_N_IN_VA_ARG.args(vaArg.getTypeName(), m_sourceInterface, type,
+                                                                vaArg.getTypeName()));
+        return Expression(vaArg);
+    }
+    type = removeQualifiers(std::move(type));
+    return Expression(std::move(type), ValueCategory::Rvalue,
+                      BuiltinVAArg(vaArg.getBuiltinToken(), vaArg.getOpenParentheses(),
+                                   std::make_unique<Expression>(std::move(expression)), vaArg.getCloseParentheses()));
 }
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::CastExpression& node)
