@@ -762,13 +762,18 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         else
         {
             arguments.push_back(visit(node.getOptionalAssignmentExpressions()[0]));
-            if (!arguments[0].getType().isUndefined()
-                && arguments[0].getType() != BuiltinType::create(false, false, BuiltinType::BuiltinVaList))
+            auto& vaList = *getTypedef("__builtin_va_list");
+            if (!arguments[0].getType().isUndefined() && arguments[0].getType() != vaList)
             {
-                log(Errors::Semantics::CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_N.args(
-                    arguments[0], m_sourceInterface, 1, BuiltinType::create(false, false, BuiltinType::BuiltinVaList),
-                    arguments[0]));
+                log(Errors::Semantics::CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_VA_LIST.args(
+                    arguments[0], m_sourceInterface, 1, arguments[0]));
             }
+            // even if the call is done using "__builtin_va_start(list,...)" the list is actually passed as a pointer.
+            // In the case of x86_64 ABI __builtin_va_list is an array type causing pointer decay, in the case
+            // of Windows x64 it's basically as if &list was written. Since this is a builtin call the backend will
+            // have to do special handling either way but we'll insert an lvalueConversion now to force array to pointer
+            // decay
+            arguments.back() = lvalueConversion(std::move(arguments.back()));
             auto expression = visit(node.getOptionalAssignmentExpressions()[1]);
             if (!getCurrentFunctionScope())
             {
@@ -1309,12 +1314,11 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         }
     }
     auto expression = visit(vaArg.getAssignmentExpression());
-    if (!expression.getType().isUndefined()
-        && expression.getType() != BuiltinType::create(false, false, BuiltinType::BuiltinVaList))
+    auto& vaList = *getTypedef("__builtin_va_list");
+    if (!expression.getType().isUndefined() && expression.getType() != vaList)
     {
-        log(Errors::Semantics::CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_N.args(
-            expression, m_sourceInterface, 1, BuiltinType::create(false, false, BuiltinType::BuiltinVaList),
-            expression));
+        log(Errors::Semantics::CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_VA_LIST.args(
+            expression, m_sourceInterface, 1, expression));
     }
     auto type =
         declaratorsToType(vaArg.getTypeName().getSpecifierQualifiers(), vaArg.getTypeName().getAbstractDeclarator());

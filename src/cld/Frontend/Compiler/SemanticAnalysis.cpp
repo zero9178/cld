@@ -779,17 +779,6 @@ const cld::Semantics::Type* cld::Semantics::SemanticAnalysis::getTypedef(std::st
     return std::get_if<Type>(lookupDecl(name));
 }
 
-const cld::Semantics::Type* cld::Semantics::SemanticAnalysis::getBuiltinType(std::string_view name) const
-{
-    if (name == "__builtin_va_list")
-    {
-        static auto instance = BuiltinType::create(false, false, BuiltinType::BuiltinVaList);
-        return &instance;
-    }
-
-    return nullptr;
-}
-
 const cld::Semantics::SemanticAnalysis::DeclarationInScope::Variant*
     cld::Semantics::SemanticAnalysis::lookupDecl(std::string_view name, std::int64_t scope) const
 {
@@ -1661,7 +1650,7 @@ const cld::Semantics::ProgramInterface::DeclarationInScope::Variant*
     {
         static BuiltinFunction builtinVAStart(
             FunctionType::create(PrimitiveType::createVoid(false, false),
-                                 {{BuiltinType::create(false, false, BuiltinType::BuiltinVaList), ""}}, true, false),
+                                 {{adjustParameterType(*getTypedef("__builtin_va_list")), ""}}, true, false),
             BuiltinFunction::VAStart);
         static DeclarationInScope::Variant temp = &builtinVAStart;
         return &temp;
@@ -1670,21 +1659,62 @@ const cld::Semantics::ProgramInterface::DeclarationInScope::Variant*
     {
         static BuiltinFunction builtinVAStart(
             FunctionType::create(PrimitiveType::createVoid(false, false),
-                                 {{BuiltinType::create(false, false, BuiltinType::BuiltinVaList), ""}}, false, false),
+                                 {{adjustParameterType(*getTypedef("__builtin_va_list")), ""}}, false, false),
             BuiltinFunction::VAEnd);
         static DeclarationInScope::Variant temp = &builtinVAStart;
         return &temp;
     }
     if (name == "__builtin_va_copy")
     {
+        auto vaList = adjustParameterType(*getTypedef("__builtin_va_list"));
         static BuiltinFunction builtinVAStart(
-            FunctionType::create(PrimitiveType::createVoid(false, false),
-                                 {{BuiltinType::create(false, false, BuiltinType::BuiltinVaList), ""},
-                                  {BuiltinType::create(false, false, BuiltinType::BuiltinVaList), ""}},
-                                 false, false),
+            FunctionType::create(PrimitiveType::createVoid(false, false), {{vaList, ""}, {vaList, ""}}, false, false),
             BuiltinFunction::VACopy);
         static DeclarationInScope::Variant temp = &builtinVAStart;
         return &temp;
     }
     return nullptr;
+}
+
+void cld::Semantics::SemanticAnalysis::createBuiltins()
+{
+    switch (m_sourceInterface.getLanguageOptions().vaListKind)
+    {
+        case LanguageOptions::BuiltInVaList::CharPtr:
+        {
+            auto type = PointerType::create(
+                false, false, false, PrimitiveType::createChar(false, false, m_sourceInterface.getLanguageOptions()));
+            type.setName("__builtin_va_list");
+            getCurrentScope().declarations.emplace("__builtin_va_list", DeclarationInScope{nullptr, std::move(type)});
+            break;
+        }
+        case LanguageOptions::BuiltInVaList::VoidPtr:
+        {
+            auto type = PointerType::create(false, false, false, PrimitiveType::createVoid(false, false));
+            type.setName("__builtin_va_list");
+            getCurrentScope().declarations.emplace("__builtin_va_list", DeclarationInScope{nullptr, std::move(type)});
+            break;
+        }
+        case LanguageOptions::BuiltInVaList::x86_64ABI:
+        {
+            std::vector<Field> fields;
+            auto unsignedInt = std::make_shared<Type>(
+                PrimitiveType::createUnsignedInt(false, false, m_sourceInterface.getLanguageOptions()));
+            fields.push_back({unsignedInt, "gp_offset", {}, 0});
+            fields.push_back({unsignedInt, "fp_offset", {}, 1});
+            auto voidStar = std::make_shared<Type>(
+                PointerType::create(false, false, false, PrimitiveType::createVoid(false, false)));
+            fields.push_back({voidStar, "overflow_arg_area", {}, 2});
+            fields.push_back({voidStar, "reg_save_area", {}, 3});
+            m_structDefinitions.emplace_back("__va_list_tag", std::move(fields),
+                                             std::vector<Type>{*unsignedInt, *unsignedInt, *voidStar, *voidStar}, 24,
+                                             16);
+            auto elementType = StructType::create(false, false, "__va_list_tag", m_structDefinitions.size() - 1);
+            elementType = ArrayType::create(false, false, false, false, std::move(elementType), 1);
+            elementType.setName("__builtin_va_list");
+            getCurrentScope().declarations.emplace("__builtin_va_list",
+                                                   DeclarationInScope{nullptr, std::move(elementType)});
+            break;
+        }
+    }
 }

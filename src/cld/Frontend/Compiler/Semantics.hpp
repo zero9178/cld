@@ -331,10 +331,10 @@ class StructType final
     std::string_view m_name;
     std::uint64_t m_scopeOrId;
 
-    StructType(std::string_view name, std::int64_t scope);
+    StructType(std::string_view name, std::int64_t scopeOrID);
 
 public:
-    [[nodiscard]] static Type create(bool isConst, bool isVolatile, std::string_view name, std::int64_t scope);
+    [[nodiscard]] static Type create(bool isConst, bool isVolatile, std::string_view name, std::int64_t scopeOrID);
 
     [[nodiscard]] std::string_view getName() const
     {
@@ -575,48 +575,12 @@ public:
     [[nodiscard]] bool operator!=(const PointerType& rhs) const;
 };
 
-class BuiltinType final
-{
-public:
-    enum Kind
-    {
-        BuiltinVaList,
-    };
-
-private:
-    Kind m_kind;
-
-    explicit BuiltinType(Kind kind) : m_kind(kind) {}
-
-public:
-    static Type create(bool isConst, bool isVolatile, Kind kind);
-
-    [[nodiscard]] Kind getKind() const noexcept
-    {
-        return m_kind;
-    }
-
-    [[nodiscard]] std::size_t getSizeOf(const ProgramInterface& program) const;
-
-    [[nodiscard]] std::size_t getAlignOf(const ProgramInterface& program) const;
-
-    [[nodiscard]] bool operator==(const BuiltinType& rhs) const
-    {
-        return m_kind == rhs.m_kind;
-    }
-
-    [[nodiscard]] bool operator!=(const BuiltinType& rhs) const
-    {
-        return !(*this == rhs);
-    }
-};
-
 class Type final
 {
 public:
     using Variant = std::variant<std::monostate, PrimitiveType, ArrayType, AbstractArrayType, ValArrayType,
                                  FunctionType, StructType, UnionType, EnumType, PointerType, AnonymousEnumType,
-                                 AnonymousStructType, AnonymousUnionType, BuiltinType>;
+                                 AnonymousStructType, AnonymousUnionType>;
 
 private:
     Variant m_type;

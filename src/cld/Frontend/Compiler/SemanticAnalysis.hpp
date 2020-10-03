@@ -121,8 +121,6 @@ class SemanticAnalysis final : public ProgramInterface
 
     [[nodiscard]] const Semantics::Type* CLD_NULLABLE getTypedef(std::string_view name) const;
 
-    [[nodiscard]] const Semantics::Type* CLD_NULLABLE getBuiltinType(std::string_view name) const;
-
     [[nodiscard]] const DeclarationInScope::Variant* CLD_NULLABLE getBuiltinFuncDecl(std::string_view name) const;
 
     [[nodiscard]] const DeclarationInScope::Variant* CLD_NULLABLE lookupDecl(std::string_view name) const
@@ -278,6 +276,8 @@ private:
     void checkForIllegalSwitchJumps(std::tuple<const Lexer::CToken&, const Lexer::CToken&> loc,
                                     const SwitchStatement& switchStatement, bool isCaseOrDefault);
 
+    void createBuiltins();
+
 public:
     explicit SemanticAnalysis(const SourceInterface& sourceInterface, llvm::raw_ostream* reporter = &llvm::errs(),
                               bool* errors = nullptr, std::function<bool(std::string_view)> definedCallback = {})
@@ -286,6 +286,7 @@ public:
           m_errors(errors),
           m_definedCallback(std::move(definedCallback))
     {
+        createBuiltins();
     }
 
     Expected<ConstValue, std::vector<Message>> evaluateConstantExpression(const Expression& constantExpression,

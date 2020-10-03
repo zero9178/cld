@@ -4307,7 +4307,7 @@ TEST_CASE("Semantics varargs", "[semantics]")
         SEMA_PRODUCES("void foo(int i,...) {\n"
                       "__builtin_va_start(5,3);\n"
                       "}",
-                      ProducesError(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_N, 1, "'va_list'"));
+                      ProducesError(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_VA_LIST, 1));
         SEMA_PRODUCES("void foo(int i,...) {\n"
                       "__builtin_va_list list;\n"
                       "__builtin_va_start(list,5);\n"
@@ -4322,7 +4322,7 @@ TEST_CASE("Semantics varargs", "[semantics]")
                       "const __builtin_va_list list;\n"
                       "__builtin_va_start(list,i);\n"
                       "}",
-                      ProducesError(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_N, 1, "'va_list'"));
+                      ProducesError(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_VA_LIST, 1));
         SEMA_PRODUCES("void foo(int i,...) {\n"
                       "void (*f)(int,...) = __builtin_va_start;\n"
                       "}",
@@ -4338,7 +4338,7 @@ TEST_CASE("Semantics varargs", "[semantics]")
         SEMA_PRODUCES("void foo(int i,...) {\n"
                       "__builtin_va_arg(5,int);\n"
                       "}",
-                      ProducesError(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_N, 1, "'va_list'"));
+                      ProducesError(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_VA_LIST, 1));
         SEMA_PRODUCES("void foo(int i,...) {\n"
                       "__builtin_va_list list;\n"
                       "__builtin_va_start(list,i);\n"
@@ -4349,7 +4349,7 @@ TEST_CASE("Semantics varargs", "[semantics]")
                       "const __builtin_va_list list;\n"
                       "__builtin_va_arg(list,int);\n"
                       "}",
-                      ProducesError(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_N, 1, "'va_list'"));
+                      ProducesError(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_VA_LIST, 1));
         SEMA_PRODUCES("void foo(int i,...) {\n"
                       "__builtin_va_list list;\n"
                       "__builtin_va_start(list,i);\n"

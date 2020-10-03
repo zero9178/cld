@@ -421,12 +421,14 @@ cld::Lexer::CTokenIterator cld::Semantics::declaratorToLoc(const cld::Syntax::De
         });
 }
 
-cld::Semantics::StructType::StructType(std::string_view name, int64_t scope) : m_name(name), m_scopeOrId(scope) {}
+cld::Semantics::StructType::StructType(std::string_view name, int64_t scopeOrID) : m_name(name), m_scopeOrId(scopeOrID)
+{
+}
 
 cld::Semantics::Type cld::Semantics::StructType::create(bool isConst, bool isVolatile, std::string_view name,
-                                                        int64_t scope)
+                                                        int64_t scopeOrID)
 {
-    return cld::Semantics::Type(isConst, isVolatile, StructType(name, scope));
+    return cld::Semantics::Type(isConst, isVolatile, StructType(name, scopeOrID));
 }
 
 std::size_t cld::Semantics::StructType::getSizeOf(const ProgramInterface& program) const
@@ -965,21 +967,6 @@ std::string typeToString(const cld::Semantics::Type& arg)
                 qualifiersAndSpecifiers += "enum <anonymous 0x" + llvm::utohexstr(enumType.getId()) + ">";
                 return {};
             },
-            [&](const BuiltinType& builtinType) -> std::optional<Type> {
-                if (maybeCurr->isConst())
-                {
-                    qualifiersAndSpecifiers += "const ";
-                }
-                if (maybeCurr->isVolatile())
-                {
-                    qualifiersAndSpecifiers += "volatile ";
-                }
-                switch (builtinType.getKind())
-                {
-                    case BuiltinType::BuiltinVaList: qualifiersAndSpecifiers += "va_list"; break;
-                }
-                return {};
-            },
             [&](std::monostate) -> std::optional<Type> {
                 if (maybeCurr->isConst())
                 {
@@ -1238,34 +1225,6 @@ cld::Semantics::Program cld::Semantics::analyse(const Syntax::TranslationUnit& p
     SemanticAnalysis analysis(cTokens, reporter, errors);
     auto translationUnit = analysis.visit(parseTree);
     return Program(std::move(translationUnit), std::move(cTokens), std::move(analysis));
-}
-
-cld::Semantics::Type cld::Semantics::BuiltinType::create(bool isConst, bool isVolatile,
-                                                         cld::Semantics::BuiltinType::Kind kind)
-{
-    return cld::Semantics::Type(isConst, isVolatile, BuiltinType(kind));
-}
-
-std::size_t cld::Semantics::BuiltinType::getSizeOf(const cld::Semantics::ProgramInterface& programInterface) const
-{
-    switch (programInterface.getLanguageOptions().vaListKind)
-    {
-        case LanguageOptions::BuiltInVaList::CharPtr:
-        case LanguageOptions::BuiltInVaList::VoidPtr:
-        case LanguageOptions::BuiltInVaList::x86_64ABI: return programInterface.getLanguageOptions().sizeOfVoidStar;
-    }
-    CLD_UNREACHABLE;
-}
-
-std::size_t cld::Semantics::BuiltinType::getAlignOf(const cld::Semantics::ProgramInterface& programInterface) const
-{
-    switch (programInterface.getLanguageOptions().vaListKind)
-    {
-        case LanguageOptions::BuiltInVaList::CharPtr:
-        case LanguageOptions::BuiltInVaList::VoidPtr:
-        case LanguageOptions::BuiltInVaList::x86_64ABI: return programInterface.getLanguageOptions().sizeOfVoidStar;
-    }
-    CLD_UNREACHABLE;
 }
 
 const cld::Semantics::Expression& cld::Semantics::BuiltinVAArg::getExpression() const

@@ -514,10 +514,6 @@ cld::Semantics::Type
                 *typeSpec[1], m_sourceInterface, llvm::ArrayRef(typeSpec).drop_front()));
         }
         const auto* type = getTypedef(*name);
-        if (!type)
-        {
-            type = getBuiltinType(*name);
-        }
         CLD_ASSERT(type);
         auto ret = Type(isConst, isVolatile, type->getVariant());
         if (std::tuple(type->isConst(), type->isVolatile()) == std::tuple(isConst, isVolatile))
@@ -555,8 +551,11 @@ cld::Semantics::Type
                 {
                     log(Errors::REDEFINITION_OF_SYMBOL_N.args(*structOrUnion->getIdentifierLoc(), m_sourceInterface,
                                                               *structOrUnion->getIdentifierLoc()));
-                    log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
-                                                             *prev->second.identifier));
+                    if (prev->second.identifier)
+                    {
+                        log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
+                                                                 *prev->second.identifier));
+                    }
                 }
                 return UnionType::create(isConst, isVolatile, name, m_currentScope | IS_SCOPE);
             }
@@ -573,8 +572,11 @@ cld::Semantics::Type
             {
                 log(Errors::REDEFINITION_OF_SYMBOL_N.args(*structOrUnion->getIdentifierLoc(), m_sourceInterface,
                                                           *structOrUnion->getIdentifierLoc()));
-                log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
-                                                         *prev->second.identifier));
+                if (prev->second.identifier)
+                {
+                    log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
+                                                             *prev->second.identifier));
+                }
             }
             return StructType::create(isConst, isVolatile, name, m_currentScope | IS_SCOPE);
         }
@@ -597,8 +599,11 @@ cld::Semantics::Type
                 {
                     log(Errors::REDEFINITION_OF_SYMBOL_N.args(*structOrUnion->getIdentifierLoc(), m_sourceInterface,
                                                               *structOrUnion->getIdentifierLoc()));
-                    log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
-                                                             *prev->second.identifier));
+                    if (prev->second.identifier)
+                    {
+                        log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
+                                                                 *prev->second.identifier));
+                    }
                     definitionIsValid = false;
                 }
                 else if (!notRedefined && !std::holds_alternative<TagTypeInScope::UnionDecl>(prev->second.tagType)
@@ -617,8 +622,11 @@ cld::Semantics::Type
                 {
                     log(Errors::REDEFINITION_OF_SYMBOL_N.args(*structOrUnion->getIdentifierLoc(), m_sourceInterface,
                                                               *structOrUnion->getIdentifierLoc()));
-                    log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
-                                                             *prev->second.identifier));
+                    if (prev->second.identifier)
+                    {
+                        log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
+                                                                 *prev->second.identifier));
+                    }
                     definitionIsValid = false;
                 }
                 else if (!notRedefined && !std::holds_alternative<TagTypeInScope::StructDecl>(prev->second.tagType)
@@ -992,7 +1000,7 @@ cld::Semantics::Type
         {
             nextValue = value.plus(one, m_sourceInterface.getLanguageOptions());
         }
-        auto [prevValue, notRedefined] = getCurrentScope().declarations.insert(
+        auto [prev, notRedefined] = getCurrentScope().declarations.insert(
             {loc->getText(),
              DeclarationInScope{
                  loc, std::pair{std::move(value),
@@ -1000,8 +1008,11 @@ cld::Semantics::Type
         if (!notRedefined)
         {
             log(Errors::REDEFINITION_OF_SYMBOL_N.args(*loc, m_sourceInterface, *loc));
-            log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prevValue->second.identifier, m_sourceInterface,
-                                                     *prevValue->second.identifier));
+            if (prev->second.identifier)
+            {
+                log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
+                                                         *prev->second.identifier));
+            }
         }
     }
     if (enumDef.getName())
@@ -1014,8 +1025,11 @@ cld::Semantics::Type
         if (!notRedefined)
         {
             log(Errors::REDEFINITION_OF_SYMBOL_N.args(*enumDef.getName(), m_sourceInterface, *enumDef.getName()));
-            log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
-                                                     *prev->second.identifier));
+            if (prev->second.identifier)
+            {
+                log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
+                                                         *prev->second.identifier));
+            }
         }
         return EnumType::create(isConst, isVolatile, name, m_enumDefinitions.size() - 1);
     }

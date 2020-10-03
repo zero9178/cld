@@ -568,6 +568,9 @@ CREATE_ERROR(TOO_MANY_ARGUMENTS_FOR_CALLING_FUNCTION_VA_START_EXPECTED_N_GOT_N,
 
 CREATE_ERROR(INCOMPLETE_TYPE_N_IN_VA_ARG, "Incomplete type %full0 in 'va_arg'", Underline<1>);
 
+CREATE_ERROR(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_VA_LIST,
+             "Cannot pass incompatible type to parameter %0 of type 'va_list'", AnnotateExpr<1>);
+
 // Size of
 
 CREATE_ERROR(INCOMPLETE_TYPE_N_IN_SIZE_OF, "Incomplete type %full0 in 'sizeof'", Underline<1>);
