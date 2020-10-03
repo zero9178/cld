@@ -1944,8 +1944,7 @@ public:
                 if (std::holds_alternative<cld::Semantics::ArrayType>(conversion.getExpression().getType().getVariant())
                     && !cld::Semantics::isVariableLengthArray(conversion.getExpression().getType()))
                 {
-                    auto* zero = llvm::ConstantInt::get(m_builder.getIntPtrTy(m_module.getDataLayout()), 0);
-                    return m_builder.CreateInBoundsGEP(value, {zero, zero});
+                    return m_builder.CreateInBoundsGEP(value, {m_builder.getInt64(0), m_builder.getInt64(0)});
                 }
                 if (std::holds_alternative<cld::Semantics::FunctionType>(
                         conversion.getExpression().getType().getVariant())
@@ -1978,6 +1977,10 @@ public:
                     if (cld::Semantics::isInteger(prevType))
                     {
                         return m_builder.CreateIntToPtr(value, visit(newType));
+                    }
+                    if (cld::Semantics::isArray(prevType))
+                    {
+                        return m_builder.CreateInBoundsGEP(value, {m_builder.getInt64(0), m_builder.getInt64(0)});
                     }
                     return m_builder.CreatePointerCast(value, visit(newType));
                 }
@@ -2050,10 +2053,9 @@ public:
                 value = m_builder.CreateLoad(value, memberAccess.getRecordExpression().getType().isVolatile());
             }
         }
-        else if (std::holds_alternative<cld::Semantics::CallExpression>(
-                     memberAccess.getRecordExpression().getVariant()))
+        else if (memberAccess.getRecordExpression().getValueCategory() != cld::Semantics::ValueCategory::Lvalue)
         {
-            // Struct access is only ever allowed on pointers or lvalue except if it's the return value of a function
+            // Struct access is only ever allowed on pointers or lvalue except through the return value of a function
             // then it's also allowed to be an rvalue
             auto* load = llvm::cast<llvm::LoadInst>(value);
             value = load->getPointerOperand();
@@ -2080,9 +2082,14 @@ public:
             // we must load because an rvalue is returned and no lvalue conversion will load for us
             if (!std::holds_alternative<cld::Semantics::PointerType>(
                     memberAccess.getRecordExpression().getType().getVariant())
-                && std::holds_alternative<cld::Semantics::CallExpression>(
-                    memberAccess.getRecordExpression().getVariant()))
+                && (memberAccess.getRecordExpression().getValueCategory() != cld::Semantics::ValueCategory::Lvalue))
             {
+                // Arrays are generally passed around as llvm pointers to llvm arrays to be able to decay them to
+                // pointers. Best example for this are string literals which for this reason are global variables
+                if (std::holds_alternative<cld::Semantics::ArrayType>(fields[index].type->getVariant()))
+                {
+                    return field;
+                }
                 return m_builder.CreateLoad(field, type.isVolatile());
             }
             return field;
@@ -2991,9 +2998,54 @@ public:
         return var;
     }
 
-    llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::BuiltinVAArg& vaarg)
+    llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::BuiltinVAArg& vaArg)
     {
-        // TODO:
+        auto* vaList = visit(vaArg.getExpression());
+        auto align = vaArg.getExpression().getType().getAlignOf(m_programInterface);
+        llvm::Value* loadedVaList = m_builder.CreateAlignedLoad(vaList, llvm::Align(align));
+
+        switch (m_programInterface.getLanguageOptions().vaListKind)
+        {
+            case cld::LanguageOptions::BuiltInVaList::CharPtr:
+            case cld::LanguageOptions::BuiltInVaList::VoidPtr:
+            {
+                std::size_t sizeOf = expression.getType().getSizeOf(m_programInterface);
+                auto* increment = m_builder.CreateInBoundsGEP(loadedVaList, {m_builder.getInt64(sizeOf)});
+                m_builder.CreateAlignedStore(increment, vaList, llvm::Align(align));
+
+                auto* destType = visit(expression.getType());
+
+                auto exprAlign = expression.getType().getAlignOf(m_programInterface);
+                if (m_triple.getPlatform() == cld::Platform::Windows
+                    && m_triple.getArchitecture() == cld::Architecture::x86_64)
+                {
+                    if (!destType->isStructTy() && !destType->isX86_FP80Ty())
+                    {
+                        loadedVaList = m_builder.CreateBitCast(loadedVaList, llvm::PointerType::getUnqual(destType));
+                        return m_builder.CreateAlignedLoad(loadedVaList, llvm::Align(align));
+                    }
+                    if (!m_module.getDataLayout().isLegalInteger(sizeOf))
+                    {
+                        loadedVaList = m_builder.CreateBitCast(
+                            loadedVaList, llvm::PointerType::getUnqual(llvm::PointerType::getUnqual(destType)));
+                        loadedVaList = m_builder.CreateAlignedLoad(loadedVaList, llvm::Align(align));
+                        align = exprAlign;
+                    }
+                }
+                else
+                {
+                    CLD_UNREACHABLE;
+                }
+
+                llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(), m_currentFunction->getEntryBlock().begin());
+                auto* alloca = temp.CreateAlloca(destType, nullptr, "va_arg.ret");
+                alloca->setAlignment(llvm::Align(exprAlign));
+                m_builder.CreateLifetimeStart(alloca, m_builder.getInt64(sizeOf));
+                m_builder.CreateMemCpy(alloca, alloca->getAlign(), loadedVaList, llvm::Align(align), sizeOf);
+                return m_builder.CreateLoad(alloca);
+            }
+            case cld::LanguageOptions::BuiltInVaList::x86_64ABI: break;
+        }
         CLD_UNREACHABLE;
     }
 

@@ -21,6 +21,8 @@ class PrimaryExpressionConstant;
 
 class PrimaryExpressionParentheses;
 
+class PrimaryExpressionBuiltinVAArg;
+
 class PostFixExpressionPrimaryExpression;
 
 class PostFixExpressionSubscript;
@@ -44,8 +46,6 @@ class UnaryExpressionUnaryOperator;
 class UnaryExpressionSizeOf;
 
 class UnaryExpressionDefined;
-
-class UnaryExpressionBuiltinVAArg;
 
 class CastExpression;
 
@@ -255,12 +255,47 @@ public:
 };
 
 /**
+ * [GNU] <UnaryExpressionBuiltinVAArg> ::= <Identifier=__builtin_va_arg> <TokenType::OpenParentheses>
+ *                                         <NonCommaExpression> <TokenType::Comma> <TypeName>
+ *                                         <TokenType::CloseParentheses>
+ */
+class PrimaryExpressionBuiltinVAArg final : public Node
+{
+    Lexer::CTokenIterator m_builtinToken;
+    Lexer::CTokenIterator m_openParentheses;
+    std::unique_ptr<AssignmentExpression> m_assignmentExpression;
+    Lexer::CTokenIterator m_comma;
+    std::unique_ptr<TypeName> m_typeName;
+    Lexer::CTokenIterator m_closeParentheses;
+
+public:
+    PrimaryExpressionBuiltinVAArg(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
+                                  Lexer::CTokenIterator builtinToken, Lexer::CTokenIterator openParentheses,
+                                  std::unique_ptr<AssignmentExpression>&& assignmentExpression,
+                                  Lexer::CTokenIterator comma, std::unique_ptr<TypeName>&& typeName,
+                                  Lexer::CTokenIterator closeParentheses);
+
+    Lexer::CTokenIterator getBuiltinToken() const;
+
+    Lexer::CTokenIterator getOpenParentheses() const;
+
+    const AssignmentExpression& getAssignmentExpression() const;
+
+    Lexer::CTokenIterator getComma() const;
+
+    const TypeName& getTypeName() const;
+
+    Lexer::CTokenIterator getCloseParentheses() const;
+};
+
+/**
  * <PrimaryExpression> ::= <PrimaryExpressionIdentifier>
  *                       | <PrimaryExpressionConstant>
  *                       | <PrimaryExpressionParentheses>
+ *                 [GNU] | <PrimaryExpressionBuiltinVAArg>
  */
-using PrimaryExpression =
-    std::variant<PrimaryExpressionIdentifier, PrimaryExpressionConstant, PrimaryExpressionParentheses>;
+using PrimaryExpression = std::variant<PrimaryExpressionIdentifier, PrimaryExpressionConstant,
+                                       PrimaryExpressionParentheses, PrimaryExpressionBuiltinVAArg>;
 
 /**
  * <PostFixExpression> ::= <PostFixExpressionPrimaryExpression>
@@ -452,10 +487,9 @@ public:
  *                     | <UnaryExpressionUnaryOperator>
  *                     | <UnaryExpressionSizeOf>
  *                 [PP]| <UnaryExpressionDefined>
- *               [GNU] | <UnaryExpressionBuiltinVAArg>
  */
 using UnaryExpression = std::variant<UnaryExpressionPostFixExpression, UnaryExpressionUnaryOperator,
-                                     UnaryExpressionSizeOf, UnaryExpressionDefined, UnaryExpressionBuiltinVAArg>;
+                                     UnaryExpressionSizeOf, UnaryExpressionDefined>;
 
 /**
  * <UnaryExpressionPostFixExpression> ::= <PostFixExpression>
@@ -598,40 +632,6 @@ public:
     [[nodiscard]] const std::vector<SpecifierQualifier>& getSpecifierQualifiers() const;
 
     [[nodiscard]] const AbstractDeclarator* getAbstractDeclarator() const;
-};
-
-/**
- * [GNU] <UnaryExpressionBuiltinVAArg> ::= <Identifier=__builtin_va_arg> <TokenType::OpenParentheses>
- *                                         <NonCommaExpression> <TokenType::Comma> <TypeName>
- *                                         <TokenType::CloseParentheses>
- */
-class UnaryExpressionBuiltinVAArg final : public Node
-{
-    Lexer::CTokenIterator m_builtinToken;
-    Lexer::CTokenIterator m_openParentheses;
-    std::unique_ptr<AssignmentExpression> m_assignmentExpression;
-    Lexer::CTokenIterator m_comma;
-    TypeName m_typeName;
-    Lexer::CTokenIterator m_closeParentheses;
-
-public:
-    UnaryExpressionBuiltinVAArg(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                                Lexer::CTokenIterator builtinToken, Lexer::CTokenIterator openParentheses,
-                                std::unique_ptr<AssignmentExpression>&& assignmentExpression,
-                                Lexer::CTokenIterator comma, TypeName&& typeName,
-                                Lexer::CTokenIterator closeParentheses);
-
-    Lexer::CTokenIterator getBuiltinToken() const;
-
-    Lexer::CTokenIterator getOpenParentheses() const;
-
-    const AssignmentExpression& getAssignmentExpression() const;
-
-    Lexer::CTokenIterator getComma() const;
-
-    const TypeName& getTypeName() const;
-
-    Lexer::CTokenIterator getCloseParentheses() const;
 };
 
 /**

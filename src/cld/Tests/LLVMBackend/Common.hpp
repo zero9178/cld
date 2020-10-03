@@ -62,6 +62,12 @@ struct return_type<R(A...)>
     typedef R type;
 };
 
+template <class R, class... A>
+struct return_type<R(A..., ...)>
+{
+    typedef R type;
+};
+
 } // namespace details
 
 template <class Fn, class... Args>

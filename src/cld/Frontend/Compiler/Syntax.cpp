@@ -1381,10 +1381,10 @@ cld::Syntax::GNUASMStatement::GNUASMStatement(Lexer::CTokenIterator begin, Lexer
 {
 }
 
-cld::Syntax::UnaryExpressionBuiltinVAArg::UnaryExpressionBuiltinVAArg(
+cld::Syntax::PrimaryExpressionBuiltinVAArg::PrimaryExpressionBuiltinVAArg(
     Lexer::CTokenIterator begin, Lexer::CTokenIterator end, Lexer::CTokenIterator builtinToken,
     Lexer::CTokenIterator openParentheses, std::unique_ptr<AssignmentExpression>&& assignmentExpression,
-    Lexer::CTokenIterator comma, cld::Syntax::TypeName&& typeName, Lexer::CTokenIterator closeParentheses)
+    Lexer::CTokenIterator comma, std::unique_ptr<TypeName>&& typeName, Lexer::CTokenIterator closeParentheses)
     : Node(begin, end),
       m_builtinToken(builtinToken),
       m_openParentheses(openParentheses),
@@ -1396,32 +1396,32 @@ cld::Syntax::UnaryExpressionBuiltinVAArg::UnaryExpressionBuiltinVAArg(
     CLD_ASSERT(m_assignmentExpression);
 }
 
-cld::Lexer::CTokenIterator cld::Syntax::UnaryExpressionBuiltinVAArg::getBuiltinToken() const
+cld::Lexer::CTokenIterator cld::Syntax::PrimaryExpressionBuiltinVAArg::getBuiltinToken() const
 {
     return m_builtinToken;
 }
 
-cld::Lexer::CTokenIterator cld::Syntax::UnaryExpressionBuiltinVAArg::getOpenParentheses() const
+cld::Lexer::CTokenIterator cld::Syntax::PrimaryExpressionBuiltinVAArg::getOpenParentheses() const
 {
     return m_openParentheses;
 }
 
-const cld::Syntax::AssignmentExpression& cld::Syntax::UnaryExpressionBuiltinVAArg::getAssignmentExpression() const
+const cld::Syntax::AssignmentExpression& cld::Syntax::PrimaryExpressionBuiltinVAArg::getAssignmentExpression() const
 {
     return *m_assignmentExpression;
 }
 
-cld::Lexer::CTokenIterator cld::Syntax::UnaryExpressionBuiltinVAArg::getComma() const
+cld::Lexer::CTokenIterator cld::Syntax::PrimaryExpressionBuiltinVAArg::getComma() const
 {
     return m_comma;
 }
 
-const cld::Syntax::TypeName& cld::Syntax::UnaryExpressionBuiltinVAArg::getTypeName() const
+const cld::Syntax::TypeName& cld::Syntax::PrimaryExpressionBuiltinVAArg::getTypeName() const
 {
-    return m_typeName;
+    return *m_typeName;
 }
 
-cld::Lexer::CTokenIterator cld::Syntax::UnaryExpressionBuiltinVAArg::getCloseParentheses() const
+cld::Lexer::CTokenIterator cld::Syntax::PrimaryExpressionBuiltinVAArg::getCloseParentheses() const
 {
     return m_closeParentheses;
 }

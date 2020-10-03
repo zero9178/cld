@@ -805,21 +805,26 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
     if (!isBuiltinFunction(function))
     {
         function = lvalueConversion(std::move(function));
+        if (!std::holds_alternative<PointerType>(function.getType().getVariant())
+            || !std::holds_alternative<FunctionType>(
+                cld::get<PointerType>(function.getType().getVariant()).getElementType().getVariant()))
+        {
+            if (!function.isUndefined())
+            {
+                log(Errors::Semantics::CANNOT_CALL_NON_FUNCTION_TYPE.args(
+                    function, m_sourceInterface, function, *node.getOpenParentheses(), *node.getCloseParentheses()));
+            }
+            for (auto& iter : node.getOptionalAssignmentExpressions())
+            {
+                visit(iter);
+            }
+            return Expression(node);
+        }
     }
-    if (!std::holds_alternative<PointerType>(function.getType().getVariant())
-        || !std::holds_alternative<FunctionType>(
-            cld::get<PointerType>(function.getType().getVariant()).getElementType().getVariant()))
+    else
     {
-        if (!function.isUndefined())
-        {
-            log(Errors::Semantics::CANNOT_CALL_NON_FUNCTION_TYPE.args(
-                function, m_sourceInterface, function, *node.getOpenParentheses(), *node.getCloseParentheses()));
-        }
-        for (auto& iter : node.getOptionalAssignmentExpressions())
-        {
-            visit(iter);
-        }
-        return Expression(node);
+        function = Expression(PointerType::create(false, false, false, function.getType()), ValueCategory::Rvalue,
+                              Conversion(Conversion::LValue, std::make_unique<Expression>(std::move(function))));
     }
     auto& ft =
         cld::get<FunctionType>(cld::get<PointerType>(function.getType().getVariant()).getElementType().getVariant());
@@ -1293,7 +1298,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                       Constant(llvm::APSInt(64, false), node.begin(), node.end()));
 }
 
-cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::UnaryExpressionBuiltinVAArg& vaArg)
+cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::PrimaryExpressionBuiltinVAArg& vaArg)
 {
     if (getCurrentFunctionScope())
     {
@@ -2092,6 +2097,19 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::lvalueConversion(Expression&& expression)
 {
+    if (expression.getValueCategory() != ValueCategory::Lvalue)
+    {
+        // It's a lil weird to not be doing an lvalue conversion here but pretty much every user of lvalueConversion
+        // probably expects it to also handle array to pointer decay even if the array is an rvalue
+        if (isArray(expression.getType()))
+        {
+            auto& elementType = getArrayElementType(expression.getType());
+            auto newType = PointerType::create(false, false, false, elementType);
+            return Expression(std::move(newType), ValueCategory::Rvalue,
+                              Conversion(Conversion::Implicit, std::make_unique<Expression>(std::move(expression))));
+        }
+        return std::move(expression);
+    }
     if (isArray(expression.getType()))
     {
         auto& elementType = getArrayElementType(expression.getType());
@@ -2109,14 +2127,6 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::lvalueConversion(Ex
         auto newType = PointerType::create(false, false, false, expression.getType());
         return Expression(std::move(newType), ValueCategory::Rvalue,
                           Conversion(Conversion::LValue, std::make_unique<Expression>(std::move(expression))));
-    }
-    // If the expression isn't an lvalue and not qualified then conversion is redundant
-    if (expression.getValueCategory() != ValueCategory::Lvalue && !expression.getType().isVolatile()
-        && !expression.getType().isConst()
-        && (!std::holds_alternative<PointerType>(expression.getType().getVariant())
-            || !cld::get<PointerType>(expression.getType().getVariant()).isRestricted()))
-    {
-        return std::move(expression);
     }
     auto newType = Type(false, false, expression.getType().getVariant());
     return Expression(std::move(newType), ValueCategory::Rvalue,

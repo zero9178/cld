@@ -346,7 +346,7 @@ public:
 
     Expression visit(const Syntax::UnaryExpressionDefined& node);
 
-    Expression visit(const Syntax::UnaryExpressionBuiltinVAArg& node);
+    Expression visit(const Syntax::PrimaryExpressionBuiltinVAArg& node);
 
     Expression visit(const Syntax::CastExpression& node);
 

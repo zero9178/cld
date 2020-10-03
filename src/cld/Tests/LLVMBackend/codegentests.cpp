@@ -3824,3 +3824,72 @@ TEST_CASE("LLVM codegen c-testsuite", "[LLVM]")
         CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 0);
     }
 }
+
+TEST_CASE("LLVM codegen var arg", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    auto module = std::make_unique<llvm::Module>("", context);
+    SECTION("integer register")
+    {
+        auto program = generateProgram("int function(void*p,...) {\n"
+                                       "__builtin_va_list list;\n"
+                                       "__builtin_va_start(list,p);\n"
+                                       "int i = __builtin_va_arg(list,int);\n"
+                                       "__builtin_va_end(list);\n"
+                                       "return i;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int(void*, ...)>(std::move(module), "function", nullptr, 5) == 5);
+    }
+    SECTION("small simple struct")
+    {
+        struct T
+        {
+            float f;
+            int r;
+        };
+        auto program = generateProgram("struct T {\n"
+                                       "float f;\n"
+                                       "int r;\n"
+                                       "};\n"
+                                       "\n"
+                                       "int function(void*p,...) {\n"
+                                       "__builtin_va_list list;\n"
+                                       "__builtin_va_start(list,p);\n"
+                                       "int i = __builtin_va_arg(list,struct T).r;\n"
+                                       "__builtin_va_end(list);\n"
+                                       "return i;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int(void*, ...)>(std::move(module), "function", nullptr, T{3.0, 5}) == 5);
+    }
+    SECTION("larger struct")
+    {
+        struct T
+        {
+            float f;
+            int r[5];
+        };
+        auto program = generateProgram("struct T {\n"
+                                       "float f;\n"
+                                       "int r[5];\n"
+                                       "};\n"
+                                       "\n"
+                                       "int function(void*p,...) {\n"
+                                       "__builtin_va_list list;\n"
+                                       "__builtin_va_start(list,p);\n"
+                                       "int i = __builtin_va_arg(list,struct T).r[2];\n"
+                                       "__builtin_va_end(list);\n"
+                                       "return i;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int(void*, ...)>(std::move(module), "function", nullptr, T{3.0, {3, 4, 5, 6, 7}})
+              == 5);
+    }
+}
