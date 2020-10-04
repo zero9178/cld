@@ -1151,7 +1151,14 @@ public:
                 m_types.insert({unionType, type});
                 return type;
             },
-            [&](const cld::Semantics::AbstractArrayType&) -> llvm::Type* { CLD_UNREACHABLE; },
+            [&](const cld::Semantics::AbstractArrayType& arrayType) -> llvm::Type* {
+                auto* elementType = visit(arrayType.getType());
+                if (cld::Semantics::isVariableLengthArray(arrayType.getType()))
+                {
+                    return elementType;
+                }
+                return llvm::ArrayType::get(elementType, 0);
+            },
             [&](const std::monostate&) -> llvm::Type* { CLD_UNREACHABLE; },
             [&](const cld::Semantics::EnumType& enumType) -> llvm::Type* {
                 auto* enumDef = m_programInterface.getEnumDefinition(enumType.getName(), enumType.getScopeOrId());

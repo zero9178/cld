@@ -3825,6 +3825,53 @@ TEST_CASE("LLVM codegen c-testsuite", "[LLVM]")
     }
 }
 
+TEST_CASE("LLVM codegen miscellaneous programs", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    auto module = std::make_unique<llvm::Module>("", context);
+    SECTION("variably modified types shenanigans")
+    {
+        auto program = generateProgram("struct A {\n"
+                                       "    double (*arr)[];\n"
+                                       "    int length;\n"
+                                       "    int width;\n"
+                                       "};\n"
+                                       "\n"
+                                       "void print_mat(int l,int w,double (*arr)[w],int (*printF)(const char*,...))\n"
+                                       "{\n"
+                                       "    for(int i = 0; i < l; i++)\n"
+                                       "    {\n"
+                                       "        for (int j = 0; j < w; j++)\n"
+                                       "        {\n"
+                                       "            printF(\"%6.6f, \",arr[i][j]);\n"
+                                       "        }\n"
+                                       "    printF(\"\\n\");\n"
+                                       "    }\n"
+                                       "}\n"
+                                       "\n"
+                                       "void function(int (*printF)(const char*,...))\n"
+                                       "{\n"
+                                       "    double a[3][2] = {{1,2,},{3,4},{5,6}};\n"
+                                       "    struct A as = {\n"
+                                       "        .length = 3,\n"
+                                       "        .width = 2,\n"
+                                       "        .arr = a"
+                                       "    };\n"
+                                       "\n"
+                                       "    print_mat(as.length,as.width,as.arr,printF);\n"
+                                       "    double b[3][3] = {{1.}};\n"
+                                       "    as.width = 3;\n"
+                                       "    as.arr = b;\n"
+                                       "    \n"
+                                       "    print_mat(as.length,as.width,as.arr,printF);\n"
+                                       "}\n");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        cld::Tests::computeInJIT<void(int (*)(const char*, ...))>(std::move(module), "function", printf);
+    }
+}
+
 TEST_CASE("LLVM codegen var arg", "[LLVM]")
 {
     llvm::LLVMContext context;

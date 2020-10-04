@@ -1701,22 +1701,33 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
 {
     SECTION("Subscript")
     {
-        auto& expr = generateExpression("void foo(int *i) {\n"
-                                        "    i[5];\n"
-                                        "}");
-
-        CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-        CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
-        REQUIRE(std::holds_alternative<SubscriptOperator>(expr.getVariant()));
-        CHECK(cld::get<SubscriptOperator>(expr.getVariant()).getLeftExpression().getType()
-              == PointerType::create(false, false, false,
-                                     PrimitiveType::createInt(false, false, cld::LanguageOptions::native())));
-        CHECK(cld::get<SubscriptOperator>(expr.getVariant()).getLeftExpression().getValueCategory()
-              == ValueCategory::Rvalue);
-        CHECK(cld::get<SubscriptOperator>(expr.getVariant()).getRightExpression().getType()
-              == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-        CHECK(cld::get<SubscriptOperator>(expr.getVariant()).getRightExpression().getValueCategory()
-              == ValueCategory::Rvalue);
+        SECTION("Simple")
+        {
+            auto& expr = generateExpression("void foo(int *i) {\n"
+                                            "    i[5];\n"
+                                            "}");
+            CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
+            REQUIRE(std::holds_alternative<SubscriptOperator>(expr.getVariant()));
+            CHECK(cld::get<SubscriptOperator>(expr.getVariant()).getLeftExpression().getType()
+                  == PointerType::create(false, false, false,
+                                         PrimitiveType::createInt(false, false, cld::LanguageOptions::native())));
+            CHECK(cld::get<SubscriptOperator>(expr.getVariant()).getLeftExpression().getValueCategory()
+                  == ValueCategory::Rvalue);
+            CHECK(cld::get<SubscriptOperator>(expr.getVariant()).getRightExpression().getType()
+                  == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(cld::get<SubscriptOperator>(expr.getVariant()).getRightExpression().getValueCategory()
+                  == ValueCategory::Rvalue);
+        }
+        SECTION("CV qualified")
+        {
+            auto& expr = generateExpression("void foo(void) {\n"
+                                            "   const int i[5];\n"
+                                            "   i[3];"
+                                            "}");
+            CHECK(expr.getType() == PrimitiveType::createInt(true, false, cld::LanguageOptions::native()));
+            CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
+        }
         SEMA_PRODUCES("int foo(void) {\n"
                       " 5[5];\n"
                       "}",

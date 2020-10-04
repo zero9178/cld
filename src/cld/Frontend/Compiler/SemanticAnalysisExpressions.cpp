@@ -814,7 +814,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
             || !std::holds_alternative<FunctionType>(
                 cld::get<PointerType>(function.getType().getVariant()).getElementType().getVariant()))
         {
-            if (!function.isUndefined())
+            if (!function.getType().isUndefined())
             {
                 log(Errors::Semantics::CANNOT_CALL_NON_FUNCTION_TYPE.args(
                     function, m_sourceInterface, function, *node.getOpenParentheses(), *node.getCloseParentheses()));
