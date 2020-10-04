@@ -207,5 +207,8 @@ llvm_map_components_to_libnames(llvm_all ${LLVM_TARGETS_TO_BUILD})
 
 message(STATUS "${llvm_all}")
 
+add_library(cldMain src/cld/cldmain.cpp)
+target_link_libraries(cldMain LLVMBackend ${llvm_all})
+
 add_executable(cld src/cld/main.cpp)
-target_link_libraries(cld LLVMBackend ${llvm_all})
+target_link_libraries(cld cldMain)
