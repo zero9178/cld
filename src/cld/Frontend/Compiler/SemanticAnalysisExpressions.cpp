@@ -763,7 +763,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
         {
             arguments.push_back(visit(node.getOptionalAssignmentExpressions()[0]));
             auto& vaList = *getTypedef("__builtin_va_list");
-            if (!arguments[0].getType().isUndefined() && arguments[0].getType() != vaList)
+            if (!arguments[0].getType().isUndefined() && !typesAreCompatible(arguments[0].getType(), vaList))
             {
                 log(Errors::Semantics::CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_VA_LIST.args(
                     arguments[0], m_sourceInterface, 1, arguments[0]));
@@ -828,7 +828,8 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
     }
     else
     {
-        function = Expression(PointerType::create(false, false, false, function.getType()), ValueCategory::Rvalue,
+        auto type = function.getType();
+        function = Expression(PointerType::create(false, false, false, std::move(type)), ValueCategory::Rvalue,
                               Conversion(Conversion::LValue, std::make_unique<Expression>(std::move(function))));
     }
     auto& ft =
@@ -1315,10 +1316,15 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
     }
     auto expression = visit(vaArg.getAssignmentExpression());
     auto& vaList = *getTypedef("__builtin_va_list");
-    if (!expression.getType().isUndefined() && expression.getType() != vaList)
+    if (!expression.getType().isUndefined() && !typesAreCompatible(expression.getType(), vaList))
     {
         log(Errors::Semantics::CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_VA_LIST.args(
             expression, m_sourceInterface, 1, expression));
+    }
+    if (isArray(expression.getType()))
+    {
+        // Do Pointer decay
+        expression = lvalueConversion(std::move(expression));
     }
     auto type =
         declaratorsToType(vaArg.getTypeName().getSpecifierQualifiers(), vaArg.getTypeName().getAbstractDeclarator());

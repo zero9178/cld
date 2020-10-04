@@ -1643,8 +1643,8 @@ cld::Semantics::ConstValue
         });
 }
 
-const cld::Semantics::ProgramInterface::DeclarationInScope::Variant*
-    cld::Semantics::SemanticAnalysis::getBuiltinFuncDecl(std::string_view name) const CLD_NULLABLE
+const cld::Semantics::ProgramInterface::DeclarationInScope::Variant* CLD_NULLABLE
+    cld::Semantics::SemanticAnalysis::getBuiltinFuncDecl(std::string_view name) const
 {
     if (name == "__builtin_va_start")
     {

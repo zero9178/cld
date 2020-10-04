@@ -168,7 +168,7 @@ class CodeGenerator final
     }
 
     std::tuple<ABITransformations::Variant, llvm::Type * CLD_NON_NULL, llvm::Type * CLD_NULLABLE>
-        flattenSingleArg(llvm::Type* type, std::uint8_t& takenIntegers, std::uint8_t& takenFloats)
+        flattenSingleArg(llvm::Type* type, std::uint8_t* takenIntegers = nullptr, std::uint8_t* takenFloats = nullptr)
     {
         constexpr std::uint8_t availableIntegerRegisters = 6;
         constexpr std::uint8_t availableFloatingPointRegisters = 8;
@@ -176,8 +176,8 @@ class CodeGenerator final
         std::size_t retIndex = 0;
         std::array<llvm::Type*, 2> ret = {};
 
-        std::uint8_t takenIntegerRegisters = takenIntegers;
-        std::uint8_t takenFloatingPointRegisters = takenFloats;
+        std::uint8_t takenIntegerRegisters = takenIntegers ? *takenIntegers : 0;
+        std::uint8_t takenFloatingPointRegisters = takenFloats ? *takenFloats : 0;
         const auto flat = flatten(type);
         auto iter = flat.begin();
         while (iter != flat.end())
@@ -280,8 +280,14 @@ class CodeGenerator final
                 cld::get<ABITransformations::MultipleArgs>(dest).size++;
             }
         }
-        takenFloats = takenFloatingPointRegisters;
-        takenIntegers = takenIntegerRegisters;
+        if (takenFloats)
+        {
+            *takenFloats = takenFloatingPointRegisters;
+        }
+        if (takenIntegers)
+        {
+            *takenIntegers = takenIntegerRegisters;
+        }
         return {dest, ret[0], ret[1]};
     }
 
@@ -343,7 +349,7 @@ class CodeGenerator final
                 }
                 std::pair<llvm::Type*, llvm::Type*> types;
                 std::tie(dest, types.first, types.second) =
-                    flattenSingleArg(*arg, takenIntegerRegisters, takenFloatingPointRegisters);
+                    flattenSingleArg(*arg, &takenIntegerRegisters, &takenFloatingPointRegisters);
                 if (std::holds_alternative<ABITransformations::Change>(dest)
                     && cld::get<ABITransformations::Change>(dest) == ABITransformations::OnStack)
                 {
@@ -374,7 +380,7 @@ class CodeGenerator final
                 {
                     auto* prevReturnType = returnType;
                     auto [temp, firstType, secondType] =
-                        flattenSingleArg(returnType, takenIntegerRegisters, takenFloatingPointRegisters);
+                        flattenSingleArg(returnType, &takenIntegerRegisters, &takenFloatingPointRegisters);
                     if (secondType)
                     {
                         returnType = llvm::StructType::get(firstType, secondType);
@@ -2959,15 +2965,15 @@ public:
     llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::BuiltinVAArg& vaArg)
     {
         auto* vaList = visit(vaArg.getExpression());
+        std::size_t sizeOf = expression.getType().getSizeOf(m_programInterface);
         auto align = vaArg.getExpression().getType().getAlignOf(m_programInterface);
-        llvm::Value* loadedVaList = m_builder.CreateAlignedLoad(vaList, llvm::Align(align));
 
         switch (m_programInterface.getLanguageOptions().vaListKind)
         {
             case cld::LanguageOptions::BuiltInVaList::CharPtr:
             case cld::LanguageOptions::BuiltInVaList::VoidPtr:
             {
-                std::size_t sizeOf = expression.getType().getSizeOf(m_programInterface);
+                llvm::Value* loadedVaList = m_builder.CreateAlignedLoad(vaList, llvm::Align(align));
                 auto* increment = m_builder.CreateInBoundsGEP(loadedVaList, {m_builder.getInt64(sizeOf)});
                 m_builder.CreateAlignedStore(increment, vaList, llvm::Align(align));
 
@@ -2982,7 +2988,7 @@ public:
                         loadedVaList = m_builder.CreateBitCast(loadedVaList, llvm::PointerType::getUnqual(destType));
                         return m_builder.CreateAlignedLoad(loadedVaList, llvm::Align(align));
                     }
-                    if (!m_module.getDataLayout().isLegalInteger(sizeOf))
+                    if (!m_module.getDataLayout().isLegalInteger(sizeOf * 8))
                     {
                         loadedVaList = m_builder.CreateBitCast(
                             loadedVaList, llvm::PointerType::getUnqual(llvm::PointerType::getUnqual(destType)));
@@ -2990,18 +2996,191 @@ public:
                         align = exprAlign;
                     }
                 }
+
+                llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(), m_currentFunction->getEntryBlock().begin());
+                auto* allocaInst = temp.CreateAlloca(destType, nullptr, "va_arg.ret");
+                allocaInst->setAlignment(llvm::Align(exprAlign));
+                m_builder.CreateLifetimeStart(allocaInst, m_builder.getInt64(sizeOf));
+                m_builder.CreateMemCpy(allocaInst, allocaInst->getAlign(), loadedVaList, llvm::Align(align), sizeOf);
+                return m_builder.CreateLoad(allocaInst);
+            }
+            case cld::LanguageOptions::BuiltInVaList::x86_64ABI:
+            {
+                auto* destType = visit(expression.getType());
+                if (m_module.getDataLayout().getTypeAllocSizeInBits(destType) > 128)
+                {
+                    auto* overflowArea =
+                        m_builder.CreateInBoundsGEP(vaList, {m_builder.getInt64(0), m_builder.getInt32(2)});
+                    llvm::Value* loadedStackPointer = m_builder.CreateLoad(overflowArea);
+                    auto* incremented = m_builder.CreateGEP(loadedStackPointer, m_builder.getInt64(sizeOf));
+                    loadedStackPointer =
+                        m_builder.CreateBitCast(loadedStackPointer, llvm::PointerType::getUnqual(destType));
+                    m_builder.CreateStore(incremented, overflowArea);
+
+                    llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(),
+                                           m_currentFunction->getEntryBlock().begin());
+                    auto* allocaInst = temp.CreateAlloca(destType, nullptr, "va_arg.ret");
+                    allocaInst->setAlignment(llvm::Align(expression.getType().getAlignOf(m_programInterface)));
+                    m_builder.CreateLifetimeStart(allocaInst, m_builder.getInt64(sizeOf));
+                    m_builder.CreateMemCpy(allocaInst, allocaInst->getAlign(), loadedStackPointer,
+                                           allocaInst->getAlign(), sizeOf);
+                    return m_builder.CreateLoad(allocaInst);
+                }
+                auto [transform, first, second] = flattenSingleArg(destType);
+                (void)transform;
+
+                llvm::Value* gpOffset = nullptr;
+                llvm::Value* gpCount = nullptr;
+                llvm::Value* fpOffset = nullptr;
+                llvm::Value* fpCount = nullptr;
+
+                llvm::Value* cond = nullptr;
+
+                if (first->isIntegerTy() || (second && second->isIntegerTy()))
+                {
+                    gpOffset = m_builder.CreateInBoundsGEP(vaList, {m_builder.getInt64(0), m_builder.getInt32(0)});
+                    gpCount = m_builder.CreateAlignedLoad(gpOffset, llvm::Align(align));
+                    // if the offset is 48 bytes it is full (8 Bytes * 6 Integer registers). To fit two integers we
+                    // need an offset of 32, to fit one we need max 40
+                    auto maxOffset = first->isIntegerTy() && second && second->isIntegerTy() ? 32 : 40;
+                    cond = m_builder.CreateICmpULE(gpCount, m_builder.getInt32(maxOffset));
+                }
+                if (first->isFPOrFPVectorTy() || (second && second->isFloatingPointTy()))
+                {
+                    fpOffset = m_builder.CreateInBoundsGEP(vaList, {m_builder.getInt64(0), m_builder.getInt32(1)});
+                    fpCount = m_builder.CreateAlignedLoad(fpOffset, llvm::Align(align));
+                    // fpOffset comes after gpOffset therefore all fp registers are used when fpOffset
+                    // is 8 Bytes * 6 Integer registers + 16 Bytes * 8 Floating point registers
+                    auto maxOffset =
+                        first->isVectorTy() || (first->isFloatingPointTy() && second && second->isFloatingPointTy()) ?
+                            144 :
+                            160;
+                    if (!cond)
+                    {
+                        cond = m_builder.CreateICmpULE(fpCount, m_builder.getInt32(maxOffset));
+                    }
+                    else
+                    {
+                        cond =
+                            m_builder.CreateAnd(cond, m_builder.CreateICmpULE(fpCount, m_builder.getInt32(maxOffset)));
+                    }
+                }
+                CLD_ASSERT(cond);
+
+                auto* inRegister =
+                    llvm::BasicBlock::Create(m_module.getContext(), "va_arg.inRegister", m_currentFunction);
+                auto* onStack = llvm::BasicBlock::Create(m_module.getContext(), "va_arg.onStack", m_currentFunction);
+                auto* contBlock = llvm::BasicBlock::Create(m_module.getContext(), "va_arg.continue", m_currentFunction);
+                m_builder.CreateCondBr(cond, inRegister, onStack);
+
+                m_builder.SetInsertPoint(inRegister);
+                llvm::Value* regArea =
+                    m_builder.CreateInBoundsGEP(vaList, {m_builder.getInt64(0), m_builder.getInt32(3)});
+                regArea = m_builder.CreateAlignedLoad(regArea, llvm::Align(align));
+                llvm::Value* regValue;
+                if (!second)
+                {
+                    if (first->isIntegerTy())
+                    {
+                        regArea = m_builder.CreateGEP(regArea, gpCount);
+                        regValue = m_builder.CreateBitCast(regArea, llvm::PointerType::getUnqual(destType));
+                        auto* incremented = m_builder.CreateAdd(gpCount, m_builder.getInt32(8));
+                        m_builder.CreateAlignedStore(incremented, gpOffset, llvm::Align(align));
+                        m_builder.CreateBr(contBlock);
+                    }
+                    else
+                    {
+                        regArea = m_builder.CreateGEP(regArea, fpCount);
+                        regValue = m_builder.CreateBitCast(regArea, llvm::PointerType::getUnqual(destType));
+                        auto* incremented =
+                            m_builder.CreateAdd(fpCount, m_builder.getInt32(first->isVectorTy() ? 32 : 16));
+                        m_builder.CreateAlignedStore(incremented, fpOffset, llvm::Align(align));
+                        m_builder.CreateBr(contBlock);
+                    }
+                }
                 else
                 {
+                    llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(),
+                                           m_currentFunction->getEntryBlock().begin());
+                    auto* allocaInst = temp.CreateAlloca(destType, nullptr, "va_arg.temp");
+                    allocaInst->setAlignment(llvm::Align(expression.getType().getAlignOf(m_programInterface)));
+                    m_builder.CreateLifetimeStart(allocaInst, m_builder.getInt64(sizeOf));
+                    auto* dest = m_builder.CreateBitCast(
+                        allocaInst, llvm::PointerType::getUnqual(llvm::StructType::get(first, second)));
+
+                    llvm::Value* regAreaOfFirst =
+                        m_builder.CreateGEP(regArea, first->isFPOrFPVectorTy() ? fpCount : gpCount);
+                    regAreaOfFirst = m_builder.CreateBitCast(regAreaOfFirst, llvm::PointerType::getUnqual(first));
+                    regAreaOfFirst = m_builder.CreateLoad(regAreaOfFirst);
+                    auto* destFirst = m_builder.CreateInBoundsGEP(dest, {m_builder.getInt64(0), m_builder.getInt32(0)});
+                    m_builder.CreateStore(regAreaOfFirst, destFirst);
+
+                    llvm::Value* offsetOfSecond = second->isFPOrFPVectorTy() ? fpCount : gpCount;
+                    // If both are initialized then we are loading from one floating point and one integer register.
+                    // Otherwise we are loading from two registers. In that case we need to apply an extra offset
+                    // as we already loaded previously
+                    if (static_cast<bool>(fpOffset) != static_cast<bool>(gpOffset))
+                    {
+                        offsetOfSecond = m_builder.CreateAdd(
+                            offsetOfSecond, llvm::ConstantInt::get(offsetOfSecond->getType(), fpOffset ? 16 : 8));
+                    }
+                    llvm::Value* regAreaOfSecond = m_builder.CreateGEP(regArea, offsetOfSecond);
+                    regAreaOfSecond = m_builder.CreateBitCast(regAreaOfSecond, llvm::PointerType::getUnqual(second));
+                    regAreaOfSecond = m_builder.CreateLoad(regAreaOfSecond);
+                    auto* destSecond =
+                        m_builder.CreateInBoundsGEP(dest, {m_builder.getInt64(0), m_builder.getInt32(1)});
+                    m_builder.CreateStore(regAreaOfSecond, destSecond);
+
+                    if (static_cast<bool>(fpOffset) != static_cast<bool>(gpOffset))
+                    {
+                        if (fpOffset)
+                        {
+                            fpCount = m_builder.CreateAdd(fpCount, llvm::ConstantInt::get(fpCount->getType(), 32));
+                            m_builder.CreateStore(fpCount, fpOffset);
+                        }
+                        else
+                        {
+                            gpCount = m_builder.CreateAdd(gpCount, llvm::ConstantInt::get(gpCount->getType(), 16));
+                            m_builder.CreateStore(gpCount, gpOffset);
+                        }
+                    }
+                    else
+                    {
+                        fpCount = m_builder.CreateAdd(fpCount, llvm::ConstantInt::get(fpCount->getType(), 16));
+                        m_builder.CreateStore(fpCount, fpOffset);
+                        gpCount = m_builder.CreateAdd(gpCount, llvm::ConstantInt::get(gpCount->getType(), 8));
+                        m_builder.CreateStore(gpCount, gpOffset);
+                    }
+                    regValue = allocaInst;
+                    m_builder.CreateBr(contBlock);
+                }
+
+                m_builder.SetInsertPoint(onStack);
+                llvm::Value* stackAreaPtr =
+                    m_builder.CreateInBoundsGEP(vaList, {m_builder.getInt64(0), m_builder.getInt32(2)});
+                llvm::Value* stackArea = m_builder.CreateAlignedLoad(stackAreaPtr, llvm::Align(align));
+                auto* stackValue = m_builder.CreateBitCast(stackArea, llvm::PointerType::getUnqual(destType));
+                stackArea = m_builder.CreateGEP(stackArea, m_builder.getInt32(std::max<std::size_t>(8, sizeOf)));
+                m_builder.CreateStore(stackArea, stackAreaPtr);
+                m_builder.CreateBr(contBlock);
+
+                m_builder.SetInsertPoint(contBlock);
+                auto* phi = m_builder.CreatePHI(llvm::PointerType::getUnqual(destType), 2);
+                phi->addIncoming(regValue, inRegister);
+                phi->addIncoming(stackValue, onStack);
+
+                if (!cld::Semantics::isRecord(expression.getType()))
+                {
+                    return m_builder.CreateLoad(phi);
                 }
 
                 llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(), m_currentFunction->getEntryBlock().begin());
-                auto* alloca = temp.CreateAlloca(destType, nullptr, "va_arg.ret");
-                alloca->setAlignment(llvm::Align(exprAlign));
-                m_builder.CreateLifetimeStart(alloca, m_builder.getInt64(sizeOf));
-                m_builder.CreateMemCpy(alloca, alloca->getAlign(), loadedVaList, llvm::Align(align), sizeOf);
-                return m_builder.CreateLoad(alloca);
+                auto* allocaInst = temp.CreateAlloca(destType, nullptr, "va_arg.ret");
+                allocaInst->setAlignment(llvm::Align(expression.getType().getAlignOf(m_programInterface)));
+                m_builder.CreateLifetimeStart(allocaInst, m_builder.getInt64(sizeOf));
+                m_builder.CreateMemCpy(allocaInst, allocaInst->getAlign(), phi, allocaInst->getAlign(), sizeOf);
+                return m_builder.CreateLoad(allocaInst);
             }
-            case cld::LanguageOptions::BuiltInVaList::x86_64ABI: break;
         }
         CLD_UNREACHABLE;
     }
