@@ -3529,6 +3529,18 @@ TEST_CASE("LLVM Codegen variably modified types", "[LLVM]")
         REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
         CHECK(cld::Tests::computeInJIT<int(int)>(std::move(module), "function", 5) == 5);
     }
+    SECTION("After dead code")
+    {
+        auto program = generateProgram("int function(int n) {\n"
+                                       "    return n;\n"
+                                       "    int r[3][5][n];\n"
+                                       "    return sizeof(r);\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int(int)>(std::move(module), "function", 5) == 5);
+    }
 }
 
 TEST_CASE("LLVM codegen c-testsuite", "[LLVM]")
@@ -3855,7 +3867,7 @@ TEST_CASE("LLVM codegen miscellaneous programs", "[LLVM]")
                                        "    struct A as = {\n"
                                        "        .length = 3,\n"
                                        "        .width = 2,\n"
-                                       "        .arr = a"
+                                       "        .arr = a\n"
                                        "    };\n"
                                        "\n"
                                        "    print_mat(as.length,as.width,as.arr,printF);\n"

@@ -955,9 +955,11 @@ class CodeGenerator final
                 if (cld::Semantics::isVariableLengthArray(decl->getType()))
                 {
                     auto* alloca = m_stackSaves[decl];
-                    CLD_ASSERT(alloca);
-                    auto* loaded = m_builder.CreateLoad(alloca);
-                    m_builder.CreateIntrinsic(llvm::Intrinsic::stackrestore, {}, {loaded});
+                    if (alloca)
+                    {
+                        auto* loaded = m_builder.CreateLoad(alloca);
+                        m_builder.CreateIntrinsic(llvm::Intrinsic::stackrestore, {}, {loaded});
+                    }
                     continue;
                 }
             }
@@ -1168,7 +1170,7 @@ public:
             [&](const cld::Semantics::AnonymousEnumType& enumType) -> llvm::Type* { return visit(enumType.getType()); },
             [&](const cld::Semantics::ValArrayType& valArrayType) -> llvm::Type* {
                 auto expression = m_valSizes.find(valArrayType.getExpression());
-                if (expression == m_valSizes.end() && m_currentFunction)
+                if (expression == m_valSizes.end() && m_currentFunction && m_builder.GetInsertBlock())
                 {
                     m_valSizes.emplace(valArrayType.getExpression(),
                                        m_builder.CreateIntCast(visit(*valArrayType.getExpression()),
@@ -1192,7 +1194,7 @@ public:
                 },
                 [&](const std::unique_ptr<cld::Semantics::Declaration>& declaration) {
                     auto* global = visit(*declaration);
-                    if (llvm::isa<llvm::GlobalVariable>(global))
+                    if (llvm::isa_and_nonnull<llvm::GlobalVariable>(global))
                     {
                         m_cGlobalVariables.emplace(declaration->getNameToken()->getText(),
                                                    llvm::cast<llvm::GlobalVariable>(global));
@@ -1273,6 +1275,10 @@ public:
         llvm::AllocaInst* var = nullptr;
         if (cld::Semantics::isVariableLengthArray(declaration.getType()))
         {
+            if (!m_builder.GetInsertBlock())
+            {
+                return nullptr;
+            }
             llvm::Value* value = nullptr;
             cld::Semantics::RecursiveVisitor visitor(declaration.getType(), cld::Semantics::ARRAY_TYPE_NEXT_FN);
             bool valSeen = false;
