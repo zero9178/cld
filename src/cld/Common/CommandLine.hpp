@@ -650,7 +650,7 @@ static bool checkAlternative(llvm::MutableArrayRef<std::string_view>& commandLin
             {
                 return false;
             }
-            else if (!commandLine.empty())
+            if (!commandLine.empty())
             {
                 commandLine = commandLine.drop_front();
             }
@@ -712,7 +712,7 @@ static bool checkAllAlternatives(llvm::MutableArrayRef<std::string_view>& comman
                 {
                     return checkAlternative<cliOption, i>(commandLine, storage);
                 }
-                else if constexpr (std::tuple_size_v<Tuple> >= 2)
+                if constexpr (std::tuple_size_v<Tuple> >= 2)
                 {
                     if constexpr (!std::is_same_v<std::tuple_element_t<1, Tuple>, detail::CommandLine::Whitespace>)
                     {
@@ -727,6 +727,11 @@ static bool checkAllAlternatives(llvm::MutableArrayRef<std::string_view>& comman
         },
         integerSequenceToTuple(std::make_index_sequence<std::tuple_size_v<AllAlternatives>>{}));
 }
+
+template <auto& option>
+using OptionStorage = std::conditional_t<option.getMultiArg() == CLIMultiArg::List,
+                                         std::vector<typename std::decay_t<decltype(option)>::value_type>,
+                                         std::optional<typename std::decay_t<decltype(option)>::value_type>>;
 
 } // namespace detail::CommandLine
 
@@ -750,13 +755,15 @@ public:
     template <auto& option>
     [[nodiscard]] const auto& get() const noexcept
     {
-        return std::get<
-                   std::pair<detail::CommandLine::Pointer<&option>,
-                             std::conditional_t<option.getMultiArg() == CLIMultiArg::List,
-                                                std::vector<typename std::decay_t<decltype(option)>::value_type>,
-                                                std::optional<typename std::decay_t<decltype(option)>::value_type>>>>(
-                   m_storage)
-            .second;
+        return std::get<1>(std::get<std::tuple<detail::CommandLine::Pointer<&option>,
+                                               detail::CommandLine::OptionStorage<option>, int>>(m_storage));
+    }
+
+    template <auto& option>
+    [[nodiscard]] int pos() const noexcept
+    {
+        return std::get<2>(std::get<std::tuple<detail::CommandLine::Pointer<&option>,
+                                               detail::CommandLine::OptionStorage<option>, int>>(m_storage));
     }
 };
 
@@ -765,20 +772,23 @@ auto parseCommandLine(llvm::MutableArrayRef<std::string_view> commandLine)
 {
     constexpr auto tuple = std::make_tuple(detail::CommandLine::Pointer<&options>{}...);
     auto storage = std::make_tuple(
-        std::pair{detail::CommandLine::Pointer<&options>{},
-                  std::conditional_t<options.getMultiArg() == CLIMultiArg::List,
-                                     std::vector<typename std::decay_t<decltype(options)>::value_type>,
-                                     std::optional<typename std::decay_t<decltype(options)>::value_type>>{}}...);
+        std::tuple{detail::CommandLine::Pointer<&options>{}, detail::CommandLine::OptionStorage<options>{}, -1}...);
     std::vector<std::string_view> unrecognized;
+    int counter = 0;
     while (!commandLine.empty())
     {
         if (!std::apply(
                 [&](auto&&... indices) -> bool {
                     return ([&](auto index) -> bool {
                         constexpr std::size_t i = decltype(index)::value;
-                        return detail::CommandLine::checkAllAlternatives<
-                            std::tuple_element_t<i, decltype(tuple)>::pointer>(commandLine,
-                                                                               std::get<i>(storage).second);
+                        if (detail::CommandLine::checkAllAlternatives<
+                                std::tuple_element_t<i, decltype(tuple)>::pointer>(commandLine,
+                                                                                   std::get<1>(std::get<i>(storage))))
+                        {
+                            std::get<2>(std::get<i>(storage)) = counter;
+                            return true;
+                        }
+                        return false;
                     }(indices) || ...);
                 },
                 integerSequenceToTuple(std::make_index_sequence<sizeof...(options)>{})))
@@ -786,6 +796,7 @@ auto parseCommandLine(llvm::MutableArrayRef<std::string_view> commandLine)
             unrecognized.push_back(commandLine.front());
             commandLine = commandLine.drop_front();
         }
+        counter++;
     }
     return CommandLine(std::move(storage), std::move(unrecognized));
 }

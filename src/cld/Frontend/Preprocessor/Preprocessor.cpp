@@ -17,12 +17,9 @@
 
 namespace
 {
-constexpr std::array PREDEFINED_MACRO_NAMES = {"__DATE__",          "__FILE__",
-                                               "__LINE__",          "__STDC__",
-                                               "__STDC_HOSTED__",   "__STDC_MB_MIGHT_NEQ_WC__",
-                                               "__STDC_VERSION__",  "__TIME__",
-                                               "__STC_IEC_559__",   "__STDC_IEC_559_COMPLEX__",
-                                               "__STDC_ISO_10646__"};
+constexpr std::array PREDEFINED_MACRO_NAMES = {"__DATE__",         "__FILE__",        "__LINE__",
+                                               "__STDC__",         "__STDC_HOSTED__", "__STDC_MB_MIGHT_NEQ_WC__",
+                                               "__STDC_VERSION__", "__TIME__"};
 
 template <class T>
 std::vector<T>& append(std::vector<T>& lhs, std::vector<T>&& rhs)

@@ -1258,7 +1258,10 @@ public:
                 global = new llvm::GlobalVariable(
                     m_module, type, declaration.getType().isConst() && linkageType != llvm::GlobalValue::CommonLinkage,
                     linkageType, constant, llvm::StringRef{declaration.getNameToken()->getText()});
-                global->setAlignment(llvm::MaybeAlign(declaration.getType().getAlignOf(m_programInterface)));
+                if (m_programInterface.isCompleteType(declaration.getType()))
+                {
+                    global->setAlignment(llvm::MaybeAlign(declaration.getType().getAlignOf(m_programInterface)));
+                }
             }
             else
             {

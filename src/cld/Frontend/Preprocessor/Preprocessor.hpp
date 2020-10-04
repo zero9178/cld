@@ -71,8 +71,10 @@ std::string reconstruct(const T* begin, const T* end, const SourceInterface& sou
         // they are part of the same macro there cannot be a newline in between
         if (std::get<2>(beginValues) >= std::get<2>(prevValues))
         {
-            newLines = sourceInterface.getLineNumber(std::get<1>(beginValues), std::get<2>(beginValues))
-                       - sourceInterface.getLineNumber(std::get<1>(prevValues), std::get<2>(prevValues));
+            newLines = std::min<std::size_t>(
+                sourceInterface.getLineNumber(std::get<1>(beginValues), std::get<2>(beginValues))
+                    - sourceInterface.getLineNumber(std::get<1>(prevValues), std::get<2>(prevValues)),
+                1);
         }
         result.insert(result.size(), newLines, '\n');
         if (newLines == 0
