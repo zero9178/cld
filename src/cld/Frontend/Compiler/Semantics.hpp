@@ -2162,12 +2162,12 @@ namespace cld::diag
 template <>
 struct StringConverter<Semantics::Type>
 {
-    static std::string inFormat(const Semantics::Type& arg, const SourceInterface& sourceInterface)
+    static std::string inFormat(const Semantics::Type& arg, const SourceInterface* sourceInterface)
     {
         return "'" + inArg(arg, sourceInterface) + "'";
     }
 
-    static std::string inArg(const Semantics::Type& arg, const SourceInterface&);
+    static std::string inArg(const Semantics::Type& arg, const SourceInterface*);
 };
 
 template <>

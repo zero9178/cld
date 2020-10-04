@@ -3,6 +3,8 @@
 #include <llvm/Support/Format.h>
 #include <llvm/Support/WithColor.h>
 
+#include <algorithm>
+#include <array>
 #include <map>
 
 #include "SourceObject.hpp"
@@ -332,42 +334,7 @@ cld::Message cld::detail::Diagnostic::DiagnosticBase::print(std::pair<PointLocat
         }
     }
 
-    switch (m_severity)
-    {
-        case Severity::None: CLD_UNREACHABLE;
-        case Severity::Error: llvm::WithColor(ss, ss.RED, true) << "error: "; break;
-        case Severity::Warning: llvm::WithColor(ss, ss.MAGENTA, true) << "warning: "; break;
-        case Severity::Note: llvm::WithColor(ss, ss.CYAN, true) << "note: "; break;
-    }
-    for (auto& iter : ctre::range<DIAG_ARG_PATTERN>(message))
-    {
-        auto index = iter.get<2>().view().back() - '0';
-        auto mods = iter.get<1>().view();
-
-        ss.write(message.data(), iter.view().data() - message.data());
-        message.remove_prefix(iter.view().data() + iter.view().size() - message.data());
-        if (mods.empty())
-        {
-            CLD_ASSERT(arguments[index].inFormatText);
-            ss << *arguments[index].inFormatText;
-        }
-        else
-        {
-            std::u32string temp(mods.size(), '\0');
-            const auto* start = mods.data();
-            auto* dest = temp.data();
-            auto ok = llvm::ConvertUTF8toUTF32(
-                reinterpret_cast<const llvm::UTF8**>(&start),
-                reinterpret_cast<const llvm::UTF8*>(mods.data() + mods.size()), reinterpret_cast<llvm::UTF32**>(&dest),
-                reinterpret_cast<llvm::UTF32*>(dest + temp.size()), llvm::strictConversion);
-            (void)ok;
-            CLD_ASSERT(ok == llvm::conversionOK);
-            std::u32string_view view = {temp.data(), static_cast<std::size_t>(dest - temp.data())};
-            CLD_ASSERT(arguments[index].customModifiers.count(view) != 0);
-            ss << arguments[index].customModifiers[view];
-        }
-    }
-    ss.write(message.data(), message.size()) << '\n';
+    evaluateFormatsInMessage(message, arguments, ss);
 
     // The second argument doesn't use getLineCol for location.second because the std::pair location
     // is an open range aka [location.first,location.second). Therefore to get the actual last line
@@ -509,6 +476,66 @@ cld::Message cld::detail::Diagnostic::DiagnosticBase::print(std::pair<PointLocat
         }
     }
 
+    ss.flush();
+    return Message(m_severity, std::move(result));
+}
+
+void cld::detail::Diagnostic::DiagnosticBase::evaluateFormatsInMessage(std::string_view message,
+                                                                       llvm::MutableArrayRef<Argument> arguments,
+                                                                       llvm::raw_string_ostream& ss) const
+{
+    switch (this->m_severity)
+    {
+        case cld::Severity::None: CLD_UNREACHABLE;
+        case cld::Severity::Error: llvm::WithColor(ss, ss.RED, true) << "error: "; break;
+        case cld::Severity::Warning: llvm::WithColor(ss, ss.MAGENTA, true) << "warning: "; break;
+        case cld::Severity::Note: llvm::WithColor(ss, ss.CYAN, true) << "note: "; break;
+    }
+    for (auto& iter : ctre::range<cld::detail::Diagnostic::DIAG_ARG_PATTERN>(message))
+    {
+        auto index = iter.get<2>().view().back() - '0';
+        auto mods = iter.get<1>().view();
+
+        ss.write(message.data(), iter.view().data() - message.data());
+        message.remove_prefix(iter.view().data() + iter.view().size() - message.data());
+        if (mods.empty())
+        {
+            CLD_ASSERT(arguments[index].inFormatText);
+            ss << *arguments[index].inFormatText;
+        }
+        else
+        {
+            std::u32string temp(mods.size(), '\0');
+            const auto* start = mods.data();
+            auto* dest = temp.data();
+            auto ok = llvm::ConvertUTF8toUTF32(
+                reinterpret_cast<const llvm::UTF8**>(&start),
+                reinterpret_cast<const llvm::UTF8*>(mods.data() + mods.size()), reinterpret_cast<llvm::UTF32**>(&dest),
+                reinterpret_cast<llvm::UTF32*>(dest + temp.size()), llvm::strictConversion);
+            (void)ok;
+            CLD_ASSERT(ok == llvm::conversionOK);
+            std::u32string_view view = {temp.data(), static_cast<size_t>(dest - temp.data())};
+            CLD_ASSERT(arguments[index].customModifiers.count(view) != 0);
+            ss << arguments[index].customModifiers[view];
+        }
+    }
+    ss.write(message.data(), message.size()) << '\n';
+}
+
+cld::Message cld::detail::Diagnostic::DiagnosticBase::print(std::string_view message,
+                                                            llvm::MutableArrayRef<Argument> arguments) const
+{
+    std::string result;
+    // TODO: Right now the colour is useless. Just putting it here to know what the colour when and were.
+    // Will have to create a segment map or so in cld::Message that stores the colour and boldness information
+    // and then emits it correctly in it's operator<<
+    llvm::raw_string_ostream ss(result);
+    llvm::WithColor(ss, ss.RED, true) << "cld"
+#ifdef _WIN32
+                                         ".exe"
+#endif
+                                         ": ";
+    evaluateFormatsInMessage(message, arguments, ss);
     ss.flush();
     return Message(m_severity, std::move(result));
 }

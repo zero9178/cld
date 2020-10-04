@@ -206,7 +206,10 @@ protected:
                   llvm::MutableArrayRef<Argument> arguments, llvm::ArrayRef<Modifiers> modifiers,
                   const SourceInterface& sourceInterface) const;
 
-    static std::string stringFromToken(const SourceInterface& sourceInterface, const Lexer::TokenBase& token);
+    Message print(std::string_view message, llvm::MutableArrayRef<Argument> arguments) const;
+
+    void evaluateFormatsInMessage(std::string_view message, llvm::MutableArrayRef<Argument> arguments,
+                                  llvm::raw_string_ostream& ss) const;
 
 public:
     constexpr DiagnosticBase(Severity severity, std::string_view name) : m_severity(severity), m_name(name) {}
@@ -425,9 +428,9 @@ private:
 
     template <class T>
     struct HasStringConverters<
-        T, std::void_t<decltype(
-               diag::StringConverter<T>::inFormat(std::declval<T>(), std::declval<const SourceInterface&>()),
-               diag::StringConverter<T>::inArg(std::declval<T>(), std::declval<const SourceInterface&>()))>>
+        T, std::void_t<
+               decltype(diag::StringConverter<T>::inFormat(std::declval<T>(), std::declval<const SourceInterface*>()),
+                        diag::StringConverter<T>::inArg(std::declval<T>(), std::declval<const SourceInterface*>()))>>
         : std::true_type
     {
     };
@@ -581,7 +584,7 @@ private:
     }
 
     template <class Tuple, std::size_t... ints>
-    static std::array<Argument, N> createArgumentArray(const SourceInterface& sourceInterface, Tuple&& args,
+    static std::array<Argument, N> createArgumentArray(const SourceInterface* sourceInterface, Tuple&& args,
                                                        std::index_sequence<ints...>);
 
     template <std::size_t i>
@@ -665,6 +668,9 @@ public:
     template <class T, class... Args>
     Message args(const T& location, const SourceInterface& sourceInterface, Args&&... args) const;
 
+    template <class... Args>
+    Message argsCLI(Args&&... args) const;
+
     constexpr static auto constraints = getConstraints();
 
 private:
@@ -711,10 +717,35 @@ Message Diagnostic<N, format, Mods...>::args(const T& location, const SourceInte
                                  reinterpret_cast<llvm::UTF8*>(result.data() + result.size()), llvm::strictConversion);
     (void)ret;
     CLD_ASSERT(ret == llvm::conversionOK);
-    auto array = createArgumentArray(sourceInterface, std::forward_as_tuple(std::forward<Args>(args)...),
+    auto array = createArgumentArray(&sourceInterface, std::forward_as_tuple(std::forward<Args>(args)...),
                                      std::index_sequence_for<Args...>{});
     return print(getPointRange(location), {result.data(), static_cast<std::size_t>(resStart - result.data())}, array,
                  modifiers, sourceInterface);
+}
+
+template <std::size_t N, auto& format, class... Mods>
+template <class... Args>
+Message Diagnostic<N, format, Mods...>::argsCLI(Args&&... args) const
+{
+    static_assert(sizeof...(Args) == N, "Not the same amount of argument as needed by the format");
+    [[maybe_unused]] auto* v = this->checkConstraints<constraints, 0, Args...>; // Instantiate but don't call the
+    // function to improve debug perf a lil
+    constexpr auto u32string = getFormat();
+    const char32_t* start = u32string.data();
+    std::array<char, u32string.size() * 4> result;
+    char* resStart = result.data();
+    auto ret =
+        llvm::ConvertUTF32toUTF8(reinterpret_cast<const llvm::UTF32**>(&start),
+                                 reinterpret_cast<const llvm::UTF32*>(u32string.data() + u32string.size()),
+                                 reinterpret_cast<llvm::UTF8**>(&resStart),
+                                 reinterpret_cast<llvm::UTF8*>(result.data() + result.size()), llvm::strictConversion);
+    (void)ret;
+    CLD_ASSERT(ret == llvm::conversionOK);
+    // TODO: Instead of passing nullptr make it so that StringConverter may use const SourceInterface& as a second
+    //  argument but make it a compiler error if such a string converter is used when using argsCLI instead of args
+    auto array = createArgumentArray(nullptr, std::forward_as_tuple(std::forward<Args>(args)...),
+                                     std::index_sequence_for<Args...>{});
+    return print({result.data(), static_cast<std::size_t>(resStart - result.data())}, array);
 }
 
 template <std::size_t N, auto& format, class... Mods>
@@ -774,12 +805,13 @@ constexpr auto Diagnostic<N, format, Mods...>::getConstraints() -> std::array<st
 
 template <std::size_t N, auto& format, class... Mods>
 template <class Tuple, std::size_t... ints>
-auto Diagnostic<N, format, Mods...>::createArgumentArray(const SourceInterface& sourceInterface, Tuple&& args,
+auto Diagnostic<N, format, Mods...>::createArgumentArray(const SourceInterface* sourceInterface, Tuple&& args,
                                                          std::index_sequence<ints...>) -> std::array<Argument, N>
 {
+    (void)sourceInterface;
     std::array<Argument, N> result;
     (
-        [&result, &args, &sourceInterface](auto integer) {
+        [&result, &args, sourceInterface](auto integer) {
             using IntegerTy = decltype(integer);
             using ArgTy = std::decay_t<std::tuple_element_t<IntegerTy::value, Tuple>>;
             static_assert(constraints[IntegerTy::value]);

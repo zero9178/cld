@@ -984,7 +984,7 @@ std::string typeToString(const cld::Semantics::Type& arg)
 }
 } // namespace
 
-std::string cld::diag::StringConverter<cld::Semantics::Type>::inArg(const Semantics::Type& arg, const SourceInterface&)
+std::string cld::diag::StringConverter<cld::Semantics::Type>::inArg(const Semantics::Type& arg, const SourceInterface*)
 {
     return typeToString(arg);
 }

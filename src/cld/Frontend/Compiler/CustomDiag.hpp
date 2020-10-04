@@ -13,12 +13,12 @@ namespace diag
 template <class T>
 struct StringConverter
 {
-    static std::string inFormat(const T& arg, const SourceInterface&)
+    static std::string inFormat(const T& arg, const SourceInterface*)
     {
         return cld::to_string(arg);
     }
 
-    static std::string inArg(const T& arg, const SourceInterface&)
+    static std::string inArg(const T& arg, const SourceInterface*)
     {
         return cld::to_string(arg);
     }

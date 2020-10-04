@@ -561,13 +561,13 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::notEqual(const cld::Seman
 }
 
 std::string cld::diag::StringConverter<cld::Semantics::ConstValue>::inFormat(const Semantics::ConstValue& arg,
-                                                                             const SourceInterface&)
+                                                                             const SourceInterface*)
 {
     return '\'' + arg.toString() + '\'';
 }
 
 std::string cld::diag::StringConverter<cld::Semantics::ConstValue>::inArg(const Semantics::ConstValue& arg,
-                                                                          const SourceInterface&)
+                                                                          const SourceInterface*)
 {
     return arg.toString();
 }

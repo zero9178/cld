@@ -11,6 +11,7 @@
 #include <cld/Common/CommandLine.hpp>
 #include <cld/Common/Filesystem.hpp>
 #include <cld/Common/Triple.hpp>
+#include <cld/Frontend/Compiler/ErrorMessages.hpp>
 #include <cld/Frontend/Compiler/LanguageOptions.hpp>
 #include <cld/Frontend/Compiler/Parser.hpp>
 #include <cld/Frontend/Compiler/Program.hpp>
@@ -63,12 +64,16 @@ enum class Action
 
 template <class CL>
 std::optional<cld::fs::path> compileCFile(Action action, const cld::fs::path& cSourceFile, const cld::Triple& triple,
-                                          const cld::LanguageOptions& languageOptions, const CL& cli)
+                                          const cld::LanguageOptions& languageOptions, const CL& cli,
+                                          llvm::raw_ostream* reporter)
 {
     cld::fs::ifstream file(cSourceFile, std::ios_base::binary | std::ios_base::ate | std::ios_base::in);
     if (!file.is_open())
     {
-        // TODO: Error
+        if (reporter)
+        {
+            *reporter << cld::Errors::CLI::FAILED_TO_OPEN_C_SOURCE_FILE_N.argsCLI(cSourceFile.u8string());
+        }
         return {};
     }
 
@@ -79,13 +84,12 @@ std::optional<cld::fs::path> compileCFile(Action action, const cld::fs::path& cS
     file.close();
 
     bool errors = false;
-    auto pptokens =
-        cld::Lexer::tokenize(std::move(input), languageOptions, &llvm::errs(), &errors, cSourceFile.u8string());
+    auto pptokens = cld::Lexer::tokenize(std::move(input), languageOptions, reporter, &errors, cSourceFile.u8string());
     if (errors)
     {
         return {};
     }
-    pptokens = cld::PP::preprocess(std::move(pptokens), &llvm::errs(), &errors);
+    pptokens = cld::PP::preprocess(std::move(pptokens), reporter, &errors);
     if (errors)
     {
         return {};
@@ -104,24 +108,28 @@ std::optional<cld::fs::path> compileCFile(Action action, const cld::fs::path& cS
         cld::fs::ofstream outputFile(cld::to_string(*cli.template get<OUTPUT_FILE>()), std::ios_base::out);
         if (!outputFile.is_open())
         {
-            // TODO: Error
+            if (reporter)
+            {
+                *reporter << cld::Errors::CLI::FAILED_TO_OPEN_FILE_N_FOR_OUTPUT.argsCLI(
+                    *cli.template get<OUTPUT_FILE>());
+            }
             return {};
         }
         outputFile << reconstruction;
         outputFile.close();
         return cld::fs::u8path(*cli.template get<OUTPUT_FILE>());
     }
-    auto ctokens = cld::Lexer::toCTokens(pptokens, &llvm::errs(), &errors);
+    auto ctokens = cld::Lexer::toCTokens(pptokens, reporter, &errors);
     if (errors)
     {
         return {};
     }
-    auto tree = cld::Parser::buildTree(ctokens, &llvm::errs(), &errors);
+    auto tree = cld::Parser::buildTree(ctokens, reporter, &errors);
     if (errors)
     {
         return {};
     }
-    auto program = cld::Semantics::analyse(tree, std::move(ctokens), &llvm::errs(), &errors);
+    auto program = cld::Semantics::analyse(tree, std::move(ctokens), reporter, &errors);
     if (errors)
     {
         return {};
@@ -194,7 +202,10 @@ std::optional<cld::fs::path> compileCFile(Action action, const cld::fs::path& cS
     llvm::raw_fd_ostream os(outputFile, ec, llvm::sys::fs::OpenFlags::OF_None);
     if (ec)
     {
-        // TODO: Error
+        if (reporter)
+        {
+            *reporter << cld::Errors::CLI::FAILED_TO_OPEN_FILE_N_FOR_OUTPUT.argsCLI(outputFile);
+        }
         return {};
     }
 
@@ -228,7 +239,7 @@ std::optional<cld::fs::path> compileCFile(Action action, const cld::fs::path& cS
 
 template <class CL>
 int doActionOnAllFiles(Action action, const cld::LanguageOptions& languageOptions, const cld::Triple& triple,
-                       llvm::ArrayRef<std::string_view> files, const CL& cli)
+                       llvm::ArrayRef<std::string_view> files, const CL& cli, llvm::raw_ostream* reporter)
 {
     std::vector<cld::fs::path> linkableFiles;
     for (auto& iter : files)
@@ -237,7 +248,7 @@ int doActionOnAllFiles(Action action, const cld::LanguageOptions& languageOption
         auto extension = path.extension();
         if (extension == ".c")
         {
-            auto objectFile = compileCFile(action, iter, triple, languageOptions, cli);
+            auto objectFile = compileCFile(action, iter, triple, languageOptions, cli, reporter);
             if (!objectFile)
             {
                 return -1;
@@ -504,7 +515,7 @@ void applyTargetSpecificLanguageOptions(cld::LanguageOptions& languageOptions, c
 }
 } // namespace
 
-int cld::main(llvm::MutableArrayRef<std::string_view> elements)
+int cld::main(llvm::MutableArrayRef<std::string_view> elements, llvm::raw_ostream* reporter)
 {
     llvm::InitializeAllTargetInfos();
     llvm::InitializeAllTargets();
@@ -538,7 +549,11 @@ int cld::main(llvm::MutableArrayRef<std::string_view> elements)
         }
         else
         {
-            // TODO: Error
+            if (reporter)
+            {
+                *reporter << Errors::CLI::UNKNOWN_LANGUAGE_STANDARD_N.argsCLI(str);
+            }
+            return -1;
         }
     }
     auto options = cld::LanguageOptions::fromTriple(triple, language);
@@ -559,38 +574,41 @@ int cld::main(llvm::MutableArrayRef<std::string_view> elements)
 
     if (cli.getUnrecognized().empty())
     {
-        // TODO: Error
-        return -1;
-    }
-    if ((static_cast<int>(cli.get<COMPILE_ONLY>().has_value())
-         + static_cast<int>(cli.get<ASSEMBLY_OUTPUT>().has_value())
-         + static_cast<int>(cli.get<PREPROCESS_ONLY>().has_value()))
-            > 1
-        && cli.get<OUTPUT_FILE>())
-    {
-        // TODO: Error
+        if (reporter)
+        {
+            *reporter << Errors::CLI::NO_SOURCE_FILES_SPECIFIED.argsCLI();
+        }
         return -1;
     }
     if (cli.get<COMPILE_ONLY>())
     {
         if (cli.get<ASSEMBLY_OUTPUT>())
         {
-            // TODO: Error
+            if (reporter)
+            {
+                *reporter << Errors::CLI::CANNOT_COMPILE_TO_OBJECT_FILE_AND_ASSEMBLY_AT_THE_SAME_TIME.argsCLI();
+            }
         }
         if (cli.get<PREPROCESS_ONLY>())
         {
-            // TODO: Error
+            if (reporter)
+            {
+                *reporter << Errors::CLI::CANNOT_COMPILE_TO_OBJECT_FILE_AND_PREPROCESS_AT_THE_SAME_TIME.argsCLI();
+            }
         }
-        return doActionOnAllFiles(Action::Compile, options, triple, cli.getUnrecognized(), cli);
+        return doActionOnAllFiles(Action::Compile, options, triple, cli.getUnrecognized(), cli, reporter);
     }
     if (cli.get<ASSEMBLY_OUTPUT>())
     {
         if (cli.get<PREPROCESS_ONLY>())
         {
-            // TODO: Error
+            if (reporter)
+            {
+                *reporter << Errors::CLI::CANNOT_COMPILE_TO_ASSEMBLY_AND_PREPROCESS_AT_THE_SAME_TIME.argsCLI();
+            }
         }
-        return doActionOnAllFiles(Action::AssemblyOutput, options, triple, cli.getUnrecognized(), cli);
+        return doActionOnAllFiles(Action::AssemblyOutput, options, triple, cli.getUnrecognized(), cli, reporter);
     }
 
-    return doActionOnAllFiles(Action::Preprocess, options, triple, cli.getUnrecognized(), cli);
+    return doActionOnAllFiles(Action::Preprocess, options, triple, cli.getUnrecognized(), cli, reporter);
 }

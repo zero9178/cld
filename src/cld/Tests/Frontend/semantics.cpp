@@ -1468,7 +1468,7 @@ TEST_CASE("Semantics type printing", "[semantics]")
     using namespace cld::Semantics;
     auto toStr = [](const Type& type) {
         cld::CSourceObject object;
-        return cld::diag::StringConverter<Type>::inArg(type, object);
+        return cld::diag::StringConverter<Type>::inArg(type, &object);
     };
     SECTION("Primitives")
     {
@@ -1723,7 +1723,7 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
         {
             auto& expr = generateExpression("void foo(void) {\n"
                                             "   const int i[5];\n"
-                                            "   i[3];"
+                                            "   i[3];\n"
                                             "}");
             CHECK(expr.getType() == PrimitiveType::createInt(true, false, cld::LanguageOptions::native()));
             CHECK(expr.getValueCategory() == ValueCategory::Lvalue);

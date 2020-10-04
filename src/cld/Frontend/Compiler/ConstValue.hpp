@@ -110,9 +110,9 @@ namespace cld::diag
 template <>
 struct StringConverter<Semantics::ConstValue>
 {
-    static std::string inFormat(const Semantics::ConstValue& arg, const SourceInterface&);
+    static std::string inFormat(const Semantics::ConstValue& arg, const SourceInterface*);
 
-    static std::string inArg(const Semantics::ConstValue& arg, const SourceInterface&);
+    static std::string inArg(const Semantics::ConstValue& arg, const SourceInterface*);
 };
 
 } // namespace cld::diag
