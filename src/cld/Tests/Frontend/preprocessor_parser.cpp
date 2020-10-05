@@ -60,7 +60,7 @@ TEST_CASE("Parse Preprocessor Group", "[PPParse]")
 {
     SECTION("Text block")
     {
-        auto ret = functionProduces(parseGroup, "a line", 0, ProducesNothing());
+        auto ret = functionProduces(parseGroup, "a line", 0, ProducesNoErrors());
         REQUIRE(ret.groupPart.size() == 1);
         const auto& part = ret.groupPart[0];
         REQUIRE(std::holds_alternative<cld::PP::TextBlock>(part));
@@ -71,16 +71,16 @@ TEST_CASE("Parse Preprocessor Group", "[PPParse]")
     }
     SECTION("Only #")
     {
-        treeProduces("#", ProducesNothing());
+        treeProduces("#", ProducesNoErrors());
     }
     SECTION("Non directive")
     {
-        treeProduces("#5non directive", ProducesNothing());
+        treeProduces("#5non directive", ProducesNoErrors());
     }
     SECTION("Invalid directive")
     {
         // Error mustn't be handled in the parser
-        treeProduces("#non directive", ProducesNothing());
+        treeProduces("#non directive", ProducesNoErrors());
     }
 }
 
@@ -90,7 +90,7 @@ TEST_CASE("Parse Preprocessor Control Line", "[PPParse]")
     {
         SECTION("Normal")
         {
-            auto tree = treeProduces("#include <String>\n", ProducesNothing());
+            auto tree = treeProduces("#include <String>\n", ProducesNoErrors());
             REQUIRE(tree.groups.size() == 1);
             const auto& parts = tree.groups[0];
             REQUIRE(parts.groupPart.size() == 1);
@@ -105,15 +105,15 @@ TEST_CASE("Parse Preprocessor Control Line", "[PPParse]")
         }
         SECTION("Empty")
         {
-            treeProduces("#include\n", ProducesNothing());
+            treeProduces("#include\n", ProducesNoErrors());
         }
     }
     SECTION("Lines")
     {
         SECTION("Normal")
         {
-            treeProduces("#line 5\n", ProducesNothing());
-            auto ret = functionProduces(parseControlLine, "#line 5\n", 1, ProducesNothing());
+            treeProduces("#line 5\n", ProducesNoErrors());
+            auto ret = functionProduces(parseControlLine, "#line 5\n", 1, ProducesNoErrors());
             REQUIRE(std::holds_alternative<cld::PP::ControlLine::LineTag>(ret.variant));
             const auto& line = std::get<cld::PP::ControlLine::LineTag>(ret.variant);
             REQUIRE(line.tokens.size() == 1);
@@ -123,15 +123,15 @@ TEST_CASE("Parse Preprocessor Control Line", "[PPParse]")
         SECTION("Empty")
         {
             // Mustn't be handled in the parser
-            treeProduces("#line\n", ProducesNothing());
+            treeProduces("#line\n", ProducesNoErrors());
         }
     }
     SECTION("Define")
     {
         SECTION("Normal")
         {
-            treeProduces("#define n\n", ProducesNothing());
-            auto ret = functionProduces(parseControlLine, "#define n\n", 1, ProducesNothing());
+            treeProduces("#define n\n", ProducesNoErrors());
+            auto ret = functionProduces(parseControlLine, "#define n\n", 1, ProducesNoErrors());
             REQUIRE(std::holds_alternative<cld::PP::DefineDirective>(ret.variant));
             const auto& define = std::get<cld::PP::DefineDirective>(ret.variant);
             REQUIRE(define.tokens.size() == 1);
@@ -141,19 +141,19 @@ TEST_CASE("Parse Preprocessor Control Line", "[PPParse]")
         SECTION("Invalid syntax")
         {
             // Mustn't be handled in the parser
-            treeProduces("#define\n", ProducesNothing());
-            treeProduces("#define 5\n", ProducesNothing());
-            treeProduces("#define a(\n", ProducesNothing());
-            treeProduces("#define a()\n", ProducesNothing());
-            treeProduces("#define a+\n", ProducesNothing());
+            treeProduces("#define\n", ProducesNoErrors());
+            treeProduces("#define 5\n", ProducesNoErrors());
+            treeProduces("#define a(\n", ProducesNoErrors());
+            treeProduces("#define a()\n", ProducesNoErrors());
+            treeProduces("#define a+\n", ProducesNoErrors());
         }
     }
     SECTION("Errors")
     {
         SECTION("Normal")
         {
-            treeProduces("#error 5\n", ProducesNothing());
-            const auto& ret = functionProduces(parseControlLine, "#error 5\n", 1, ProducesNothing());
+            treeProduces("#error 5\n", ProducesNoErrors());
+            const auto& ret = functionProduces(parseControlLine, "#error 5\n", 1, ProducesNoErrors());
             REQUIRE(std::holds_alternative<cld::PP::ControlLine::ErrorTag>(ret.variant));
             const auto& include = std::get<cld::PP::ControlLine::ErrorTag>(ret.variant);
             REQUIRE(include.tokens.size() == 1);
@@ -162,8 +162,8 @@ TEST_CASE("Parse Preprocessor Control Line", "[PPParse]")
         }
         SECTION("Empty")
         {
-            treeProduces("#error\n", ProducesNothing());
-            const auto& ret = functionProduces(parseControlLine, "#error\n", 1, ProducesNothing());
+            treeProduces("#error\n", ProducesNoErrors());
+            const auto& ret = functionProduces(parseControlLine, "#error\n", 1, ProducesNoErrors());
             REQUIRE(std::holds_alternative<cld::PP::ControlLine::ErrorTag>(ret.variant));
             const auto& include = std::get<cld::PP::ControlLine::ErrorTag>(ret.variant);
             REQUIRE(include.tokens.size() == 0);
@@ -173,8 +173,8 @@ TEST_CASE("Parse Preprocessor Control Line", "[PPParse]")
     {
         SECTION("Normal")
         {
-            treeProduces("#pragma 5\n", ProducesNothing());
-            const auto& ret = functionProduces(parseControlLine, "#pragma 5\n", 1, ProducesNothing());
+            treeProduces("#pragma 5\n", ProducesNoErrors());
+            const auto& ret = functionProduces(parseControlLine, "#pragma 5\n", 1, ProducesNoErrors());
             REQUIRE(std::holds_alternative<cld::PP::ControlLine::PragmaTag>(ret.variant));
             const auto& include = std::get<cld::PP::ControlLine::PragmaTag>(ret.variant);
             REQUIRE(include.tokens.size() == 1);
@@ -183,8 +183,8 @@ TEST_CASE("Parse Preprocessor Control Line", "[PPParse]")
         }
         SECTION("Empty")
         {
-            treeProduces("#pragma\n", ProducesNothing());
-            const auto& ret = functionProduces(parseControlLine, "#pragma\n", 1, ProducesNothing());
+            treeProduces("#pragma\n", ProducesNoErrors());
+            const auto& ret = functionProduces(parseControlLine, "#pragma\n", 1, ProducesNoErrors());
             REQUIRE(std::holds_alternative<cld::PP::ControlLine::PragmaTag>(ret.variant));
             const auto& include = std::get<cld::PP::ControlLine::PragmaTag>(ret.variant);
             CHECK(include.tokens.empty());
@@ -194,8 +194,8 @@ TEST_CASE("Parse Preprocessor Control Line", "[PPParse]")
     {
         SECTION("Normal")
         {
-            treeProduces("#undef ID\n", ProducesNothing());
-            const auto& ret = functionProduces(parseControlLine, "#undef ID\n", 1, ProducesNothing());
+            treeProduces("#undef ID\n", ProducesNoErrors());
+            const auto& ret = functionProduces(parseControlLine, "#undef ID\n", 1, ProducesNoErrors());
             REQUIRE(std::holds_alternative<cld::Lexer::PPTokenIterator>(ret.variant));
             const auto& iter = std::get<cld::Lexer::PPTokenIterator>(ret.variant);
             CHECK(iter->getValue() == "ID");
@@ -208,7 +208,7 @@ TEST_CASE("Parse Preprocessor Control Line", "[PPParse]")
     }
     SECTION("define")
     {
-        treeProduces("#define ID\n", ProducesNothing());
+        treeProduces("#define ID\n", ProducesNoErrors());
     }
 }
 
@@ -216,8 +216,8 @@ TEST_CASE("Parse Preprocessor if section", "[PPParse]")
 {
     SECTION("if")
     {
-        treeProduces("#if 0\n5\n#endif\n", ProducesNothing());
-        auto ret = functionProduces(parseIfGroup, "#if 0\n5\n", 1, ProducesNothing());
+        treeProduces("#if 0\n5\n#endif\n", ProducesNoErrors());
+        auto ret = functionProduces(parseIfGroup, "#if 0\n5\n", 1, ProducesNoErrors());
         CHECK(ret.optionalGroup);
         REQUIRE(std::holds_alternative<llvm::ArrayRef<cld::Lexer::PPToken>>(ret.ifs));
         const auto& tokens = std::get<llvm::ArrayRef<cld::Lexer::PPToken>>(ret.ifs);
@@ -228,8 +228,8 @@ TEST_CASE("Parse Preprocessor if section", "[PPParse]")
     }
     SECTION("ifdef")
     {
-        treeProduces("#ifdef ID\n5\n#endif\n", ProducesNothing());
-        auto ret = functionProduces(parseIfGroup, "#ifdef ID\n5\n", 1, ProducesNothing());
+        treeProduces("#ifdef ID\n5\n#endif\n", ProducesNoErrors());
+        auto ret = functionProduces(parseIfGroup, "#ifdef ID\n5\n", 1, ProducesNoErrors());
         CHECK(ret.optionalGroup);
         REQUIRE(std::holds_alternative<cld::PP::IfGroup::IfDefTag>(ret.ifs));
         const auto& tokens = std::get<cld::PP::IfGroup::IfDefTag>(ret.ifs);
@@ -239,8 +239,8 @@ TEST_CASE("Parse Preprocessor if section", "[PPParse]")
     }
     SECTION("ifndef")
     {
-        treeProduces("#ifndef ID\n5\n#endif\n", ProducesNothing());
-        auto ret = functionProduces(parseIfGroup, "#ifndef ID\n5\n", 1, ProducesNothing());
+        treeProduces("#ifndef ID\n5\n#endif\n", ProducesNoErrors());
+        auto ret = functionProduces(parseIfGroup, "#ifndef ID\n5\n", 1, ProducesNoErrors());
         CHECK(ret.optionalGroup);
         REQUIRE(std::holds_alternative<cld::PP::IfGroup::IfnDefTag>(ret.ifs));
         const auto& tokens = std::get<cld::PP::IfGroup::IfnDefTag>(ret.ifs);
@@ -250,8 +250,8 @@ TEST_CASE("Parse Preprocessor if section", "[PPParse]")
     }
     SECTION("elif")
     {
-        treeProduces("#if 0\n#elif 1\n5\n#endif\n", ProducesNothing());
-        auto ret = functionProduces(parseIfSection, "#if 0\n#elif 1\n5\n#endif\n", 1, ProducesNothing());
+        treeProduces("#if 0\n#elif 1\n5\n#endif\n", ProducesNoErrors());
+        auto ret = functionProduces(parseIfSection, "#if 0\n#elif 1\n5\n#endif\n", 1, ProducesNoErrors());
         REQUIRE(ret.elifGroups.size() == 1);
         const auto& elif = ret.elifGroups[0];
         CHECK(elif.optionalGroup);
@@ -262,12 +262,12 @@ TEST_CASE("Parse Preprocessor if section", "[PPParse]")
     }
     SECTION("Else")
     {
-        auto ret = functionProduces(parseIfSection, "#if 0\n#else\n5\n#endif\n", 1, ProducesNothing());
+        auto ret = functionProduces(parseIfSection, "#if 0\n#else\n5\n#endif\n", 1, ProducesNoErrors());
         CHECK(ret.elifGroups.empty());
         REQUIRE(ret.optionalElseGroup);
         const auto& elseGroup = *ret.optionalElseGroup;
         CHECK(elseGroup.optionalGroup);
-        ret = functionProduces(parseIfSection, "#if 0\n#else\n#endif\n", 1, ProducesNothing());
+        ret = functionProduces(parseIfSection, "#if 0\n#else\n#endif\n", 1, ProducesNoErrors());
         CHECK(ret.elifGroups.empty());
         REQUIRE(ret.optionalElseGroup);
         CHECK(!ret.optionalElseGroup->optionalGroup);
@@ -283,13 +283,13 @@ TEST_CASE("Parse Preprocessor if section", "[PPParse]")
                      "      #line 7\n"
                      "  #endif\n"
                      "#endif\n",
-                     ProducesNothing());
+                     ProducesNoErrors());
     }
     SECTION("Empty if")
     {
-        treeProduces("#if 0\n#endif", ProducesNothing());
-        treeProduces("#if 0\n#else\n#endif", ProducesNothing());
-        treeProduces("#if 0\n#elif 1\n#endif", ProducesNothing());
+        treeProduces("#if 0\n#endif", ProducesNoErrors());
+        treeProduces("#if 0\n#else\n#endif", ProducesNoErrors());
+        treeProduces("#if 0\n#elif 1\n#endif", ProducesNoErrors());
     }
     treeProduces("#if 0\n", ProducesError(EXPECTED_ENDIF) && ProducesNote(TO_MATCH_N_HERE, "'if'"));
     treeProduces("#if 0\n#else\n#else\n",

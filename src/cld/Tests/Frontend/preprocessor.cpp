@@ -182,8 +182,8 @@ TEST_CASE("PP Unknown and non directives", "[PP]")
 {
     SECTION("Non directive")
     {
-        PP_OUTPUTS_WITH("#5non directive", ProducesNothing());
-        PP_OUTPUTS_WITH("#", ProducesNothing());
+        PP_OUTPUTS_WITH("#5non directive", ProducesNoErrors());
+        PP_OUTPUTS_WITH("#", ProducesNoErrors());
     }
     SECTION("Unknown directive")
     {
@@ -198,39 +198,39 @@ TEST_CASE("PP Define", "[PP]")
         using namespace cld::Errors::Parser;
         SECTION("Simple")
         {
-            PP_OUTPUTS_WITH("#define ID 5\n", ProducesNothing());
-            PP_OUTPUTS_WITH("#define ID\n", ProducesNothing());
+            PP_OUTPUTS_WITH("#define ID 5\n", ProducesNoErrors());
+            PP_OUTPUTS_WITH("#define ID\n", ProducesNoErrors());
             PP_OUTPUTS_WITH("#define 5\n", ProducesError(EXPECTED_N_INSTEAD_OF_N, "identifier", "'5'"));
             PP_OUTPUTS_WITH("#define\n", ProducesError(EXPECTED_N_AFTER_N, "identifier", "'define'"));
             PP_OUTPUTS_WITH("#define ID+\n", ProducesError(WHITESPACE_REQUIRED_AFTER_OBJECT_MACRO_DEFINITION));
         }
         SECTION("Empty identifier list")
         {
-            PP_OUTPUTS_WITH("#define ID()\n", ProducesNothing());
-            PP_OUTPUTS_WITH("#define ID() 5\n", ProducesNothing());
+            PP_OUTPUTS_WITH("#define ID()\n", ProducesNoErrors());
+            PP_OUTPUTS_WITH("#define ID() 5\n", ProducesNoErrors());
             PP_OUTPUTS_WITH("#define ID(\n", ProducesError(EXPECTED_N, "')'") && ProducesNote(TO_MATCH_N_HERE, "'('"));
         }
         SECTION("Ellipse only")
         {
-            PP_OUTPUTS_WITH("#define ID(...)\n", ProducesNothing());
-            PP_OUTPUTS_WITH("#define ID(...) 5\n", ProducesNothing());
+            PP_OUTPUTS_WITH("#define ID(...)\n", ProducesNoErrors());
+            PP_OUTPUTS_WITH("#define ID(...) 5\n", ProducesNoErrors());
             PP_OUTPUTS_WITH("#define ID(...\n",
                             ProducesError(EXPECTED_N, "')'") && ProducesNote(TO_MATCH_N_HERE, "'('"));
         }
         SECTION("Simple identifier list")
         {
-            PP_OUTPUTS_WITH("#define ID(a)\n", ProducesNothing());
-            PP_OUTPUTS_WITH("#define ID(a) 5\n", ProducesNothing());
+            PP_OUTPUTS_WITH("#define ID(a)\n", ProducesNoErrors());
+            PP_OUTPUTS_WITH("#define ID(a) 5\n", ProducesNoErrors());
             PP_OUTPUTS_WITH("#define ID(5\n", ProducesError(EXPECTED_N_INSTEAD_OF_N, "identifier", "'5'"));
             PP_OUTPUTS_WITH("#define ID(a\n", ProducesError(EXPECTED_N, "')'") && ProducesNote(TO_MATCH_N_HERE, "'('"));
         }
         SECTION("Multiple identifiers")
         {
-            PP_OUTPUTS_WITH("#define ID(a,b,c)\n", ProducesNothing());
+            PP_OUTPUTS_WITH("#define ID(a,b,c)\n", ProducesNoErrors());
             PP_OUTPUTS_WITH("#define ID(a,)\n", ProducesError(EXPECTED_N_INSTEAD_OF_N, "identifier", "')'"));
             PP_OUTPUTS_WITH("#define ID(a,\n", ProducesError(EXPECTED_N, "identifier"));
             PP_OUTPUTS_WITH("#define ID(a,5) 5\n", ProducesError(EXPECTED_N_INSTEAD_OF_N, "identifier", "'5'"));
-            PP_OUTPUTS_WITH("#define ID(a,b,c,...)\n", ProducesNothing());
+            PP_OUTPUTS_WITH("#define ID(a,b,c,...)\n", ProducesNoErrors());
             PP_OUTPUTS_WITH("#define ID(a,b,a)\n", ProducesError(REDEFINITION_OF_MACRO_PARAMETER_N, "'a'")
                                                        && ProducesNote(PREVIOUSLY_DECLARED_HERE));
         }
@@ -262,8 +262,8 @@ TEST_CASE("PP Define", "[PP]")
         PP_OUTPUTS_WITH("#define macroName __VA_ARGS__\n", ProducesError(VA_ARGS_NOT_ALLOWED_IN_REPLACEMENT_LIST));
         PP_OUTPUTS_WITH("#define macroName() __VA_ARGS__\n", ProducesError(VA_ARGS_NOT_ALLOWED_IN_REPLACEMENT_LIST));
         PP_OUTPUTS_WITH("#define macroName(a) __VA_ARGS__\n", ProducesError(VA_ARGS_NOT_ALLOWED_IN_REPLACEMENT_LIST));
-        PP_OUTPUTS_WITH("#define macroName(...) __VA_ARGS__\n", ProducesNothing());
-        PP_OUTPUTS_WITH("#define macroName(a,...) __VA_ARGS__\n", ProducesNothing());
+        PP_OUTPUTS_WITH("#define macroName(...) __VA_ARGS__\n", ProducesNoErrors());
+        PP_OUTPUTS_WITH("#define macroName(a,...) __VA_ARGS__\n", ProducesNoErrors());
     }
     SECTION("6.10.8.4 Defining builtin macros")
     {
@@ -297,7 +297,7 @@ TEST_CASE("PP Define", "[PP]")
     }
     PP_OUTPUTS_WITH("#define defined\n", ProducesError(DEFINED_CANNOT_BE_USED_AS_MACRO_NAME));
     PP_OUTPUTS_WITH("#define A(x) # a x\n", ProducesError(EXPECTED_AN_ARGUMENT_AFTER_POUND));
-    PP_OUTPUTS_WITH("#define A # a x\n", ProducesNothing());
+    PP_OUTPUTS_WITH("#define A # a x\n", ProducesNoErrors());
     PP_OUTPUTS_WITH("#define A(x) ## x\n",
                     ProducesError(OPERATOR_DOUBLE_POUND_NOT_ALLOWED_AT_BEGINNING_OF_REPLACEMENT_LIST));
     PP_OUTPUTS_WITH("#define A ## x\n",
@@ -1401,7 +1401,7 @@ TEST_CASE("PP error", "[PP]")
     PP_OUTPUTS_WITH("#if 0\n"
                     "#error aiwzdbwauzdbwaizadbw\n"
                     "#endif\n",
-                    ProducesNothing());
+                    ProducesNoErrors());
 }
 
 TEST_CASE("PP Reconstruction", "[PP]")

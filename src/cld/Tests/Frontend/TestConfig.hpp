@@ -162,8 +162,6 @@ struct ProducesNoWarnings : Catch::Matchers::StdString::ContainsMatcher
     }
 };
 
-#define ProducesNothing() ProducesNoErrors() && ProducesNoNotes() && ProducesNoWarnings()
-
 // Matcher that works almost like == of two strings except it doesn't care of any leading whitespaces per line
 struct ProducesLines : Catch::MatcherBase<std::string_view>
 {

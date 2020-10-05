@@ -59,7 +59,7 @@ TEST_CASE("Semantics declarations", "[semantics]")
     SECTION("Multiple declarations")
     {
         auto [translationUnit, errors] = generateSemantics("int i,f;");
-        REQUIRE_THAT(errors, ProducesNothing());
+        REQUIRE_THAT(errors, ProducesNoErrors());
         REQUIRE(translationUnit.getGlobals().size() == 2);
         {
             REQUIRE(
@@ -178,7 +178,7 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                    "{\n"
                                                                    "    int i;\n"
                                                                    "}\n");
-                REQUIRE_THAT(errors, ProducesNothing());
+                REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit.getGlobals().size() == 1);
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
                     translationUnit.getGlobals()[0]));
@@ -196,7 +196,7 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                    "{\n"
                                                                    "    extern int i;\n"
                                                                    "}\n");
-                REQUIRE_THAT(errors, ProducesNothing());
+                REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit.getGlobals().size() == 1);
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
                     translationUnit.getGlobals()[0]));
@@ -212,7 +212,7 @@ TEST_CASE("Semantics declarations", "[semantics]")
         SECTION("Objects at file scope are external by default")
         {
             auto [translationUnit, errors] = generateSemantics("int i;");
-            REQUIRE_THAT(errors, ProducesNothing());
+            REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit.getGlobals().size() == 1);
             REQUIRE(
                 std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
@@ -223,7 +223,7 @@ TEST_CASE("Semantics declarations", "[semantics]")
         SECTION("Internal linkage")
         {
             auto [translationUnit, errors] = generateSemantics("static int i;");
-            REQUIRE_THAT(errors, ProducesNothing());
+            REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit.getGlobals().size() == 1);
             REQUIRE(
                 std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
@@ -239,7 +239,7 @@ TEST_CASE("Semantics declarations", "[semantics]")
         SECTION("File scope")
         {
             auto [translationUnit, errors] = generateSemantics("int i;");
-            REQUIRE_THAT(errors, ProducesNothing());
+            REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit.getGlobals().size() == 1);
             REQUIRE(
                 std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
@@ -256,7 +256,7 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                    "{\n"
                                                                    "    int i;\n"
                                                                    "}\n");
-                REQUIRE_THAT(errors, ProducesNothing());
+                REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit.getGlobals().size() == 1);
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
                     translationUnit.getGlobals()[0]));
@@ -274,7 +274,7 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                    "{\n"
                                                                    "    auto int i;\n"
                                                                    "}\n");
-                REQUIRE_THAT(errors, ProducesNothing());
+                REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit.getGlobals().size() == 1);
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
                     translationUnit.getGlobals()[0]));
@@ -292,7 +292,7 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                    "{\n"
                                                                    "    static int i;\n"
                                                                    "}\n");
-                REQUIRE_THAT(errors, ProducesNothing());
+                REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit.getGlobals().size() == 1);
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
                     translationUnit.getGlobals()[0]));
@@ -310,7 +310,7 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                    "{\n"
                                                                    "    extern int i;\n"
                                                                    "}\n");
-                REQUIRE_THAT(errors, ProducesNothing());
+                REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit.getGlobals().size() == 1);
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
                     translationUnit.getGlobals()[0]));
@@ -328,7 +328,7 @@ TEST_CASE("Semantics declarations", "[semantics]")
                 {
                     auto [translationUnit, errors] = generateSemantics("void foo(register int i)\n"
                                                                        "{}\n");
-                    REQUIRE_THAT(errors, ProducesNothing());
+                    REQUIRE_THAT(errors, ProducesNoErrors());
                     REQUIRE(translationUnit.getGlobals().size() == 1);
                     REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
                         translationUnit.getGlobals()[0]));
@@ -342,7 +342,7 @@ TEST_CASE("Semantics declarations", "[semantics]")
                 {
                     auto [translationUnit, errors] = generateSemantics("void foo(i) register int i;\n"
                                                                        "{}\n");
-                    REQUIRE_THAT(errors, ProducesNothing());
+                    REQUIRE_THAT(errors, ProducesNoErrors());
                     REQUIRE(translationUnit.getGlobals().size() == 1);
                     REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
                         translationUnit.getGlobals()[0]));
@@ -361,7 +361,7 @@ TEST_CASE("Semantics declarations", "[semantics]")
         {
             auto [translationUnit, errors] = generateSemantics("typedef long double ld;\n"
                                                                "ld d;");
-            REQUIRE_THAT(errors, ProducesNothing());
+            REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit.getGlobals().size() == 1);
             REQUIRE(
                 std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
@@ -375,7 +375,7 @@ TEST_CASE("Semantics declarations", "[semantics]")
         {
             auto [translationUnit, errors] = generateSemantics("typedef long double ld;\n"
                                                                "const volatile ld d;");
-            REQUIRE_THAT(errors, ProducesNothing());
+            REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit.getGlobals().size() == 1);
             REQUIRE(
                 std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
@@ -390,7 +390,7 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                "typedef int r[2 * n][n++];\n"
                                                                "r f;\n"
                                                                "}");
-            REQUIRE_THAT(errors, ProducesNothing());
+            REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit.getGlobals().size() == 1);
             auto& global = translationUnit.getGlobals()[0];
             REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(global));
@@ -523,7 +523,7 @@ TEST_CASE("Semantics primitive declarations", "[semantics]")
                 text += " volatile";
             }
             auto [translationUnit, errors] = generateSemantics(text + " i;", options);
-            REQUIRE_THAT(errors, ProducesNothing());
+            REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit.getGlobals().size() == 1);
             REQUIRE(
                 std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
@@ -558,7 +558,7 @@ TEST_CASE("Semantics pointer declarations", "[semantics]")
         SECTION("Simple")
         {
             auto [translationUnit, errors] = generateSemantics("int *f;");
-            REQUIRE_THAT(errors, ProducesNothing());
+            REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit.getGlobals().size() == 1);
             REQUIRE(
                 std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
@@ -585,7 +585,7 @@ TEST_CASE("Semantics pointer declarations", "[semantics]")
                     text = "volatile " + text;
                 }
                 auto [translationUnit, errors] = generateSemantics(text);
-                REQUIRE_THAT(errors, ProducesNothing());
+                REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit.getGlobals().size() == 1);
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
                     translationUnit.getGlobals()[0]));
@@ -611,7 +611,7 @@ TEST_CASE("Semantics pointer declarations", "[semantics]")
                 }
                 text += "*f;";
                 auto [translationUnit, errors] = generateSemantics(text);
-                REQUIRE_THAT(errors, ProducesNothing());
+                REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit.getGlobals().size() == 1);
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
                     translationUnit.getGlobals()[0]));
@@ -643,7 +643,7 @@ TEST_CASE("Semantics pointer declarations", "[semantics]")
             }
             text += "f;";
             auto [translationUnit, errors] = generateSemantics(text);
-            REQUIRE_THAT(errors, ProducesNothing());
+            REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit.getGlobals().size() == 1);
             REQUIRE(
                 std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
@@ -671,7 +671,7 @@ TEST_CASE("Semantics array declarations", "[semantics]")
         SECTION("Simple")
         {
             auto [translationUnit, errors] = generateSemantics("int f[1];");
-            REQUIRE_THAT(errors, ProducesNothing());
+            REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit.getGlobals().size() == 1);
             REQUIRE(
                 std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
@@ -685,7 +685,7 @@ TEST_CASE("Semantics array declarations", "[semantics]")
         SECTION("Order")
         {
             auto [translationUnit, errors] = generateSemantics("int (*f[1]);");
-            REQUIRE_THAT(errors, ProducesNothing());
+            REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit.getGlobals().size() == 1);
             REQUIRE(
                 std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
@@ -710,7 +710,7 @@ TEST_CASE("Semantics array declarations", "[semantics]")
                       ProducesError(ARRAY_ELEMENT_TYPE_MUST_NOT_CONTAIN_A_FLEXIBLE_ARRAY_MEMBER));
         SEMA_PRODUCES("int f[static 1];", ProducesError(ARRAY_OUTSIDE_OF_FUNCTION_PARAMETER_MAY_NOT_BE_STATIC));
         SEMA_PRODUCES("int f[const 1];", ProducesError(ARRAY_OUTSIDE_OF_FUNCTION_PARAMETER_MAY_NOT_BE_QUALIFIED));
-        SEMA_PRODUCES("int f[];", ProducesNothing());
+        SEMA_PRODUCES("int f[];", ProducesNoErrors());
 
         SEMA_PRODUCES("int n = 1;\n"
                       "int f[n];",
@@ -747,7 +747,7 @@ TEST_CASE("Semantics function prototypes", "[semantics]")
     SECTION("Simple")
     {
         auto [translationUnit, errors] = generateSemantics("int f(int,float);");
-        REQUIRE_THAT(errors, ProducesNothing());
+        REQUIRE_THAT(errors, ProducesNoErrors());
         REQUIRE(translationUnit.getGlobals().size() == 1);
         REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
         auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
@@ -761,17 +761,17 @@ TEST_CASE("Semantics function prototypes", "[semantics]")
     }
     SECTION("Parameters")
     {
-        SEMA_PRODUCES("int f(int a[]);", ProducesNothing());
-        SEMA_PRODUCES("int f(void);", ProducesNothing());
+        SEMA_PRODUCES("int f(int a[]);", ProducesNoErrors());
+        SEMA_PRODUCES("int f(void);", ProducesNoErrors());
         SEMA_PRODUCES("int f(const void);", ProducesError(VOID_TYPE_NOT_ALLOWED_AS_FUNCTION_PARAMETER));
-        SEMA_PRODUCES("int f(int a[*]);", ProducesNothing());
-        SEMA_PRODUCES("int f(int a,float a);", ProducesNothing());
-        SEMA_PRODUCES("int f(register int a);", ProducesNothing());
-        SEMA_PRODUCES("int f(int a[static 6]);", ProducesNothing());
+        SEMA_PRODUCES("int f(int a[*]);", ProducesNoErrors());
+        SEMA_PRODUCES("int f(int a,float a);", ProducesNoErrors());
+        SEMA_PRODUCES("int f(register int a);", ProducesNoErrors());
+        SEMA_PRODUCES("int f(int a[static 6]);", ProducesNoErrors());
         SEMA_PRODUCES("int f(int a[6][static 5]);", ProducesError(STATIC_ONLY_ALLOWED_IN_OUTERMOST_ARRAY));
     }
     SEMA_PRODUCES("int f(int) = 5;", ProducesError(FUNCTION_PROTOTYPE_MUST_NOT_HAVE_AN_INITIALIZER));
-    SEMA_PRODUCES("static inline int f(int);", ProducesNothing());
+    SEMA_PRODUCES("static inline int f(int);", ProducesNoErrors());
     SEMA_PRODUCES("int f(extern int a);",
                   ProducesError(NO_STORAGE_CLASS_SPECIFIER_ALLOWED_IN_PARAMETER_BESIDES_REGISTER));
     SEMA_PRODUCES("int (f(int a)[10]);", ProducesError(FUNCTION_RETURN_TYPE_MUST_NOT_BE_AN_ARRAY));
@@ -783,7 +783,7 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
     SECTION("Simple struct")
     {
         auto [translationUnit, errors] = generateSemantics("struct A{ int i; float f, r; } a;");
-        REQUIRE_THAT(errors, ProducesNothing());
+        REQUIRE_THAT(errors, ProducesNoErrors());
         REQUIRE(translationUnit.getGlobals().size() == 1);
         REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
         auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
@@ -794,12 +794,12 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
     }
     SECTION("Defining two variables with one struct definition")
     {
-        SEMA_PRODUCES("struct A{ int i; float f, r; } a,b;", ProducesNothing());
+        SEMA_PRODUCES("struct A{ int i; float f, r; } a,b;", ProducesNoErrors());
     }
     SECTION("Simple union")
     {
         auto [translationUnit, errors] = generateSemantics("union A{ int i; float f, r; } a;");
-        REQUIRE_THAT(errors, ProducesNothing());
+        REQUIRE_THAT(errors, ProducesNoErrors());
         REQUIRE(translationUnit.getGlobals().size() == 1);
         REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
         auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
@@ -811,7 +811,7 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
     SECTION("Anonymous struct")
     {
         auto [translationUnit, errors] = generateSemantics("struct { int i; float f, r; } a;");
-        REQUIRE_THAT(errors, ProducesNothing());
+        REQUIRE_THAT(errors, ProducesNoErrors());
         REQUIRE(translationUnit.getGlobals().size() == 1);
         REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
         auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
@@ -833,7 +833,7 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
     SECTION("Anonymous union")
     {
         auto [translationUnit, errors] = generateSemantics("union { int i; float f, r; } a;");
-        REQUIRE_THAT(errors, ProducesNothing());
+        REQUIRE_THAT(errors, ProducesNoErrors());
         REQUIRE(translationUnit.getGlobals().size() == 1);
         REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
         auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
@@ -856,9 +856,9 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
     {
         SEMA_PRODUCES("struct A{ int f[]; };", ProducesError(INCOMPLETE_TYPE_NOT_ALLOWED_IN_STRUCT, "'int[]'"));
         SEMA_PRODUCES("struct A{ int r;int f[],c; };", ProducesError(INCOMPLETE_TYPE_NOT_ALLOWED_IN_STRUCT, "'int[]'"));
-        SEMA_PRODUCES("struct A{ int r,f[]; };", ProducesNothing());
+        SEMA_PRODUCES("struct A{ int r,f[]; };", ProducesNoErrors());
         SEMA_PRODUCES("union A{ int r,f[]; };", ProducesError(INCOMPLETE_TYPE_NOT_ALLOWED_IN_UNION, "'int[]'"));
-        SEMA_PRODUCES("struct A{ int r;int f[]; };", ProducesNothing());
+        SEMA_PRODUCES("struct A{ int r;int f[]; };", ProducesNoErrors());
         SEMA_PRODUCES("union A{ int r;int f[]; };", ProducesError(INCOMPLETE_TYPE_NOT_ALLOWED_IN_UNION, "'int[]'"));
         SEMA_PRODUCES("struct A {\n"
                       " int r;\n"
@@ -875,7 +875,7 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
                       "union B {\n"
                       " struct A a;\n"
                       "};",
-                      ProducesNothing());
+                      ProducesNoErrors());
         SEMA_PRODUCES(
             "struct A {\n"
             " int r;\n"
@@ -908,7 +908,7 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
                                                                    "\n"
                                                                    "int a[sizeof(struct A)];",
                                                                    x64windowsMsvc);
-                REQUIRE_THAT(errors, ProducesNothing());
+                REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit.getGlobals().size() == 1);
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
                     translationUnit.getGlobals()[0]));
@@ -931,7 +931,7 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
                                                                    "\n"
                                                                    "int a[sizeof(struct A)];",
                                                                    x64linux);
-                REQUIRE_THAT(errors, ProducesNothing());
+                REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit.getGlobals().size() == 1);
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
                     translationUnit.getGlobals()[0]));
@@ -1029,7 +1029,7 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
                   "};\n"
                   "\n"
                   "struct B a;",
-                  ProducesNothing());
+                  ProducesNoErrors());
     SEMA_PRODUCES("struct A{ void f; };", ProducesError(VOID_TYPE_NOT_ALLOWED_IN_STRUCT));
     SEMA_PRODUCES("union A{ void f; };", ProducesError(VOID_TYPE_NOT_ALLOWED_IN_UNION));
     SEMA_PRODUCES("struct A{ struct r f; };", ProducesError(INCOMPLETE_TYPE_NOT_ALLOWED_IN_STRUCT, "'struct r'"));
@@ -1055,7 +1055,7 @@ TEST_CASE("Semantics enums", "[semantics]")
                                                   "int a_[a];\n"
                                                   "int b_[b];\n"
                                                   "int c_[c];");
-            REQUIRE_THAT(errors, ProducesNothing());
+            REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(tu.getGlobals().size() == 3);
             std::uint64_t i = 1;
             for (auto& iter : tu.getGlobals())
@@ -1076,7 +1076,7 @@ TEST_CASE("Semantics enums", "[semantics]")
                                                   "int a_[a];\n"
                                                   "int b_[b];\n"
                                                   "int c_[c];");
-            REQUIRE_THAT(errors, ProducesNothing());
+            REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(tu.getGlobals().size() == 3);
             std::uint64_t i = 5;
             for (auto& iter : tu.getGlobals())
@@ -1104,7 +1104,7 @@ TEST_CASE("Semantics enums", "[semantics]")
                                                   "int a_[a];\n"
                                                   "int b_[b];\n"
                                                   "int c_[c];");
-            REQUIRE_THAT(errors, ProducesNothing());
+            REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(tu.getGlobals().size() == 3);
             std::uint64_t i = 1;
             for (auto& iter : tu.getGlobals())
@@ -1125,7 +1125,7 @@ TEST_CASE("Semantics enums", "[semantics]")
                                                   "int a_[a];\n"
                                                   "int b_[b];\n"
                                                   "int c_[c];");
-            REQUIRE_THAT(errors, ProducesNothing());
+            REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(tu.getGlobals().size() == 3);
             std::uint64_t i = 5;
             for (auto& iter : tu.getGlobals())
@@ -1183,7 +1183,7 @@ TEST_CASE("Semantics enums", "[semantics]")
 
 TEST_CASE("Semantics function definitions")
 {
-    SEMA_PRODUCES("static int bar(int n,int r[3][5][n]) {}", ProducesNothing());
+    SEMA_PRODUCES("static int bar(int n,int r[3][5][n]) {}", ProducesNoErrors());
     SECTION("Identifier list")
     {
         SEMA_PRODUCES("void foo(voi)\n"
@@ -1212,13 +1212,13 @@ TEST_CASE("Semantics function definitions")
                   "int foo(struct A {\n"
                   " int r;\n"
                   "} a){}",
-                  ProducesNothing());
+                  ProducesNoErrors());
     SEMA_PRODUCES("struct A {\n"
                   " float f;\n"
                   "};\n"
                   "\n"
                   "int foo(a) struct A { int r; } a; {}",
-                  ProducesNothing());
+                  ProducesNoErrors());
     SEMA_PRODUCES("int foo(int a,int a) {}",
                   ProducesError(REDEFINITION_OF_SYMBOL_N, "'a'") && ProducesNote(PREVIOUSLY_DECLARED_HERE));
     SEMA_PRODUCES("int foo(int a,int b) int a; int f; {}",
@@ -1241,16 +1241,16 @@ TEST_CASE("Semantics type compatibility", "[semantics]")
     {
         SEMA_PRODUCES("int foo;\n"
                       "int foo;",
-                      ProducesNothing());
+                      ProducesNoErrors());
         SEMA_PRODUCES("const int foo;\n"
                       "const int foo;",
-                      ProducesNothing());
+                      ProducesNoErrors());
         SEMA_PRODUCES("volatile int foo;\n"
                       "volatile int foo;",
-                      ProducesNothing());
+                      ProducesNoErrors());
         SEMA_PRODUCES("const volatile int foo;\n"
                       "const int volatile foo;",
-                      ProducesNothing());
+                      ProducesNoErrors());
         SEMA_PRODUCES("const int foo;\n"
                       "int foo;",
                       ProducesError(REDEFINITION_OF_SYMBOL_N, "'foo'"));
@@ -1265,10 +1265,10 @@ TEST_CASE("Semantics type compatibility", "[semantics]")
     {
         SEMA_PRODUCES("int foo[5];\n"
                       "int foo[5];",
-                      ProducesNothing());
+                      ProducesNoErrors());
         SEMA_PRODUCES("int foo[];\n"
                       "int foo[5];",
-                      ProducesNothing());
+                      ProducesNoErrors());
         SEMA_PRODUCES("float foo[5];\n"
                       "int foo[5];",
                       ProducesError(REDEFINITION_OF_SYMBOL_N, "'foo'"));
@@ -1277,22 +1277,22 @@ TEST_CASE("Semantics type compatibility", "[semantics]")
                       ProducesError(REDEFINITION_OF_SYMBOL_N, "'foo'"));
         SEMA_PRODUCES("int foo[];\n"
                       "int foo[];",
-                      ProducesNothing());
+                      ProducesNoErrors());
     }
     SECTION("Pointers")
     {
         SEMA_PRODUCES("int* foo;\n"
                       "int* foo;",
-                      ProducesNothing());
+                      ProducesNoErrors());
         SEMA_PRODUCES("int* const foo;\n"
                       "int* const foo;",
-                      ProducesNothing());
+                      ProducesNoErrors());
         SEMA_PRODUCES("int* volatile foo;\n"
                       "int* volatile foo;",
-                      ProducesNothing());
+                      ProducesNoErrors());
         SEMA_PRODUCES("int* restrict foo;\n"
                       "int* restrict foo;",
-                      ProducesNothing());
+                      ProducesNoErrors());
         SEMA_PRODUCES("int* const foo;\n"
                       "int* foo;",
                       ProducesError(REDEFINITION_OF_SYMBOL_N, "'foo'"));
@@ -1313,7 +1313,7 @@ TEST_CASE("Semantics type compatibility", "[semantics]")
     {
         SEMA_PRODUCES("int foo();\n"
                       "int foo();",
-                      ProducesNothing());
+                      ProducesNoErrors());
         SEMA_PRODUCES("int foo();\n"
                       "float foo();",
                       ProducesError(REDEFINITION_OF_SYMBOL_N, "'foo'"));
@@ -1322,13 +1322,13 @@ TEST_CASE("Semantics type compatibility", "[semantics]")
                       ProducesError(REDEFINITION_OF_SYMBOL_N, "'foo'"));
         SEMA_PRODUCES("int foo();\n"
                       "int foo(int a);",
-                      ProducesNothing());
+                      ProducesNoErrors());
         SEMA_PRODUCES("int foo();\n"
                       "int foo(float a);",
                       ProducesError(REDEFINITION_OF_SYMBOL_N, "'foo'"));
         SEMA_PRODUCES("int foo();\n"
                       "int foo(const int a);",
-                      ProducesNothing());
+                      ProducesNoErrors());
         SEMA_PRODUCES("int foo();\n"
                       "int foo(const float a);",
                       ProducesError(REDEFINITION_OF_SYMBOL_N, "'foo'"));
@@ -1337,25 +1337,25 @@ TEST_CASE("Semantics type compatibility", "[semantics]")
                       ProducesError(REDEFINITION_OF_SYMBOL_N, "'foo'"));
         SEMA_PRODUCES("int foo(const double a);\n"
                       "int foo(a) const float a; {}",
-                      ProducesNothing());
+                      ProducesNoErrors());
         SEMA_PRODUCES("int foo(int a);\n"
                       "int foo() {}",
                       ProducesError(REDEFINITION_OF_SYMBOL_N, "'foo'"));
         SEMA_PRODUCES("int foo(void);\n"
                       "int foo() {}",
-                      ProducesNothing());
+                      ProducesNoErrors());
         SEMA_PRODUCES("int foo();\n"
                       "int foo(a) int a; {}",
-                      ProducesNothing());
+                      ProducesNoErrors());
         SEMA_PRODUCES("int foo(float a);\n"
                       "int foo(const float a);",
-                      ProducesNothing());
+                      ProducesNoErrors());
         SEMA_PRODUCES("int foo(float a);\n"
                       "int foo(int a);",
                       ProducesError(ProducesError(REDEFINITION_OF_SYMBOL_N, "'foo'")));
         SEMA_PRODUCES("int foo(float a,...);\n"
                       "int foo(float a,...);",
-                      ProducesNothing());
+                      ProducesNoErrors());
         SEMA_PRODUCES("int foo(float a,...);\n"
                       "int foo(float a);",
                       ProducesError(REDEFINITION_OF_SYMBOL_N, "'foo'"));
@@ -1367,28 +1367,28 @@ TEST_CASE("Semantics type compatibility", "[semantics]")
                       ProducesError(REDEFINITION_OF_SYMBOL_N, "'foo'"));
         SEMA_PRODUCES("int foo(float* a);\n"
                       "int foo(float a[]);",
-                      ProducesNothing());
+                      ProducesNoErrors());
         SEMA_PRODUCES("int foo(float a[5]);\n"
                       "int foo(float a[]);",
-                      ProducesNothing());
+                      ProducesNoErrors());
         SEMA_PRODUCES("int foo(float a[const 5]);\n"
                       "int foo(float* const a);",
-                      ProducesNothing());
+                      ProducesNoErrors());
         SEMA_PRODUCES("int foo(float a[restrict 5]);\n"
                       "int foo(float* restrict a);",
-                      ProducesNothing());
+                      ProducesNoErrors());
         SEMA_PRODUCES("int foo(float a[volatile 5]);\n"
                       "int foo(float* volatile a);",
-                      ProducesNothing());
+                      ProducesNoErrors());
         SEMA_PRODUCES("int foo(const float a[static 5]);\n"
                       "int foo(const float* a);",
-                      ProducesNothing());
+                      ProducesNoErrors());
         SEMA_PRODUCES("int foo(float (*a)(int));\n"
                       "int foo(float a(int));",
-                      ProducesNothing());
+                      ProducesNoErrors());
         SEMA_PRODUCES("void foor(int x[restrict 5]);\n"
                       "void foor(int[restrict 5]);",
-                      ProducesNothing());
+                      ProducesNoErrors());
     }
     SECTION("Records")
     {
@@ -1436,7 +1436,7 @@ TEST_CASE("Semantics composite type", "[semantics]")
     {
         auto [translationUnit, errors] = generateSemantics("int f(int (*)(),double (*)[3]);\n"
                                                            "int f(int (*)(char *),double (*)[]);");
-        REQUIRE_THAT(errors, ProducesNothing());
+        REQUIRE_THAT(errors, ProducesNoErrors());
         REQUIRE(translationUnit.getGlobals().size() == 2);
         REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[1]));
         auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[1]);
@@ -3741,7 +3741,7 @@ TEST_CASE("Semantics initializer list", "[semantics]")
                       "    struct C c2 = {{getA()}};\n"
                       "    struct C c3 = {getB()};\n"
                       "}\n",
-                      ProducesNothing());
+                      ProducesNoErrors());
     }
     SECTION("Initializing union")
     {
@@ -4328,7 +4328,7 @@ TEST_CASE("Semantics varargs", "[semantics]")
                       "__builtin_va_list list;\n"
                       "__builtin_va_start(list,i);\n"
                       "}",
-                      ProducesNothing());
+                      ProducesNoErrors());
         SEMA_PRODUCES("void foo(int i,...) {\n"
                       "const __builtin_va_list list;\n"
                       "__builtin_va_start(list,i);\n"
@@ -4355,7 +4355,7 @@ TEST_CASE("Semantics varargs", "[semantics]")
                       "__builtin_va_start(list,i);\n"
                       "__builtin_va_arg(list,int);\n"
                       "}",
-                      ProducesNothing());
+                      ProducesNoErrors());
         SEMA_PRODUCES("void foo(int i,...) {\n"
                       "const __builtin_va_list list;\n"
                       "__builtin_va_arg(list,int);\n"

@@ -67,19 +67,19 @@ TEST_CASE("Parse specifier qualifier list", "[parser]")
 
 TEST_CASE("Parse external declaration", "[parser]")
 {
-    functionProduces(parseExternalDeclaration, "int;", ProducesNothing());
+    functionProduces(parseExternalDeclaration, "int;", ProducesNoErrors());
     functionProduces(parseExternalDeclaration, "int i", ProducesError(EXPECTED_N, "';'") && ProducesNoNotes());
     functionProduces(parseExternalDeclaration, "i{}",
                      ProducesError(EXPECTED_STORAGE_SPECIFIER_OR_TYPENAME_BEFORE_N, "'i'") && ProducesNoNotes());
-    functionProduces(parseExternalDeclaration, "int i() int f;{}", ProducesNothing());
-    functionProduces(parseExternalDeclaration, "int i(void) {}", ProducesNothing());
+    functionProduces(parseExternalDeclaration, "int i() int f;{}", ProducesNoErrors());
+    functionProduces(parseExternalDeclaration, "int i(void) {}", ProducesNoErrors());
     functionProduces(parseExternalDeclaration, "int () int f;{}",
                      ProducesError(EXPECTED_N_INSTEAD_OF_N, "'(' or identifier", "')'") && ProducesNoNotes());
     functionProduces(parseExternalDeclaration, "int i() int f{}",
                      ProducesError(EXPECTED_N_INSTEAD_OF_N, "';'", "'{'") && ProducesNoNotes());
     functionProduces(parseExternalDeclaration, "int foo(int,int[5]){}",
                      ProducesError(MISSING_PARAMETER_NAME) && ProducesNoNotes());
-    functionProduces(parseExternalDeclaration, "int foo = 5;", ProducesNothing());
+    functionProduces(parseExternalDeclaration, "int foo = 5;", ProducesNoErrors());
     functionProduces(parseExternalDeclaration, "int foo = 5", ProducesError(EXPECTED_N, "';'") && ProducesNoNotes());
     functionProduces(parseExternalDeclaration, "int foo =;",
                      ProducesError(EXPECTED_N_INSTEAD_OF_N, "literal, identifier or '('", "';'") && ProducesNoNotes());
@@ -91,8 +91,8 @@ TEST_CASE("Parse external declaration", "[parser]")
                      ProducesError(EXPECTED_N_INSTEAD_OF_N, "'(' or identifier", "'['")
                          && ProducesError(EXPECTED_N_INSTEAD_OF_N, "']'", "'='") && ProducesNote(TO_MATCH_N_HERE, "'['")
                          && ProducesError(EXPECTED_N_INSTEAD_OF_N, "literal, identifier or '('", "';'"));
-    functionProduces(parseExternalDeclaration, "int foo,bar = 5;", ProducesNothing());
-    functionProduces(parseExternalDeclaration, "int foo,bar;", ProducesNothing());
+    functionProduces(parseExternalDeclaration, "int foo,bar = 5;", ProducesNoErrors());
+    functionProduces(parseExternalDeclaration, "int foo,bar;", ProducesNoErrors());
     functionProduces(parseExternalDeclaration, "int foo,[;",
                      ProducesError(EXPECTED_N_INSTEAD_OF_N, "'(' or identifier", "'['")
                          && ProducesError(EXPECTED_N_INSTEAD_OF_N, "']'", "';'")
@@ -120,7 +120,7 @@ TEST_CASE("Parse external declaration", "[parser]")
                  "{\n"
                  "    return barFunc;\n"
                  "}",
-                 ProducesNothing());
+                 ProducesNoErrors());
     treeProduces("typedef int i;void foo(int i,i i)"
                  "{"
                  "}",
@@ -129,30 +129,30 @@ TEST_CASE("Parse external declaration", "[parser]")
     treeProduces("typedef int i,bar;void foo(int i,bar i)"
                  "{"
                  "}",
-                 ProducesNothing());
+                 ProducesNoErrors());
 }
 
 TEST_CASE("Parser typedef scoping and resolution", "[parser]")
 {
-    treeProduces("typedef int aa;void foo(){aa aa;}", ProducesNothing());
-    treeProduces("typedef int aa;void foo(){aa aa;const aa;}", ProducesNothing());
+    treeProduces("typedef int aa;void foo(){aa aa;}", ProducesNoErrors());
+    treeProduces("typedef int aa;void foo(){aa aa;const aa;}", ProducesNoErrors());
     treeProduces("typedef int aa;"
                  "enum aa; aa r;",
-                 ProducesNothing());
-    treeProduces("typedef signed int t;t f(t (t));", ProducesNothing());
+                 ProducesNoErrors());
+    treeProduces("typedef signed int t;t f(t (t));", ProducesNoErrors());
     treeProduces("typedef int aa;"
                  "enum {aa,};",
-                 ProducesNothing());
+                 ProducesNoErrors());
 }
 
 TEST_CASE("Parse Declaration Specifiers", "[parser]")
 {
     treeProduces("typedef int aa; typedef extern static auto register const restrict volatile inline void char short "
                  "int long float double signed unsigned f;",
-                 ProducesNothing());
-    functionProduces(parseDeclarationSpecifier, "struct i", ProducesNothing());
-    functionProduces(parseDeclarationSpecifier, "union i", ProducesNothing());
-    functionProduces(parseDeclarationSpecifier, "enum i", ProducesNothing());
+                 ProducesNoErrors());
+    functionProduces(parseDeclarationSpecifier, "struct i", ProducesNoErrors());
+    functionProduces(parseDeclarationSpecifier, "union i", ProducesNoErrors());
+    functionProduces(parseDeclarationSpecifier, "enum i", ProducesNoErrors());
 }
 
 TEST_CASE("Parse Specifier Qualifiers", "[parser]")
@@ -160,10 +160,10 @@ TEST_CASE("Parse Specifier Qualifiers", "[parser]")
     functionProduces(
         parseSpecifierQualifierList,
         "const void long float double signed restrict volatile char short int long float double signed unsigned",
-        ProducesNothing());
-    functionProduces(parseSpecifierQualifier, "struct i", ProducesNothing());
-    functionProduces(parseSpecifierQualifier, "union i", ProducesNothing());
-    functionProduces(parseSpecifierQualifier, "enum i", ProducesNothing());
+        ProducesNoErrors());
+    functionProduces(parseSpecifierQualifier, "struct i", ProducesNoErrors());
+    functionProduces(parseSpecifierQualifier, "union i", ProducesNoErrors());
+    functionProduces(parseSpecifierQualifier, "enum i", ProducesNoErrors());
     treeProduces("typedef int i;void foo()"
                  "{"
                  "i i;struct { i; } r;"
@@ -182,17 +182,17 @@ TEST_CASE("Parse structs and unions", "[parser]")
                      ProducesError(EXPECTED_N_OR_N_AFTER_N, "identifier", "'{'", "'union'") && ProducesNoNotes());
     functionProduces(parseStructOrUnionSpecifier, "struct;",
                      ProducesError(EXPECTED_N_INSTEAD_OF_N, "identifier", "';'") && ProducesNoNotes());
-    functionProduces(parseStructOrUnionSpecifier, "struct i", ProducesNothing());
-    functionProduces(parseStructOrUnionSpecifier, "union i", ProducesNothing());
-    functionProduces(parseStructOrUnionSpecifier, "struct i {int foo, bar;int foobar;}", ProducesNothing());
+    functionProduces(parseStructOrUnionSpecifier, "struct i", ProducesNoErrors());
+    functionProduces(parseStructOrUnionSpecifier, "union i", ProducesNoErrors());
+    functionProduces(parseStructOrUnionSpecifier, "struct i {int foo, bar;int foobar;}", ProducesNoErrors());
     functionProduces(parseStructOrUnionSpecifier, "struct i{i;}",
                      ProducesError(EXPECTED_TYPENAME_BEFORE_N, "'i'") && ProducesNoNotes());
     functionProduces(parseStructOrUnionSpecifier, "struct i{}",
                      ProducesError(STRUCT_REQUIRES_AT_LEAST_ONE_FIELD) && ProducesNoNotes());
     functionProduces(parseStructOrUnionSpecifier, "union i{}",
                      ProducesError(UNION_REQUIRES_AT_LEAST_ONE_FIELD) && ProducesNoNotes());
-    functionProduces(parseStructOrUnionSpecifier, "struct i{unsigned int:5;}", ProducesNothing());
-    functionProduces(parseStructOrUnionSpecifier, "struct i{unsigned int r:5;}", ProducesNothing());
+    functionProduces(parseStructOrUnionSpecifier, "struct i{unsigned int:5;}", ProducesNoErrors());
+    functionProduces(parseStructOrUnionSpecifier, "struct i{unsigned int r:5;}", ProducesNoErrors());
     functionProduces(parseStructOrUnionSpecifier, "struct i{unsigned int:5}",
                      ProducesError(EXPECTED_N_INSTEAD_OF_N, "';'", "'}'") && ProducesNoNotes());
     functionProduces(parseStructOrUnionSpecifier, "struct i{unsigned int:;}",
@@ -212,15 +212,15 @@ TEST_CASE("Parse enums", "[parser]")
                      ProducesError(EXPECTED_N_AFTER_N, "identifier", "'enum'") && ProducesNoNotes());
     functionProduces(parseEnumSpecifier, "enum;",
                      ProducesError(EXPECTED_N_INSTEAD_OF_N, "identifier", "';'") && ProducesNoNotes());
-    functionProduces(parseEnumSpecifier, "enum i", ProducesNothing());
-    functionProduces(parseEnumSpecifier, "enum i{i}", ProducesNothing());
+    functionProduces(parseEnumSpecifier, "enum i", ProducesNoErrors());
+    functionProduces(parseEnumSpecifier, "enum i{i}", ProducesNoErrors());
     functionProduces(parseEnumSpecifier, "enum {}",
                      ProducesError(ENUM_REQUIRES_AT_LEAST_ONE_VALUE) && ProducesNoNotes());
-    functionProduces(parseEnumSpecifier, "enum i{test}", ProducesNothing());
-    functionProduces(parseEnumSpecifier, "enum i{test = 5}", ProducesNothing());
-    functionProduces(parseEnumSpecifier, "enum {test,}", ProducesNothing());
-    functionProduces(parseEnumSpecifier, "enum {test,ft}", ProducesNothing());
-    functionProduces(parseEnumSpecifier, "enum {test,ft,}", ProducesNothing());
+    functionProduces(parseEnumSpecifier, "enum i{test}", ProducesNoErrors());
+    functionProduces(parseEnumSpecifier, "enum i{test = 5}", ProducesNoErrors());
+    functionProduces(parseEnumSpecifier, "enum {test,}", ProducesNoErrors());
+    functionProduces(parseEnumSpecifier, "enum {test,ft}", ProducesNoErrors());
+    functionProduces(parseEnumSpecifier, "enum {test,ft,}", ProducesNoErrors());
     functionProduces(parseEnumSpecifier, "enum i{test = 5",
                      ProducesError(EXPECTED_N, "'}'") && ProducesNote(TO_MATCH_N_HERE, "'{'"));
     functionProduces(parseEnumSpecifier, "enum i{test ft}",
@@ -231,11 +231,11 @@ TEST_CASE("Parse enums", "[parser]")
 
 TEST_CASE("Parse Declaration", "[parser]")
 {
-    treeProduces("int fooc(int[const 5]);", ProducesNothing());
-    treeProduces("int f(int (*)(char *),double (*)[]);", ProducesNothing());
-    functionProduces(parseDeclaration, "int foo;", ProducesNothing());
-    functionProduces(parseDeclaration, "int;", ProducesNothing());
-    functionProduces(parseDeclaration, "int foo,bar;", ProducesNothing());
+    treeProduces("int fooc(int[const 5]);", ProducesNoErrors());
+    treeProduces("int f(int (*)(char *),double (*)[]);", ProducesNoErrors());
+    functionProduces(parseDeclaration, "int foo;", ProducesNoErrors());
+    functionProduces(parseDeclaration, "int;", ProducesNoErrors());
+    functionProduces(parseDeclaration, "int foo,bar;", ProducesNoErrors());
     functionProduces(parseDeclaration, "int[ =;",
                      ProducesError(EXPECTED_N_INSTEAD_OF_N, "'(' or identifier", "'['")
                          && ProducesError(EXPECTED_N_INSTEAD_OF_N, "']'", "'='") && ProducesNote(TO_MATCH_N_HERE, "'['")
@@ -246,23 +246,23 @@ TEST_CASE("Parse Declaration", "[parser]")
                          && ProducesNote(TO_MATCH_N_HERE, "'['"));
     functionProduces(parseDeclaration, "int foo =;",
                      ProducesError(EXPECTED_N_INSTEAD_OF_N, "literal, identifier or '('", "';'") && ProducesNoNotes());
-    functionProduces(parseDeclaration, "int foo = 5;", ProducesNothing());
+    functionProduces(parseDeclaration, "int foo = 5;", ProducesNoErrors());
     functionProduces(parseDeclaration, "int foo = 5", ProducesError(EXPECTED_N, "';'") && ProducesNoNotes());
-    functionProduces(parseDeclaration, "typedef int foo;", ProducesNothing());
+    functionProduces(parseDeclaration, "typedef int foo;", ProducesNoErrors());
     treeProduces("typedef int aa;void foo(){aa aa;const aa bb;}",
                  ProducesError(EXPECTED_N_INSTEAD_OF_N, "';'", "'bb'")
                      && ProducesNote(TYPEDEF_OVERSHADOWED_BY_DECLARATION, "'aa'"));
-    treeProduces("typedef int aa;void foo(){aa aa;const aa;}", ProducesNothing());
+    treeProduces("typedef int aa;void foo(){aa aa;const aa;}", ProducesNoErrors());
 }
 
 TEST_CASE("Parse Declarators and DirectDeclarators", "[parser]")
 {
-    functionProduces(parseDeclarator, "* const * volatile *i", ProducesNothing());
+    functionProduces(parseDeclarator, "* const * volatile *i", ProducesNoErrors());
     functionProduces(parseDeclarator, "* const * volatile *(i",
                      ProducesError(EXPECTED_N, "')'") && ProducesNote(TO_MATCH_N_HERE, "'('"));
     functionProduces(parseDeclarator, "* const * volatile *i(int f",
                      ProducesError(EXPECTED_N, "')'") && ProducesNote(TO_MATCH_N_HERE, "'('"));
-    functionProduces(parseDeclarator, "foo(int,int[5])", ProducesNothing());
+    functionProduces(parseDeclarator, "foo(int,int[5])", ProducesNoErrors());
     functionProduces(parseDeclarator, "foo(int i,int f[5],)",
                      ProducesError(EXPECTED_STORAGE_SPECIFIER_OR_TYPENAME_BEFORE_N, "')'") && ProducesNoNotes());
     functionProduces(parseDeclarator, "foo(i,f e)",
@@ -282,12 +282,12 @@ TEST_CASE("Parse Declarators and DirectDeclarators", "[parser]")
     functionProduces(parseDeclarator, "(int)()",
                      ProducesError(EXPECTED_N_INSTEAD_OF_N, "'(' or identifier", "'int'") && ProducesNoNotes());
     functionProduces(parseDeclarator, "foo(", ProducesError(EXPECTED_N, "')'") && ProducesNote(TO_MATCH_N_HERE, "'('"));
-    functionProduces(parseDeclarator, "foo()", ProducesNothing());
+    functionProduces(parseDeclarator, "foo()", ProducesNoErrors());
     functionProduces(parseDeclarator, "foo(foo bar int)",
                      ProducesError(EXPECTED_N_INSTEAD_OF_N, "','", "'bar'")
                          && ProducesError(EXPECTED_N_INSTEAD_OF_N, "')'", "'int'")
                          && ProducesNote(TO_MATCH_N_HERE, "'('"));
-    functionProduces(parseDeclarator, "foo[static const volatile restrict 5]", ProducesNothing());
+    functionProduces(parseDeclarator, "foo[static const volatile restrict 5]", ProducesNoErrors());
     functionProduces(parseDeclarator, "(int)[static 5]",
                      ProducesError(EXPECTED_N_INSTEAD_OF_N, "'(' or identifier", "'int'") && ProducesNoNotes());
     functionProduces(parseDeclarator, "(int)[const static 5]",
@@ -298,68 +298,68 @@ TEST_CASE("Parse Declarators and DirectDeclarators", "[parser]")
                      ProducesError(EXPECTED_N_INSTEAD_OF_N, "'(' or identifier", "'int'") && ProducesNoNotes());
     functionProduces(parseDeclarator, "(int)[]",
                      ProducesError(EXPECTED_N_INSTEAD_OF_N, "'(' or identifier", "'int'") && ProducesNoNotes());
-    functionProduces(parseDeclarator, "foo[]", ProducesNothing());
-    functionProduces(parseDeclarator, "foo[const static 5]", ProducesNothing());
-    functionProduces(parseDeclarator, "foo[const *]", ProducesNothing());
+    functionProduces(parseDeclarator, "foo[]", ProducesNoErrors());
+    functionProduces(parseDeclarator, "foo[const static 5]", ProducesNoErrors());
+    functionProduces(parseDeclarator, "foo[const *]", ProducesNoErrors());
     functionProduces(parseDeclarator, "foo[const restrict volatile",
                      ProducesError(EXPECTED_N, "']'") && ProducesNote(TO_MATCH_N_HERE, "'['"));
-    functionProduces(parseDeclarator, "foo[*]", ProducesNothing());
-    functionProduces(parseDeclarator, "foo[5]", ProducesNothing());
+    functionProduces(parseDeclarator, "foo[*]", ProducesNoErrors());
+    functionProduces(parseDeclarator, "foo[5]", ProducesNoErrors());
     functionProduces(parseDeclarator, "foo[*[]",
                      ProducesError(EXPECTED_N, "']'") && ProducesNote(TO_MATCH_N_HERE, "'['"));
     functionProduces(parseDeclarator, "foo(int()",
                      ProducesError(EXPECTED_N, "')'") && ProducesNote(TO_MATCH_N_HERE, "'('"));
-    functionProduces(parseDeclarator, "foo(int(int))", ProducesNothing());
-    functionProduces(parseDeclarator, "foo(int([5]))", ProducesNothing());
-    functionProduces(parseDeclarator, "foo(int())", ProducesNothing());
-    functionProduces(parseDeclarator, "foo(int[*])", ProducesNothing());
-    functionProduces(parseDeclarator, "foo(int (i)(int))", ProducesNothing());
+    functionProduces(parseDeclarator, "foo(int(int))", ProducesNoErrors());
+    functionProduces(parseDeclarator, "foo(int([5]))", ProducesNoErrors());
+    functionProduces(parseDeclarator, "foo(int())", ProducesNoErrors());
+    functionProduces(parseDeclarator, "foo(int[*])", ProducesNoErrors());
+    functionProduces(parseDeclarator, "foo(int (i)(int))", ProducesNoErrors());
     treeProduces("typedef int i;void foo(a,i){}", ProducesError(EXPECTED_N_INSTEAD_OF_N, "identifier", "typename")
                                                       && ProducesNote(IDENTIFIER_IS_TYPEDEF, "'i'"));
 }
 
 TEST_CASE("Parse parameter (type) list", "[parser]")
 {
-    functionProduces(parseParameterTypeList, "int,...", ProducesNothing());
-    functionProduces(parseParameterTypeList, "int,int", ProducesNothing());
-    functionProduces(parseParameterTypeList, "int const volatile restrict *", ProducesNothing());
-    functionProduces(parseParameterTypeList, "int const volatile restrict *[]", ProducesNothing());
-    functionProduces(parseParameterTypeList, "int const volatile restrict *foo", ProducesNothing());
-    functionProduces(parseParameterTypeList, "int const volatile restrict *(((foo)))", ProducesNothing());
-    functionProduces(parseParameterTypeList, "int const volatile restrict *(*(*(*foo)))", ProducesNothing());
-    functionProduces(parseParameterTypeList, "int const volatile restrict *(*(*(*)))", ProducesNothing());
+    functionProduces(parseParameterTypeList, "int,...", ProducesNoErrors());
+    functionProduces(parseParameterTypeList, "int,int", ProducesNoErrors());
+    functionProduces(parseParameterTypeList, "int const volatile restrict *", ProducesNoErrors());
+    functionProduces(parseParameterTypeList, "int const volatile restrict *[]", ProducesNoErrors());
+    functionProduces(parseParameterTypeList, "int const volatile restrict *foo", ProducesNoErrors());
+    functionProduces(parseParameterTypeList, "int const volatile restrict *(((foo)))", ProducesNoErrors());
+    functionProduces(parseParameterTypeList, "int const volatile restrict *(*(*(*foo)))", ProducesNoErrors());
+    functionProduces(parseParameterTypeList, "int const volatile restrict *(*(*(*)))", ProducesNoErrors());
     functionProduces(parseParameterTypeList, "int,",
                      ProducesError(EXPECTED_N, "storage specifier or typename") && ProducesNoNotes());
 }
 
 TEST_CASE("Parse Abstract Declarator and Direct Abstract Declarator", "[parser]")
 {
-    functionProduces(parseAbstractDeclarator, "* const * volatile *", ProducesNothing());
+    functionProduces(parseAbstractDeclarator, "* const * volatile *", ProducesNoErrors());
     functionProduces(parseAbstractDeclarator, "* const * volatile *(",
                      ProducesError(EXPECTED_N, "')'") && ProducesNote(TO_MATCH_N_HERE, "'('"));
     functionProduces(parseAbstractDeclarator, "* const * volatile *(int f",
                      ProducesError(EXPECTED_N, "')'") && ProducesNote(TO_MATCH_N_HERE, "'('"));
-    functionProduces(parseAbstractDeclarator, "(int,int[5])", ProducesNothing());
+    functionProduces(parseAbstractDeclarator, "(int,int[5])", ProducesNoErrors());
     functionProduces(parseAbstractDeclarator, "(int i,int f[5],)",
                      ProducesError(EXPECTED_STORAGE_SPECIFIER_OR_TYPENAME_BEFORE_N, "')'") && ProducesNoNotes());
     functionProduces(parseAbstractDeclarator, "[",
                      ProducesError(EXPECTED_N, "']'") && ProducesNote(TO_MATCH_N_HERE, "'['"));
-    functionProduces(parseAbstractDeclarator, "*", ProducesNothing());
+    functionProduces(parseAbstractDeclarator, "*", ProducesNoErrors());
     functionProduces(parseAbstractDeclarator, "(",
                      ProducesError(EXPECTED_N, "')'") && ProducesNote(TO_MATCH_N_HERE, "'('"));
-    functionProduces(parseAbstractDeclarator, "()", ProducesNothing());
-    functionProduces(parseAbstractDeclarator, "[]", ProducesNothing());
-    functionProduces(parseAbstractDeclarator, "[*]", ProducesNothing());
-    functionProduces(parseAbstractDeclarator, "[5]", ProducesNothing());
+    functionProduces(parseAbstractDeclarator, "()", ProducesNoErrors());
+    functionProduces(parseAbstractDeclarator, "[]", ProducesNoErrors());
+    functionProduces(parseAbstractDeclarator, "[*]", ProducesNoErrors());
+    functionProduces(parseAbstractDeclarator, "[5]", ProducesNoErrors());
     functionProduces(parseAbstractDeclarator, "[*[]",
                      ProducesError(EXPECTED_N, "']'") && ProducesNote(TO_MATCH_N_HERE, "'['"));
     functionProduces(parseAbstractDeclarator, "(int()",
                      ProducesError(EXPECTED_N, "')'") && ProducesNote(TO_MATCH_N_HERE, "'('"));
-    functionProduces(parseAbstractDeclarator, "(int(int))", ProducesNothing());
-    functionProduces(parseAbstractDeclarator, "(int([5]))", ProducesNothing());
-    functionProduces(parseAbstractDeclarator, "(int())", ProducesNothing());
-    functionProduces(parseAbstractDeclarator, "(int[*])", ProducesNothing());
-    functionProduces(parseAbstractDeclarator, "(int (i)(int))", ProducesNothing());
+    functionProduces(parseAbstractDeclarator, "(int(int))", ProducesNoErrors());
+    functionProduces(parseAbstractDeclarator, "(int([5]))", ProducesNoErrors());
+    functionProduces(parseAbstractDeclarator, "(int())", ProducesNoErrors());
+    functionProduces(parseAbstractDeclarator, "(int[*])", ProducesNoErrors());
+    functionProduces(parseAbstractDeclarator, "(int (i)(int))", ProducesNoErrors());
     functionProduces(parseAbstractDeclarator, "]",
                      ProducesError(EXPECTED_N_INSTEAD_OF_N, "'(' or '['", "']'") && ProducesNoNotes());
 }
@@ -368,8 +368,8 @@ TEST_CASE("Parse Statements", "[parser]")
 {
     SECTION("Return")
     {
-        functionProduces(parseStatement, "return;", ProducesNothing());
-        functionProduces(parseStatement, "return 5;", ProducesNothing());
+        functionProduces(parseStatement, "return;", ProducesNoErrors());
+        functionProduces(parseStatement, "return 5;", ProducesNoErrors());
         functionProduces(parseStatement, "return", ProducesError(EXPECTED_N, "';'") && ProducesNoNotes());
         functionProduces(parseStatement, "return 5", ProducesError(EXPECTED_N, "';'") && ProducesNoNotes());
         functionProduces(parseStatement, "return 5", ProducesError(EXPECTED_N, "';'") && ProducesNoNotes());
@@ -382,7 +382,7 @@ TEST_CASE("Parse Statements", "[parser]")
                          ProducesError(EXPECTED_N_INSTEAD_OF_N, "'('", "'5'") && ProducesNoNotes());
         functionProduces(parseStatement, "if(5;int i",
                          ProducesError(EXPECTED_N_INSTEAD_OF_N, "')'", "';'") && ProducesNote(TO_MATCH_N_HERE, "'('"));
-        functionProduces(parseStatement, "if(5);else;", ProducesNothing());
+        functionProduces(parseStatement, "if(5);else;", ProducesNoErrors());
         functionProduces(parseStatement, "if(5)case:;",
                          ProducesError(EXPECTED_N_INSTEAD_OF_N, "literal, identifier or '('", "':'")
                              && ProducesNoNotes());
@@ -394,7 +394,7 @@ TEST_CASE("Parse Statements", "[parser]")
     }
     SECTION("switch")
     {
-        functionProduces(parseStatement, "switch(5);", ProducesNothing());
+        functionProduces(parseStatement, "switch(5);", ProducesNoErrors());
         functionProduces(parseStatement, "switch 5);",
                          ProducesError(EXPECTED_N_INSTEAD_OF_N, "'('", "'5'") && ProducesNoNotes());
         functionProduces(parseStatement, "switch(5;int i",
@@ -434,7 +434,7 @@ TEST_CASE("Parse Statements", "[parser]")
     }
     SECTION("Head while")
     {
-        functionProduces(parseStatement, "while(5);", ProducesNothing());
+        functionProduces(parseStatement, "while(5);", ProducesNoErrors());
         functionProduces(parseStatement, "while 5);",
                          ProducesError(EXPECTED_N_INSTEAD_OF_N, "'('", "'5'") && ProducesNoNotes());
         functionProduces(parseStatement, "while(5;",
@@ -447,7 +447,7 @@ TEST_CASE("Parse Statements", "[parser]")
     }
     SECTION("Foot while")
     {
-        functionProduces(parseStatement, "do;while(5);", ProducesNothing());
+        functionProduces(parseStatement, "do;while(5);", ProducesNoErrors());
         functionProduces(parseStatement, "do;while(5)", ProducesError(EXPECTED_N, "';'") && ProducesNoNotes());
         functionProduces(parseStatement, "do;while 5);",
                          ProducesError(EXPECTED_N_INSTEAD_OF_N, "'('", "'5'") && ProducesNoNotes());
@@ -465,20 +465,20 @@ TEST_CASE("Parse Statements", "[parser]")
     }
     SECTION("break and continue")
     {
-        functionProduces(parseStatement, "break;", ProducesNothing());
-        functionProduces(parseStatement, "continue;", ProducesNothing());
+        functionProduces(parseStatement, "break;", ProducesNoErrors());
+        functionProduces(parseStatement, "continue;", ProducesNoErrors());
         functionProduces(parseStatement, "break", ProducesError(EXPECTED_N, "';'") && ProducesNoNotes());
         functionProduces(parseStatement, "continue", ProducesError(EXPECTED_N, "';'") && ProducesNoNotes());
     }
     SECTION("Default and case")
     {
-        functionProduces(parseStatement, "default:;", ProducesNothing());
+        functionProduces(parseStatement, "default:;", ProducesNoErrors());
         functionProduces(parseStatement, "default;",
                          ProducesError(EXPECTED_N_INSTEAD_OF_N, "':'", "';'") && ProducesNoNotes());
         functionProduces(parseStatement, "default:case:;",
                          ProducesError(EXPECTED_N_INSTEAD_OF_N, "literal, identifier or '('", "':'")
                              && ProducesNoNotes());
-        functionProduces(parseStatement, "case 5:;", ProducesNothing());
+        functionProduces(parseStatement, "case 5:;", ProducesNoErrors());
         functionProduces(parseStatement, "case 5;",
                          ProducesError(EXPECTED_N_INSTEAD_OF_N, "':'", "';'") && ProducesNoNotes());
         functionProduces(parseStatement, "case 5:case:;",
@@ -487,20 +487,20 @@ TEST_CASE("Parse Statements", "[parser]")
     }
     SECTION("Label and goto")
     {
-        functionProduces(parseStatement, "test:;", ProducesNothing());
+        functionProduces(parseStatement, "test:;", ProducesNoErrors());
         functionProduces(parseStatement, "test:case:;",
                          ProducesError(EXPECTED_N_INSTEAD_OF_N, "literal, identifier or '('", "':'")
                              && ProducesNoNotes());
-        functionProduces(parseStatement, "goto test;", ProducesNothing());
+        functionProduces(parseStatement, "goto test;", ProducesNoErrors());
         functionProduces(parseStatement, "goto test", ProducesError(EXPECTED_N, "';'") && ProducesNoNotes());
-        functionProduces(parseStatement, "{test:;goto test;}", ProducesNothing());
-        functionProduces(parseStatement, "{typedef int test;test:;goto test;}", ProducesNothing());
+        functionProduces(parseStatement, "{test:;goto test;}", ProducesNoErrors());
+        functionProduces(parseStatement, "{typedef int test;test:;goto test;}", ProducesNoErrors());
         functionProduces(parseStatement, "{test:;goto 0x3;}",
                          ProducesError(EXPECTED_N_INSTEAD_OF_N, "identifier", "'0x3'") && ProducesNoNotes());
     }
     SECTION("Expression Statement")
     {
-        functionProduces(parseStatement, "test;", ProducesNothing());
+        functionProduces(parseStatement, "test;", ProducesNoErrors());
         functionProduces(parseStatement, "test", ProducesError(EXPECTED_N, "';'") && ProducesNoNotes());
         treeProduces("typedef int aa;void foo(){aa aa;aa bb;}",
                      ProducesError(EXPECTED_N_INSTEAD_OF_N, "';'", "'bb'")
@@ -511,7 +511,7 @@ TEST_CASE("Parse Statements", "[parser]")
     }
     SECTION("Compound statement")
     {
-        functionProduces(parseStatement, "{}", ProducesNothing());
+        functionProduces(parseStatement, "{}", ProducesNoErrors());
         functionProduces(parseStatement, "{", ProducesError(EXPECTED_N, "'}'") && ProducesNote(TO_MATCH_N_HERE, "'{'"));
         functionProduces(parseCompoundStatement, "}",
                          ProducesError(EXPECTED_N_INSTEAD_OF_N, "'{'", "'}'") && ProducesNoNotes());
@@ -523,11 +523,11 @@ TEST_CASE("Parse Statements", "[parser]")
 
 TEST_CASE("Parse Initializer and Initializer List", "[parser]")
 {
-    functionProduces(parseInitializer, "5", ProducesNothing());
-    functionProduces(parseInitializer, "{5}", ProducesNothing());
-    functionProduces(parseInitializer, "{5,}", ProducesNothing());
-    functionProduces(parseInitializer, "{5,3}", ProducesNothing());
-    functionProduces(parseInitializer, "{[5].m = 5}", ProducesNothing());
+    functionProduces(parseInitializer, "5", ProducesNoErrors());
+    functionProduces(parseInitializer, "{5}", ProducesNoErrors());
+    functionProduces(parseInitializer, "{5,}", ProducesNoErrors());
+    functionProduces(parseInitializer, "{5,3}", ProducesNoErrors());
+    functionProduces(parseInitializer, "{[5].m = 5}", ProducesNoErrors());
     functionProduces(parseInitializer, "]",
                      ProducesError(EXPECTED_N_INSTEAD_OF_N, "literal, identifier or '('", "']'") && ProducesNoNotes());
     functionProduces(parseInitializer, "{5,", ProducesError(EXPECTED_N, "'}'") && ProducesNoNotes());
@@ -545,10 +545,10 @@ TEST_CASE("Parse Expressions", "[parser]")
 {
     SECTION("Primary expressions")
     {
-        functionProduces(parsePostFixExpression, "0", ProducesNothing());
-        functionProduces(parsePostFixExpression, "wdawd", ProducesNothing());
-        functionProduces(parsePostFixExpression, "\"wdawd\"", ProducesNothing());
-        functionProduces(parsePostFixExpression, "((((5))))", ProducesNothing());
+        functionProduces(parsePostFixExpression, "0", ProducesNoErrors());
+        functionProduces(parsePostFixExpression, "wdawd", ProducesNoErrors());
+        functionProduces(parsePostFixExpression, "\"wdawd\"", ProducesNoErrors());
+        functionProduces(parsePostFixExpression, "((((5))))", ProducesNoErrors());
         functionProduces(parsePostFixExpression, "((((]))]))",
                          ProducesError(EXPECTED_N_INSTEAD_OF_N, "literal, identifier or '('", "']'")
                              && ProducesError(EXPECTED_N_INSTEAD_OF_N, "')'", "']'")
@@ -556,7 +556,7 @@ TEST_CASE("Parse Expressions", "[parser]")
         functionProduces(parsePostFixExpression, "((((]",
                          ProducesError(EXPECTED_N_INSTEAD_OF_N, "literal, identifier or '('", "']'")
                              && ProducesError(EXPECTED_N, "')'") && ProducesNote(TO_MATCH_N_HERE, "'('"));
-        treeProduces("void foo(){i;\"string\"\"can also be concatenated\";34234;}", ProducesNothing());
+        treeProduces("void foo(){i;\"string\"\"can also be concatenated\";34234;}", ProducesNoErrors());
         treeProduces("void foo(){int i =;}",
                      ProducesError(EXPECTED_N_INSTEAD_OF_N, "literal, identifier or '('", "';'") && ProducesNoNotes());
         treeProduces("int i =", ProducesError(EXPECTED_N, "literal, identifier or '('")
@@ -564,7 +564,7 @@ TEST_CASE("Parse Expressions", "[parser]")
     }
     SECTION("Postfix expressions")
     {
-        functionProduces(parsePostFixExpression, "i(53,42,32)", ProducesNothing());
+        functionProduces(parsePostFixExpression, "i(53,42,32)", ProducesNoErrors());
         functionProduces(parsePostFixExpression, "i(53 42,32,53 43",
                          ProducesError(EXPECTED_N_INSTEAD_OF_N, "','", "'42'")
                              && ProducesError(EXPECTED_N_INSTEAD_OF_N, "','", "'43'")
@@ -575,7 +575,7 @@ TEST_CASE("Parse Expressions", "[parser]")
                          ProducesError(EXPECTED_N, "literal, identifier or '('") && ProducesError(EXPECTED_N, "')'")
                              && ProducesNote(TO_MATCH_N_HERE, "'('"));
 
-        functionProduces(parsePostFixExpression, "(int){5}", ProducesNothing());
+        functionProduces(parsePostFixExpression, "(int){5}", ProducesNoErrors());
         treeProduces("void foo(){(int[{5};}",
                      ProducesError(EXPECTED_N_INSTEAD_OF_N, "']'", "'{'") && ProducesNote(TO_MATCH_N_HERE, "'['")
                          && ProducesError(EXPECTED_N, "')'") && ProducesNote(TO_MATCH_N_HERE, "'('"));
@@ -586,28 +586,28 @@ TEST_CASE("Parse Expressions", "[parser]")
         functionProduces(parsePostFixExpression, "(int)5",
                          ProducesError(EXPECTED_N_INSTEAD_OF_N, "'{'", "'5'") && ProducesError(EXPECTED_N, "'}'")
                              && ProducesNoNotes());
-        functionProduces(parsePostFixExpression, "(int){5,}", ProducesNothing());
+        functionProduces(parsePostFixExpression, "(int){5,}", ProducesNoErrors());
 
         functionProduces(parsePostFixExpression, "i[5",
                          ProducesError(EXPECTED_N, "']'") && ProducesNote(TO_MATCH_N_HERE, "'['"));
         functionProduces(parsePostFixExpression, "i[]",
                          ProducesError(EXPECTED_N_INSTEAD_OF_N, "literal, identifier or '('", "']'")
                              && ProducesNoNotes());
-        functionProduces(parsePostFixExpression, "i[5]", ProducesNothing());
+        functionProduces(parsePostFixExpression, "i[5]", ProducesNoErrors());
 
-        functionProduces(parsePostFixExpression, "i++", ProducesNothing());
+        functionProduces(parsePostFixExpression, "i++", ProducesNoErrors());
         functionProduces(parsePostFixExpression, "]++",
                          ProducesError(EXPECTED_N_INSTEAD_OF_N, "literal, identifier or '('", "']'")
                              && ProducesNoNotes());
         functionProduces(parsePostFixExpression, "]()",
                          ProducesError(EXPECTED_N_INSTEAD_OF_N, "literal, identifier or '('", "']'")
                              && ProducesNoNotes());
-        functionProduces(parsePostFixExpression, "i--", ProducesNothing());
+        functionProduces(parsePostFixExpression, "i--", ProducesNoErrors());
         functionProduces(parsePostFixExpression, "]--",
                          ProducesError(EXPECTED_N_INSTEAD_OF_N, "literal, identifier or '('", "']'")
                              && ProducesNoNotes());
 
-        functionProduces(parsePostFixExpression, "i.m", ProducesNothing());
+        functionProduces(parsePostFixExpression, "i.m", ProducesNoErrors());
         functionProduces(parsePostFixExpression, "].m",
                          ProducesError(EXPECTED_LITERAL_N_OR_N_INSTEAD_OF_N, "identifier", "'('", "']'")
                              && ProducesNoNotes());
@@ -617,7 +617,7 @@ TEST_CASE("Parse Expressions", "[parser]")
                              && ProducesError(EXPECTED_N_INSTEAD_OF_N, "literal, identifier or '('", "']'")
                              && ProducesNoNotes());
 
-        functionProduces(parsePostFixExpression, "i->m", ProducesNothing());
+        functionProduces(parsePostFixExpression, "i->m", ProducesNoErrors());
         functionProduces(parsePostFixExpression, "]->m",
                          ProducesError(EXPECTED_N_INSTEAD_OF_N, "literal, identifier or '('", "']'")
                              && ProducesNoNotes());
@@ -629,15 +629,15 @@ TEST_CASE("Parse Expressions", "[parser]")
     }
     SECTION("Unary expressions")
     {
-        functionProduces(parseUnaryExpression, "sizeof(int)", ProducesNothing());
-        functionProduces(parseUnaryExpression, "sizeof(5)", ProducesNothing());
+        functionProduces(parseUnaryExpression, "sizeof(int)", ProducesNoErrors());
+        functionProduces(parseUnaryExpression, "sizeof(5)", ProducesNoErrors());
 
         functionProduces(parseUnaryExpression, "sizeof(int",
                          ProducesError(EXPECTED_N, "')'") && ProducesNote(TO_MATCH_N_HERE, "'('"));
         functionProduces(parseUnaryExpression, "sizeof(5",
                          ProducesError(EXPECTED_N, "')'") && ProducesNote(TO_MATCH_N_HERE, "'('"));
 
-        functionProduces(parseUnaryExpression, "sizeof sizeof(int)", ProducesNothing());
+        functionProduces(parseUnaryExpression, "sizeof sizeof(int)", ProducesNoErrors());
         functionProduces(parseUnaryExpression, "sizeof ]",
                          ProducesError(EXPECTED_N_INSTEAD_OF_N, "literal, identifier or '('", "']'")
                              && ProducesNoNotes());
@@ -646,34 +646,34 @@ TEST_CASE("Parse Expressions", "[parser]")
         functionProduces(parseUnaryExpression, "+(int)",
                          ProducesError(EXPECTED_N, "literal, identifier or '('") && ProducesNoNotes());
 
-        functionProduces(parseUnaryExpression, "++i", ProducesNothing());
-        functionProduces(parseUnaryExpression, "--i", ProducesNothing());
-        functionProduces(parseUnaryExpression, "&i", ProducesNothing());
-        functionProduces(parseUnaryExpression, "*i", ProducesNothing());
-        functionProduces(parseUnaryExpression, "+(int)i", ProducesNothing());
-        functionProduces(parseUnaryExpression, "+i", ProducesNothing());
-        functionProduces(parseUnaryExpression, "-i", ProducesNothing());
-        functionProduces(parseUnaryExpression, "!i", ProducesNothing());
-        functionProduces(parseUnaryExpression, "~i", ProducesNothing());
-        functionProduces(parseUnaryExpression, "__builtin_va_arg(f,int)", ProducesNothing());
+        functionProduces(parseUnaryExpression, "++i", ProducesNoErrors());
+        functionProduces(parseUnaryExpression, "--i", ProducesNoErrors());
+        functionProduces(parseUnaryExpression, "&i", ProducesNoErrors());
+        functionProduces(parseUnaryExpression, "*i", ProducesNoErrors());
+        functionProduces(parseUnaryExpression, "+(int)i", ProducesNoErrors());
+        functionProduces(parseUnaryExpression, "+i", ProducesNoErrors());
+        functionProduces(parseUnaryExpression, "-i", ProducesNoErrors());
+        functionProduces(parseUnaryExpression, "!i", ProducesNoErrors());
+        functionProduces(parseUnaryExpression, "~i", ProducesNoErrors());
+        functionProduces(parseUnaryExpression, "__builtin_va_arg(f,int)", ProducesNoErrors());
     }
     SECTION("Type name")
     {
-        functionProduces(parseTypeName, "int", ProducesNothing());
-        functionProduces(parseTypeName, "int[5]", ProducesNothing());
-        functionProduces(parseTypeName, "int(*)(int,char)", ProducesNothing());
+        functionProduces(parseTypeName, "int", ProducesNoErrors());
+        functionProduces(parseTypeName, "int[5]", ProducesNoErrors());
+        functionProduces(parseTypeName, "int(*)(int,char)", ProducesNoErrors());
     }
     SECTION("Cast expression")
     {
-        functionProduces(parseCastExpression, "(int)5", ProducesNothing());
+        functionProduces(parseCastExpression, "(int)5", ProducesNoErrors());
         functionProduces(parseCastExpression, "(int)",
                          ProducesError(EXPECTED_N, "literal, identifier or '('") && ProducesNoNotes());
     }
     SECTION("Term")
     {
-        functionProduces(parseTerm, "5 * 5", ProducesNothing());
-        functionProduces(parseTerm, "5 / 5", ProducesNothing());
-        functionProduces(parseTerm, "5 % 5", ProducesNothing());
+        functionProduces(parseTerm, "5 * 5", ProducesNoErrors());
+        functionProduces(parseTerm, "5 / 5", ProducesNoErrors());
+        functionProduces(parseTerm, "5 % 5", ProducesNoErrors());
 
         functionProduces(parseTerm, "5 * / 5",
                          ProducesError(EXPECTED_N, "literal, identifier or '('") && ProducesNoNotes());
@@ -686,21 +686,21 @@ TEST_CASE("Parse Expressions", "[parser]")
     }
     SECTION("Additive")
     {
-        functionProduces(parseAdditiveExpression, "5 + 5", ProducesNothing());
-        functionProduces(parseAdditiveExpression, "5 - 5", ProducesNothing());
+        functionProduces(parseAdditiveExpression, "5 + 5", ProducesNoErrors());
+        functionProduces(parseAdditiveExpression, "5 - 5", ProducesNoErrors());
 
         functionProduces(parseAdditiveExpression, "5 + () + 5",
                          ProducesError(EXPECTED_N, "literal, identifier or '('") && ProducesNoNotes());
         functionProduces(parseAdditiveExpression, "() + 5",
                          ProducesError(EXPECTED_N, "literal, identifier or '('") && ProducesNoNotes());
 
-        functionProduces(parseAdditiveExpression, "5 + - -5", ProducesNothing());
-        functionProduces(parseAdditiveExpression, " + + - - 5", ProducesNothing());
+        functionProduces(parseAdditiveExpression, "5 + - -5", ProducesNoErrors());
+        functionProduces(parseAdditiveExpression, " + + - - 5", ProducesNoErrors());
     }
     SECTION("Shift")
     {
-        functionProduces(parseShiftExpression, "5 << 5", ProducesNothing());
-        functionProduces(parseShiftExpression, "5 >> 5", ProducesNothing());
+        functionProduces(parseShiftExpression, "5 << 5", ProducesNoErrors());
+        functionProduces(parseShiftExpression, "5 >> 5", ProducesNoErrors());
 
         functionProduces(parseShiftExpression, "5 << >> 5",
                          ProducesError(EXPECTED_N, "literal, identifier or '('") && ProducesNoNotes());
@@ -714,10 +714,10 @@ TEST_CASE("Parse Expressions", "[parser]")
     }
     SECTION("Relational")
     {
-        functionProduces(parseRelationalExpression, "5 < 5", ProducesNothing());
-        functionProduces(parseRelationalExpression, "5 > 5", ProducesNothing());
-        functionProduces(parseRelationalExpression, "5 <= 5", ProducesNothing());
-        functionProduces(parseRelationalExpression, "5 >= 5", ProducesNothing());
+        functionProduces(parseRelationalExpression, "5 < 5", ProducesNoErrors());
+        functionProduces(parseRelationalExpression, "5 > 5", ProducesNoErrors());
+        functionProduces(parseRelationalExpression, "5 <= 5", ProducesNoErrors());
+        functionProduces(parseRelationalExpression, "5 >= 5", ProducesNoErrors());
 
         functionProduces(parseRelationalExpression, "5 < > 5",
                          ProducesError(EXPECTED_N, "literal, identifier or '('") && ProducesNoNotes());
@@ -728,8 +728,8 @@ TEST_CASE("Parse Expressions", "[parser]")
     }
     SECTION("Equality")
     {
-        functionProduces(parseEqualityExpression, "5 == 5", ProducesNothing());
-        functionProduces(parseEqualityExpression, "5 != 5", ProducesNothing());
+        functionProduces(parseEqualityExpression, "5 == 5", ProducesNoErrors());
+        functionProduces(parseEqualityExpression, "5 != 5", ProducesNoErrors());
 
         functionProduces(parseEqualityExpression, "5 == != 5",
                          ProducesError(EXPECTED_N, "literal, identifier or '('") && ProducesNoNotes());
@@ -748,14 +748,14 @@ TEST_CASE("Parse Expressions", "[parser]")
                          ProducesError(EXPECTED_N, "literal, identifier or '('") && ProducesNoNotes());
         functionProduces(parseBitAndExpression, "() & 5",
                          ProducesError(EXPECTED_N, "literal, identifier or '('") && ProducesNoNotes());
-        functionProduces(parseBitAndExpression, "5 & 5", ProducesNothing());
-        functionProduces(parseBitAndExpression, "5 & &5", ProducesNothing());
-        functionProduces(parseBitAndExpression, "5 & & 5", ProducesNothing());
-        functionProduces(parseBitAndExpression, " & & 5", ProducesNothing());
+        functionProduces(parseBitAndExpression, "5 & 5", ProducesNoErrors());
+        functionProduces(parseBitAndExpression, "5 & &5", ProducesNoErrors());
+        functionProduces(parseBitAndExpression, "5 & & 5", ProducesNoErrors());
+        functionProduces(parseBitAndExpression, " & & 5", ProducesNoErrors());
     }
     SECTION("BitXor")
     {
-        functionProduces(parseBitXorExpression, "5 ^ 5", ProducesNothing());
+        functionProduces(parseBitXorExpression, "5 ^ 5", ProducesNoErrors());
 
         functionProduces(parseBitXorExpression, "5 ^ ()",
                          ProducesError(EXPECTED_N, "literal, identifier or '('") && ProducesNoNotes());
@@ -767,7 +767,7 @@ TEST_CASE("Parse Expressions", "[parser]")
     }
     SECTION("BitOr")
     {
-        functionProduces(parseBitOrExpression, "5 | 5", ProducesNothing());
+        functionProduces(parseBitOrExpression, "5 | 5", ProducesNoErrors());
 
         functionProduces(parseBitOrExpression, "5 | | 5",
                          ProducesError(EXPECTED_N, "literal, identifier or '('") && ProducesNoNotes());
@@ -778,7 +778,7 @@ TEST_CASE("Parse Expressions", "[parser]")
     }
     SECTION("LogicalAnd")
     {
-        functionProduces(parseLogicalAndExpression, "5 && 5", ProducesNothing());
+        functionProduces(parseLogicalAndExpression, "5 && 5", ProducesNoErrors());
 
         functionProduces(parseLogicalAndExpression, "5 && && 5",
                          ProducesError(EXPECTED_N, "literal, identifier or '('") && ProducesNoNotes());
@@ -790,7 +790,7 @@ TEST_CASE("Parse Expressions", "[parser]")
     }
     SECTION("LogicalOr")
     {
-        functionProduces(parseLogicalOrExpression, "5 || 5", ProducesNothing());
+        functionProduces(parseLogicalOrExpression, "5 || 5", ProducesNoErrors());
 
         functionProduces(parseLogicalOrExpression, "5 || || 5",
                          ProducesError(EXPECTED_N, "literal, identifier or '('") && ProducesNoNotes());
@@ -802,7 +802,7 @@ TEST_CASE("Parse Expressions", "[parser]")
     }
     SECTION("Conditional")
     {
-        functionProduces(parseConditionalExpression, "5 ? 5 : 5", ProducesNothing());
+        functionProduces(parseConditionalExpression, "5 ? 5 : 5", ProducesNoErrors());
         functionProduces(parseConditionalExpression, "5 ? (5 : 5",
                          ProducesError(EXPECTED_N_INSTEAD_OF_N, "')'", "':'") && ProducesNote(TO_MATCH_N_HERE, "'('"));
         functionProduces(parseConditionalExpression, "5 ? 5  5",
@@ -815,23 +815,23 @@ TEST_CASE("Parse Expressions", "[parser]")
     }
     SECTION("Assignment")
     {
-        functionProduces(parseAssignmentExpression, "5 = 5", ProducesNothing());
+        functionProduces(parseAssignmentExpression, "5 = 5", ProducesNoErrors());
         functionProduces(parseAssignmentExpression, "] = ]",
                          ProducesError(EXPECTED_N, "literal, identifier or '('") && ProducesNoNotes());
-        functionProduces(parseAssignmentExpression, "5 += 5", ProducesNothing());
-        functionProduces(parseAssignmentExpression, "5 -= 5", ProducesNothing());
-        functionProduces(parseAssignmentExpression, "5 /= 5", ProducesNothing());
-        functionProduces(parseAssignmentExpression, "5 *= 5", ProducesNothing());
-        functionProduces(parseAssignmentExpression, "5 %= 5", ProducesNothing());
-        functionProduces(parseAssignmentExpression, "5 <<= 5", ProducesNothing());
-        functionProduces(parseAssignmentExpression, "5 >>= 5", ProducesNothing());
-        functionProduces(parseAssignmentExpression, "5 &= 5", ProducesNothing());
-        functionProduces(parseAssignmentExpression, "5 |= 5", ProducesNothing());
-        functionProduces(parseAssignmentExpression, "5 ^= 5", ProducesNothing());
+        functionProduces(parseAssignmentExpression, "5 += 5", ProducesNoErrors());
+        functionProduces(parseAssignmentExpression, "5 -= 5", ProducesNoErrors());
+        functionProduces(parseAssignmentExpression, "5 /= 5", ProducesNoErrors());
+        functionProduces(parseAssignmentExpression, "5 *= 5", ProducesNoErrors());
+        functionProduces(parseAssignmentExpression, "5 %= 5", ProducesNoErrors());
+        functionProduces(parseAssignmentExpression, "5 <<= 5", ProducesNoErrors());
+        functionProduces(parseAssignmentExpression, "5 >>= 5", ProducesNoErrors());
+        functionProduces(parseAssignmentExpression, "5 &= 5", ProducesNoErrors());
+        functionProduces(parseAssignmentExpression, "5 |= 5", ProducesNoErrors());
+        functionProduces(parseAssignmentExpression, "5 ^= 5", ProducesNoErrors());
     }
     SECTION("Expressions")
     {
-        functionProduces(parseExpression, "5,5", ProducesNothing());
+        functionProduces(parseExpression, "5,5", ProducesNoErrors());
         functionProduces(parseExpression, "5 +,5 +",
                          ProducesError(EXPECTED_N, "literal, identifier or '('") && ProducesNoNotes());
         functionProduces(parseExpression, "5,",
