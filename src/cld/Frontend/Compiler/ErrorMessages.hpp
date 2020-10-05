@@ -177,6 +177,15 @@ CREATE_ERROR(DEFINING_FUNCTIONS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR,
 CREATE_ERROR(DECLARING_PARAMETERS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR,
              "Declaring parameters with the name __func__ is undefined behaviour", PointAt<0>);
 
+CREATE_ERROR(INLINE_MAIN_IS_NOT_ALLOWED_IN_A_HOSTED_ENVIRONMENT, "Inline main is not allowed in a hosted environment",
+             PointAt<0>);
+
+CREATE_ERROR(INLINE_FUNCTION_N_WITH_EXTERNAL_LINKAGE_IS_NOT_ALLOWED_TO_CONTAIN_OR_ACCESS_THE_INTERNAL_IDENTIFIER_N,
+             "Inline function %0 with external linkage is not allowed to contain or access the internal identifier %1",
+             PointAt<1>);
+
+CREATE_ERROR(NO_DEFINITION_FOR_INLINE_FUNCTION_N_FOUND, "No definition for inline function %0 found", PointAt<0>);
+
 // Declarations
 
 CREATE_ERROR(DECLARATION_DOES_NOT_DECLARE_ANYTHING, "Declaration does not declare anything", Underline<0>);

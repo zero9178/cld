@@ -771,7 +771,7 @@ TEST_CASE("Semantics function prototypes", "[semantics]")
         SEMA_PRODUCES("int f(int a[6][static 5]);", ProducesError(STATIC_ONLY_ALLOWED_IN_OUTERMOST_ARRAY));
     }
     SEMA_PRODUCES("int f(int) = 5;", ProducesError(FUNCTION_PROTOTYPE_MUST_NOT_HAVE_AN_INITIALIZER));
-    SEMA_PRODUCES("inline int f(int);", ProducesNothing());
+    SEMA_PRODUCES("static inline int f(int);", ProducesNothing());
     SEMA_PRODUCES("int f(extern int a);",
                   ProducesError(NO_STORAGE_CLASS_SPECIFIER_ALLOWED_IN_PARAMETER_BESIDES_REGISTER));
     SEMA_PRODUCES("int (f(int a)[10]);", ProducesError(FUNCTION_RETURN_TYPE_MUST_NOT_BE_AN_ARRAY));
@@ -4367,5 +4367,67 @@ TEST_CASE("Semantics varargs", "[semantics]")
                       "__builtin_va_arg(list,struct I);\n"
                       "}",
                       ProducesError(INCOMPLETE_TYPE_N_IN_VA_ARG, "'struct I'"));
+    }
+}
+
+TEST_CASE("Semantics inline functions", "[semantics]")
+{
+    SECTION("inline main")
+    {
+        auto options = cld::LanguageOptions::native();
+        options.freeStanding = true;
+        CHECK_THAT(generateSemantics("inline int main(void) {}", options).second, ProducesNoErrors());
+        options.freeStanding = false;
+        CHECK_THAT(generateSemantics("inline int main(void);", options).second,
+                   ProducesError(INLINE_MAIN_IS_NOT_ALLOWED_IN_A_HOSTED_ENVIRONMENT));
+        CHECK_THAT(generateSemantics("inline int main(void) {}", options).second,
+                   ProducesError(INLINE_MAIN_IS_NOT_ALLOWED_IN_A_HOSTED_ENVIRONMENT));
+    }
+    SECTION("References")
+    {
+        SEMA_PRODUCES(
+            "inline void foo(void) {\n"
+            "static int i;\n"
+            "}",
+            ProducesError(
+                INLINE_FUNCTION_N_WITH_EXTERNAL_LINKAGE_IS_NOT_ALLOWED_TO_CONTAIN_OR_ACCESS_THE_INTERNAL_IDENTIFIER_N,
+                "'foo'", "'i'"));
+        SEMA_PRODUCES("inline void foo(void) {\n"
+                      "static const int i = 5;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("static inline void foo(void) {\n"
+                      "static int i = 5;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES(
+            "static int i = 0;\n"
+            "\n"
+            "inline void foo(void) {\n"
+            "i;\n"
+            "}",
+            ProducesError(
+                INLINE_FUNCTION_N_WITH_EXTERNAL_LINKAGE_IS_NOT_ALLOWED_TO_CONTAIN_OR_ACCESS_THE_INTERNAL_IDENTIFIER_N,
+                "'foo'", "'i'"));
+        SEMA_PRODUCES(
+            "static int i(void);\n"
+            "\n"
+            "inline void foo(void) {\n"
+            "i;\n"
+            "}",
+            ProducesError(
+                INLINE_FUNCTION_N_WITH_EXTERNAL_LINKAGE_IS_NOT_ALLOWED_TO_CONTAIN_OR_ACCESS_THE_INTERNAL_IDENTIFIER_N,
+                "'foo'", "'i'"));
+        SEMA_PRODUCES("static int i = 0;\n"
+                      "\n"
+                      "static inline void foo(void) {\n"
+                      "i;\n"
+                      "}",
+                      ProducesNoErrors());
+    }
+    SECTION("External linkage inline function")
+    {
+        SEMA_PRODUCES("inline void foo(void);", ProducesError(NO_DEFINITION_FOR_INLINE_FUNCTION_N_FOUND, "'foo'"));
+        SEMA_PRODUCES("static inline void foo(void);", ProducesNoErrors());
     }
 }

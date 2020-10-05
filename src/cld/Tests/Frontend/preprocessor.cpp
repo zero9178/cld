@@ -267,12 +267,9 @@ TEST_CASE("PP Define", "[PP]")
     }
     SECTION("6.10.8.4 Defining builtin macros")
     {
-        constexpr std::array PREDEFINED_MACRO_NAMES = {"__DATE__",          "__FILE__",
-                                                       "__LINE__",          "__STDC__",
-                                                       "__STDC_HOSTED__",   "__STDC_MB_MIGHT_NEQ_WC__",
-                                                       "__STDC_VERSION__",  "__TIME__",
-                                                       "__STC_IEC_559__",   "__STDC_IEC_559_COMPLEX__",
-                                                       "__STDC_ISO_10646__"};
+        constexpr std::array PREDEFINED_MACRO_NAMES = {
+            "__DATE__",         "__FILE__", "__LINE__", "__STDC__", "__STDC_HOSTED__", "__STDC_MB_MIGHT_NEQ_WC__",
+            "__STDC_VERSION__", "__TIME__"};
         for (std::string_view iter : PREDEFINED_MACRO_NAMES)
         {
             DYNAMIC_SECTION(iter)
@@ -285,12 +282,9 @@ TEST_CASE("PP Define", "[PP]")
     }
     SECTION("6.10.8.4 Undefining builtin macros")
     {
-        constexpr std::array PREDEFINED_MACRO_NAMES = {"__DATE__",          "__FILE__",
-                                                       "__LINE__",          "__STDC__",
-                                                       "__STDC_HOSTED__",   "__STDC_MB_MIGHT_NEQ_WC__",
-                                                       "__STDC_VERSION__",  "__TIME__",
-                                                       "__STC_IEC_559__",   "__STDC_IEC_559_COMPLEX__",
-                                                       "__STDC_ISO_10646__"};
+        constexpr std::array PREDEFINED_MACRO_NAMES = {
+            "__DATE__",         "__FILE__", "__LINE__", "__STDC__", "__STDC_HOSTED__", "__STDC_MB_MIGHT_NEQ_WC__",
+            "__STDC_VERSION__", "__TIME__"};
         for (std::string_view iter : PREDEFINED_MACRO_NAMES)
         {
             DYNAMIC_SECTION(iter)

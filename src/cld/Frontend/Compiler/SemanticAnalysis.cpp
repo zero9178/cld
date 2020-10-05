@@ -56,15 +56,34 @@ cld::Semantics::TranslationUnit cld::Semantics::SemanticAnalysis::visit(const Sy
             });
         globals.insert(globals.end(), std::move_iterator(result.begin()), std::move_iterator(result.end()));
     }
+    for (auto& [name, declared] : m_scopes[0].declarations)
+    {
+        (void)name;
+        if (!std::holds_alternative<const Declaration*>(declared.declared))
+        {
+            continue;
+        }
+        auto* decl = cld::get<const Declaration*>(declared.declared);
+        if (decl->isInline() && decl->getLinkage() == Linkage::External)
+        {
+            log(Errors::Semantics::NO_DEFINITION_FOR_INLINE_FUNCTION_N_FOUND.args(
+                *decl->getNameToken(), m_sourceInterface, *decl->getNameToken()));
+        }
+    }
     return TranslationUnit(std::move(globals));
 }
 
 std::vector<cld::Semantics::TranslationUnit::Variant>
     cld::Semantics::SemanticAnalysis::visit(const cld::Syntax::FunctionDefinition& node)
 {
+    bool isInline = false;
     const Syntax::StorageClassSpecifier* storageClassSpecifier = nullptr;
     for (auto& iter : node.getDeclarationSpecifiers())
     {
+        if (std::holds_alternative<Syntax::FunctionSpecifier>(iter))
+        {
+            isInline = true;
+        }
         if (!std::holds_alternative<Syntax::StorageClassSpecifier>(iter))
         {
             continue;
@@ -105,8 +124,9 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
                 }
             }
             paramType = adjustParameterType(std::move(paramType));
+
             auto& ptr = parameterDeclarations.emplace_back(std::make_unique<Declaration>(
-                std::move(paramType), Linkage::None, lifetime, loc, Declaration::Kind::Definition));
+                std::move(paramType), Linkage::None, lifetime, loc, Declaration::Kind::Definition, InlineKind::None));
             auto [prev, notRedefined] =
                 getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, ptr.get()}});
             if (!notRedefined)
@@ -183,6 +203,20 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
             *loc, m_sourceInterface, *loc));
         return {};
     }
+    if (loc->getText() == "main" && isInline && !m_sourceInterface.getLanguageOptions().freeStanding)
+    {
+        log(Errors::Semantics::INLINE_MAIN_IS_NOT_ALLOWED_IN_A_HOSTED_ENVIRONMENT.args(*loc, m_sourceInterface, *loc));
+    }
+    InlineKind inlineKind = InlineKind::None;
+    if (isInline && storageClassSpecifier
+        && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Extern)
+    {
+        inlineKind = InlineKind::Inline;
+    }
+    else if (isInline)
+    {
+        inlineKind = InlineKind::InlineDefinition;
+    }
     std::vector<TranslationUnit::Variant> result;
     auto& ptr = cld::get<std::unique_ptr<FunctionDefinition>>(result.emplace_back(std::make_unique<FunctionDefinition>(
         std::move(type), loc, std::move(parameterDeclarations),
@@ -190,7 +224,7 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
             (storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Static ? Linkage::Internal :
                                                                                               Linkage::External) :
             Linkage::External,
-        CompoundStatement(m_currentScope, {}))));
+        inlineKind, CompoundStatement(m_currentScope, {}))));
     // We are currently in block scope. Functions are always at file scope though so we can't use getCurrentScope
     auto [prev, notRedefinition] =
         m_scopes[0].declarations.insert({loc->getText(), DeclarationInScope{loc, ptr.get()}});
@@ -206,6 +240,8 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
         }
         else
         {
+            ptr->setInlineKind(
+                std::max(ptr->getInlineKind(), cld::get<const Declaration*>(prev->second.declared)->getInlineKind()));
             prev.value() = DeclarationInScope{loc, ptr.get()};
         }
     }
@@ -221,9 +257,14 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::Declaration& node)
 {
     std::vector<DeclRetVariant> decls;
+    bool isInline = false;
     const Syntax::StorageClassSpecifier* storageClassSpecifier = nullptr;
     for (auto& iter : node.getDeclarationSpecifiers())
     {
+        if (std::holds_alternative<Syntax::FunctionSpecifier>(iter))
+        {
+            isInline = true;
+        }
         if (!std::holds_alternative<Syntax::StorageClassSpecifier>(iter))
         {
             continue;
@@ -317,8 +358,23 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                     *loc, m_sourceInterface, *loc));
                 continue;
             }
+            if (loc->getText() == "main" && isInline && !m_sourceInterface.getLanguageOptions().freeStanding)
+            {
+                log(Errors::Semantics::INLINE_MAIN_IS_NOT_ALLOWED_IN_A_HOSTED_ENVIRONMENT.args(*loc, m_sourceInterface,
+                                                                                               *loc));
+            }
+            InlineKind inlineKind = InlineKind::None;
+            if (isInline && storageClassSpecifier
+                && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Extern)
+            {
+                inlineKind = InlineKind::Inline;
+            }
+            else if (isInline)
+            {
+                inlineKind = InlineKind::InlineDefinition;
+            }
             auto declaration = std::make_unique<Declaration>(std::move(result), linkage, lifetime, loc,
-                                                             Declaration::Kind::DeclarationOnly);
+                                                             Declaration::Kind::DeclarationOnly, inlineKind);
             auto [prev, notRedefinition] =
                 getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, declaration.get()}});
             if (!notRedefinition)
@@ -338,10 +394,12 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                 }
                 else if (std::holds_alternative<const Declaration*>(prev->second.declared))
                 {
-                    auto& otherType = cld::get<const Declaration*>(prev->second.declared)->getType();
+                    auto& prevDecl = *cld::get<const Declaration*>(prev->second.declared);
+                    auto& otherType = prevDecl.getType();
                     auto composite = compositeType(otherType, declaration->getType());
                     *declaration =
-                        Declaration(std::move(composite), linkage, lifetime, loc, Declaration::Kind::DeclarationOnly);
+                        Declaration(std::move(composite), linkage, lifetime, loc, Declaration::Kind::DeclarationOnly,
+                                    std::max(inlineKind, prevDecl.getInlineKind()));
                     prev.value().declared = declaration.get();
                     decls.push_back(std::move(declaration));
                 }
@@ -566,7 +624,8 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                 kind = Declaration::Definition;
             }
 
-            auto declaration = std::make_unique<Declaration>(std::move(result), linkage, lifetime, loc, kind);
+            auto declaration =
+                std::make_unique<Declaration>(std::move(result), linkage, lifetime, loc, kind, InlineKind::None);
             auto [prev, notRedefinition] =
                 getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, declaration.get()}});
             if (!notRedefinition)
@@ -623,8 +682,8 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                                                                  *prev->second.identifier));
                         linkage = Linkage::Internal;
                     }
-                    *declaration =
-                        Declaration(std::move(composite), linkage, lifetime, loc, std::max(prevDecl->getKind(), kind));
+                    *declaration = Declaration(std::move(composite), linkage, lifetime, loc,
+                                               std::max(prevDecl->getKind(), kind), InlineKind::None);
                     prev.value().declared = declaration.get();
                 }
             }
@@ -659,7 +718,8 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                                               cld::get<AbstractArrayType>(prevType.getVariant()).isRestricted(), false,
                                               cld::get<AbstractArrayType>(prevType.getVariant()).getType(), size);
                     }
-                    *declaration = Declaration(std::move(prevType), linkage, lifetime, loc, kind, std::move(expr));
+                    *declaration = Declaration(std::move(prevType), linkage, lifetime, loc, kind, InlineKind::None,
+                                               std::move(expr));
                     m_inStaticInitializer = false;
                 }
             }
@@ -684,6 +744,18 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                     log(Errors::Semantics::DECLARATION_MUST_HAVE_A_COMPLETE_TYPE.args(*loc, m_sourceInterface, *loc,
                                                                                       declaration->getType()));
                 }
+            }
+
+            if (getCurrentFunctionScope() && getCurrentFunctionScope()->currentFunction->isInline()
+                && getCurrentFunctionScope()->currentFunction->getLinkage() == Linkage::External
+                && declaration->getKind() == Declaration::Definition && declaration->getLifetime() == Lifetime::Static
+                && !declaration->getType().isConst())
+            {
+                log(Errors::Semantics::
+                        INLINE_FUNCTION_N_WITH_EXTERNAL_LINKAGE_IS_NOT_ALLOWED_TO_CONTAIN_OR_ACCESS_THE_INTERNAL_IDENTIFIER_N
+                            .args(*declaration->getNameToken(), m_sourceInterface,
+                                  *getCurrentFunctionScope()->currentFunction->getNameToken(),
+                                  *declaration->getNameToken()));
             }
 
             decls.push_back(std::move(declaration));

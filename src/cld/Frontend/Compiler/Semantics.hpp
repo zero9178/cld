@@ -1953,10 +1953,17 @@ enum class Lifetime : std::uint8_t
     Register
 };
 
+enum class InlineKind : std::uint8_t
+{
+    None,
+    InlineDefinition,
+    Inline
+};
+
 class Declaration final
 {
 public:
-    enum Kind
+    enum Kind : std::uint8_t
     {
         DeclarationOnly,
         TentativeDefinition,
@@ -1969,16 +1976,18 @@ private:
     Lifetime m_lifetime;
     Lexer::CTokenIterator m_nameToken;
     Kind m_kind;
+    InlineKind m_inlineKind;
     std::optional<Initializer> m_initializer;
 
 public:
     Declaration(Type type, Linkage linkage, Lifetime lifetime, Lexer::CTokenIterator nameToken, Kind kind,
-                std::optional<Initializer> initializer = {})
+                InlineKind inlineKind, std::optional<Initializer> initializer = {})
         : m_type(std::move(type)),
           m_linkage(linkage),
           m_lifetime(lifetime),
           m_nameToken(nameToken),
           m_kind(kind),
+          m_inlineKind(inlineKind),
           m_initializer(std::move(initializer))
     {
     }
@@ -2012,6 +2021,16 @@ public:
     {
         return m_initializer;
     }
+
+    [[nodiscard]] bool isInline() const noexcept
+    {
+        return m_inlineKind != InlineKind::None;
+    }
+
+    [[nodiscard]] InlineKind getInlineKind() const noexcept
+    {
+        return m_inlineKind;
+    }
 };
 
 class FunctionDefinition final
@@ -2020,16 +2039,18 @@ class FunctionDefinition final
     Lexer::CTokenIterator m_nameToken;
     std::vector<std::unique_ptr<Declaration>> m_parameterDeclarations;
     Linkage m_linkage;
+    InlineKind m_inlineKind;
     CompoundStatement m_compoundStatement;
 
 public:
     FunctionDefinition(Type type, Lexer::CTokenIterator nameToken,
                        std::vector<std::unique_ptr<Declaration>> parameterDeclarations, Linkage linkage,
-                       CompoundStatement compoundStatement)
+                       InlineKind inlineKind, CompoundStatement compoundStatement)
         : m_type(std::move(type)),
           m_nameToken(nameToken),
           m_parameterDeclarations(std::move(parameterDeclarations)),
           m_linkage(linkage),
+          m_inlineKind(inlineKind),
           m_compoundStatement(std::move(compoundStatement))
     {
     }
@@ -2067,6 +2088,21 @@ public:
     void setCompoundStatement(CompoundStatement&& compoundStatement)
     {
         m_compoundStatement = std::move(compoundStatement);
+    }
+
+    [[nodiscard]] bool isInline() const noexcept
+    {
+        return m_inlineKind != InlineKind::None;
+    }
+
+    [[nodiscard]] InlineKind getInlineKind() const noexcept
+    {
+        return m_inlineKind;
+    }
+
+    void setInlineKind(InlineKind inlineKind) noexcept
+    {
+        m_inlineKind = inlineKind;
     }
 };
 

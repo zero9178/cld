@@ -508,7 +508,20 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
     }
     auto type = cld::match(
         *result, [](const std::pair<ConstValue, Type>&) -> Type { CLD_UNREACHABLE; },
-        [](const Type&) -> Type { CLD_UNREACHABLE; }, [](const auto* ptr) { return ptr->getType(); });
+        [](const Type&) -> Type { CLD_UNREACHABLE; },
+        [](const BuiltinFunction* builtinFunction) { return builtinFunction->getType(); },
+        [&](const auto* ptr) {
+            if (getCurrentFunctionScope() && getCurrentFunctionScope()->currentFunction->isInline()
+                && getCurrentFunctionScope()->currentFunction->getLinkage() == Linkage::External
+                && ptr->getLinkage() == Linkage::Internal)
+            {
+                log(Errors::Semantics::
+                        INLINE_FUNCTION_N_WITH_EXTERNAL_LINKAGE_IS_NOT_ALLOWED_TO_CONTAIN_OR_ACCESS_THE_INTERNAL_IDENTIFIER_N
+                            .args(*ptr->getNameToken(), m_sourceInterface,
+                                  *getCurrentFunctionScope()->currentFunction->getNameToken(), *ptr->getNameToken()));
+            }
+            return ptr->getType();
+        });
     return Expression(std::move(type), ValueCategory::Lvalue,
                       DeclarationRead(cld::match(*result,
                                                  [](auto&& value) -> DeclarationRead::Variant {
