@@ -3998,3 +3998,60 @@ TEST_CASE("LLVM codegen var arg", "[LLVM]")
               == 5);
     }
 }
+
+TEST_CASE("LLVM codegen inline functions", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    auto module = std::make_unique<llvm::Module>("", context);
+    SECTION("InlineDefinition")
+    {
+        auto program = generateProgram("inline int foo(void) {\n"
+                                       "return 5;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        auto* function = module->getFunction("foo");
+        REQUIRE(function);
+        CHECK(function->isDeclaration());
+    }
+    SECTION("extern inline")
+    {
+        SECTION("extern in definition")
+        {
+            auto program = generateProgram("extern inline int foo(void) {\n"
+                                           "return 5;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            auto* function = module->getFunction("foo");
+            REQUIRE(function);
+            CHECK(!function->isDeclaration());
+        }
+        SECTION("extern in declaration")
+        {
+            auto program = generateProgram("inline int foo(void) {\n"
+                                           "return 5;\n"
+                                           "}\n"
+                                           "\n"
+                                           "extern inline int foo(void);\n");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            auto* function = module->getFunction("foo");
+            REQUIRE(function);
+            CHECK(!function->isDeclaration());
+        }
+    }
+    SECTION("Inline in declaration only")
+    {
+        auto program = generateProgram("int foo(void) {\n"
+                                       "return 5;\n"
+                                       "}\n"
+                                       "\n"
+                                       "inline int foo(void);\n");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        auto* function = module->getFunction("foo");
+        REQUIRE(function);
+        CHECK(!function->isDeclaration());
+    }
+}

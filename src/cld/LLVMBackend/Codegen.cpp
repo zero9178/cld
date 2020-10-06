@@ -1363,11 +1363,16 @@ public:
                                               llvm::StringRef{functionDefinition.getNameToken()->getText()}, &m_module);
             m_lvalues.emplace(&functionDefinition, function);
         }
+        auto& ft = cld::get<cld::Semantics::FunctionType>(functionDefinition.getType().getVariant());
+        if (functionDefinition.getInlineKind() == cld::Semantics::InlineKind::InlineDefinition)
+        {
+            applyFunctionAttributes(*function, function->getFunctionType(), ft);
+            return;
+        }
+
         auto* bb = llvm::BasicBlock::Create(m_module.getContext(), "entry", function);
         m_builder.SetInsertPoint(bb);
         m_currentFunction = function;
-
-        auto& ft = cld::get<cld::Semantics::FunctionType>(functionDefinition.getType().getVariant());
         applyFunctionAttributes(*function, function->getFunctionType(), ft,
                                 &functionDefinition.getParameterDeclarations());
         auto transformations = m_functionABITransformations.find(function->getFunctionType());

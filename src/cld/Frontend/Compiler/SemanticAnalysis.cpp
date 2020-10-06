@@ -384,9 +384,9 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                     || (std::holds_alternative<const Declaration*>(prev->second.declared)
                         && !typesAreCompatible(declaration->getType(),
                                                cld::get<const Declaration*>(prev->second.declared)->getType()))
-                    || (std::holds_alternative<const FunctionDefinition*>(prev->second.declared)
+                    || (std::holds_alternative<FunctionDefinition*>(prev->second.declared)
                         && !typesAreCompatible(declaration->getType(),
-                                               cld::get<const FunctionDefinition*>(prev->second.declared)->getType())))
+                                               cld::get<FunctionDefinition*>(prev->second.declared)->getType())))
                 {
                     log(Errors::REDEFINITION_OF_SYMBOL_N.args(*loc, m_sourceInterface, *loc));
                     log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
@@ -402,6 +402,11 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                                     std::max(inlineKind, prevDecl.getInlineKind()));
                     prev.value().declared = declaration.get();
                     decls.push_back(std::move(declaration));
+                }
+                else if (std::holds_alternative<FunctionDefinition*>(prev->second.declared))
+                {
+                    auto& fd = *cld::get<FunctionDefinition*>(prev->second.declared);
+                    fd.setInlineKind(std::max(fd.getInlineKind(), inlineKind));
                 }
                 else
                 {

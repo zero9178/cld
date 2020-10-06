@@ -1955,9 +1955,9 @@ enum class Lifetime : std::uint8_t
 
 enum class InlineKind : std::uint8_t
 {
-    None,
     InlineDefinition,
-    Inline
+    Inline,
+    None,
 };
 
 class Declaration final
