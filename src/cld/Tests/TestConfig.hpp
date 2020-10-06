@@ -190,11 +190,9 @@ struct ProducesLines : Catch::MatcherBase<std::string_view>
                                      {
                                          return lhs + '\n' + rhs;
                                      }
-                                     else
-                                     {
-                                         first = false;
-                                         return rhs;
-                                     }
+
+                                     first = false;
+                                     return rhs;
                                  })
                + '"';
     }

@@ -350,7 +350,7 @@ void applyTargetSpecificLanguageOptions(cld::LanguageOptions& languageOptions, c
         languageOptions.additionalMacros.emplace_back("__GNUC_MINOR__", "2");
         languageOptions.additionalMacros.emplace_back("__GNUC_PATCHLEVEL__", "1");
     }
-    if (cli.template get<OPT>() || *cli.template get<OPT>() > 0)
+    if (cli.template get<OPT>() && *cli.template get<OPT>() > 0)
     {
         languageOptions.additionalMacros.emplace_back("__OPTIMIZE__", "1");
     }
