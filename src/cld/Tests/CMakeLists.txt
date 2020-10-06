@@ -6,3 +6,4 @@ endif ()
 
 add_subdirectory(Frontend)
 add_subdirectory(LLVMBackend)
+add_subdirectory(cldMain)
