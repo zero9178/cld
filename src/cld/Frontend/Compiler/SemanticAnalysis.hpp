@@ -196,9 +196,9 @@ class SemanticAnalysis final : public ProgramInterface
 
     bool isConst(const Type& type) const;
 
-    std::optional<std::pair<Type, std::uint64_t>> checkMemberAccess(const Type& recordType,
-                                                                    const Syntax::PostFixExpression& postFixExpr,
-                                                                    const Lexer::CToken& identifier);
+    std::optional<std::pair<Type, std::vector<std::uint64_t>>>
+        checkMemberAccess(const Type& recordType, const Syntax::PostFixExpression& postFixExpr,
+                          const Lexer::CToken& identifier);
 
     Expression checkIncrementAndDecrement(const Syntax::Node& node, UnaryOperator::Kind kind, Expression&& value,
                                           Lexer::CTokenIterator opToken);

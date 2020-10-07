@@ -178,9 +178,24 @@ bool cld::Semantics::ProgramInterface::isBitfieldAccess(const Expression& expres
     }
     auto& mem = cld::get<MemberAccess>(expression.getVariant());
     auto& expr = mem.getRecordExpression();
-    auto& recordType = std::holds_alternative<PointerType>(expr.getType().getVariant()) ?
-                           cld::get<PointerType>(expr.getType().getVariant()).getElementType() :
-                           expr.getType();
-    auto fields = getFields(recordType);
-    return static_cast<bool>(fields[mem.getMemberIndex()].bitFieldBounds);
+    if (!isRecord(expr.getType()))
+    {
+        return false;
+    }
+    auto* recordType = std::holds_alternative<PointerType>(expr.getType().getVariant()) ?
+                           &cld::get<PointerType>(expr.getType().getVariant()).getElementType() :
+                           &expr.getType();
+    for (auto& iter : llvm::ArrayRef(mem.getMemberIndices()).drop_back())
+    {
+        auto fields = getFields(*recordType);
+        recordType = std::holds_alternative<PointerType>(fields[iter].type->getVariant()) ?
+                         &cld::get<PointerType>(fields[iter].type->getVariant()).getElementType() :
+                         fields[iter].type.get();
+        if (!isRecord(*recordType))
+        {
+            return false;
+        }
+    }
+    auto fields = getFields(*recordType);
+    return static_cast<bool>(fields[mem.getMemberIndices().back()].bitFieldBounds);
 }

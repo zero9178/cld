@@ -2046,22 +2046,24 @@ public:
             value = load->getPointerOperand();
             load->eraseFromParent();
         }
-        auto index = memberAccess.getMemberIndex();
+        auto& indices = memberAccess.getMemberIndices();
         llvm::ArrayRef<cld::Semantics::Field> fields = m_programInterface.getFields(type);
 
         llvm::Value* field = nullptr;
         if (cld::Semantics::isStruct(type))
         {
-            auto* zero = m_builder.getInt64(0);
-            auto* member = m_builder.getInt32(fields[index].layoutIndex);
-            field = m_builder.CreateInBoundsGEP(value, {zero, member});
+            std::vector<llvm::Value*> temp = {m_builder.getInt64(0)};
+            temp.resize(1 + indices.size());
+            std::transform(indices.begin(), indices.end(), temp.begin() + 1,
+                           [&](std::uint64_t index) { return m_builder.getInt32(fields[index].layoutIndex); });
+            field = m_builder.CreateInBoundsGEP(value, temp);
         }
         else
         {
-            auto* destTy = visit(*fields[index].type);
+            auto* destTy = visit(*fields[indices].type);
             field = m_builder.CreateBitCast(value, llvm::PointerType::getUnqual(destTy));
         }
-        if (!fields[index].bitFieldBounds)
+        if (!fields[indices].bitFieldBounds)
         {
             // If the record expression is the return value of a function and this is a dot access not arrow access
             // we must load because an rvalue is returned and no lvalue conversion will load for us
@@ -2071,7 +2073,7 @@ public:
             {
                 // Arrays are generally passed around as llvm pointers to llvm arrays to be able to decay them to
                 // pointers. Best example for this are string literals which for this reason are global variables
-                if (std::holds_alternative<cld::Semantics::ArrayType>(fields[index].type->getVariant()))
+                if (std::holds_alternative<cld::Semantics::ArrayType>(fields[indices].type->getVariant()))
                 {
                     return field;
                 }
@@ -2081,9 +2083,9 @@ public:
         }
 
         auto* loaded = m_builder.CreateLoad(field, expression.getType().isVolatile());
-        auto upLeft = loaded->getType()->getPrimitiveSizeInBits() - fields[index].bitFieldBounds->second;
+        auto upLeft = loaded->getType()->getPrimitiveSizeInBits() - fields[indices].bitFieldBounds->second;
         auto* shl = m_builder.CreateShl(loaded, llvm::ConstantInt::get(loaded->getType(), upLeft));
-        auto* shrConstant = llvm::ConstantInt::get(loaded->getType(), upLeft + fields[index].bitFieldBounds->first);
+        auto* shrConstant = llvm::ConstantInt::get(loaded->getType(), upLeft + fields[indices].bitFieldBounds->first);
         if (cld::get<cld::Semantics::PrimitiveType>(expression.getType().getVariant()).isSigned())
         {
             return m_builder.CreateAShr(shl, shrConstant);
@@ -2670,7 +2672,7 @@ public:
         }
         auto* rhsValue = visit(assignment.getRightExpression());
 
-        auto& field = m_programInterface.getFields(type)[memberAccess.getMemberIndex()];
+        auto& field = m_programInterface.getFields(type)[memberAccess.getMemberIndices()];
         llvm::Value* fieldPtr = nullptr;
 
         if (cld::Semantics::isStruct(type))

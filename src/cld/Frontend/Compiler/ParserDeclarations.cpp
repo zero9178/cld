@@ -268,6 +268,7 @@ std::optional<cld::Syntax::ExternalDeclaration>
     const auto* start = begin;
     begin = std::find_if_not(
         begin, end, [](const Lexer::CToken& token) { return token.getTokenType() == Lexer::TokenType::GNUExtension; });
+    auto extensionReset = context.enableExtensions(start != begin);
 
     if (begin != end && begin->getTokenType() == Lexer::TokenType::GNUASM)
     {
@@ -552,6 +553,7 @@ std::optional<cld::Syntax::DeclarationSpecifier>
                     TypeSpecifier(start, begin, TypeSpecifier::PrimitiveTypeSpecifier::Unsigned)};
             case Lexer::TokenType::UnionKeyword:
             case Lexer::TokenType::StructKeyword:
+            case Lexer::TokenType::GNUExtension:
             {
                 auto expected = parseStructOrUnionSpecifier(begin, end, context);
                 if (!expected)
@@ -612,6 +614,12 @@ std::optional<cld::Syntax::StructOrUnionSpecifier>
     cld::Parser::parseStructOrUnionSpecifier(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context)
 {
     const auto* start = begin;
+    const auto* temp = begin;
+    begin = std::find_if_not(
+        begin, end, [](const Lexer::CToken& token) { return token.getTokenType() == Lexer::TokenType::GNUExtension; });
+    bool hadExtension = temp != begin;
+    auto extensionReset = context.enableExtensions(hadExtension);
+
     bool isUnion;
     if (begin < end && begin->getTokenType() == Lexer::TokenType::StructKeyword)
     {
@@ -631,11 +639,6 @@ std::optional<cld::Syntax::StructOrUnionSpecifier>
         context.skipUntil(begin, end);
         return {};
     }
-
-    const auto* temp = begin;
-    begin = std::find_if_not(
-        begin, end, [](const Lexer::CToken& token) { return token.getTokenType() == Lexer::TokenType::GNUExtension; });
-    bool hadExtension = temp != begin;
 
     // TODO: Store
     parseGNUAttributes(begin, end, context);
@@ -663,7 +666,7 @@ std::optional<cld::Syntax::StructOrUnionSpecifier>
             context.skipUntil(begin, end);
             return {};
         }
-        return StructOrUnionSpecifier(start, begin, isUnion, name, {});
+        return StructOrUnionSpecifier(start, begin, isUnion, name, {}, false);
     }
     const Lexer::CToken* openBrace = nullptr;
     if (expect(Lexer::TokenType::OpenBrace, begin, end, context))
@@ -680,57 +683,63 @@ std::optional<cld::Syntax::StructOrUnionSpecifier>
             context.withRecoveryTokens(firstDeclaratorSet | Context::fromTokenTypes(Lexer::TokenType::Colon)));
 
         std::vector<std::pair<std::unique_ptr<Declarator>, std::optional<ConstantExpression>>> declarators;
-        bool first = true;
-        do
+        if (begin < end && (firstIsInDeclarator(*begin, context) || begin->getTokenType() == Lexer::TokenType::Colon))
         {
-            if (first)
+            bool first = true;
+            do
             {
-                first = false;
-            }
-            else if (begin < end && begin->getTokenType() == Lexer::TokenType::Comma)
-            {
-                begin++;
-                // TODO: Store
-                parseGNUAttributes(begin, end, context);
-            }
-            else
-            {
-                break;
-            }
-            if (begin < end && begin->getTokenType() == Lexer::TokenType::Colon)
-            {
-                begin++;
-                auto constant = parseConditionalExpression(begin, end,
-                                                           context.withRecoveryTokens(Context::fromTokenTypes(
-                                                               Lexer::TokenType::Comma, Lexer::TokenType::SemiColon)));
-                declarators.emplace_back(nullptr, std::move(constant));
-                // TODO: Store
-                parseGNUAttributes(begin, end, context);
-                continue;
-            }
-            auto declarator =
-                parseDeclarator(begin, end,
-                                context.withRecoveryTokens(Context::fromTokenTypes(
-                                    Lexer::TokenType::Comma, Lexer::TokenType::SemiColon, Lexer::TokenType::Colon)));
-            if (begin < end && begin->getTokenType() == Lexer::TokenType::Colon)
-            {
-                begin++;
-                auto constant = parseConditionalExpression(begin, end,
-                                                           context.withRecoveryTokens(Context::fromTokenTypes(
-                                                               Lexer::TokenType::Comma, Lexer::TokenType::SemiColon)));
-                if (declarator)
+                if (first)
                 {
-                    declarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)), std::move(constant));
+                    first = false;
                 }
-            }
-            else if (declarator)
-            {
-                declarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)),
-                                         std::optional<ConstantExpression>{});
-            }
-            // TODO: Store
-            parseGNUAttributes(begin, end, context);
-        } while (true);
+                else if (begin < end && begin->getTokenType() == Lexer::TokenType::Comma)
+                {
+                    begin++;
+                    // TODO: Store
+                    parseGNUAttributes(begin, end, context);
+                }
+                else
+                {
+                    break;
+                }
+                if (begin < end && begin->getTokenType() == Lexer::TokenType::Colon)
+                {
+                    begin++;
+                    auto constant =
+                        parseConditionalExpression(begin, end,
+                                                   context.withRecoveryTokens(Context::fromTokenTypes(
+                                                       Lexer::TokenType::Comma, Lexer::TokenType::SemiColon)));
+                    declarators.emplace_back(nullptr, std::move(constant));
+                    // TODO: Store
+                    parseGNUAttributes(begin, end, context);
+                    continue;
+                }
+                auto declarator = parseDeclarator(
+                    begin, end,
+                    context.withRecoveryTokens(Context::fromTokenTypes(
+                        Lexer::TokenType::Comma, Lexer::TokenType::SemiColon, Lexer::TokenType::Colon)));
+                if (begin < end && begin->getTokenType() == Lexer::TokenType::Colon)
+                {
+                    begin++;
+                    auto constant =
+                        parseConditionalExpression(begin, end,
+                                                   context.withRecoveryTokens(Context::fromTokenTypes(
+                                                       Lexer::TokenType::Comma, Lexer::TokenType::SemiColon)));
+                    if (declarator)
+                    {
+                        declarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)),
+                                                 std::move(constant));
+                    }
+                }
+                else if (declarator)
+                {
+                    declarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)),
+                                             std::optional<ConstantExpression>{});
+                }
+                // TODO: Store
+                parseGNUAttributes(begin, end, context);
+            } while (true);
+        }
         if (!expect(Lexer::TokenType::SemiColon, begin, end, context))
         {
             context.skipUntil(begin, end,
@@ -768,7 +777,8 @@ std::optional<cld::Syntax::StructOrUnionSpecifier>
     }
     // TODO: Store
     parseGNUAttributes(begin, end, context);
-    return StructOrUnionSpecifier(start, begin, isUnion, name, std::move(structDeclarations));
+    return StructOrUnionSpecifier(start, begin, isUnion, name, std::move(structDeclarations),
+                                  context.extensionsEnabled());
 }
 
 std::optional<cld::Syntax::SpecifierQualifier>
@@ -835,6 +845,7 @@ std::optional<cld::Syntax::SpecifierQualifier>
                     TypeSpecifier(start, begin, TypeSpecifier::PrimitiveTypeSpecifier::Unsigned)};
             case Lexer::TokenType::UnionKeyword:
             case Lexer::TokenType::StructKeyword:
+            case Lexer::TokenType::GNUExtension:
             {
                 auto expected = parseStructOrUnionSpecifier(begin, end, context);
                 if (!expected)
@@ -1798,6 +1809,7 @@ std::optional<cld::Syntax::CompoundItem> cld::Parser::parseCompoundItem(Lexer::C
         && !(lookahead->getTokenType() == Lexer::TokenType::Identifier && lookahead + 1 < end
              && (lookahead + 1)->getTokenType() == Lexer::TokenType::Colon))
     {
+        auto extensionReset = context.enableExtensions(lookahead != begin);
         auto declaration = parseDeclaration(lookahead, end, context);
         begin = lookahead;
         if (!declaration)

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cld/Common/ValueReset.h>
+
 #include <unordered_map>
 
 #include <bitset2.hpp>
@@ -72,23 +74,7 @@ private:
     std::uint64_t m_squareBracketDepth = 0;
     std::uint64_t m_braceDepth = 0;
 
-    class Decrementer
-    {
-        std::uint64_t& m_value;
-
-    public:
-        explicit Decrementer(std::uint64_t& value) : m_value(value) {}
-
-        ~Decrementer()
-        {
-            m_value--;
-        }
-
-        Decrementer(const Decrementer&) = delete;
-        Decrementer& operator=(const Decrementer&) = delete;
-        Decrementer(Decrementer&&) = delete;
-        Decrementer& operator=(Decrementer&&) = delete;
-    };
+    bool m_inExtension = false;
 
 public:
     template <class... Args>
@@ -135,13 +121,20 @@ public:
 
     void skipUntil(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, TokenBitSet additional = {});
 
-    [[nodiscard]] Decrementer parenthesesEntered(Lexer::CTokenIterator bracket);
+    [[nodiscard]] ValueReset<std::uint64_t> parenthesesEntered(Lexer::CTokenIterator bracket);
 
-    [[nodiscard]] Decrementer squareBracketEntered(Lexer::CTokenIterator bracket);
+    [[nodiscard]] ValueReset<std::uint64_t> squareBracketEntered(Lexer::CTokenIterator bracket);
 
-    [[nodiscard]] Decrementer braceEntered(Lexer::CTokenIterator bracket);
+    [[nodiscard]] ValueReset<std::uint64_t> braceEntered(Lexer::CTokenIterator bracket);
 
-    std::uint64_t getBracketMax() const;
+    [[nodiscard]] ValueReset<bool> enableExtensions(bool extensions);
+
+    [[nodiscard]] bool extensionsEnabled() const
+    {
+        return m_inExtension;
+    }
+
+    [[nodiscard]] std::uint64_t getBracketMax() const;
 
     void setBracketMax(std::uint64_t bracketMax);
 };

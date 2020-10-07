@@ -132,11 +132,11 @@ void cld::Parser::Context::skipUntil(Lexer::CTokenIterator& begin, Lexer::CToken
     });
 }
 
-auto cld::Parser::Context::parenthesesEntered(Lexer::CTokenIterator bracket) -> Decrementer
+cld::ValueReset<std::uint64_t> cld::Parser::Context::parenthesesEntered(Lexer::CTokenIterator bracket)
 {
     if (++m_parenthesesDepth <= m_bracketMax)
     {
-        return Decrementer(m_parenthesesDepth);
+        return cld::ValueReset<std::uint64_t>(m_parenthesesDepth, m_parenthesesDepth - 1);
     }
     log(Errors::Parser::MAXIMUM_BRACKET_DEPTH_OF_N_EXCEEDED.args(*bracket, m_sourceInterface, m_bracketMax, *bracket));
 #ifdef LLVM_ENABLE_EXCEPTIONS
@@ -146,11 +146,11 @@ auto cld::Parser::Context::parenthesesEntered(Lexer::CTokenIterator bracket) -> 
 #endif
 }
 
-auto cld::Parser::Context::squareBracketEntered(Lexer::CTokenIterator bracket) -> Decrementer
+cld::ValueReset<std::uint64_t> cld::Parser::Context::squareBracketEntered(Lexer::CTokenIterator bracket)
 {
     if (++m_squareBracketDepth <= m_bracketMax)
     {
-        return Decrementer(m_squareBracketDepth);
+        return cld::ValueReset<std::uint64_t>(m_squareBracketDepth, m_squareBracketDepth - 1);
     }
     log(Errors::Parser::MAXIMUM_BRACKET_DEPTH_OF_N_EXCEEDED.args(*bracket, m_sourceInterface, m_bracketMax, *bracket));
 #ifdef LLVM_ENABLE_EXCEPTIONS
@@ -160,11 +160,11 @@ auto cld::Parser::Context::squareBracketEntered(Lexer::CTokenIterator bracket) -
 #endif
 }
 
-auto cld::Parser::Context::braceEntered(Lexer::CTokenIterator bracket) -> Decrementer
+cld::ValueReset<std::uint64_t> cld::Parser::Context::braceEntered(Lexer::CTokenIterator bracket)
 {
     if (++m_braceDepth <= m_bracketMax)
     {
-        return Decrementer(m_braceDepth);
+        return cld::ValueReset<std::uint64_t>(m_braceDepth, m_braceDepth - 1);
     }
     log(Errors::Parser::MAXIMUM_BRACKET_DEPTH_OF_N_EXCEEDED.args(*bracket, m_sourceInterface, m_bracketMax, *bracket));
 #ifdef LLVM_ENABLE_EXCEPTIONS
@@ -192,4 +192,11 @@ std::uint64_t cld::Parser::Context::getBracketMax() const
 void cld::Parser::Context::setBracketMax(std::uint64_t bracketMax)
 {
     m_bracketMax = bracketMax;
+}
+
+cld::ValueReset<bool> cld::Parser::Context::enableExtensions(bool extensions)
+{
+    auto prevValue = m_inExtension;
+    m_inExtension = extensions || m_inExtension;
+    return cld::ValueReset<bool>(m_inExtension, prevValue);
 }

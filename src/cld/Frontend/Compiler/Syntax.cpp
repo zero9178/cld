@@ -819,13 +819,15 @@ const std::vector<std::pair<std::unique_ptr<cld::Syntax::Declarator>, std::uniqu
     return m_initDeclarators;
 }
 
-cld::Syntax::StructOrUnionSpecifier::StructOrUnionSpecifier(
-    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, bool isUnion, Lexer::CTokenIterator identifierLoc,
-    std::vector<cld::Syntax::StructOrUnionSpecifier::StructDeclaration>&& structDeclarations)
+cld::Syntax::StructOrUnionSpecifier::StructOrUnionSpecifier(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
+                                                            bool isUnion, const Lexer::CToken* identifierLoc,
+                                                            std::vector<StructDeclaration>&& structDeclarations,
+                                                            bool extensionsEnabled)
     : Node(begin, end),
       m_isUnion(isUnion),
       m_identifierLoc(std::move(identifierLoc)),
-      m_structDeclarations(std::move(structDeclarations))
+      m_structDeclarations(std::move(structDeclarations)),
+      m_extensionEnabled(extensionsEnabled)
 {
 }
 
@@ -843,6 +845,11 @@ const std::vector<cld::Syntax::StructOrUnionSpecifier::StructDeclaration>&
     cld::Syntax::StructOrUnionSpecifier::getStructDeclarations() const
 {
     return m_structDeclarations;
+}
+
+bool cld::Syntax::StructOrUnionSpecifier::extensionsEnabled() const
+{
+    return m_extensionEnabled;
 }
 
 cld::Syntax::ParameterList::ParameterList(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,

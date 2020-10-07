@@ -1781,7 +1781,8 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
                   == ValueCategory::Lvalue);
             CHECK(std::holds_alternative<StructType>(
                 cld::get<MemberAccess>(expr.getVariant()).getRecordExpression().getType().getVariant()));
-            CHECK(cld::get<MemberAccess>(expr.getVariant()).getMemberIndex() == 0);
+            CHECK_THAT(cld::get<MemberAccess>(expr.getVariant()).getMemberIndices(),
+                       Catch::Equals(std::vector<std::uint64_t>{0}));
         }
         SECTION("union")
         {
@@ -1799,7 +1800,8 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
                   == ValueCategory::Lvalue);
             CHECK(std::holds_alternative<UnionType>(
                 cld::get<MemberAccess>(expr.getVariant()).getRecordExpression().getType().getVariant()));
-            CHECK(cld::get<MemberAccess>(expr.getVariant()).getMemberIndex() == 0);
+            CHECK_THAT(cld::get<MemberAccess>(expr.getVariant()).getMemberIndices(),
+                       Catch::Equals(std::vector<std::uint64_t>{0}));
         }
         SECTION("anonymous struct")
         {
@@ -1814,7 +1816,8 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
                   == ValueCategory::Lvalue);
             CHECK(std::holds_alternative<AnonymousStructType>(
                 cld::get<MemberAccess>(expr.getVariant()).getRecordExpression().getType().getVariant()));
-            CHECK(cld::get<MemberAccess>(expr.getVariant()).getMemberIndex() == 0);
+            CHECK_THAT(cld::get<MemberAccess>(expr.getVariant()).getMemberIndices(),
+                       Catch::Equals(std::vector<std::uint64_t>{0}));
         }
         SECTION("anonymous union")
         {
@@ -1829,7 +1832,8 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
                   == ValueCategory::Lvalue);
             CHECK(std::holds_alternative<AnonymousUnionType>(
                 cld::get<MemberAccess>(expr.getVariant()).getRecordExpression().getType().getVariant()));
-            CHECK(cld::get<MemberAccess>(expr.getVariant()).getMemberIndex() == 0);
+            CHECK_THAT(cld::get<MemberAccess>(expr.getVariant()).getMemberIndices(),
+                       Catch::Equals(std::vector<std::uint64_t>{0}));
         }
         SEMA_PRODUCES("int foo(void) {\n"
                       " '5'.m;\n"
@@ -1894,7 +1898,7 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
             REQUIRE(std::holds_alternative<PointerType>(mem.getRecordExpression().getType().getVariant()));
             CHECK(std::holds_alternative<StructType>(
                 cld::get<PointerType>(mem.getRecordExpression().getType().getVariant()).getElementType().getVariant()));
-            CHECK(mem.getMemberIndex() == 0);
+            CHECK_THAT(mem.getMemberIndices(), Catch::Equals(std::vector<std::uint64_t>{0}));
         }
         SECTION("union")
         {
@@ -1914,7 +1918,7 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
             REQUIRE(std::holds_alternative<PointerType>(mem.getRecordExpression().getType().getVariant()));
             CHECK(std::holds_alternative<UnionType>(
                 cld::get<PointerType>(mem.getRecordExpression().getType().getVariant()).getElementType().getVariant()));
-            CHECK(mem.getMemberIndex() == 0);
+            CHECK_THAT(mem.getMemberIndices(), Catch::Equals(std::vector<std::uint64_t>{0}));
         }
         SECTION("anonymous struct")
         {
@@ -1930,7 +1934,7 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
             REQUIRE(std::holds_alternative<PointerType>(mem.getRecordExpression().getType().getVariant()));
             CHECK(std::holds_alternative<AnonymousStructType>(
                 cld::get<PointerType>(mem.getRecordExpression().getType().getVariant()).getElementType().getVariant()));
-            CHECK(mem.getMemberIndex() == 0);
+            CHECK_THAT(mem.getMemberIndices(), Catch::Equals(std::vector<std::uint64_t>{0}));
         }
         SECTION("anonymous union")
         {
@@ -1946,7 +1950,7 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
             REQUIRE(std::holds_alternative<PointerType>(mem.getRecordExpression().getType().getVariant()));
             CHECK(std::holds_alternative<AnonymousUnionType>(
                 cld::get<PointerType>(mem.getRecordExpression().getType().getVariant()).getElementType().getVariant()));
-            CHECK(mem.getMemberIndex() == 0);
+            CHECK_THAT(mem.getMemberIndices(), Catch::Equals(std::vector<std::uint64_t>{0}));
         }
         SEMA_PRODUCES("int foo(void) {\n"
                       " 5->m;\n"
@@ -4429,5 +4433,40 @@ TEST_CASE("Semantics inline functions", "[semantics]")
     {
         SEMA_PRODUCES("inline void foo(void);", ProducesError(NO_DEFINITION_FOR_INLINE_FUNCTION_N_FOUND, "'foo'"));
         SEMA_PRODUCES("static inline void foo(void);", ProducesNoErrors());
+    }
+}
+
+TEST_CASE("Semantics anonymous inline structs and unions", "[LLVM]")
+{
+    SECTION("With __extension__")
+    {
+        SEMA_PRODUCES("struct __pthread_cond_s {\n"
+                      "    __extension__ union {\n"
+                      "        unsigned long long int __wsed;\n"
+                      "        struct {\n"
+                      "            unsigned int __low;\n"
+                      "            unsigned int __high;\n"
+                      "        } __wseq32;\n"
+                      "    };\n"
+                      "};",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("struct __pthread_cond_s {\n"
+                      "    union {\n"
+                      "        unsigned long long int __wsed;\n"
+                      "        struct {\n"
+                      "            unsigned int __low;\n"
+                      "            unsigned int __high;\n"
+                      "        } __wseq32;\n"
+                      "    };\n"
+                      "};",
+                      ProducesError(FIELD_WITHOUT_A_NAME_IS_NOT_ALLOWED));
+        SEMA_PRODUCES("__extension__ struct R {\n"
+                      "    int i;\n"
+                      "    union {\n"
+                      "        float i;\n"
+                      "        int f;\n"
+                      "    };\n"
+                      "};",
+                      ProducesError(REDEFINITION_OF_FIELD_N, "'i'"));
     }
 }

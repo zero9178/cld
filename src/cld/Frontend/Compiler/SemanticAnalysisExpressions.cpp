@@ -592,8 +592,10 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                                         std::make_unique<Expression>(std::move(second)), node.getCloseBracket()));
 }
 
-std::optional<std::pair<cld::Semantics::Type, std::uint64_t>> cld::Semantics::SemanticAnalysis::checkMemberAccess(
-    const Type& recordType, const Syntax::PostFixExpression& postFixExpr, const Lexer::CToken& identifier)
+std::optional<std::pair<cld::Semantics::Type, std::vector<std::uint64_t>>>
+    cld::Semantics::SemanticAnalysis::checkMemberAccess(const Type& recordType,
+                                                        const Syntax::PostFixExpression& postFixExpr,
+                                                        const Lexer::CToken& identifier)
 {
     const std::vector<Field>* fields = nullptr;
     if (std::holds_alternative<AnonymousUnionType>(recordType.getVariant()))
@@ -664,7 +666,7 @@ std::optional<std::pair<cld::Semantics::Type, std::uint64_t>> cld::Semantics::Se
     {
         type = Type(recordType.isConst(), recordType.isVolatile(), result->type->getVariant());
     }
-    return std::pair(std::move(type), result - fields->begin());
+    return std::pair(std::move(type), std::vector<std::uint64_t>{static_cast<std::uint64_t>(result - fields->begin())});
 }
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::PostFixExpressionDot& node)
@@ -693,7 +695,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
     auto category = structOrUnion.getValueCategory();
     return Expression(
         std::move(type), category,
-        MemberAccess(std::make_unique<Expression>(std::move(structOrUnion)), index, node.getIdentifier()));
+        MemberAccess(std::make_unique<Expression>(std::move(structOrUnion)), std::move(index), node.getIdentifier()));
 }
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::PostFixExpressionArrow& node)

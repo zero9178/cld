@@ -638,17 +638,69 @@ cld::Semantics::Type
             }
         }
         std::vector<Field> fields;
+        std::unordered_map<std::string_view, const Lexer::CToken*> nameToToken;
         for (auto iter = structOrUnion->getStructDeclarations().begin();
              iter != structOrUnion->getStructDeclarations().end(); iter++)
         {
             auto& [specifiers, declarators] = *iter;
+            if (declarators.empty())
+            {
+                auto type = declaratorsToType(specifiers);
+                auto fieldStructOrUnion = std::find_if(
+                    specifiers.begin(), specifiers.end(), [](const Syntax::SpecifierQualifier& specifierQualifier) {
+                        if (!std::holds_alternative<Syntax::TypeSpecifier>(specifierQualifier))
+                        {
+                            return false;
+                        }
+                        auto& specifier = cld::get<Syntax::TypeSpecifier>(specifierQualifier);
+                        if (!std::holds_alternative<std::unique_ptr<Syntax::StructOrUnionSpecifier>>(
+                                specifier.getVariant()))
+                        {
+                            return false;
+                        }
+                        return true;
+                    });
+                if (!((fieldStructOrUnion != specifiers.end()
+                       && cld::get<std::unique_ptr<Syntax::StructOrUnionSpecifier>>(
+                              cld::get<Syntax::TypeSpecifier>(*fieldStructOrUnion).getVariant())
+                              ->extensionsEnabled())
+                      || m_sourceInterface.getLanguageOptions().extension == LanguageOptions::Extension::GNU)
+                    || (!std::holds_alternative<AnonymousStructType>(type.getVariant())
+                        && !std::holds_alternative<AnonymousUnionType>(type.getVariant())))
+                {
+                    log(Errors::Semantics::FIELD_WITHOUT_A_NAME_IS_NOT_ALLOWED.args(specifiers, m_sourceInterface,
+                                                                                    specifiers));
+                    continue;
+                }
+                auto subFields = getFields(type);
+                for (auto& iter2 : subFields)
+                {
+                    if (!iter2.nameToken)
+                    {
+                        continue;
+                    }
+                    auto [prev, notRedefined] = nameToToken.insert({iter2.name, iter2.nameToken});
+                    if (!notRedefined)
+                    {
+                        log(Errors::Semantics::REDEFINITION_OF_FIELD_N.args(*iter2.nameToken, m_sourceInterface,
+                                                                            *iter2.nameToken));
+                        if (prev->second)
+                        {
+                            log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second, m_sourceInterface, *prev->second));
+                        }
+                    }
+                }
+                fields.push_back(
+                    {std::make_shared<Type>(std::move(type)), "", nullptr, {}, static_cast<std::size_t>(-1)});
+                continue;
+            }
             for (auto iter2 = declarators.begin(); iter2 != declarators.end(); iter2++)
             {
                 bool last = iter2 + 1 == declarators.end() && iter + 1 == structOrUnion->getStructDeclarations().end();
                 bool first = iter2 == declarators.begin() && iter == structOrUnion->getStructDeclarations().begin();
+
                 auto& [declarator, size] = *iter2;
-                auto type = declarator ? declaratorsToType(specifiers, *declarator, {}) :
-                                         declaratorsToType(specifiers, nullptr, {});
+                auto type = declarator ? declaratorsToType(specifiers, *declarator) : declaratorsToType(specifiers);
                 if (isVoid(type))
                 {
                     if (structOrUnion->isUnion())
@@ -786,9 +838,23 @@ cld::Semantics::Type
                     }
                     value.emplace(0, result->toUInt());
                 }
-                std::string_view fieldName = declarator ? declaratorToLoc(*declarator)->getText() : "";
+                const auto* token = declarator ? declaratorToLoc(*declarator) : nullptr;
+                std::string_view fieldName = token ? token->getText() : "";
                 fields.push_back(
-                    {std::make_shared<Type>(std::move(type)), fieldName, value, static_cast<std::size_t>(-1)});
+                    {std::make_shared<Type>(std::move(type)), fieldName, token, value, static_cast<std::size_t>(-1)});
+                if (token)
+                {
+                    auto [prev, notRedefinition] = nameToToken.insert({token->getText(), token});
+                    if (!notRedefinition)
+                    {
+                        log(Errors::Semantics::REDEFINITION_OF_FIELD_N.args(*token, m_sourceInterface, *token));
+                        if (prev->second)
+                        {
+                            log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second, m_sourceInterface, *prev->second));
+                        }
+                        fields.pop_back();
+                    }
+                }
             }
         }
         std::size_t currentSize = 0, currentAlignment = 0;

@@ -199,8 +199,6 @@ TEST_CASE("Parse structs and unions", "[parser]")
                      ProducesError(EXPECTED_N_INSTEAD_OF_N, "literal, identifier or '('", "';'") && ProducesNoNotes());
     functionProduces(parseStructOrUnionSpecifier, "struct i{unsigned int foo:;}",
                      ProducesError(EXPECTED_N_INSTEAD_OF_N, "literal, identifier or '('", "';'") && ProducesNoNotes());
-    functionProduces(parseStructOrUnionSpecifier, "struct i{unsigned int;}",
-                     ProducesError(EXPECTED_N_INSTEAD_OF_N, "'(' or identifier", "';'") && ProducesNoNotes());
     functionProduces(parseStructOrUnionSpecifier, "struct i{unsigned int:5",
                      ProducesError(EXPECTED_N, "';'") && ProducesError(EXPECTED_N, "'}'")
                          && ProducesNote(TO_MATCH_N_HERE, "'{'"));

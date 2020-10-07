@@ -1777,12 +1777,12 @@ void cld::Semantics::SemanticAnalysis::createBuiltins()
             std::vector<Field> fields;
             auto unsignedInt = std::make_shared<Type>(
                 PrimitiveType::createUnsignedInt(false, false, m_sourceInterface.getLanguageOptions()));
-            fields.push_back({unsignedInt, "gp_offset", {}, 0});
-            fields.push_back({unsignedInt, "fp_offset", {}, 1});
+            fields.push_back({unsignedInt, "gp_offset", nullptr, {}, 0});
+            fields.push_back({unsignedInt, "fp_offset", nullptr, {}, 1});
             auto voidStar = std::make_shared<Type>(
                 PointerType::create(false, false, false, PrimitiveType::createVoid(false, false)));
-            fields.push_back({voidStar, "overflow_arg_area", {}, 2});
-            fields.push_back({voidStar, "reg_save_area", {}, 3});
+            fields.push_back({voidStar, "overflow_arg_area", nullptr, {}, 2});
+            fields.push_back({voidStar, "reg_save_area", nullptr, {}, 3});
             m_structDefinitions.emplace_back("__va_list_tag", std::move(fields),
                                              std::vector<Type>{*unsignedInt, *unsignedInt, *voidStar, *voidStar}, 24,
                                              16);

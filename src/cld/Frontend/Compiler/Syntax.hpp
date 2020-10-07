@@ -1736,9 +1736,10 @@ public:
  *                              <TokenType::OpenBrace> <StructDeclaration> { <StructDeclaration> }
  *                              <TokenType::CloseBrace> | <StructOrUnion> <TokenType::Identifier>
  *
- * [GNU]: <StructOrUnionSpecifier> ::= { <TokenType::GNUExtension> } <StructOrUnion> [<GNUAttribute>] [
- * <TokenType::Identifier> ] <TokenType::OpenBrace> <StructDeclaration> { <StructDeclaration> } <TokenType::CloseBrace>
- * [<GNUAttribute>] | <StructOrUnion> [<GNUAttribute>] <TokenType::Identifier>
+ * [GNU]: <StructOrUnionSpecifier> ::= { <TokenType::GNUExtension> } <StructOrUnion> [<GNUAttribute>]
+ *                                     [ <TokenType::Identifier> ] <TokenType::OpenBrace> <StructDeclaration>
+ *                                     { <StructDeclaration> } <TokenType::CloseBrace> [<GNUAttribute>]
+ *                                   | <StructOrUnion> [<GNUAttribute>] <TokenType::Identifier>
  */
 class StructOrUnionSpecifier final : public Node
 {
@@ -1754,7 +1755,7 @@ public:
      *                               <ConstantExpression> [<GNUAttributes>]
      *
      * <StructDeclaration> ::= <SpecifierQualifier> { <SpecifierQualifier> }
-     *                         <StructDeclarator> {<TokenType::Comma> [<GNUAttributes>] <StructDeclarator> }
+     *                         [<StructDeclarator> {<TokenType::Comma> [<GNUAttributes>] <StructDeclarator> }]
      *                         <TokenType::SemiColon>
      */
     struct StructDeclaration
@@ -1765,16 +1766,20 @@ public:
 
 private:
     std::vector<StructDeclaration> m_structDeclarations;
+    bool m_extensionEnabled;
 
 public:
     StructOrUnionSpecifier(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, bool isUnion,
-                           const Lexer::CToken* identifierLoc, std::vector<StructDeclaration>&& structDeclarations);
+                           const Lexer::CToken* identifierLoc, std::vector<StructDeclaration>&& structDeclarations,
+                           bool extensionsEnabled);
 
     [[nodiscard]] bool isUnion() const;
 
     [[nodiscard]] const Lexer::CToken* getIdentifierLoc() const;
 
     [[nodiscard]] const std::vector<StructDeclaration>& getStructDeclarations() const;
+
+    [[nodiscard]] bool extensionsEnabled() const;
 };
 
 /**

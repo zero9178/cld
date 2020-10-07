@@ -294,6 +294,9 @@ CREATE_ERROR(VOID_TYPE_NOT_ALLOWED_IN_UNION, "Incomplete type not allowed in uni
 
 CREATE_ERROR(FUNCTION_TYPE_NOT_ALLOWED_IN_UNION, "Function type not allowed in union", Underline<0>, Annotate<1, 2>);
 
+CREATE_ERROR(FIELD_WITHOUT_A_NAME_IS_NOT_ALLOWED, "Field without a name is not allowed", Underline<0>);
+
+CREATE_ERROR(REDEFINITION_OF_FIELD_N, "Redefinition of field %0", Underline<0>);
 // Bitfield
 
 CREATE_ERROR(BITFIELD_MAY_ONLY_BE_OF_TYPE_INT_OR_BOOL, "Bit-field may only be of type (unsigned) int or _Bool",

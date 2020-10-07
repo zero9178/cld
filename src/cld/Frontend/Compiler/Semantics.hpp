@@ -400,6 +400,7 @@ struct Field
 {
     std::shared_ptr<const Type> type;
     std::string_view name;
+    const Lexer::CToken* nameToken;
     std::optional<std::pair<std::uint32_t, std::uint32_t>> bitFieldBounds;
     std::size_t layoutIndex;
 
@@ -801,13 +802,13 @@ public:
 class MemberAccess final
 {
     std::unique_ptr<Expression> m_recordExpr;
-    std::uint64_t m_memberIndex;
+    std::vector<std::uint64_t> m_memberIndices;
     Lexer::CTokenIterator m_memberIdentifier;
 
 public:
-    MemberAccess(std::unique_ptr<Expression> recordExpr, std::uint64_t memberIndex,
+    MemberAccess(std::unique_ptr<Expression> recordExpr, std::vector<std::uint64_t> memberIndices,
                  Lexer::CTokenIterator memberIdentifier)
-        : m_recordExpr(std::move(recordExpr)), m_memberIndex(memberIndex), m_memberIdentifier(memberIdentifier)
+        : m_recordExpr(std::move(recordExpr)), m_memberIndices(memberIndices), m_memberIdentifier(memberIdentifier)
     {
     }
 
@@ -816,9 +817,9 @@ public:
         return *m_recordExpr;
     }
 
-    [[nodiscard]] std::uint64_t getMemberIndex() const
+    [[nodiscard]] const std::vector<std::uint64_t>& getMemberIndices() const
     {
-        return m_memberIndex;
+        return m_memberIndices;
     }
 
     [[nodiscard]] Lexer::CTokenIterator begin() const;

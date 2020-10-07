@@ -83,6 +83,7 @@ bool cld::Parser::firstIsInDeclarationSpecifier(const Lexer::CToken& token, cons
     switch (token.getTokenType())
     {
         case Lexer::TokenType::GNUAttribute:
+        case Lexer::TokenType::GNUExtension:
         case Lexer::TokenType::TypedefKeyword:
         case Lexer::TokenType::ExternKeyword:
         case Lexer::TokenType::StaticKeyword:
@@ -129,6 +130,7 @@ bool cld::Parser::firstIsInSpecifierQualifier(const Lexer::CToken& token, const 
         case Lexer::TokenType::EnumKeyword:
         case Lexer::TokenType::StructKeyword:
         case Lexer::TokenType::UnionKeyword:
+        case Lexer::TokenType::GNUExtension:
         case Lexer::TokenType::ConstKeyword:
         case Lexer::TokenType::RestrictKeyword:
         case Lexer::TokenType::VolatileKeyword: return true;
