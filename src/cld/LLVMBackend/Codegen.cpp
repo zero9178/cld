@@ -731,15 +731,17 @@ class CodeGenerator final
                 {
                     auto fields = m_programInterface.getFields(type);
                     aggregate.vector.resize(fields.size());
-                    for (const auto* iter = fields.begin(); iter != fields.end(); iter++)
-                    {
-                        if (!cld::Semantics::isAggregate(*iter->type))
-                        {
-                            continue;
-                        }
-                        auto& vector = aggregate.vector[iter - fields.begin()].emplace<Aggregate>();
-                        self(*iter->type, vector);
-                    }
+                    // TODO:
+                    CLD_UNREACHABLE;
+                    //                    for (const auto* iter = fields.begin(); iter != fields.end(); iter++)
+                    //                    {
+                    //                        if (!cld::Semantics::isAggregate(*iter->type))
+                    //                        {
+                    //                            continue;
+                    //                        }
+                    //                        auto& vector = aggregate.vector[iter -
+                    //                        fields.begin()].emplace<Aggregate>(); self(*iter->type, vector);
+                    //                    }
                 }
                 else if (cld::Semantics::isArray(type))
                 {
@@ -763,32 +765,34 @@ class CodeGenerator final
                 const cld::Semantics::Type* currentType = &type;
                 for (auto& iter : llvm::ArrayRef(path).drop_back())
                 {
-                    if (cld::Semantics::isUnion(*currentType))
-                    {
-                        auto fields = m_programInterface.getFields(*currentType);
-                        if (current->vector.empty() || current->unionIndex != iter)
-                        {
-                            current->vector.resize(1);
-                            current->vector[0] = {};
-                            current->unionIndex = iter;
-                            if (cld::Semantics::isAggregate(*fields[iter].type))
-                            {
-                                auto& vector = current->vector.back().emplace<Aggregate>();
-                                genAggregate(*fields[iter].type, vector);
-                            }
-                        }
-                        currentType = fields[iter].type.get();
-                        current = &cld::get<Aggregate>(current->vector[0]);
-                        continue;
-                    }
-                    if (cld::Semantics::isStruct(*currentType))
-                    {
-                        currentType = m_programInterface.getFields(*currentType)[iter].type.get();
-                    }
-                    else if (cld::Semantics::isArray(*currentType))
-                    {
-                        currentType = &cld::Semantics::getArrayElementType(*currentType);
-                    }
+                    // TODO:
+                    CLD_UNREACHABLE;
+                    //                    if (cld::Semantics::isUnion(*currentType))
+                    //                    {
+                    //                        auto fields = m_programInterface.getFields(*currentType);
+                    //                        if (current->vector.empty() || current->unionIndex != iter)
+                    //                        {
+                    //                            current->vector.resize(1);
+                    //                            current->vector[0] = {};
+                    //                            current->unionIndex = iter;
+                    //                            if (cld::Semantics::isAggregate(*fields[iter].type))
+                    //                            {
+                    //                                auto& vector = current->vector.back().emplace<Aggregate>();
+                    //                                genAggregate(*fields[iter].type, vector);
+                    //                            }
+                    //                        }
+                    //                        currentType = fields[iter].type.get();
+                    //                        current = &cld::get<Aggregate>(current->vector[0]);
+                    //                        continue;
+                    //                    }
+                    //                    if (cld::Semantics::isStruct(*currentType))
+                    //                    {
+                    //                        currentType = m_programInterface.getFields(*currentType)[iter].type.get();
+                    //                    }
+                    //                    else if (cld::Semantics::isArray(*currentType))
+                    //                    {
+                    //                        currentType = &cld::Semantics::getArrayElementType(*currentType);
+                    //                    }
                     current = &cld::get<Aggregate>(current->vector[iter]);
                 }
                 if (cld::Semantics::isStringLiteralExpr(expression))
@@ -849,54 +853,61 @@ class CodeGenerator final
                 auto fields = m_programInterface.getFields(type);
                 for (std::size_t i = 0; i < aggregate.vector.size();)
                 {
-                    if (!fields[i].bitFieldBounds)
-                    {
-                        elements.push_back(cld::match(
-                            aggregate.vector[i],
-                            [&](const Aggregate& subAggregate) -> llvm::Constant* {
-                                return self(*fields[i].type, llvmType->getStructElementType(fields[i].layoutIndex),
-                                            subAggregate);
-                            },
-                            [&](llvm::Constant* constant) {
-                                if (constant)
-                                {
-                                    return constant;
-                                }
-                                return llvm::Constant::getNullValue(
-                                    llvmType->getStructElementType(fields[i].layoutIndex));
-                            }));
-                        i++;
-                        continue;
-                    }
-                    elements.push_back(
-                        llvm::Constant::getNullValue(llvmType->getStructElementType(fields[i].layoutIndex)));
-                    for (; i < aggregate.vector.size() && fields[i].bitFieldBounds; i++)
-                    {
-                        auto* value = cld::match(
-                            aggregate.vector[i],
-                            [&](const Aggregate& subAggregate) -> llvm::Constant* {
-                                return self(*fields[i].type, llvmType->getStructElementType(fields[i].layoutIndex),
-                                            subAggregate);
-                            },
-                            [&](llvm::Constant* constant) -> llvm::Constant* {
-                                if (constant)
-                                {
-                                    return constant;
-                                }
-                                return llvm::Constant::getNullValue(
-                                    llvmType->getStructElementType(fields[i].layoutIndex));
-                            });
-                        auto size = fields[i].bitFieldBounds->second - fields[i].bitFieldBounds->first;
-                        auto* mask = llvm::ConstantInt::get(value->getType(), (1u << size) - 1);
-                        value = llvm::ConstantExpr::getAnd(value, mask);
-                        value = llvm::ConstantExpr::getShl(
-                            value, llvm::ConstantInt::get(value->getType(), fields[i].bitFieldBounds->first));
-                        mask = llvm::ConstantExpr::getShl(
-                            mask, llvm::ConstantInt::get(mask->getType(), fields[i].bitFieldBounds->first));
-                        mask = llvm::ConstantExpr::getNot(mask);
-                        elements.back() = llvm::ConstantExpr::getAnd(elements.back(), mask);
-                        elements.back() = llvm::ConstantExpr::getOr(elements.back(), value);
-                    }
+                    // TODO:
+                    CLD_UNREACHABLE;
+                    //                    if (!fields[i].bitFieldBounds)
+                    //                    {
+                    //                        elements.push_back(cld::match(
+                    //                            aggregate.vector[i],
+                    //                            [&](const Aggregate& subAggregate) -> llvm::Constant* {
+                    //                                return self(*fields[i].type,
+                    //                                llvmType->getStructElementType(fields[i].layoutIndex),
+                    //                                            subAggregate);
+                    //                            },
+                    //                            [&](llvm::Constant* constant) {
+                    //                                if (constant)
+                    //                                {
+                    //                                    return constant;
+                    //                                }
+                    //                                return llvm::Constant::getNullValue(
+                    //                                    llvmType->getStructElementType(fields[i].layoutIndex));
+                    //                            }));
+                    //                        i++;
+                    //                        continue;
+                    //                    }
+                    //                    elements.push_back(
+                    //                        llvm::Constant::getNullValue(llvmType->getStructElementType(fields[i].layoutIndex)));
+                    //                    for (; i < aggregate.vector.size() && fields[i].bitFieldBounds; i++)
+                    //                    {
+                    //                        auto* value = cld::match(
+                    //                            aggregate.vector[i],
+                    //                            [&](const Aggregate& subAggregate) -> llvm::Constant* {
+                    //                                return self(*fields[i].type,
+                    //                                llvmType->getStructElementType(fields[i].layoutIndex),
+                    //                                            subAggregate);
+                    //                            },
+                    //                            [&](llvm::Constant* constant) -> llvm::Constant* {
+                    //                                if (constant)
+                    //                                {
+                    //                                    return constant;
+                    //                                }
+                    //                                return llvm::Constant::getNullValue(
+                    //                                    llvmType->getStructElementType(fields[i].layoutIndex));
+                    //                            });
+                    //                        auto size = fields[i].bitFieldBounds->second -
+                    //                        fields[i].bitFieldBounds->first; auto* mask =
+                    //                        llvm::ConstantInt::get(value->getType(), (1u << size) - 1); value =
+                    //                        llvm::ConstantExpr::getAnd(value, mask); value =
+                    //                        llvm::ConstantExpr::getShl(
+                    //                            value, llvm::ConstantInt::get(value->getType(),
+                    //                            fields[i].bitFieldBounds->first));
+                    //                        mask = llvm::ConstantExpr::getShl(
+                    //                            mask, llvm::ConstantInt::get(mask->getType(),
+                    //                            fields[i].bitFieldBounds->first));
+                    //                        mask = llvm::ConstantExpr::getNot(mask);
+                    //                        elements.back() = llvm::ConstantExpr::getAnd(elements.back(), mask);
+                    //                        elements.back() = llvm::ConstantExpr::getOr(elements.back(), value);
+                    //                    }
                 }
                 return llvm::ConstantStruct::get(llvm::cast<llvm::StructType>(llvmType), elements);
             }
@@ -923,19 +934,21 @@ class CodeGenerator final
             }
             // Union
             auto fields = m_programInterface.getFields(type);
-            auto* llvmSubType = visit(*fields[*aggregate.unionIndex].type);
-            llvm::Constant* element = cld::match(
-                aggregate.vector[0], [](llvm::Constant* constant) -> llvm::Constant* { return constant; },
-                [&](const Aggregate& subAggregate) -> llvm::Constant* {
-                    return self(*fields[*aggregate.unionIndex].type, llvmSubType, subAggregate);
-                });
-            auto* padding = llvm::ArrayType::get(
-                m_builder.getInt8Ty(),
-                m_module.getDataLayout().getTypeAllocSize(llvmType).getKnownMinSize()
-                    - m_module.getDataLayout().getTypeAllocSize(element->getType()).getKnownMinSize());
-            auto* newType = llvm::StructType::get(element->getType(), padding);
-
-            return llvm::ConstantStruct::get(newType, {element, llvm::UndefValue::get(padding)});
+            // TODO:
+            CLD_UNREACHABLE;
+            //            auto* llvmSubType = visit(*fields[*aggregate.unionIndex].type);
+            //            llvm::Constant* element = cld::match(
+            //                aggregate.vector[0], [](llvm::Constant* constant) -> llvm::Constant* { return constant; },
+            //                [&](const Aggregate& subAggregate) -> llvm::Constant* {
+            //                    return self(*fields[*aggregate.unionIndex].type, llvmSubType, subAggregate);
+            //                });
+            //            auto* padding = llvm::ArrayType::get(
+            //                m_builder.getInt8Ty(),
+            //                m_module.getDataLayout().getTypeAllocSize(llvmType).getKnownMinSize()
+            //                    - m_module.getDataLayout().getTypeAllocSize(element->getType()).getKnownMinSize());
+            //            auto* newType = llvm::StructType::get(element->getType(), padding);
+            //
+            //            return llvm::ConstantStruct::get(newType, {element, llvm::UndefValue::get(padding)});
         }}(type, llvmType, constants);
     }
 
@@ -1114,12 +1127,27 @@ public:
                     m_types.insert({unionType, type});
                     return type;
                 }
-                auto largestField = std::max_element(
-                    unionDef->getFields().begin(), unionDef->getFields().end(),
-                    [&](const cld::Semantics::Field& lhs, const cld::Semantics::Field& rhs) {
-                        return lhs.type->getSizeOf(m_programInterface) < rhs.type->getSizeOf(m_programInterface);
+                std::vector<std::shared_ptr<const cld::Semantics::Type>> layout;
+                for (auto iter = unionDef->getFields().begin(); iter != unionDef->getFields().end();)
+                {
+                    if (iter->second.indices.size() == 1)
+                    {
+                        layout.push_back(iter->second.type);
+                        iter++;
+                        continue;
+                    }
+                    layout.push_back(iter->second.parentTypes.front());
+                    iter = std::find_if_not(iter, unionDef->getFields().end(), [&](auto& pair) {
+                        return pair.second.parentTypes.front().get() == layout.back().get();
                     });
-                auto* type = llvm::StructType::get(m_module.getContext(), llvm::ArrayRef(visit(*largestField->type)));
+                }
+                auto largestField =
+                    std::max_element(layout.begin(), layout.end(),
+                                     [&](const std::shared_ptr<const cld::Semantics::Type>& lhs,
+                                         const std::shared_ptr<const cld::Semantics::Type>& rhs) {
+                                         return lhs->getSizeOf(m_programInterface) < rhs->getSizeOf(m_programInterface);
+                                     });
+                auto* type = llvm::StructType::get(m_module.getContext(), llvm::ArrayRef(visit(**largestField)));
                 m_types.insert({unionType, type});
                 return type;
             },
@@ -1144,12 +1172,27 @@ public:
                 {
                     return result->second;
                 }
-                auto largestField = std::max_element(
-                    unionType.getFields().begin(), unionType.getFields().end(),
-                    [&](const cld::Semantics::Field& lhs, const cld::Semantics::Field& rhs) {
-                        return lhs.type->getSizeOf(m_programInterface) < rhs.type->getSizeOf(m_programInterface);
+                std::vector<std::shared_ptr<const cld::Semantics::Type>> layout;
+                for (auto iter = unionType.getFields().begin(); iter != unionType.getFields().end();)
+                {
+                    if (iter->second.indices.size() == 1)
+                    {
+                        layout.push_back(iter->second.type);
+                        iter++;
+                        continue;
+                    }
+                    layout.push_back(iter->second.parentTypes.front());
+                    iter = std::find_if_not(iter, unionType.getFields().end(), [&](auto& pair) {
+                        return pair.second.parentTypes.front().get() == layout.back().get();
                     });
-                auto* type = llvm::StructType::get(m_module.getContext(), llvm::ArrayRef(visit(*largestField->type)));
+                }
+                auto largestField =
+                    std::max_element(layout.begin(), layout.end(),
+                                     [&](const std::shared_ptr<const cld::Semantics::Type>& lhs,
+                                         const std::shared_ptr<const cld::Semantics::Type>& rhs) {
+                                         return lhs->getSizeOf(m_programInterface) < rhs->getSizeOf(m_programInterface);
+                                     });
+                auto* type = llvm::StructType::get(m_module.getContext(), llvm::ArrayRef(visit(**largestField)));
                 m_types.insert({unionType, type});
                 return type;
             },
@@ -2046,24 +2089,26 @@ public:
             value = load->getPointerOperand();
             load->eraseFromParent();
         }
-        auto& indices = memberAccess.getMemberIndices();
-        llvm::ArrayRef<cld::Semantics::Field> fields = m_programInterface.getFields(type);
+        auto& cldField = memberAccess.getField();
+        auto indices = llvm::ArrayRef(cldField.indices);
+        auto parentTypes = cldField.parentTypes;
+        parentTypes.insert(parentTypes.begin(), std::make_shared<const cld::Semantics::Type>(type));
+        llvm::Value* field = value;
+        for (auto iter = parentTypes.begin(); iter != parentTypes.end(); iter++)
+        {
+            auto index = iter - parentTypes.begin();
+            if (cld::Semantics::isStruct(**iter))
+            {
+                field = m_builder.CreateInBoundsGEP(field, {m_builder.getInt64(0), m_builder.getInt32(indices[index])});
+            }
+            else
+            {
+                auto* destTy = visit(iter + 1 == parentTypes.end() ? *cldField.type : **(iter + 1));
+                field = m_builder.CreateBitCast(field, llvm::PointerType::getUnqual(destTy));
+            }
+        }
 
-        llvm::Value* field = nullptr;
-        if (cld::Semantics::isStruct(type))
-        {
-            std::vector<llvm::Value*> temp = {m_builder.getInt64(0)};
-            temp.resize(1 + indices.size());
-            std::transform(indices.begin(), indices.end(), temp.begin() + 1,
-                           [&](std::uint64_t index) { return m_builder.getInt32(fields[index].layoutIndex); });
-            field = m_builder.CreateInBoundsGEP(value, temp);
-        }
-        else
-        {
-            auto* destTy = visit(*fields[indices].type);
-            field = m_builder.CreateBitCast(value, llvm::PointerType::getUnqual(destTy));
-        }
-        if (!fields[indices].bitFieldBounds)
+        if (!cldField.bitFieldBounds)
         {
             // If the record expression is the return value of a function and this is a dot access not arrow access
             // we must load because an rvalue is returned and no lvalue conversion will load for us
@@ -2073,7 +2118,7 @@ public:
             {
                 // Arrays are generally passed around as llvm pointers to llvm arrays to be able to decay them to
                 // pointers. Best example for this are string literals which for this reason are global variables
-                if (std::holds_alternative<cld::Semantics::ArrayType>(fields[indices].type->getVariant()))
+                if (std::holds_alternative<cld::Semantics::ArrayType>(cldField.type->getVariant()))
                 {
                     return field;
                 }
@@ -2083,9 +2128,9 @@ public:
         }
 
         auto* loaded = m_builder.CreateLoad(field, expression.getType().isVolatile());
-        auto upLeft = loaded->getType()->getPrimitiveSizeInBits() - fields[indices].bitFieldBounds->second;
+        auto upLeft = loaded->getType()->getPrimitiveSizeInBits() - cldField.bitFieldBounds->second;
         auto* shl = m_builder.CreateShl(loaded, llvm::ConstantInt::get(loaded->getType(), upLeft));
-        auto* shrConstant = llvm::ConstantInt::get(loaded->getType(), upLeft + fields[indices].bitFieldBounds->first);
+        auto* shrConstant = llvm::ConstantInt::get(loaded->getType(), upLeft + cldField.bitFieldBounds->first);
         if (cld::get<cld::Semantics::PrimitiveType>(expression.getType().getVariant()).isSigned())
         {
             return m_builder.CreateAShr(shl, shrConstant);
@@ -2672,27 +2717,32 @@ public:
         }
         auto* rhsValue = visit(assignment.getRightExpression());
 
-        auto& field = m_programInterface.getFields(type)[memberAccess.getMemberIndices()];
-        llvm::Value* fieldPtr = nullptr;
-
-        if (cld::Semantics::isStruct(type))
+        auto& cldField = memberAccess.getField();
+        llvm::Value* field = lhsRecord;
+        auto indices = llvm::ArrayRef(cldField.indices);
+        auto parentTypes = cldField.parentTypes;
+        parentTypes.insert(parentTypes.begin(), std::make_shared<const cld::Semantics::Type>(type));
+        for (auto iter = parentTypes.begin(); iter != parentTypes.end(); iter++)
         {
-            auto* zero = m_builder.getInt64(0);
-            auto* member = m_builder.getInt32(field.layoutIndex);
-            fieldPtr = m_builder.CreateInBoundsGEP(lhsRecord, {zero, member});
-        }
-        else
-        {
-            fieldPtr = m_builder.CreateBitCast(lhsRecord, llvm::PointerType::getUnqual(visit(*field.type)));
+            auto index = iter - parentTypes.begin();
+            if (cld::Semantics::isStruct(type))
+            {
+                field = m_builder.CreateInBoundsGEP(field, {m_builder.getInt64(0), m_builder.getInt32(indices[index])});
+            }
+            else
+            {
+                auto* destTy = visit(iter + 1 == parentTypes.end() ? *cldField.type : **(iter + 1));
+                field = m_builder.CreateBitCast(field, llvm::PointerType::getUnqual(destTy));
+            }
         }
 
-        llvm::Value* loaded = m_builder.CreateLoad(fieldPtr, type.isVolatile());
-        auto size = field.bitFieldBounds->second - field.bitFieldBounds->first;
+        llvm::Value* loaded = m_builder.CreateLoad(field, type.isVolatile());
+        auto size = cldField.bitFieldBounds->second - cldField.bitFieldBounds->first;
         llvm::Value* mask = llvm::ConstantInt::get(rhsValue->getType(), (1u << size) - 1);
         if (assignment.getKind() != cld::Semantics::Assignment::Simple)
         {
             llvm::Value* load =
-                m_builder.CreateAShr(loaded, llvm::ConstantInt::get(mask->getType(), field.bitFieldBounds->first));
+                m_builder.CreateAShr(loaded, llvm::ConstantInt::get(mask->getType(), cldField.bitFieldBounds->first));
             load = m_builder.CreateAnd(load, mask);
             load = cast(load, assignment.getLeftExpression().getType(), assignment.getRightExpression().getType());
             switch (assignment.getKind())
@@ -2734,12 +2784,12 @@ public:
         }
         rhsValue = m_builder.CreateAnd(rhsValue, mask);
         rhsValue =
-            m_builder.CreateShl(rhsValue, llvm::ConstantInt::get(rhsValue->getType(), field.bitFieldBounds->first));
-        mask = m_builder.CreateShl(mask, llvm::ConstantInt::get(mask->getType(), field.bitFieldBounds->first));
+            m_builder.CreateShl(rhsValue, llvm::ConstantInt::get(rhsValue->getType(), cldField.bitFieldBounds->first));
+        mask = m_builder.CreateShl(mask, llvm::ConstantInt::get(mask->getType(), cldField.bitFieldBounds->first));
         mask = m_builder.CreateNot(mask);
         loaded = m_builder.CreateAnd(loaded, mask);
         auto* result = m_builder.CreateOr(loaded, rhsValue);
-        m_builder.CreateStore(result, fieldPtr, type.isVolatile());
+        m_builder.CreateStore(result, field, type.isVolatile());
         return result;
     }
 
@@ -3250,23 +3300,26 @@ public:
                     std::optional<std::pair<std::uint32_t, std::uint32_t>> bitFieldBounds;
                     for (auto iter : path)
                     {
-                        if (cld::Semantics::isStruct(*currentType))
-                        {
-                            auto fields = m_programInterface.getFields(*currentType);
-                            currentPointer = m_builder.CreateInBoundsGEP(
-                                currentPointer, {m_builder.getInt64(0), m_builder.getInt32(fields[iter].layoutIndex)});
-                            currentType = fields[iter].type.get();
-                            bitFieldBounds = fields[iter].bitFieldBounds;
-                        }
-                        else if (cld::Semantics::isUnion(*currentType))
-                        {
-                            auto fields = m_programInterface.getFields(*currentType);
-                            currentType = fields[iter].type.get();
-                            currentPointer = m_builder.CreateBitCast(currentPointer,
-                                                                     llvm::PointerType::getUnqual(visit(*currentType)));
-                            bitFieldBounds = fields[iter].bitFieldBounds;
-                        }
-                        else
+                        // TODO:
+                        CLD_UNREACHABLE;
+                        //                        if (cld::Semantics::isStruct(*currentType))
+                        //                        {
+                        //                            auto fields = m_programInterface.getFields(*currentType);
+                        //                            currentPointer = m_builder.CreateInBoundsGEP(
+                        //                                currentPointer, {m_builder.getInt64(0),
+                        //                                m_builder.getInt32(fields[iter].layoutIndex)});
+                        //                            currentType = fields[iter].type.get();
+                        //                            bitFieldBounds = fields[iter].bitFieldBounds;
+                        //                        }
+                        //                        else if (cld::Semantics::isUnion(*currentType))
+                        //                        {
+                        //                            auto fields = m_programInterface.getFields(*currentType);
+                        //                            currentType = fields[iter].type.get();
+                        //                            currentPointer = m_builder.CreateBitCast(currentPointer,
+                        //                                                                     llvm::PointerType::getUnqual(visit(*currentType)));
+                        //                            bitFieldBounds = fields[iter].bitFieldBounds;
+                        //                        }
+                        //                        else
                         {
                             currentType = &cld::Semantics::getArrayElementType(*currentType);
                             currentPointer = m_builder.CreateInBoundsGEP(

@@ -876,22 +876,22 @@ cld::Semantics::Type
         {
             for (auto iter = fields.begin(); iter != fields.end();)
             {
-                auto& field = iter.value();
-                if (field.type->isUndefined())
+                if (iter->second.type->isUndefined())
                 {
-                    field.indices[0] = layout.size();
-                    layout.push_back(*field.type);
+                    iter.value().indices[0] = layout.size();
+                    layout.push_back(*iter->second.type);
                     iter++;
                     continue;
                 }
-                if (iter + 1 == fields.end() && std::holds_alternative<AbstractArrayType>(field.type->getVariant()))
+                if (iter + 1 == fields.end()
+                    && std::holds_alternative<AbstractArrayType>(iter->second.type->getVariant()))
                 {
                     // TODO: I don't think this should be part of the layout but I am not sure?
                     break;
                 }
-                if (field.indices.size() > 1)
+                if (iter->second.indices.size() > 1)
                 {
-                    auto& parentType = field.parentTypes.front();
+                    auto& parentType = iter->second.parentTypes.front();
                     auto end = std::find_if_not(iter, fields.end(), [&](const auto& pair) {
                         return pair.second.parentTypes.front().get() == parentType.get();
                     });
@@ -899,22 +899,31 @@ cld::Semantics::Type
                     {
                         iter.value().indices[0] = layout.size();
                     }
-                    layout.emplace_back(*parentType);
-                    continue;
-                }
-                if (!field.bitFieldBounds)
-                {
-                    auto alignment = field.type->getAlignOf(*this);
+                    auto alignment = parentType->getAlignOf(*this);
                     currentAlignment = std::max(currentAlignment, alignment);
                     auto rest = currentSize % alignment;
                     if (rest != 0)
                     {
                         currentSize += alignment - rest;
                     }
-                    auto subSize = field.type->getSizeOf(*this);
+                    auto subSize = parentType->getSizeOf(*this);
                     currentSize += subSize;
-                    field.indices[0] = layout.size();
-                    layout.push_back(*field.type);
+                    layout.emplace_back(*parentType);
+                    continue;
+                }
+                if (!iter->second.bitFieldBounds)
+                {
+                    auto alignment = iter->second.type->getAlignOf(*this);
+                    currentAlignment = std::max(currentAlignment, alignment);
+                    auto rest = currentSize % alignment;
+                    if (rest != 0)
+                    {
+                        currentSize += alignment - rest;
+                    }
+                    auto subSize = iter->second.type->getSizeOf(*this);
+                    currentSize += subSize;
+                    iter.value().indices[0] = layout.size();
+                    layout.push_back(*iter->second.type);
                     iter++;
                     continue;
                 }
@@ -922,26 +931,26 @@ cld::Semantics::Type
                 std::uint64_t storageLeft = 0;
                 std::uint64_t prevSize = 0;
                 std::uint64_t used = 0;
-                for (; iter != fields.end() && field.bitFieldBounds;)
+                for (; iter != fields.end() && iter->second.bitFieldBounds;)
                 {
                     if (zeroBitFields.count(iter - fields.begin()))
                     {
                         lastWasZero = true;
                     }
-                    std::size_t size = field.type->getSizeOf(*this);
-                    if (!lastWasZero && storageLeft > field.bitFieldBounds->second
+                    std::size_t size = iter->second.type->getSizeOf(*this);
+                    if (!lastWasZero && storageLeft > iter->second.bitFieldBounds->second
                         && (!m_sourceInterface.getLanguageOptions().discreteBitfields || prevSize == size))
                     {
-                        field.indices[0] = layout.size() - 1;
-                        storageLeft -= field.bitFieldBounds->second;
-                        field.bitFieldBounds.emplace(used, used + field.bitFieldBounds->second);
-                        used = field.bitFieldBounds->second;
+                        iter.value().indices[0] = layout.size() - 1;
+                        storageLeft -= iter->second.bitFieldBounds->second;
+                        iter.value().bitFieldBounds.emplace(used, used + iter->second.bitFieldBounds->second);
+                        used = iter->second.bitFieldBounds->second;
                         iter++;
                         continue;
                     }
                     lastWasZero = false;
                     currentSize += prevSize;
-                    auto alignment = field.type->getAlignOf(*this);
+                    auto alignment = iter->second.type->getAlignOf(*this);
                     currentAlignment = std::max(currentAlignment, alignment);
                     auto rest = currentSize % alignment;
                     if (rest != 0)
@@ -949,12 +958,12 @@ cld::Semantics::Type
                         currentSize += alignment - rest;
                     }
                     prevSize = size;
-                    storageLeft =
-                        cld::get<PrimitiveType>(field.type->getVariant()).getBitCount() - field.bitFieldBounds->second;
-                    used = field.bitFieldBounds->second;
-                    field.bitFieldBounds.emplace(0, used);
-                    field.indices[0] = layout.size();
-                    layout.push_back(*field.type);
+                    storageLeft = cld::get<PrimitiveType>(iter->second.type->getVariant()).getBitCount()
+                                  - iter->second.bitFieldBounds->second;
+                    used = iter->second.bitFieldBounds->second;
+                    iter.value().bitFieldBounds.emplace(0, used);
+                    iter.value().indices[0] = layout.size();
+                    layout.push_back(*iter->second.type);
                     iter++;
                 }
                 currentSize += prevSize;
