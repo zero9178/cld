@@ -113,7 +113,7 @@ public:
     const UnionDefinition* CLD_NULLABLE getUnionDefinition(std::string_view name, std::uint64_t scopeOrId,
                                                            std::uint64_t* idOut = nullptr) const;
 
-    const tsl::ordered_map<std::string_view, Field>& getFields(const Type& recordType) const;
+    const FieldMap& getFields(const Type& recordType) const;
 
     llvm::ArrayRef<Type> getLayout(const Type& structType) const;
 

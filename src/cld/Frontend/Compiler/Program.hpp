@@ -12,6 +12,8 @@ class Program final : public ProgramInterface
     CSourceObject m_sourceObject;
 
 public:
+    Program() = default;
+
     Program(TranslationUnit&& translationUnit, CSourceObject&& sourceObject, ProgramInterface&& programInterface)
         : ProgramInterface(std::move(programInterface)),
           m_translationUnit(std::move(translationUnit)),

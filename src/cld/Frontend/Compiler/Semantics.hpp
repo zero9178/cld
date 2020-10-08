@@ -405,38 +405,41 @@ struct Field
     const Lexer::CToken* nameToken;
     std::vector<std::uint64_t> indices;
     std::optional<std::pair<std::uint32_t, std::uint32_t>> bitFieldBounds;
-    std::shared_ptr<const Type> parentType; // null if indices.size() == 1
+    std::vector<std::shared_ptr<const Type>> parentTypes;
 
     [[nodiscard]] bool operator==(const Field& rhs) const;
 
     [[nodiscard]] bool operator!=(const Field& rhs) const;
 };
 
+using FieldMap = tsl::ordered_map<std::string_view, Field, std::hash<std::string_view>, std::equal_to<std::string_view>,
+                                  std::allocator<std::pair<std::string_view, Field>>,
+                                  std::vector<std::pair<std::string_view, Field>>>;
+
 class AnonymousStructType final
 {
     std::uint64_t m_id;
-    tsl::ordered_map<std::string_view, Field> m_fields;
+    FieldMap m_fields;
     std::vector<Type> m_layout;
     std::uint32_t m_sizeOf;
     std::uint32_t m_alignOf;
 
-    AnonymousStructType(std::uint64_t id, tsl::ordered_map<std::string_view, Field>&& fields,
-                        std::vector<Type>&& layout, std::uint32_t sizeOf, std::uint32_t alignOf)
+    AnonymousStructType(std::uint64_t id, FieldMap&& fields, std::vector<Type>&& layout, std::uint32_t sizeOf,
+                        std::uint32_t alignOf)
         : m_id(id), m_fields(std::move(fields)), m_layout(std::move(layout)), m_sizeOf(sizeOf), m_alignOf(alignOf)
     {
     }
 
 public:
-    static Type create(bool isConst, bool isVolatile, std::uint64_t id,
-                       tsl::ordered_map<std::string_view, Field> fields, std::vector<Type> layout, std::uint32_t sizeOf,
-                       std::uint32_t alignOf);
+    static Type create(bool isConst, bool isVolatile, std::uint64_t id, FieldMap fields, std::vector<Type> layout,
+                       std::uint32_t sizeOf, std::uint32_t alignOf);
 
     [[nodiscard]] std::uint64_t getId() const
     {
         return m_id;
     }
 
-    [[nodiscard]] const tsl::ordered_map<std::string_view, Field>& getFields() const
+    [[nodiscard]] const FieldMap& getFields() const
     {
         return m_fields;
     }
@@ -458,26 +461,25 @@ public:
 class AnonymousUnionType final
 {
     std::uint64_t m_id;
-    tsl::ordered_map<std::string_view, Field> m_fields;
+    FieldMap m_fields;
     std::uint64_t m_sizeOf;
     std::uint64_t m_alignOf;
 
-    AnonymousUnionType(std::uint64_t id, tsl::ordered_map<std::string_view, Field>&& fields, std::uint64_t sizeOf,
-                       std::uint64_t alignOf)
+    AnonymousUnionType(std::uint64_t id, FieldMap&& fields, std::uint64_t sizeOf, std::uint64_t alignOf)
         : m_id(id), m_fields(std::move(fields)), m_sizeOf(sizeOf), m_alignOf(alignOf)
     {
     }
 
 public:
-    static Type create(bool isConst, bool isVolatile, std::uint64_t id,
-                       tsl::ordered_map<std::string_view, Field> fields, std::uint64_t sizeOf, std::uint64_t alignOf);
+    static Type create(bool isConst, bool isVolatile, std::uint64_t id, FieldMap fields, std::uint64_t sizeOf,
+                       std::uint64_t alignOf);
 
     [[nodiscard]] std::uint64_t getId() const
     {
         return m_id;
     }
 
-    [[nodiscard]] const tsl::ordered_map<std::string_view, Field>& getFields() const
+    [[nodiscard]] const FieldMap& getFields() const
     {
         return m_fields;
     }
@@ -810,13 +812,12 @@ public:
 class MemberAccess final
 {
     std::unique_ptr<Expression> m_recordExpr;
-    std::vector<std::uint64_t> m_memberIndices;
+    const Field* m_field;
     Lexer::CTokenIterator m_memberIdentifier;
 
 public:
-    MemberAccess(std::unique_ptr<Expression> recordExpr, std::vector<std::uint64_t> memberIndices,
-                 Lexer::CTokenIterator memberIdentifier)
-        : m_recordExpr(std::move(recordExpr)), m_memberIndices(memberIndices), m_memberIdentifier(memberIdentifier)
+    MemberAccess(std::unique_ptr<Expression> recordExpr, const Field& field, Lexer::CTokenIterator memberIdentifier)
+        : m_recordExpr(std::move(recordExpr)), m_field(&field), m_memberIdentifier(memberIdentifier)
     {
     }
 
@@ -825,9 +826,9 @@ public:
         return *m_recordExpr;
     }
 
-    [[nodiscard]] const std::vector<std::uint64_t>& getMemberIndices() const
+    [[nodiscard]] const Field& getField() const
     {
-        return m_memberIndices;
+        return *m_field;
     }
 
     [[nodiscard]] Lexer::CTokenIterator begin() const;
@@ -1823,14 +1824,14 @@ public:
 class StructDefinition
 {
     std::string_view m_name;
-    tsl::ordered_map<std::string_view, Field> m_fields;
+    FieldMap m_fields;
     std::vector<Type> m_layout;
     std::uint64_t m_sizeOf;
     std::uint64_t m_alignOf;
 
 public:
-    StructDefinition(std::string_view name, tsl::ordered_map<std::string_view, Field> fields, std::vector<Type> layout,
-                     std::uint64_t sizeOf, std::uint64_t alignOf)
+    StructDefinition(std::string_view name, FieldMap fields, std::vector<Type> layout, std::uint64_t sizeOf,
+                     std::uint64_t alignOf)
         : m_name(name), m_fields(std::move(fields)), m_layout(std::move(layout)), m_sizeOf(sizeOf), m_alignOf(alignOf)
     {
     }
@@ -1840,7 +1841,7 @@ public:
         return m_name;
     }
 
-    [[nodiscard]] const tsl::ordered_map<std::string_view, Field>& getFields() const
+    [[nodiscard]] const FieldMap& getFields() const
     {
         return m_fields;
     }
@@ -1868,13 +1869,12 @@ public:
 class UnionDefinition
 {
     std::string_view m_name;
-    tsl::ordered_map<std::string_view, Field> m_fields;
+    FieldMap m_fields;
     std::uint64_t m_sizeOf;
     std::uint64_t m_alignOf;
 
 public:
-    UnionDefinition(std::string_view name, tsl::ordered_map<std::string_view, Field> fields, std::uint64_t sizeOf,
-                    std::uint64_t alignOf)
+    UnionDefinition(std::string_view name, FieldMap fields, std::uint64_t sizeOf, std::uint64_t alignOf)
         : m_name(name), m_fields(std::move(fields)), m_sizeOf(sizeOf), m_alignOf(alignOf)
     {
     }
@@ -1884,7 +1884,7 @@ public:
         return m_name;
     }
 
-    [[nodiscard]] const tsl::ordered_map<std::string_view, Field>& getFields() const
+    [[nodiscard]] const FieldMap& getFields() const
     {
         return m_fields;
     }
@@ -2154,6 +2154,8 @@ private:
     std::vector<Variant> m_globals;
 
 public:
+    TranslationUnit() = default;
+
     explicit TranslationUnit(std::vector<Variant> globals);
 
     [[nodiscard]] const std::vector<Variant>& getGlobals() const

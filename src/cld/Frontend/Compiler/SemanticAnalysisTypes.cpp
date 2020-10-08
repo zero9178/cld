@@ -637,7 +637,7 @@ cld::Semantics::Type
                 }
             }
         }
-        tsl::ordered_map<std::string_view, Field> fields;
+        FieldMap fields;
         std::unordered_set<std::uint64_t> zeroBitFields;
         for (auto iter = structOrUnion->getStructDeclarations().begin();
              iter != structOrUnion->getStructDeclarations().end(); iter++)
@@ -672,11 +672,19 @@ cld::Semantics::Type
                                                                                     specifiers));
                     continue;
                 }
-                auto parentType = std::make_shared<Type>(std::move(type));
-                auto& subFields = getFields(type);
+                auto parentType = std::make_shared<const Type>(std::move(type));
+                auto& subFields = getFields(*parentType);
                 for (auto [name, field] : subFields)
                 {
                     field.indices.insert(field.indices.begin(), static_cast<std::size_t>(-1));
+                    field.parentTypes.insert(field.parentTypes.begin(), parentType);
+                    if (std::pair(parentType->isConst(), parentType->isVolatile())
+                        > std::pair(field.type->isConst(), field.type->isVolatile()))
+                    {
+                        field.type = std::make_shared<const Type>(parentType->isConst() || field.type->isConst(),
+                                                                  parentType->isVolatile() || field.type->isVolatile(),
+                                                                  field.type->getVariant());
+                    }
                     const auto* token = field.nameToken;
                     auto [prev, notRedefined] = fields.insert({name, std::move(field)});
                     if (!notRedefined)
@@ -883,10 +891,15 @@ cld::Semantics::Type
                 }
                 if (field.indices.size() > 1)
                 {
-                    auto& parentType = field.parentType;
+                    auto& parentType = field.parentTypes.front();
+                    auto end = std::find_if_not(iter, fields.end(), [&](const auto& pair) {
+                        return pair.second.parentTypes.front().get() == parentType.get();
+                    });
+                    for (; iter != end; iter++)
+                    {
+                        iter.value().indices[0] = layout.size();
+                    }
                     layout.emplace_back(*parentType);
-                    iter = std::find_if(iter, fields.end(),
-                                        [&](const Field& field) { return field.parentType == parentType; });
                     continue;
                 }
                 if (!field.bitFieldBounds)
@@ -956,6 +969,7 @@ cld::Semantics::Type
                 {
                     continue;
                 }
+                field.indices[0] = iter - fields.begin();
                 auto size = field.type->getSizeOf(*this);
                 if (size > currentSize)
                 {

@@ -1229,7 +1229,8 @@ bool cld::Semantics::SemanticAnalysis::hasFlexibleArrayMember(const Type& type) 
         if (maybeStructDef)
         {
             return !maybeStructDef->getFields().empty()
-                   && std::holds_alternative<AbstractArrayType>(maybeStructDef->getFields().back().type->getVariant());
+                   && std::holds_alternative<AbstractArrayType>(
+                       maybeStructDef->getFields().back().second.type->getVariant());
         }
     }
     else if (std::holds_alternative<UnionType>(type.getVariant()))
@@ -1238,13 +1239,13 @@ bool cld::Semantics::SemanticAnalysis::hasFlexibleArrayMember(const Type& type) 
                                                  cld::get<UnionType>(type.getVariant()).getScopeOrId());
         if (maybeUnionDef)
         {
-            for (auto& iter : maybeUnionDef->getFields())
+            for (auto& [name, field] : maybeUnionDef->getFields())
             {
-                if (std::holds_alternative<AbstractArrayType>(iter.type->getVariant()))
+                if (std::holds_alternative<AbstractArrayType>(field.type->getVariant()))
                 {
                     return true;
                 }
-                if (hasFlexibleArrayMember(*iter.type))
+                if (hasFlexibleArrayMember(*field.type))
                 {
                     return true;
                 }
@@ -1256,18 +1257,18 @@ bool cld::Semantics::SemanticAnalysis::hasFlexibleArrayMember(const Type& type) 
     {
         auto& structDef = cld::get<AnonymousStructType>(type.getVariant());
         return !structDef.getFields().empty()
-               && std::holds_alternative<AbstractArrayType>(structDef.getFields().back().type->getVariant());
+               && std::holds_alternative<AbstractArrayType>(structDef.getFields().back().second.type->getVariant());
     }
     else if (std::holds_alternative<AnonymousUnionType>(type.getVariant()))
     {
         auto& unionDef = cld::get<AnonymousUnionType>(type.getVariant());
-        for (auto& iter : unionDef.getFields())
+        for (auto& [name, field] : unionDef.getFields())
         {
-            if (std::holds_alternative<AbstractArrayType>(iter.type->getVariant()))
+            if (std::holds_alternative<AbstractArrayType>(field.type->getVariant()))
             {
                 return true;
             }
-            if (hasFlexibleArrayMember(*iter.type))
+            if (hasFlexibleArrayMember(*field.type))
             {
                 return true;
             }
@@ -1774,15 +1775,15 @@ void cld::Semantics::SemanticAnalysis::createBuiltins()
         }
         case LanguageOptions::BuiltInVaList::x86_64ABI:
         {
-            std::vector<Field> fields;
+            FieldMap fields;
             auto unsignedInt = std::make_shared<Type>(
                 PrimitiveType::createUnsignedInt(false, false, m_sourceInterface.getLanguageOptions()));
-            fields.push_back({unsignedInt, "gp_offset", nullptr, {}, 0});
-            fields.push_back({unsignedInt, "fp_offset", nullptr, {}, 1});
+            fields.insert({"gp_offset", {unsignedInt, "gp_offset", nullptr, {0}, {}, {}}});
+            fields.insert({"fp_offset", {unsignedInt, "fp_offset", nullptr, {1}, {}, {}}});
             auto voidStar = std::make_shared<Type>(
                 PointerType::create(false, false, false, PrimitiveType::createVoid(false, false)));
-            fields.push_back({voidStar, "overflow_arg_area", nullptr, {}, 2});
-            fields.push_back({voidStar, "reg_save_area", nullptr, {}, 3});
+            fields.insert({"overflow_arg_area", {voidStar, "overflow_arg_area", nullptr, {2}, {}, {}}});
+            fields.insert({"reg_save_area", {voidStar, "reg_save_area", nullptr, {3}, {}, {}}});
             m_structDefinitions.emplace_back("__va_list_tag", std::move(fields),
                                              std::vector<Type>{*unsignedInt, *unsignedInt, *voidStar, *voidStar}, 24,
                                              16);

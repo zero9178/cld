@@ -59,10 +59,10 @@ bool cld::Semantics::SemanticAnalysis::isConst(const Type& type) const
     {
         return false;
     }
-    auto fields = getFields(type);
+    auto& fields = getFields(type);
     for (auto& iter : fields)
     {
-        if (isConst(*iter.type))
+        if (isConst(*iter.second.type))
         {
             return true;
         }
@@ -592,12 +592,12 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                                         std::make_unique<Expression>(std::move(second)), node.getCloseBracket()));
 }
 
-std::optional<std::pair<cld::Semantics::Type, std::vector<std::uint64_t>>>
+std::optional<std::pair<cld::Semantics::Type, const cld::Semantics::Field * CLD_NON_NULL>>
     cld::Semantics::SemanticAnalysis::checkMemberAccess(const Type& recordType,
                                                         const Syntax::PostFixExpression& postFixExpr,
                                                         const Lexer::CToken& identifier)
 {
-    const std::vector<Field>* fields = nullptr;
+    const FieldMap* fields = nullptr;
     if (std::holds_alternative<AnonymousUnionType>(recordType.getVariant()))
     {
         fields = &cld::get<AnonymousUnionType>(recordType.getVariant()).getFields();
@@ -631,8 +631,7 @@ std::optional<std::pair<cld::Semantics::Type, std::vector<std::uint64_t>>>
         fields = &unionDef->getFields();
     }
     CLD_ASSERT(fields);
-    auto result = std::find_if(fields->begin(), fields->end(),
-                               [&](const Field& field) { return field.name == identifier.getText(); });
+    auto result = fields->find(identifier.getText());
     if (result == fields->end())
     {
         if (std::holds_alternative<AnonymousUnionType>(recordType.getVariant()))
@@ -658,15 +657,16 @@ std::optional<std::pair<cld::Semantics::Type, std::vector<std::uint64_t>>>
         return {};
     }
     Type type;
-    if (result->type->isConst() == recordType.isConst() && result->type->isVolatile() == recordType.isVolatile())
+    if (std::pair{result->second.type->isConst(), result->second.type->isVolatile()}
+        >= std::pair{recordType.isConst(), recordType.isVolatile()})
     {
-        type = *result->type;
+        type = *result->second.type;
     }
     else
     {
-        type = Type(recordType.isConst(), recordType.isVolatile(), result->type->getVariant());
+        type = Type(recordType.isConst(), recordType.isVolatile(), result->second.type->getVariant());
     }
-    return std::pair(std::move(type), std::vector<std::uint64_t>{static_cast<std::uint64_t>(result - fields->begin())});
+    return std::pair(std::move(type), &result->second);
 }
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::PostFixExpressionDot& node)
@@ -687,7 +687,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
     {
         return Expression(node);
     }
-    auto& [type, index] = *result;
+    auto& [type, field] = *result;
     if (type.isUndefined())
     {
         return Expression(node);
@@ -695,7 +695,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
     auto category = structOrUnion.getValueCategory();
     return Expression(
         std::move(type), category,
-        MemberAccess(std::make_unique<Expression>(std::move(structOrUnion)), std::move(index), node.getIdentifier()));
+        MemberAccess(std::make_unique<Expression>(std::move(structOrUnion)), *field, node.getIdentifier()));
 }
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::PostFixExpressionArrow& node)
@@ -723,10 +723,14 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
     {
         return Expression(node);
     }
-    auto& [type, index] = *result;
+    auto& [type, field] = *result;
+    if (type.isUndefined())
+    {
+        return Expression(node);
+    }
     return Expression(
         std::move(type), ValueCategory::Lvalue,
-        MemberAccess(std::make_unique<Expression>(std::move(structOrUnionPtr)), index, node.getIdentifier()));
+        MemberAccess(std::make_unique<Expression>(std::move(structOrUnionPtr)), *field, node.getIdentifier()));
 }
 
 namespace
@@ -2602,20 +2606,20 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
     auto assignChildren = YComb{[&](auto&& self, const Type& type, INode& parent) -> void {
         if (isRecord(type))
         {
-            auto ref = getFields(type);
-            if (std::holds_alternative<AbstractArrayType>(ref.back().type->getVariant()))
+            auto ref = llvm::ArrayRef(getFields(type).values_container());
+            if (std::holds_alternative<AbstractArrayType>(ref.back().second.type->getVariant()))
             {
                 ref = ref.drop_back();
             }
             parent.resize(ref.size());
             for (std::size_t i = 0; i < ref.size(); i++)
             {
-                parent.at(i).type = ref[i].type.get();
+                parent.at(i).type = ref[i].second.type.get();
                 parent.at(i).index = i;
                 parent.at(i).parent = &parent;
-                if (isAggregate(*ref[i].type))
+                if (isAggregate(*ref[i].second.type))
                 {
-                    self(*ref[i].type, parent.at(i));
+                    self(*ref[i].second.type, parent.at(i));
                 }
             }
         }
@@ -2780,10 +2784,10 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
                         return Expression(node);
                     }
                     const auto* token = cld::get<Lexer::CTokenIterator>(desig);
-                    auto fields = getFields(*current->type);
-                    const auto* result =
+                    auto& fields = getFields(*current->type);
+                    auto result =
                         std::find_if(fields.begin(), fields.end(),
-                                     [name = token->getText()](const Field& field) { return field.name == name; });
+                                     [name = token->getText()](const auto& pair) { return pair.second.name == name; });
                     if (result == fields.end())
                     {
                         cld::match(
@@ -2808,7 +2812,7 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
                         finishRest(iter + 1, node.getNonCommaExpressionsAndBlocks().end());
                         return Expression(node);
                     }
-                    if (std::holds_alternative<AbstractArrayType>(result->type->getVariant()))
+                    if (std::holds_alternative<AbstractArrayType>(result->second.type->getVariant()))
                     {
                         log(Errors::Semantics::CANNOT_INITIALIZE_FLEXIBLE_ARRAY_MEMBER.args(*token, m_sourceInterface,
                                                                                             *token));

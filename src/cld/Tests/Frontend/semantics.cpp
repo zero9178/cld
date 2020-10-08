@@ -10,7 +10,7 @@
 
 #include "TestConfig.hpp"
 
-static std::pair<cld::Semantics::TranslationUnit, std::string>
+static std::pair<const cld::Semantics::TranslationUnit * CLD_NON_NULL, std::string>
     generateSemantics(std::string source, const cld::LanguageOptions& options = cld::LanguageOptions::native())
 {
     std::string storage;
@@ -23,19 +23,19 @@ static std::pair<cld::Semantics::TranslationUnit, std::string>
     tokens = cld::PP::preprocess(std::move(tokens), &ss, &errors);
     UNSCOPED_INFO(storage);
     REQUIRE_FALSE(errors);
-    static cld::CSourceObject ctokens;
-    ctokens = cld::Lexer::toCTokens(tokens, &ss, &errors);
+    auto ctokens = cld::Lexer::toCTokens(tokens, &ss, &errors);
     UNSCOPED_INFO(storage);
     REQUIRE_FALSE(errors);
     auto parsing = cld::Parser::buildTree(ctokens, &ss, &errors);
     UNSCOPED_INFO(storage);
     REQUIRE_FALSE(errors);
-    cld::Semantics::SemanticAnalysis analysis(ctokens, &ss);
-    auto semantics = analysis.visit(parsing);
-    return {std::move(semantics), ss.str()};
+    static cld::Semantics::Program program;
+    program = cld::Semantics::analyse(parsing, std::move(ctokens), &ss);
+    return {&program.getTranslationUnit(), ss.str()};
 }
 
-static std::pair<cld::Semantics::TranslationUnit, std::string> generateSemantics(std::string source, cld::Triple triple)
+static std::pair<const cld::Semantics::TranslationUnit * CLD_NON_NULL, std::string>
+    generateSemantics(std::string source, cld::Triple triple)
 {
     return generateSemantics(std::move(source), cld::LanguageOptions::fromTriple(triple));
 }
@@ -60,11 +60,11 @@ TEST_CASE("Semantics declarations", "[semantics]")
     {
         auto [translationUnit, errors] = generateSemantics("int i,f;");
         REQUIRE_THAT(errors, ProducesNoErrors());
-        REQUIRE(translationUnit.getGlobals().size() == 2);
+        REQUIRE(translationUnit->getGlobals().size() == 2);
         {
             REQUIRE(
-                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
-            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
+            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
             CHECK(decl->getLinkage() == cld::Semantics::Linkage::External);
             CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
             CHECK(decl->getNameToken()->getText() == "i");
@@ -73,8 +73,8 @@ TEST_CASE("Semantics declarations", "[semantics]")
         }
         {
             REQUIRE(
-                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[1]));
-            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[1]);
+                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[1]));
+            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[1]);
             CHECK(decl->getLinkage() == cld::Semantics::Linkage::External);
             CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
             CHECK(decl->getNameToken()->getText() == "f");
@@ -90,10 +90,10 @@ TEST_CASE("Semantics declarations", "[semantics]")
             {
                 auto [translationUnit, errors] = generateSemantics("extern int i;");
                 REQUIRE_THAT(errors, ProducesNoErrors());
-                REQUIRE(translationUnit.getGlobals().size() == 1);
+                REQUIRE(translationUnit->getGlobals().size() == 1);
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
-                    translationUnit.getGlobals()[0]));
-                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+                    translationUnit->getGlobals()[0]));
+                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
                 CHECK(decl->getLinkage() == cld::Semantics::Linkage::External);
                 CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
                 CHECK(decl->getKind() == cld::Semantics::Declaration::Kind::DeclarationOnly);
@@ -102,10 +102,10 @@ TEST_CASE("Semantics declarations", "[semantics]")
             {
                 auto [translationUnit, errors] = generateSemantics("extern int i = 5;");
                 REQUIRE_THAT(errors, ProducesNoErrors());
-                REQUIRE(translationUnit.getGlobals().size() == 1);
+                REQUIRE(translationUnit->getGlobals().size() == 1);
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
-                    translationUnit.getGlobals()[0]));
-                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+                    translationUnit->getGlobals()[0]));
+                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
                 CHECK(decl->getLinkage() == cld::Semantics::Linkage::External);
                 CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
                 CHECK(decl->getKind() == cld::Semantics::Declaration::Kind::DeclarationOnly);
@@ -120,10 +120,10 @@ TEST_CASE("Semantics declarations", "[semantics]")
             auto [translationUnit, errors] = generateSemantics("static int i;\n"
                                                                "extern int i;");
             REQUIRE_THAT(errors, ProducesNoErrors());
-            REQUIRE(translationUnit.getGlobals().size() == 2);
+            REQUIRE(translationUnit->getGlobals().size() == 2);
             REQUIRE(
-                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[1]));
-            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[1]);
+                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[1]));
+            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[1]);
             CHECK(decl->getLinkage() == cld::Semantics::Linkage::Internal);
             CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
             CHECK(decl->getKind() == cld::Semantics::Declaration::Kind::TentativeDefinition);
@@ -137,10 +137,10 @@ TEST_CASE("Semantics declarations", "[semantics]")
             {
                 auto [translationUnit, errors] = generateSemantics("static int i;");
                 REQUIRE_THAT(errors, ProducesNoErrors());
-                REQUIRE(translationUnit.getGlobals().size() == 1);
+                REQUIRE(translationUnit->getGlobals().size() == 1);
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
-                    translationUnit.getGlobals()[0]));
-                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+                    translationUnit->getGlobals()[0]));
+                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
                 CHECK(decl->getLinkage() == cld::Semantics::Linkage::Internal);
                 CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
                 CHECK(decl->getKind() == cld::Semantics::Declaration::Kind::TentativeDefinition);
@@ -149,10 +149,10 @@ TEST_CASE("Semantics declarations", "[semantics]")
             {
                 auto [translationUnit, errors] = generateSemantics("static int i = 0;");
                 REQUIRE_THAT(errors, ProducesNoErrors());
-                REQUIRE(translationUnit.getGlobals().size() == 1);
+                REQUIRE(translationUnit->getGlobals().size() == 1);
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
-                    translationUnit.getGlobals()[0]));
-                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+                    translationUnit->getGlobals()[0]));
+                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
                 CHECK(decl->getLinkage() == cld::Semantics::Linkage::Internal);
                 CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
                 CHECK(decl->getKind() == cld::Semantics::Declaration::Kind::Definition);
@@ -179,11 +179,11 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                    "    int i;\n"
                                                                    "}\n");
                 REQUIRE_THAT(errors, ProducesNoErrors());
-                REQUIRE(translationUnit.getGlobals().size() == 1);
+                REQUIRE(translationUnit->getGlobals().size() == 1);
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
-                    translationUnit.getGlobals()[0]));
+                    translationUnit->getGlobals()[0]));
                 auto& func =
-                    *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit.getGlobals()[0]);
+                    *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit->getGlobals()[0]);
                 REQUIRE(func.getCompoundStatement().getCompoundItems().size() == 1);
                 auto& var = func.getCompoundStatement().getCompoundItems()[0];
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(var));
@@ -197,11 +197,11 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                    "    extern int i;\n"
                                                                    "}\n");
                 REQUIRE_THAT(errors, ProducesNoErrors());
-                REQUIRE(translationUnit.getGlobals().size() == 1);
+                REQUIRE(translationUnit->getGlobals().size() == 1);
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
-                    translationUnit.getGlobals()[0]));
+                    translationUnit->getGlobals()[0]));
                 auto& func =
-                    *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit.getGlobals()[0]);
+                    *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit->getGlobals()[0]);
                 REQUIRE(func.getCompoundStatement().getCompoundItems().size() == 1);
                 auto& var = func.getCompoundStatement().getCompoundItems()[0];
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(var));
@@ -213,10 +213,10 @@ TEST_CASE("Semantics declarations", "[semantics]")
         {
             auto [translationUnit, errors] = generateSemantics("int i;");
             REQUIRE_THAT(errors, ProducesNoErrors());
-            REQUIRE(translationUnit.getGlobals().size() == 1);
+            REQUIRE(translationUnit->getGlobals().size() == 1);
             REQUIRE(
-                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
-            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
+            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
             CHECK(decl->getLinkage() == cld::Semantics::Linkage::External);
             CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
         }
@@ -224,10 +224,10 @@ TEST_CASE("Semantics declarations", "[semantics]")
         {
             auto [translationUnit, errors] = generateSemantics("static int i;");
             REQUIRE_THAT(errors, ProducesNoErrors());
-            REQUIRE(translationUnit.getGlobals().size() == 1);
+            REQUIRE(translationUnit->getGlobals().size() == 1);
             REQUIRE(
-                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
-            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
+            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
             CHECK(decl->getLinkage() == cld::Semantics::Linkage::Internal);
             CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
         }
@@ -240,10 +240,10 @@ TEST_CASE("Semantics declarations", "[semantics]")
         {
             auto [translationUnit, errors] = generateSemantics("int i;");
             REQUIRE_THAT(errors, ProducesNoErrors());
-            REQUIRE(translationUnit.getGlobals().size() == 1);
+            REQUIRE(translationUnit->getGlobals().size() == 1);
             REQUIRE(
-                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
-            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
+            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
             CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
             SEMA_PRODUCES("auto int i;", ProducesError(DECLARATIONS_AT_FILE_SCOPE_CANNOT_BE_AUTO));
             SEMA_PRODUCES("register int i;", ProducesError(DECLARATIONS_AT_FILE_SCOPE_CANNOT_BE_REGISTER));
@@ -257,11 +257,11 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                    "    int i;\n"
                                                                    "}\n");
                 REQUIRE_THAT(errors, ProducesNoErrors());
-                REQUIRE(translationUnit.getGlobals().size() == 1);
+                REQUIRE(translationUnit->getGlobals().size() == 1);
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
-                    translationUnit.getGlobals()[0]));
+                    translationUnit->getGlobals()[0]));
                 auto& func =
-                    *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit.getGlobals()[0]);
+                    *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit->getGlobals()[0]);
                 REQUIRE(func.getCompoundStatement().getCompoundItems().size() == 1);
                 auto& var = func.getCompoundStatement().getCompoundItems()[0];
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(var));
@@ -275,11 +275,11 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                    "    auto int i;\n"
                                                                    "}\n");
                 REQUIRE_THAT(errors, ProducesNoErrors());
-                REQUIRE(translationUnit.getGlobals().size() == 1);
+                REQUIRE(translationUnit->getGlobals().size() == 1);
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
-                    translationUnit.getGlobals()[0]));
+                    translationUnit->getGlobals()[0]));
                 auto& func =
-                    *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit.getGlobals()[0]);
+                    *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit->getGlobals()[0]);
                 REQUIRE(func.getCompoundStatement().getCompoundItems().size() == 1);
                 auto& var = func.getCompoundStatement().getCompoundItems()[0];
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(var));
@@ -293,11 +293,11 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                    "    static int i;\n"
                                                                    "}\n");
                 REQUIRE_THAT(errors, ProducesNoErrors());
-                REQUIRE(translationUnit.getGlobals().size() == 1);
+                REQUIRE(translationUnit->getGlobals().size() == 1);
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
-                    translationUnit.getGlobals()[0]));
+                    translationUnit->getGlobals()[0]));
                 auto& func =
-                    *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit.getGlobals()[0]);
+                    *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit->getGlobals()[0]);
                 REQUIRE(func.getCompoundStatement().getCompoundItems().size() == 1);
                 auto& var = func.getCompoundStatement().getCompoundItems()[0];
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(var));
@@ -311,11 +311,11 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                    "    extern int i;\n"
                                                                    "}\n");
                 REQUIRE_THAT(errors, ProducesNoErrors());
-                REQUIRE(translationUnit.getGlobals().size() == 1);
+                REQUIRE(translationUnit->getGlobals().size() == 1);
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
-                    translationUnit.getGlobals()[0]));
+                    translationUnit->getGlobals()[0]));
                 auto& func =
-                    *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit.getGlobals()[0]);
+                    *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit->getGlobals()[0]);
                 REQUIRE(func.getCompoundStatement().getCompoundItems().size() == 1);
                 auto& var = func.getCompoundStatement().getCompoundItems()[0];
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(var));
@@ -329,11 +329,11 @@ TEST_CASE("Semantics declarations", "[semantics]")
                     auto [translationUnit, errors] = generateSemantics("void foo(register int i)\n"
                                                                        "{}\n");
                     REQUIRE_THAT(errors, ProducesNoErrors());
-                    REQUIRE(translationUnit.getGlobals().size() == 1);
+                    REQUIRE(translationUnit->getGlobals().size() == 1);
                     REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
-                        translationUnit.getGlobals()[0]));
-                    auto& func =
-                        *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit.getGlobals()[0]);
+                        translationUnit->getGlobals()[0]));
+                    auto& func = *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
+                        translationUnit->getGlobals()[0]);
                     REQUIRE(func.getParameterDeclarations().size() == 1);
                     auto& decl = *func.getParameterDeclarations()[0];
                     CHECK(decl.getLifetime() == cld::Semantics::Lifetime::Register);
@@ -343,11 +343,11 @@ TEST_CASE("Semantics declarations", "[semantics]")
                     auto [translationUnit, errors] = generateSemantics("void foo(i) register int i;\n"
                                                                        "{}\n");
                     REQUIRE_THAT(errors, ProducesNoErrors());
-                    REQUIRE(translationUnit.getGlobals().size() == 1);
+                    REQUIRE(translationUnit->getGlobals().size() == 1);
                     REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
-                        translationUnit.getGlobals()[0]));
-                    auto& func =
-                        *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit.getGlobals()[0]);
+                        translationUnit->getGlobals()[0]));
+                    auto& func = *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
+                        translationUnit->getGlobals()[0]);
                     REQUIRE(func.getParameterDeclarations().size() == 1);
                     auto& decl = *func.getParameterDeclarations()[0];
                     CHECK(decl.getLifetime() == cld::Semantics::Lifetime::Register);
@@ -362,10 +362,10 @@ TEST_CASE("Semantics declarations", "[semantics]")
             auto [translationUnit, errors] = generateSemantics("typedef long double ld;\n"
                                                                "ld d;");
             REQUIRE_THAT(errors, ProducesNoErrors());
-            REQUIRE(translationUnit.getGlobals().size() == 1);
+            REQUIRE(translationUnit->getGlobals().size() == 1);
             REQUIRE(
-                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
-            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
+            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
             CHECK(decl->getNameToken()->getText() == "d");
             CHECK(decl->getType()
                   == cld::Semantics::PrimitiveType::createLongDouble(false, false, cld::LanguageOptions::native()));
@@ -376,10 +376,10 @@ TEST_CASE("Semantics declarations", "[semantics]")
             auto [translationUnit, errors] = generateSemantics("typedef long double ld;\n"
                                                                "const volatile ld d;");
             REQUIRE_THAT(errors, ProducesNoErrors());
-            REQUIRE(translationUnit.getGlobals().size() == 1);
+            REQUIRE(translationUnit->getGlobals().size() == 1);
             REQUIRE(
-                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
-            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
+            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
             CHECK(decl->getNameToken()->getText() == "d");
             CHECK(decl->getType()
                   == cld::Semantics::PrimitiveType::createLongDouble(true, true, cld::LanguageOptions::native()));
@@ -391,8 +391,8 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                "r f;\n"
                                                                "}");
             REQUIRE_THAT(errors, ProducesNoErrors());
-            REQUIRE(translationUnit.getGlobals().size() == 1);
-            auto& global = translationUnit.getGlobals()[0];
+            REQUIRE(translationUnit->getGlobals().size() == 1);
+            auto& global = translationUnit->getGlobals()[0];
             REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(global));
             auto& def = *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(global);
             REQUIRE(def.getCompoundStatement().getCompoundItems().size() == 3);
@@ -524,10 +524,10 @@ TEST_CASE("Semantics primitive declarations", "[semantics]")
             }
             auto [translationUnit, errors] = generateSemantics(text + " i;", options);
             REQUIRE_THAT(errors, ProducesNoErrors());
-            REQUIRE(translationUnit.getGlobals().size() == 1);
+            REQUIRE(translationUnit->getGlobals().size() == 1);
             REQUIRE(
-                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
-            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
+            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
             CHECK(decl->getNameToken()->getText() == "i");
             CHECK(decl->getType() == type);
             CHECK(decl->getLinkage() == cld::Semantics::Linkage::External);
@@ -559,10 +559,10 @@ TEST_CASE("Semantics pointer declarations", "[semantics]")
         {
             auto [translationUnit, errors] = generateSemantics("int *f;");
             REQUIRE_THAT(errors, ProducesNoErrors());
-            REQUIRE(translationUnit.getGlobals().size() == 1);
+            REQUIRE(translationUnit->getGlobals().size() == 1);
             REQUIRE(
-                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
-            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
+            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
             CHECK(decl->getNameToken()->getText() == "f");
             CHECK(decl->getType()
                   == cld::Semantics::PointerType::create(
@@ -586,10 +586,10 @@ TEST_CASE("Semantics pointer declarations", "[semantics]")
                 }
                 auto [translationUnit, errors] = generateSemantics(text);
                 REQUIRE_THAT(errors, ProducesNoErrors());
-                REQUIRE(translationUnit.getGlobals().size() == 1);
+                REQUIRE(translationUnit->getGlobals().size() == 1);
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
-                    translationUnit.getGlobals()[0]));
-                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+                    translationUnit->getGlobals()[0]));
+                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
                 CHECK(decl->getNameToken()->getText() == "f");
                 CHECK(decl->getType()
                       == cld::Semantics::PointerType::create(false, false, false,
@@ -612,10 +612,10 @@ TEST_CASE("Semantics pointer declarations", "[semantics]")
                 text += "*f;";
                 auto [translationUnit, errors] = generateSemantics(text);
                 REQUIRE_THAT(errors, ProducesNoErrors());
-                REQUIRE(translationUnit.getGlobals().size() == 1);
+                REQUIRE(translationUnit->getGlobals().size() == 1);
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
-                    translationUnit.getGlobals()[0]));
-                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+                    translationUnit->getGlobals()[0]));
+                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
                 CHECK(decl->getNameToken()->getText() == "f");
                 CHECK(decl->getType()
                       == cld::Semantics::PointerType::create(false, false, false,
@@ -644,10 +644,10 @@ TEST_CASE("Semantics pointer declarations", "[semantics]")
             text += "f;";
             auto [translationUnit, errors] = generateSemantics(text);
             REQUIRE_THAT(errors, ProducesNoErrors());
-            REQUIRE(translationUnit.getGlobals().size() == 1);
+            REQUIRE(translationUnit->getGlobals().size() == 1);
             REQUIRE(
-                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
-            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
+            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
             CHECK(decl->getNameToken()->getText() == "f");
             CHECK(decl->getType()
                   == cld::Semantics::PointerType::create(
@@ -672,10 +672,10 @@ TEST_CASE("Semantics array declarations", "[semantics]")
         {
             auto [translationUnit, errors] = generateSemantics("int f[1];");
             REQUIRE_THAT(errors, ProducesNoErrors());
-            REQUIRE(translationUnit.getGlobals().size() == 1);
+            REQUIRE(translationUnit->getGlobals().size() == 1);
             REQUIRE(
-                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
-            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
+            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
             CHECK(decl->getNameToken()->getText() == "f");
             CHECK(decl->getType()
                   == cld::Semantics::ArrayType::create(
@@ -686,10 +686,10 @@ TEST_CASE("Semantics array declarations", "[semantics]")
         {
             auto [translationUnit, errors] = generateSemantics("int (*f[1]);");
             REQUIRE_THAT(errors, ProducesNoErrors());
-            REQUIRE(translationUnit.getGlobals().size() == 1);
+            REQUIRE(translationUnit->getGlobals().size() == 1);
             REQUIRE(
-                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
-            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
+            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
             CHECK(decl->getNameToken()->getText() == "f");
             CHECK(decl->getType()
                   == cld::Semantics::ArrayType::create(
@@ -748,9 +748,9 @@ TEST_CASE("Semantics function prototypes", "[semantics]")
     {
         auto [translationUnit, errors] = generateSemantics("int f(int,float);");
         REQUIRE_THAT(errors, ProducesNoErrors());
-        REQUIRE(translationUnit.getGlobals().size() == 1);
-        REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
-        auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+        REQUIRE(translationUnit->getGlobals().size() == 1);
+        REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
+        auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
         CHECK(decl->getNameToken()->getText() == "f");
         CHECK(decl->getType()
               == cld::Semantics::FunctionType::create(
@@ -784,9 +784,9 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
     {
         auto [translationUnit, errors] = generateSemantics("struct A{ int i; float f, r; } a;");
         REQUIRE_THAT(errors, ProducesNoErrors());
-        REQUIRE(translationUnit.getGlobals().size() == 1);
-        REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
-        auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+        REQUIRE(translationUnit->getGlobals().size() == 1);
+        REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
+        auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
         CHECK(decl->getNameToken()->getText() == "a");
         REQUIRE(std::holds_alternative<cld::Semantics::StructType>(decl->getType().getVariant()));
         CHECK(cld::get<cld::Semantics::StructType>(decl->getType().getVariant()).getName() == "A");
@@ -800,9 +800,9 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
     {
         auto [translationUnit, errors] = generateSemantics("union A{ int i; float f, r; } a;");
         REQUIRE_THAT(errors, ProducesNoErrors());
-        REQUIRE(translationUnit.getGlobals().size() == 1);
-        REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
-        auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+        REQUIRE(translationUnit->getGlobals().size() == 1);
+        REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
+        auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
         CHECK(decl->getNameToken()->getText() == "a");
         REQUIRE(std::holds_alternative<cld::Semantics::UnionType>(decl->getType().getVariant()));
         CHECK(cld::get<cld::Semantics::UnionType>(decl->getType().getVariant()).getName() == "A");
@@ -812,9 +812,9 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
     {
         auto [translationUnit, errors] = generateSemantics("struct { int i; float f, r; } a;");
         REQUIRE_THAT(errors, ProducesNoErrors());
-        REQUIRE(translationUnit.getGlobals().size() == 1);
-        REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
-        auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+        REQUIRE(translationUnit->getGlobals().size() == 1);
+        REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
+        auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
         CHECK(decl->getNameToken()->getText() == "a");
         REQUIRE(std::holds_alternative<cld::Semantics::AnonymousStructType>(decl->getType().getVariant()));
         auto& anon = cld::get<cld::Semantics::AnonymousStructType>(decl->getType().getVariant());
@@ -836,9 +836,9 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
     {
         auto [translationUnit, errors] = generateSemantics("union { int i; float f, r; } a;");
         REQUIRE_THAT(errors, ProducesNoErrors());
-        REQUIRE(translationUnit.getGlobals().size() == 1);
-        REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]));
-        auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+        REQUIRE(translationUnit->getGlobals().size() == 1);
+        REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
+        auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
         CHECK(decl->getNameToken()->getText() == "a");
         REQUIRE(std::holds_alternative<cld::Semantics::AnonymousUnionType>(decl->getType().getVariant()));
         auto& anon = cld::get<cld::Semantics::AnonymousUnionType>(decl->getType().getVariant());
@@ -847,7 +847,7 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
         CHECK(*anon.getFields().values_container()[0].second.type
               == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         CHECK_FALSE(anon.getFields().values_container()[0].second.bitFieldBounds);
-        CHECK(anon.getFields().values_container()[0].second.name == "f");
+        CHECK(anon.getFields().values_container()[1].second.name == "f");
         CHECK(*anon.getFields().values_container()[1].second.type
               == cld::Semantics::PrimitiveType::createFloat(false, false));
         CHECK_FALSE(anon.getFields().values_container()[1].second.bitFieldBounds);
@@ -913,10 +913,10 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
                                                                    "int a[sizeof(struct A)];",
                                                                    x64windowsMsvc);
                 REQUIRE_THAT(errors, ProducesNoErrors());
-                REQUIRE(translationUnit.getGlobals().size() == 1);
+                REQUIRE(translationUnit->getGlobals().size() == 1);
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
-                    translationUnit.getGlobals()[0]));
-                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+                    translationUnit->getGlobals()[0]));
+                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
                 REQUIRE(std::holds_alternative<cld::Semantics::ArrayType>(decl->getType().getVariant()));
                 auto& array = cld::get<cld::Semantics::ArrayType>(decl->getType().getVariant());
                 CHECK(array.getSize() == 8);
@@ -936,10 +936,10 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
                                                                    "int a[sizeof(struct A)];",
                                                                    x64linux);
                 REQUIRE_THAT(errors, ProducesNoErrors());
-                REQUIRE(translationUnit.getGlobals().size() == 1);
+                REQUIRE(translationUnit->getGlobals().size() == 1);
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
-                    translationUnit.getGlobals()[0]));
-                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[0]);
+                    translationUnit->getGlobals()[0]));
+                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
                 REQUIRE(std::holds_alternative<cld::Semantics::ArrayType>(decl->getType().getVariant()));
                 auto& array = cld::get<cld::Semantics::ArrayType>(decl->getType().getVariant());
                 CHECK(array.getSize() == 4);
@@ -976,28 +976,28 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
             REQUIRE(structDef->getFields().values_container()[0].second.bitFieldBounds);
             CHECK(*structDef->getFields().values_container()[0].second.bitFieldBounds == std::pair{0u, 8u});
 
-            CHECK(structDef->getFields().values_container()[1].second.indices,
-                  Catch::Equals(std::vector<std::uint64_t>{0}));
+            CHECK_THAT(structDef->getFields().values_container()[1].second.indices,
+                       Catch::Equals(std::vector<std::uint64_t>{0}));
             REQUIRE(structDef->getFields().values_container()[1].second.bitFieldBounds);
             CHECK(*structDef->getFields().values_container()[1].second.bitFieldBounds == std::pair{8u, 11u});
 
-            CHECK(structDef->getFields().values_container()[2].second.indices,
-                  Catch::Equals(std::vector<std::uint64_t>{0}));
+            CHECK_THAT(structDef->getFields().values_container()[2].second.indices,
+                       Catch::Equals(std::vector<std::uint64_t>{0}));
             REQUIRE(structDef->getFields().values_container()[2].second.bitFieldBounds);
             CHECK(*structDef->getFields().values_container()[2].second.bitFieldBounds == std::pair{11u, 12u});
 
-            CHECK(structDef->getFields().values_container()[3] second.indices,
-                  Catch::Equals(std::vector<std::uint64_t>{0}));
+            CHECK_THAT(structDef->getFields().values_container()[3].second.indices,
+                       Catch::Equals(std::vector<std::uint64_t>{0}));
             REQUIRE(structDef->getFields().values_container()[3].second.bitFieldBounds);
             CHECK(*structDef->getFields().values_container()[3].second.bitFieldBounds == std::pair{12u, 13u});
 
-            CHECK(structDef->getFields().values_container()[4].second.indices,
-                  Catch::Equals(std::vector<std::uint64_t>{0}));
+            CHECK_THAT(structDef->getFields().values_container()[4].second.indices,
+                       Catch::Equals(std::vector<std::uint64_t>{0}));
             REQUIRE(structDef->getFields().values_container()[4].second.bitFieldBounds);
             CHECK(*structDef->getFields().values_container()[4].second.bitFieldBounds == std::pair{13u, 14u});
 
-            CHECK(structDef->getFields().values_container()[5].second.indices,
-                  Catch::Equals(std::vector<std::uint64_t>{1}));
+            CHECK_THAT(structDef->getFields().values_container()[5].second.indices,
+                       Catch::Equals(std::vector<std::uint64_t>{1}));
             REQUIRE(structDef->getFields().values_container()[5].second.bitFieldBounds);
             CHECK(*structDef->getFields().values_container()[5].second.bitFieldBounds == std::pair{0u, 1u});
         }
@@ -1066,9 +1066,9 @@ TEST_CASE("Semantics enums", "[semantics]")
                                                   "int b_[b];\n"
                                                   "int c_[c];");
             REQUIRE_THAT(errors, ProducesNoErrors());
-            REQUIRE(tu.getGlobals().size() == 3);
+            REQUIRE(tu->getGlobals().size() == 3);
             std::uint64_t i = 1;
-            for (auto& iter : tu.getGlobals())
+            for (auto& iter : tu->getGlobals())
             {
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(iter));
                 auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(iter);
@@ -1087,9 +1087,9 @@ TEST_CASE("Semantics enums", "[semantics]")
                                                   "int b_[b];\n"
                                                   "int c_[c];");
             REQUIRE_THAT(errors, ProducesNoErrors());
-            REQUIRE(tu.getGlobals().size() == 3);
+            REQUIRE(tu->getGlobals().size() == 3);
             std::uint64_t i = 5;
-            for (auto& iter : tu.getGlobals())
+            for (auto& iter : tu->getGlobals())
             {
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(iter));
                 auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(iter);
@@ -1115,9 +1115,9 @@ TEST_CASE("Semantics enums", "[semantics]")
                                                   "int b_[b];\n"
                                                   "int c_[c];");
             REQUIRE_THAT(errors, ProducesNoErrors());
-            REQUIRE(tu.getGlobals().size() == 3);
+            REQUIRE(tu->getGlobals().size() == 3);
             std::uint64_t i = 1;
-            for (auto& iter : tu.getGlobals())
+            for (auto& iter : tu->getGlobals())
             {
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(iter));
                 auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(iter);
@@ -1136,9 +1136,9 @@ TEST_CASE("Semantics enums", "[semantics]")
                                                   "int b_[b];\n"
                                                   "int c_[c];");
             REQUIRE_THAT(errors, ProducesNoErrors());
-            REQUIRE(tu.getGlobals().size() == 3);
+            REQUIRE(tu->getGlobals().size() == 3);
             std::uint64_t i = 5;
-            for (auto& iter : tu.getGlobals())
+            for (auto& iter : tu->getGlobals())
             {
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(iter));
                 auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(iter);
@@ -1447,9 +1447,9 @@ TEST_CASE("Semantics composite type", "[semantics]")
         auto [translationUnit, errors] = generateSemantics("int f(int (*)(),double (*)[3]);\n"
                                                            "int f(int (*)(char *),double (*)[]);");
         REQUIRE_THAT(errors, ProducesNoErrors());
-        REQUIRE(translationUnit.getGlobals().size() == 2);
-        REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[1]));
-        auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit.getGlobals()[1]);
+        REQUIRE(translationUnit->getGlobals().size() == 2);
+        REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[1]));
+        auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[1]);
         CHECK(decl->getNameToken()->getText() == "f");
         CHECK(decl->getType()
               == cld::Semantics::FunctionType::create(
@@ -1613,12 +1613,10 @@ namespace
  */
 const Expression& generateExpression(std::string source, cld::LanguageOptions options = cld::LanguageOptions::native())
 {
-    static TranslationUnit translationUnit({});
-    std::string errors;
-    std::tie(translationUnit, errors) = generateSemantics(std::move(source), options);
+    auto [translationUnit, errors] = generateSemantics(std::move(source), options);
     REQUIRE_THAT(errors, ProducesNoErrors());
-    REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals().back()));
-    auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit.getGlobals().back());
+    REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit->getGlobals().back()));
+    auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit->getGlobals().back());
     REQUIRE(
         std::holds_alternative<std::unique_ptr<Statement>>(funcDef.getCompoundStatement().getCompoundItems().back()));
     auto& statement = *cld::get<std::unique_ptr<Statement>>(funcDef.getCompoundStatement().getCompoundItems().back());
@@ -1791,7 +1789,7 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
                   == ValueCategory::Lvalue);
             CHECK(std::holds_alternative<StructType>(
                 cld::get<MemberAccess>(expr.getVariant()).getRecordExpression().getType().getVariant()));
-            CHECK_THAT(cld::get<MemberAccess>(expr.getVariant()).getMemberIndices(),
+            CHECK_THAT(cld::get<MemberAccess>(expr.getVariant()).getField().indices,
                        Catch::Equals(std::vector<std::uint64_t>{0}));
         }
         SECTION("union")
@@ -1810,7 +1808,7 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
                   == ValueCategory::Lvalue);
             CHECK(std::holds_alternative<UnionType>(
                 cld::get<MemberAccess>(expr.getVariant()).getRecordExpression().getType().getVariant()));
-            CHECK_THAT(cld::get<MemberAccess>(expr.getVariant()).getMemberIndices(),
+            CHECK_THAT(cld::get<MemberAccess>(expr.getVariant()).getField().indices,
                        Catch::Equals(std::vector<std::uint64_t>{0}));
         }
         SECTION("anonymous struct")
@@ -1826,7 +1824,7 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
                   == ValueCategory::Lvalue);
             CHECK(std::holds_alternative<AnonymousStructType>(
                 cld::get<MemberAccess>(expr.getVariant()).getRecordExpression().getType().getVariant()));
-            CHECK_THAT(cld::get<MemberAccess>(expr.getVariant()).getMemberIndices(),
+            CHECK_THAT(cld::get<MemberAccess>(expr.getVariant()).getField().indices,
                        Catch::Equals(std::vector<std::uint64_t>{0}));
         }
         SECTION("anonymous union")
@@ -1842,7 +1840,7 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
                   == ValueCategory::Lvalue);
             CHECK(std::holds_alternative<AnonymousUnionType>(
                 cld::get<MemberAccess>(expr.getVariant()).getRecordExpression().getType().getVariant()));
-            CHECK_THAT(cld::get<MemberAccess>(expr.getVariant()).getMemberIndices(),
+            CHECK_THAT(cld::get<MemberAccess>(expr.getVariant()).getField().indices,
                        Catch::Equals(std::vector<std::uint64_t>{0}));
         }
         SEMA_PRODUCES("int foo(void) {\n"
@@ -1908,7 +1906,7 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
             REQUIRE(std::holds_alternative<PointerType>(mem.getRecordExpression().getType().getVariant()));
             CHECK(std::holds_alternative<StructType>(
                 cld::get<PointerType>(mem.getRecordExpression().getType().getVariant()).getElementType().getVariant()));
-            CHECK_THAT(mem.getMemberIndices(), Catch::Equals(std::vector<std::uint64_t>{0}));
+            CHECK_THAT(mem.getField().indices, Catch::Equals(std::vector<std::uint64_t>{0}));
         }
         SECTION("union")
         {
@@ -1928,7 +1926,7 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
             REQUIRE(std::holds_alternative<PointerType>(mem.getRecordExpression().getType().getVariant()));
             CHECK(std::holds_alternative<UnionType>(
                 cld::get<PointerType>(mem.getRecordExpression().getType().getVariant()).getElementType().getVariant()));
-            CHECK_THAT(mem.getMemberIndices(), Catch::Equals(std::vector<std::uint64_t>{0}));
+            CHECK_THAT(mem.getField().indices, Catch::Equals(std::vector<std::uint64_t>{0}));
         }
         SECTION("anonymous struct")
         {
@@ -1944,7 +1942,7 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
             REQUIRE(std::holds_alternative<PointerType>(mem.getRecordExpression().getType().getVariant()));
             CHECK(std::holds_alternative<AnonymousStructType>(
                 cld::get<PointerType>(mem.getRecordExpression().getType().getVariant()).getElementType().getVariant()));
-            CHECK_THAT(mem.getMemberIndices(), Catch::Equals(std::vector<std::uint64_t>{0}));
+            CHECK_THAT(mem.getField().indices, Catch::Equals(std::vector<std::uint64_t>{0}));
         }
         SECTION("anonymous union")
         {
@@ -1960,7 +1958,7 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
             REQUIRE(std::holds_alternative<PointerType>(mem.getRecordExpression().getType().getVariant()));
             CHECK(std::holds_alternative<AnonymousUnionType>(
                 cld::get<PointerType>(mem.getRecordExpression().getType().getVariant()).getElementType().getVariant()));
-            CHECK_THAT(mem.getMemberIndices(), Catch::Equals(std::vector<std::uint64_t>{0}));
+            CHECK_THAT(mem.getField().indices, Catch::Equals(std::vector<std::uint64_t>{0}));
         }
         SEMA_PRODUCES("int foo(void) {\n"
                       " 5->m;\n"
@@ -3587,8 +3585,8 @@ TEST_CASE("Semantics simple initializer", "[semantics]")
         {
             auto [translationUnit, errors] = generateSemantics("char foo[] = \"string\";");
             REQUIRE_THAT(errors, ProducesNoErrors());
-            REQUIRE(translationUnit.getGlobals().size() == 1);
-            auto& global = translationUnit.getGlobals()[0];
+            REQUIRE(translationUnit->getGlobals().size() == 1);
+            auto& global = translationUnit->getGlobals()[0];
             REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(global));
             auto& declaration = *cld::get<std::unique_ptr<Declaration>>(global);
             REQUIRE(std::holds_alternative<ArrayType>(declaration.getType().getVariant()));
@@ -3601,8 +3599,8 @@ TEST_CASE("Semantics simple initializer", "[semantics]")
                 auto [translationUnit, errors] =
                     generateSemantics("unsigned short foo[] = L\"string\";", x64windowsGnu);
                 REQUIRE_THAT(errors, ProducesNoErrors());
-                REQUIRE(translationUnit.getGlobals().size() == 1);
-                auto& global = translationUnit.getGlobals()[0];
+                REQUIRE(translationUnit->getGlobals().size() == 1);
+                auto& global = translationUnit->getGlobals()[0];
                 REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(global));
                 auto& declaration = *cld::get<std::unique_ptr<Declaration>>(global);
                 REQUIRE(std::holds_alternative<ArrayType>(declaration.getType().getVariant()));
@@ -3612,8 +3610,8 @@ TEST_CASE("Semantics simple initializer", "[semantics]")
             {
                 auto [translationUnit, errors] = generateSemantics("int foo[] = L\"string\";", x64linux);
                 REQUIRE_THAT(errors, ProducesNoErrors());
-                REQUIRE(translationUnit.getGlobals().size() == 1);
-                auto& global = translationUnit.getGlobals()[0];
+                REQUIRE(translationUnit->getGlobals().size() == 1);
+                auto& global = translationUnit->getGlobals()[0];
                 REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(global));
                 auto& declaration = *cld::get<std::unique_ptr<Declaration>>(global);
                 REQUIRE(std::holds_alternative<ArrayType>(declaration.getType().getVariant()));
@@ -3677,8 +3675,8 @@ TEST_CASE("Semantics initializer list", "[semantics]")
                                                            "} Point;\n"
                                                            "\n"
                                                            "Point point = {5.0,3.0};");
-        REQUIRE(translationUnit.getGlobals().size() == 1);
-        auto& global = translationUnit.getGlobals()[0];
+        REQUIRE(translationUnit->getGlobals().size() == 1);
+        auto& global = translationUnit->getGlobals()[0];
         REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(global));
         auto& decl = cld::get<std::unique_ptr<Declaration>>(global);
         REQUIRE(decl->getInitializer());
@@ -3808,8 +3806,8 @@ TEST_CASE("Semantics initializer list", "[semantics]")
                                                                    " float x,y;\n"
                                                                    "} points[] = {5.0,2.0,4.0,23.04,7};");
                 REQUIRE_THAT(errors, ProducesNoErrors());
-                REQUIRE(translationUnit.getGlobals().size() == 1);
-                auto& global = translationUnit.getGlobals()[0];
+                REQUIRE(translationUnit->getGlobals().size() == 1);
+                auto& global = translationUnit->getGlobals()[0];
                 REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(global));
                 auto& declaration = *cld::get<std::unique_ptr<Declaration>>(global);
                 REQUIRE(std::holds_alternative<ArrayType>(declaration.getType().getVariant()));
@@ -3823,8 +3821,8 @@ TEST_CASE("Semantics initializer list", "[semantics]")
                                       " float x,y;\n"
                                       "} points[] = {[10].x = 5,[10].y = 3,[0] = {3.0,2.0},3.0,3.0,23.025,23.024};");
                 REQUIRE_THAT(errors, ProducesNoErrors());
-                REQUIRE(translationUnit.getGlobals().size() == 1);
-                auto& global = translationUnit.getGlobals()[0];
+                REQUIRE(translationUnit->getGlobals().size() == 1);
+                auto& global = translationUnit->getGlobals()[0];
                 REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(global));
                 auto& declaration = *cld::get<std::unique_ptr<Declaration>>(global);
                 REQUIRE(std::holds_alternative<ArrayType>(declaration.getType().getVariant()));
@@ -3847,8 +3845,8 @@ TEST_CASE("Semantics initializer list", "[semantics]")
             {
                 auto [translationUnit, errors] = generateSemantics("int a[] = {[sizeof(*a) - 1] = 5};");
                 REQUIRE_THAT(errors, ProducesNoErrors());
-                REQUIRE(translationUnit.getGlobals().size() == 1);
-                auto& global = translationUnit.getGlobals()[0];
+                REQUIRE(translationUnit->getGlobals().size() == 1);
+                auto& global = translationUnit->getGlobals()[0];
                 REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(global));
                 auto& declaration = *cld::get<std::unique_ptr<Declaration>>(global);
                 REQUIRE(std::holds_alternative<ArrayType>(declaration.getType().getVariant()));
@@ -4458,7 +4456,7 @@ TEST_CASE("Semantics anonymous inline structs and unions", "[LLVM]")
                   "    };\n"
                   "};\n"
                   "\n"
-                  "int* function(struct __pthread_cond_s* c) {\n"
+                  "unsigned int* function(struct __pthread_cond_s* c) {\n"
                   "   return &c->__low;\n"
                   "}\n",
                   ProducesNoErrors());

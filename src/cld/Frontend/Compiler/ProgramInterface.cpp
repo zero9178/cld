@@ -125,7 +125,7 @@ const cld::Semantics::UnionDefinition* cld::Semantics::ProgramInterface::getUnio
     return &m_unionDefinitions[static_cast<std::uint64_t>(*type)];
 }
 
-const tsl::ordered_map<std::string_view, cld::Semantics::Field>&
+const cld::Semantics::FieldMap&
     cld::Semantics::ProgramInterface::getFields(const cld::Semantics::Type& recordType) const
 {
     if (std::holds_alternative<AnonymousUnionType>(recordType.getVariant()))
@@ -177,25 +177,5 @@ bool cld::Semantics::ProgramInterface::isBitfieldAccess(const Expression& expres
         return false;
     }
     auto& mem = cld::get<MemberAccess>(expression.getVariant());
-    auto& expr = mem.getRecordExpression();
-    if (!isRecord(expr.getType()))
-    {
-        return false;
-    }
-    auto* recordType = std::holds_alternative<PointerType>(expr.getType().getVariant()) ?
-                           &cld::get<PointerType>(expr.getType().getVariant()).getElementType() :
-                           &expr.getType();
-    for (auto& iter : llvm::ArrayRef(mem.getMemberIndices()).drop_back())
-    {
-        auto fields = getFields(*recordType);
-        recordType = std::holds_alternative<PointerType>(fields[iter].type->getVariant()) ?
-                         &cld::get<PointerType>(fields[iter].type->getVariant()).getElementType() :
-                         fields[iter].type.get();
-        if (!isRecord(*recordType))
-        {
-            return false;
-        }
-    }
-    auto fields = getFields(*recordType);
-    return static_cast<bool>(fields[mem.getMemberIndices().back()].bitFieldBounds);
+    return static_cast<bool>(mem.getField().bitFieldBounds);
 }
