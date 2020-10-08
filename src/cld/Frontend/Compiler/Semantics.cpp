@@ -627,8 +627,9 @@ bool cld::Semantics::AnonymousStructType::operator!=(const cld::Semantics::Anony
 }
 
 cld::Semantics::Type cld::Semantics::AnonymousStructType::create(bool isConst, bool isVolatile, std::uint64_t id,
-                                                                 std::vector<Field> fields, std::vector<Type> layout,
-                                                                 std::uint32_t sizeOf, std::uint32_t alignOf)
+                                                                 tsl::ordered_map<std::string_view, Field> fields,
+                                                                 std::vector<Type> layout, std::uint32_t sizeOf,
+                                                                 std::uint32_t alignOf)
 {
     return cld::Semantics::Type(isConst, isVolatile,
                                 AnonymousStructType(id, std::move(fields), std::move(layout), sizeOf, alignOf));
@@ -644,12 +645,6 @@ std::size_t cld::Semantics::AnonymousStructType::getAlignOf(const ProgramInterfa
     return m_alignOf;
 }
 
-cld::Semantics::AnonymousUnionType::AnonymousUnionType(std::uint64_t id, std::vector<Field>&& fields,
-                                                       std::uint64_t sizeOf, std::uint64_t alignOf)
-    : m_id(id), m_fields(std::move(fields)), m_sizeOf(sizeOf), m_alignOf(alignOf)
-{
-}
-
 bool cld::Semantics::AnonymousUnionType::operator==(const cld::Semantics::AnonymousUnionType& rhs) const
 {
     return m_id == rhs.m_id;
@@ -661,8 +656,8 @@ bool cld::Semantics::AnonymousUnionType::operator!=(const cld::Semantics::Anonym
 }
 
 cld::Semantics::Type cld::Semantics::AnonymousUnionType::create(bool isConst, bool isVolatile, std::uint64_t id,
-                                                                std::vector<Field> fields, std::uint64_t sizeOf,
-                                                                std::uint64_t alignOf)
+                                                                tsl::ordered_map<std::string_view, Field> fields,
+                                                                std::uint64_t sizeOf, std::uint64_t alignOf)
 {
     return cld::Semantics::Type(isConst, isVolatile, AnonymousUnionType(id, std::move(fields), sizeOf, alignOf));
 }

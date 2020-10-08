@@ -125,7 +125,7 @@ const cld::Semantics::UnionDefinition* cld::Semantics::ProgramInterface::getUnio
     return &m_unionDefinitions[static_cast<std::uint64_t>(*type)];
 }
 
-llvm::ArrayRef<cld::Semantics::Field>
+const tsl::ordered_map<std::string_view, cld::Semantics::Field>&
     cld::Semantics::ProgramInterface::getFields(const cld::Semantics::Type& recordType) const
 {
     if (std::holds_alternative<AnonymousUnionType>(recordType.getVariant()))

@@ -637,8 +637,8 @@ cld::Semantics::Type
                 }
             }
         }
-        std::vector<Field> fields;
-        std::unordered_map<std::string_view, const Lexer::CToken*> nameToToken;
+        tsl::ordered_map<std::string_view, Field> fields;
+        std::unordered_set<std::uint64_t> zeroBitFields;
         for (auto iter = structOrUnion->getStructDeclarations().begin();
              iter != structOrUnion->getStructDeclarations().end(); iter++)
         {
@@ -672,26 +672,23 @@ cld::Semantics::Type
                                                                                     specifiers));
                     continue;
                 }
-                auto subFields = getFields(type);
-                for (auto& iter2 : subFields)
+                auto parentType = std::make_shared<Type>(std::move(type));
+                auto& subFields = getFields(type);
+                for (auto [name, field] : subFields)
                 {
-                    if (!iter2.nameToken)
-                    {
-                        continue;
-                    }
-                    auto [prev, notRedefined] = nameToToken.insert({iter2.name, iter2.nameToken});
+                    field.indices.insert(field.indices.begin(), static_cast<std::size_t>(-1));
+                    const auto* token = field.nameToken;
+                    auto [prev, notRedefined] = fields.insert({name, std::move(field)});
                     if (!notRedefined)
                     {
-                        log(Errors::Semantics::REDEFINITION_OF_FIELD_N.args(*iter2.nameToken, m_sourceInterface,
-                                                                            *iter2.nameToken));
-                        if (prev->second)
+                        log(Errors::Semantics::REDEFINITION_OF_FIELD_N.args(*token, m_sourceInterface, *token));
+                        if (prev->second.nameToken)
                         {
-                            log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second, m_sourceInterface, *prev->second));
+                            log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.nameToken, m_sourceInterface,
+                                                                     *prev->second.nameToken));
                         }
                     }
                 }
-                fields.push_back(
-                    {std::make_shared<Type>(std::move(type)), "", nullptr, {}, static_cast<std::size_t>(-1)});
                 continue;
             }
             for (auto iter2 = declarators.begin(); iter2 != declarators.end(); iter2++)
@@ -836,23 +833,31 @@ cld::Semantics::Type
                         log(Errors::Semantics::BITFIELD_WITH_SIZE_ZERO_MAY_NOT_HAVE_A_NAME.args(
                             *declarator, m_sourceInterface, *declarator));
                     }
+                    if (result->toUInt() == 0)
+                    {
+                        zeroBitFields.emplace(fields.size());
+                        continue;
+                    }
                     value.emplace(0, result->toUInt());
                 }
                 const auto* token = declarator ? declaratorToLoc(*declarator) : nullptr;
-                std::string_view fieldName = token ? token->getText() : "";
-                fields.push_back(
-                    {std::make_shared<Type>(std::move(type)), fieldName, token, value, static_cast<std::size_t>(-1)});
                 if (token)
                 {
-                    auto [prev, notRedefinition] = nameToToken.insert({token->getText(), token});
+                    auto [prev, notRedefinition] = fields.insert({token->getText(),
+                                                                  {std::make_shared<Type>(std::move(type)),
+                                                                   token->getText(),
+                                                                   token,
+                                                                   {static_cast<std::size_t>(-1)},
+                                                                   std::move(value),
+                                                                   {}}});
                     if (!notRedefinition)
                     {
                         log(Errors::Semantics::REDEFINITION_OF_FIELD_N.args(*token, m_sourceInterface, *token));
-                        if (prev->second)
+                        if (prev->second.nameToken)
                         {
-                            log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second, m_sourceInterface, *prev->second));
+                            log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.nameToken, m_sourceInterface,
+                                                                     *prev->second.nameToken));
                         }
-                        fields.pop_back();
                     }
                 }
             }
@@ -863,31 +868,40 @@ cld::Semantics::Type
         {
             for (auto iter = fields.begin(); iter != fields.end();)
             {
-                if (iter->type->isUndefined())
+                auto& field = iter.value();
+                if (field.type->isUndefined())
                 {
-                    iter->layoutIndex = layout.size();
-                    layout.push_back(*iter->type);
+                    field.indices[0] = layout.size();
+                    layout.push_back(*field.type);
                     iter++;
                     continue;
                 }
-                if (iter + 1 == fields.end() && std::holds_alternative<AbstractArrayType>(iter->type->getVariant()))
+                if (iter + 1 == fields.end() && std::holds_alternative<AbstractArrayType>(field.type->getVariant()))
                 {
                     // TODO: I don't think this should be part of the layout but I am not sure?
                     break;
                 }
-                if (!iter->bitFieldBounds)
+                if (field.indices.size() > 1)
                 {
-                    auto alignment = iter->type->getAlignOf(*this);
+                    auto& parentType = field.parentType;
+                    layout.emplace_back(*parentType);
+                    iter = std::find_if(iter, fields.end(),
+                                        [&](const Field& field) { return field.parentType == parentType; });
+                    continue;
+                }
+                if (!field.bitFieldBounds)
+                {
+                    auto alignment = field.type->getAlignOf(*this);
                     currentAlignment = std::max(currentAlignment, alignment);
                     auto rest = currentSize % alignment;
                     if (rest != 0)
                     {
                         currentSize += alignment - rest;
                     }
-                    auto subSize = iter->type->getSizeOf(*this);
+                    auto subSize = field.type->getSizeOf(*this);
                     currentSize += subSize;
-                    iter->layoutIndex = layout.size();
-                    layout.push_back(*iter->type);
+                    field.indices[0] = layout.size();
+                    layout.push_back(*field.type);
                     iter++;
                     continue;
                 }
@@ -895,28 +909,26 @@ cld::Semantics::Type
                 std::uint64_t storageLeft = 0;
                 std::uint64_t prevSize = 0;
                 std::uint64_t used = 0;
-                for (; iter != fields.end() && iter->bitFieldBounds;)
+                for (; iter != fields.end() && field.bitFieldBounds;)
                 {
-                    if (iter->bitFieldBounds->second == 0)
+                    if (zeroBitFields.count(iter - fields.begin()))
                     {
                         lastWasZero = true;
-                        iter = fields.erase(iter);
-                        continue;
                     }
-                    std::size_t size = iter->type->getSizeOf(*this);
-                    if (!lastWasZero && storageLeft > iter->bitFieldBounds->second
+                    std::size_t size = field.type->getSizeOf(*this);
+                    if (!lastWasZero && storageLeft > field.bitFieldBounds->second
                         && (!m_sourceInterface.getLanguageOptions().discreteBitfields || prevSize == size))
                     {
-                        iter->layoutIndex = layout.size() - 1;
-                        storageLeft -= iter->bitFieldBounds->second;
-                        iter->bitFieldBounds.emplace(used, used + iter->bitFieldBounds->second);
-                        used = iter->bitFieldBounds->second;
+                        field.indices[0] = layout.size() - 1;
+                        storageLeft -= field.bitFieldBounds->second;
+                        field.bitFieldBounds.emplace(used, used + field.bitFieldBounds->second);
+                        used = field.bitFieldBounds->second;
                         iter++;
                         continue;
                     }
                     lastWasZero = false;
                     currentSize += prevSize;
-                    auto alignment = iter->type->getAlignOf(*this);
+                    auto alignment = field.type->getAlignOf(*this);
                     currentAlignment = std::max(currentAlignment, alignment);
                     auto rest = currentSize % alignment;
                     if (rest != 0)
@@ -925,11 +937,11 @@ cld::Semantics::Type
                     }
                     prevSize = size;
                     storageLeft =
-                        cld::get<PrimitiveType>(iter->type->getVariant()).getBitCount() - iter->bitFieldBounds->second;
-                    used = iter->bitFieldBounds->second;
-                    iter->bitFieldBounds.emplace(0, used);
-                    iter->layoutIndex = layout.size();
-                    layout.push_back(*iter->type);
+                        cld::get<PrimitiveType>(field.type->getVariant()).getBitCount() - field.bitFieldBounds->second;
+                    used = field.bitFieldBounds->second;
+                    field.bitFieldBounds.emplace(0, used);
+                    field.indices[0] = layout.size();
+                    layout.push_back(*field.type);
                     iter++;
                 }
                 currentSize += prevSize;
@@ -937,17 +949,18 @@ cld::Semantics::Type
         }
         else
         {
-            for (auto& iter : fields)
+            for (auto iter = fields.begin(); iter != fields.end(); iter++)
             {
-                if (iter.type->isUndefined())
+                auto& field = iter.value();
+                if (field.type->isUndefined())
                 {
                     continue;
                 }
-                auto size = iter.type->getSizeOf(*this);
+                auto size = field.type->getSizeOf(*this);
                 if (size > currentSize)
                 {
                     currentSize = size;
-                    currentAlignment = iter.type->getAlignOf(*this);
+                    currentAlignment = field.type->getAlignOf(*this);
                 }
             }
         }

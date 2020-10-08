@@ -819,16 +819,18 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
         REQUIRE(std::holds_alternative<cld::Semantics::AnonymousStructType>(decl->getType().getVariant()));
         auto& anon = cld::get<cld::Semantics::AnonymousStructType>(decl->getType().getVariant());
         CHECK(anon.getFields().size() == 3);
-        CHECK(anon.getFields()[0].name == "i");
-        CHECK(*anon.getFields()[0].type
+        CHECK(anon.getFields().values_container()[0].second.name == "i");
+        CHECK(*anon.getFields().values_container()[0].second.type
               == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-        CHECK_FALSE(anon.getFields()[0].bitFieldBounds);
-        CHECK(anon.getFields()[1].name == "f");
-        CHECK(*anon.getFields()[1].type == cld::Semantics::PrimitiveType::createFloat(false, false));
-        CHECK_FALSE(anon.getFields()[1].bitFieldBounds);
-        CHECK(anon.getFields()[2].name == "r");
-        CHECK(*anon.getFields()[2].type == cld::Semantics::PrimitiveType::createFloat(false, false));
-        CHECK_FALSE(anon.getFields()[2].bitFieldBounds);
+        CHECK_FALSE(anon.getFields().values_container()[0].second.bitFieldBounds);
+        CHECK(anon.getFields().values_container()[1].second.name == "f");
+        CHECK(*anon.getFields().values_container()[1].second.type
+              == cld::Semantics::PrimitiveType::createFloat(false, false));
+        CHECK_FALSE(anon.getFields().values_container()[1].second.bitFieldBounds);
+        CHECK(anon.getFields().values_container()[2].second.name == "r");
+        CHECK(*anon.getFields().values_container()[2].second.type
+              == cld::Semantics::PrimitiveType::createFloat(false, false));
+        CHECK_FALSE(anon.getFields().values_container()[2].second.bitFieldBounds);
     }
     SECTION("Anonymous union")
     {
@@ -841,16 +843,18 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
         REQUIRE(std::holds_alternative<cld::Semantics::AnonymousUnionType>(decl->getType().getVariant()));
         auto& anon = cld::get<cld::Semantics::AnonymousUnionType>(decl->getType().getVariant());
         CHECK(anon.getFields().size() == 3);
-        CHECK(anon.getFields()[0].name == "i");
-        CHECK(*anon.getFields()[0].type
+        CHECK(anon.getFields().values_container()[0].second.name == "i");
+        CHECK(*anon.getFields().values_container()[0].second.type
               == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-        CHECK_FALSE(anon.getFields()[0].bitFieldBounds);
-        CHECK(anon.getFields()[1].name == "f");
-        CHECK(*anon.getFields()[1].type == cld::Semantics::PrimitiveType::createFloat(false, false));
-        CHECK_FALSE(anon.getFields()[1].bitFieldBounds);
-        CHECK(anon.getFields()[2].name == "r");
-        CHECK(*anon.getFields()[2].type == cld::Semantics::PrimitiveType::createFloat(false, false));
-        CHECK_FALSE(anon.getFields()[2].bitFieldBounds);
+        CHECK_FALSE(anon.getFields().values_container()[0].second.bitFieldBounds);
+        CHECK(anon.getFields().values_container()[0].second.name == "f");
+        CHECK(*anon.getFields().values_container()[1].second.type
+              == cld::Semantics::PrimitiveType::createFloat(false, false));
+        CHECK_FALSE(anon.getFields().values_container()[1].second.bitFieldBounds);
+        CHECK(anon.getFields().values_container()[2].second.name == "r");
+        CHECK(*anon.getFields().values_container()[2].second.type
+              == cld::Semantics::PrimitiveType::createFloat(false, false));
+        CHECK_FALSE(anon.getFields().values_container()[2].second.bitFieldBounds);
     }
     SECTION("Flexible array member")
     {
@@ -967,29 +971,35 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
             REQUIRE(structDef->getFields().size() == 6);
             CHECK(structDef->getLayout().size() == 2);
 
-            CHECK(structDef->getFields()[0].layoutIndex == 0);
-            REQUIRE(structDef->getFields()[0].bitFieldBounds);
-            CHECK(*structDef->getFields()[0].bitFieldBounds == std::pair{0u, 8u});
+            CHECK_THAT(structDef->getFields().values_container()[0].second.indices,
+                       Catch::Equals(std::vector<std::uint64_t>{0}));
+            REQUIRE(structDef->getFields().values_container()[0].second.bitFieldBounds);
+            CHECK(*structDef->getFields().values_container()[0].second.bitFieldBounds == std::pair{0u, 8u});
 
-            CHECK(structDef->getFields()[1].layoutIndex == 0);
-            REQUIRE(structDef->getFields()[1].bitFieldBounds);
-            CHECK(*structDef->getFields()[1].bitFieldBounds == std::pair{8u, 11u});
+            CHECK(structDef->getFields().values_container()[1].second.indices,
+                  Catch::Equals(std::vector<std::uint64_t>{0}));
+            REQUIRE(structDef->getFields().values_container()[1].second.bitFieldBounds);
+            CHECK(*structDef->getFields().values_container()[1].second.bitFieldBounds == std::pair{8u, 11u});
 
-            CHECK(structDef->getFields()[2].layoutIndex == 0);
-            REQUIRE(structDef->getFields()[2].bitFieldBounds);
-            CHECK(*structDef->getFields()[2].bitFieldBounds == std::pair{11u, 12u});
+            CHECK(structDef->getFields().values_container()[2].second.indices,
+                  Catch::Equals(std::vector<std::uint64_t>{0}));
+            REQUIRE(structDef->getFields().values_container()[2].second.bitFieldBounds);
+            CHECK(*structDef->getFields().values_container()[2].second.bitFieldBounds == std::pair{11u, 12u});
 
-            CHECK(structDef->getFields()[3].layoutIndex == 0);
-            REQUIRE(structDef->getFields()[3].bitFieldBounds);
-            CHECK(*structDef->getFields()[3].bitFieldBounds == std::pair{12u, 13u});
+            CHECK(structDef->getFields().values_container()[3] second.indices,
+                  Catch::Equals(std::vector<std::uint64_t>{0}));
+            REQUIRE(structDef->getFields().values_container()[3].second.bitFieldBounds);
+            CHECK(*structDef->getFields().values_container()[3].second.bitFieldBounds == std::pair{12u, 13u});
 
-            CHECK(structDef->getFields()[4].layoutIndex == 0);
-            REQUIRE(structDef->getFields()[4].bitFieldBounds);
-            CHECK(*structDef->getFields()[4].bitFieldBounds == std::pair{13u, 14u});
+            CHECK(structDef->getFields().values_container()[4].second.indices,
+                  Catch::Equals(std::vector<std::uint64_t>{0}));
+            REQUIRE(structDef->getFields().values_container()[4].second.bitFieldBounds);
+            CHECK(*structDef->getFields().values_container()[4].second.bitFieldBounds == std::pair{13u, 14u});
 
-            CHECK(structDef->getFields()[5].layoutIndex == 1);
-            REQUIRE(structDef->getFields()[5].bitFieldBounds);
-            CHECK(*structDef->getFields()[5].bitFieldBounds == std::pair{0u, 1u});
+            CHECK(structDef->getFields().values_container()[5].second.indices,
+                  Catch::Equals(std::vector<std::uint64_t>{1}));
+            REQUIRE(structDef->getFields().values_container()[5].second.bitFieldBounds);
+            CHECK(*structDef->getFields().values_container()[5].second.bitFieldBounds == std::pair{0u, 1u});
         }
         SEMA_PRODUCES("struct A {\n"
                       " float i :5;\n"
@@ -4438,35 +4448,46 @@ TEST_CASE("Semantics inline functions", "[semantics]")
 
 TEST_CASE("Semantics anonymous inline structs and unions", "[LLVM]")
 {
-    SECTION("With __extension__")
-    {
-        SEMA_PRODUCES("struct __pthread_cond_s {\n"
-                      "    __extension__ union {\n"
-                      "        unsigned long long int __wsed;\n"
-                      "        struct {\n"
-                      "            unsigned int __low;\n"
-                      "            unsigned int __high;\n"
-                      "        } __wseq32;\n"
-                      "    };\n"
-                      "};",
-                      ProducesNoErrors());
-        SEMA_PRODUCES("struct __pthread_cond_s {\n"
-                      "    union {\n"
-                      "        unsigned long long int __wsed;\n"
-                      "        struct {\n"
-                      "            unsigned int __low;\n"
-                      "            unsigned int __high;\n"
-                      "        } __wseq32;\n"
-                      "    };\n"
-                      "};",
-                      ProducesError(FIELD_WITHOUT_A_NAME_IS_NOT_ALLOWED));
-        SEMA_PRODUCES("__extension__ struct R {\n"
-                      "    int i;\n"
-                      "    union {\n"
-                      "        float i;\n"
-                      "        int f;\n"
-                      "    };\n"
-                      "};",
-                      ProducesError(REDEFINITION_OF_FIELD_N, "'i'"));
-    }
+    SEMA_PRODUCES("struct __pthread_cond_s {\n"
+                  "    __extension__ union {\n"
+                  "        unsigned long long int __wsed;\n"
+                  "        struct {\n"
+                  "            unsigned int __low;\n"
+                  "            unsigned int __high;\n"
+                  "        };\n"
+                  "    };\n"
+                  "};\n"
+                  "\n"
+                  "int* function(struct __pthread_cond_s* c) {\n"
+                  "   return &c->__low;\n"
+                  "}\n",
+                  ProducesNoErrors());
+    SEMA_PRODUCES("struct __pthread_cond_s {\n"
+                  "    __extension__ union {\n"
+                  "        unsigned long long int __wsed;\n"
+                  "        struct {\n"
+                  "            unsigned int __low;\n"
+                  "            unsigned int __high;\n"
+                  "        } __wseq32;\n"
+                  "    };\n"
+                  "};",
+                  ProducesNoErrors());
+    SEMA_PRODUCES("struct __pthread_cond_s {\n"
+                  "    union {\n"
+                  "        unsigned long long int __wsed;\n"
+                  "        struct {\n"
+                  "            unsigned int __low;\n"
+                  "            unsigned int __high;\n"
+                  "        } __wseq32;\n"
+                  "    };\n"
+                  "};",
+                  ProducesError(FIELD_WITHOUT_A_NAME_IS_NOT_ALLOWED));
+    SEMA_PRODUCES("__extension__ struct R {\n"
+                  "    int i;\n"
+                  "    union {\n"
+                  "        float i;\n"
+                  "        int f;\n"
+                  "    };\n"
+                  "};",
+                  ProducesError(REDEFINITION_OF_FIELD_N, "'i'"));
 }
