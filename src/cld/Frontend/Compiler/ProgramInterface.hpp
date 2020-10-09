@@ -115,7 +115,9 @@ public:
 
     const FieldMap& getFields(const Type& recordType) const;
 
-    llvm::ArrayRef<Type> getLayout(const Type& structType) const;
+    llvm::ArrayRef<Type> getMemoryLayout(const Type& structType) const;
+
+    llvm::ArrayRef<FieldInLayout> getFieldLayout(const Type& structType) const;
 
     bool isBitfieldAccess(const Expression& expression) const;
 

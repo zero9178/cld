@@ -1107,7 +1107,7 @@ public:
                 }
 
                 std::vector<llvm::Type*> fields;
-                for (auto& iter : structDef->getLayout())
+                for (auto& iter : structDef->getMemLayout())
                 {
                     fields.push_back(visit(iter));
                 }
@@ -1158,7 +1158,7 @@ public:
                     return result->second;
                 }
                 std::vector<llvm::Type*> fields;
-                for (auto& iter : structType.getLayout())
+                for (auto& iter : structType.getMemLayout())
                 {
                     fields.push_back(visit(iter));
                 }
@@ -3300,26 +3300,24 @@ public:
                     std::optional<std::pair<std::uint32_t, std::uint32_t>> bitFieldBounds;
                     for (auto iter : path)
                     {
-                        // TODO:
-                        CLD_UNREACHABLE;
-                        //                        if (cld::Semantics::isStruct(*currentType))
-                        //                        {
-                        //                            auto fields = m_programInterface.getFields(*currentType);
-                        //                            currentPointer = m_builder.CreateInBoundsGEP(
-                        //                                currentPointer, {m_builder.getInt64(0),
-                        //                                m_builder.getInt32(fields[iter].layoutIndex)});
-                        //                            currentType = fields[iter].type.get();
-                        //                            bitFieldBounds = fields[iter].bitFieldBounds;
-                        //                        }
-                        //                        else if (cld::Semantics::isUnion(*currentType))
-                        //                        {
-                        //                            auto fields = m_programInterface.getFields(*currentType);
-                        //                            currentType = fields[iter].type.get();
-                        //                            currentPointer = m_builder.CreateBitCast(currentPointer,
-                        //                                                                     llvm::PointerType::getUnqual(visit(*currentType)));
-                        //                            bitFieldBounds = fields[iter].bitFieldBounds;
-                        //                        }
-                        //                        else
+                        if (cld::Semantics::isStruct(*currentType))
+                        {
+                            auto fieldLayout = m_programInterface.getFieldLayout(*currentType);
+                            currentPointer = m_builder.CreateInBoundsGEP(
+                                currentPointer,
+                                {m_builder.getInt64(0), m_builder.getInt32(fieldLayout[iter].layoutIndex)});
+                            currentType = fieldLayout[iter].type.get();
+                            bitFieldBounds = fieldLayout[iter].bitFieldBounds;
+                        }
+                        else if (cld::Semantics::isUnion(*currentType))
+                        {
+                            auto fields = m_programInterface.getFields(*currentType);
+                            currentType = fields.values_container()[iter].second.type.get();
+                            currentPointer = m_builder.CreateBitCast(currentPointer,
+                                                                     llvm::PointerType::getUnqual(visit(*currentType)));
+                            bitFieldBounds = fields.values_container()[iter].second.bitFieldBounds;
+                        }
+                        else
                         {
                             currentType = &cld::Semantics::getArrayElementType(*currentType);
                             currentPointer = m_builder.CreateInBoundsGEP(

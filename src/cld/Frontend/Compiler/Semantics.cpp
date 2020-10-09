@@ -627,11 +627,14 @@ bool cld::Semantics::AnonymousStructType::operator!=(const cld::Semantics::Anony
 }
 
 cld::Semantics::Type cld::Semantics::AnonymousStructType::create(bool isConst, bool isVolatile, std::uint64_t id,
-                                                                 FieldMap fields, std::vector<Type> layout,
-                                                                 std::uint32_t sizeOf, std::uint32_t alignOf)
+                                                                 FieldMap fields,
+                                                                 std::vector<FieldInLayout> fieldLayout,
+                                                                 std::vector<Type> memLayout, std::uint32_t sizeOf,
+                                                                 std::uint32_t alignOf)
 {
-    return cld::Semantics::Type(isConst, isVolatile,
-                                AnonymousStructType(id, std::move(fields), std::move(layout), sizeOf, alignOf));
+    return cld::Semantics::Type(
+        isConst, isVolatile,
+        AnonymousStructType(id, std::move(fields), std::move(fieldLayout), std::move(memLayout), sizeOf, alignOf));
 }
 
 std::size_t cld::Semantics::AnonymousStructType::getSizeOf(const ProgramInterface&) const

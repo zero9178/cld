@@ -1784,9 +1784,11 @@ void cld::Semantics::SemanticAnalysis::createBuiltins()
                 PointerType::create(false, false, false, PrimitiveType::createVoid(false, false)));
             fields.insert({"overflow_arg_area", {voidStar, "overflow_arg_area", nullptr, {2}, {}, {}}});
             fields.insert({"reg_save_area", {voidStar, "reg_save_area", nullptr, {3}, {}, {}}});
-            m_structDefinitions.emplace_back("__va_list_tag", std::move(fields),
-                                             std::vector<Type>{*unsignedInt, *unsignedInt, *voidStar, *voidStar}, 24,
-                                             16);
+            auto fieldLayout = std::vector<FieldInLayout>{
+                {unsignedInt, 0, {}}, {unsignedInt, 1, {}}, {voidStar, 2, {}}, {voidStar, 3, {}}};
+            auto memLayout = std::vector<Type>{*unsignedInt, *unsignedInt, *voidStar, *voidStar};
+            m_structDefinitions.emplace_back("__va_list_tag", std::move(fields), std::move(fieldLayout),
+                                             std::move(memLayout), 24, 16);
             auto elementType = StructType::create(false, false, "__va_list_tag", m_structDefinitions.size() - 1);
             elementType = ArrayType::create(false, false, false, false, std::move(elementType), 1);
             elementType.setName("__builtin_va_list");

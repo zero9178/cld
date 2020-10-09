@@ -2604,13 +2604,9 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
     } top(type);
 
     auto assignChildren = YComb{[&](auto&& self, const Type& type, INode& parent) -> void {
-        if (isRecord(type))
+        if (isUnion(type))
         {
             auto ref = llvm::ArrayRef(getFields(type).values_container());
-            if (std::holds_alternative<AbstractArrayType>(ref.back().second.type->getVariant()))
-            {
-                ref = ref.drop_back();
-            }
             parent.resize(ref.size());
             for (std::size_t i = 0; i < ref.size(); i++)
             {
@@ -2620,6 +2616,25 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
                 if (isAggregate(*ref[i].second.type))
                 {
                     self(*ref[i].second.type, parent.at(i));
+                }
+            }
+        }
+        else if (isStruct(type))
+        {
+            auto ref = getFieldLayout(type);
+            if (std::holds_alternative<AbstractArrayType>(ref.back().type->getVariant()))
+            {
+                ref = ref.drop_back();
+            }
+            parent.resize(ref.size());
+            for (std::size_t i = 0; i < ref.size(); i++)
+            {
+                parent.at(i).type = ref[i].type.get();
+                parent.at(i).index = i;
+                parent.at(i).parent = &parent;
+                if (isAggregate(*ref[i].type))
+                {
+                    self(*ref[i].type, parent.at(i));
                 }
             }
         }
@@ -2819,7 +2834,18 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
                         finishRest(iter, node.getNonCommaExpressionsAndBlocks().end());
                         return Expression(node);
                     }
-                    currentIndex = result - fields.begin();
+                    if (result->second.parentTypes.empty())
+                    {
+                        currentIndex = result - fields.begin();
+                    }
+                    else
+                    {
+                        for (auto index : llvm::ArrayRef(result->second.indices).drop_back())
+                        {
+                            current = &current->at(index);
+                        }
+                        currentIndex = result->second.indices.back();
+                    }
                 }
                 else if (!current->type->isUndefined())
                 {

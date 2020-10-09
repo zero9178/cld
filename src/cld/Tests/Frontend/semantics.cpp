@@ -969,7 +969,7 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
             auto* structDef = program.getStructDefinition("A", 0);
             REQUIRE(structDef);
             REQUIRE(structDef->getFields().size() == 6);
-            CHECK(structDef->getLayout().size() == 2);
+            CHECK(structDef->getMemLayout().size() == 2);
 
             CHECK_THAT(structDef->getFields().values_container()[0].second.indices,
                        Catch::Equals(std::vector<std::uint64_t>{0}));
@@ -4446,6 +4446,29 @@ TEST_CASE("Semantics inline functions", "[semantics]")
 
 TEST_CASE("Semantics anonymous inline structs and unions", "[LLVM]")
 {
+    SECTION("Initialization")
+    {
+        SEMA_PRODUCES("__extension__ struct R {\n"
+                      "    int f;\n"
+                      "    struct {\n"
+                      "        float t;\n"
+                      "        int r;\n"
+                      "    };\n"
+                      "};\n"
+                      "\n"
+                      "struct R r = {.t = 5};\n",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("__extension__ struct R {\n"
+                      "    struct {\n"
+                      "        float t;\n"
+                      "        int r;\n"
+                      "    };\n"
+                      "    int f;\n"
+                      "};\n"
+                      "\n"
+                      "struct R r = {{3.0,5,3}};\n",
+                      ProducesError(NO_MORE_SUB_OBJECTS_TO_INITIALIZE));
+    }
     SEMA_PRODUCES("struct __pthread_cond_s {\n"
                   "    __extension__ union {\n"
                   "        unsigned long long int __wsed;\n"

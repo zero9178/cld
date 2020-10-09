@@ -403,13 +403,20 @@ struct Field
     std::shared_ptr<const Type> type; // NOT NULL
     std::string_view name;
     const Lexer::CToken* nameToken;
-    std::vector<std::uint64_t> indices;
+    std::vector<std::size_t> indices;
     std::optional<std::pair<std::uint32_t, std::uint32_t>> bitFieldBounds;
     std::vector<std::shared_ptr<const Type>> parentTypes;
 
     [[nodiscard]] bool operator==(const Field& rhs) const;
 
     [[nodiscard]] bool operator!=(const Field& rhs) const;
+};
+
+struct FieldInLayout
+{
+    std::shared_ptr<const Type> type;
+    std::size_t layoutIndex;
+    std::optional<std::pair<std::uint32_t, std::uint32_t>> bitFieldBounds;
 };
 
 using FieldMap = tsl::ordered_map<std::string_view, Field, std::hash<std::string_view>, std::equal_to<std::string_view>,
@@ -420,19 +427,26 @@ class AnonymousStructType final
 {
     std::uint64_t m_id;
     FieldMap m_fields;
-    std::vector<Type> m_layout;
+    std::vector<FieldInLayout> m_fieldLayout;
+    std::vector<Type> m_memLayout;
     std::uint32_t m_sizeOf;
     std::uint32_t m_alignOf;
 
-    AnonymousStructType(std::uint64_t id, FieldMap&& fields, std::vector<Type>&& layout, std::uint32_t sizeOf,
-                        std::uint32_t alignOf)
-        : m_id(id), m_fields(std::move(fields)), m_layout(std::move(layout)), m_sizeOf(sizeOf), m_alignOf(alignOf)
+    AnonymousStructType(std::uint64_t id, FieldMap&& fields, std::vector<FieldInLayout>&& fieldLayout,
+                        std::vector<Type>&& memLayout, std::uint32_t sizeOf, std::uint32_t alignOf)
+        : m_id(id),
+          m_fields(std::move(fields)),
+          m_fieldLayout(std::move(fieldLayout)),
+          m_memLayout(std::move(memLayout)),
+          m_sizeOf(sizeOf),
+          m_alignOf(alignOf)
     {
     }
 
 public:
-    static Type create(bool isConst, bool isVolatile, std::uint64_t id, FieldMap fields, std::vector<Type> layout,
-                       std::uint32_t sizeOf, std::uint32_t alignOf);
+    static Type create(bool isConst, bool isVolatile, std::uint64_t id, FieldMap fields,
+                       std::vector<FieldInLayout> fieldLayout, std::vector<Type> memLayout, std::uint32_t sizeOf,
+                       std::uint32_t alignOf);
 
     [[nodiscard]] std::uint64_t getId() const
     {
@@ -444,9 +458,14 @@ public:
         return m_fields;
     }
 
-    [[nodiscard]] const std::vector<Type>& getLayout() const
+    [[nodiscard]] const std::vector<FieldInLayout>& getFieldLayout() const
     {
-        return m_layout;
+        return m_fieldLayout;
+    }
+
+    [[nodiscard]] const std::vector<Type>& getMemLayout() const
+    {
+        return m_memLayout;
     }
 
     [[nodiscard]] std::size_t getSizeOf(const ProgramInterface& program) const;
@@ -1825,14 +1844,20 @@ class StructDefinition
 {
     std::string_view m_name;
     FieldMap m_fields;
-    std::vector<Type> m_layout;
+    std::vector<FieldInLayout> m_fieldLayout;
+    std::vector<Type> m_memLayout;
     std::uint64_t m_sizeOf;
     std::uint64_t m_alignOf;
 
 public:
-    StructDefinition(std::string_view name, FieldMap fields, std::vector<Type> layout, std::uint64_t sizeOf,
-                     std::uint64_t alignOf)
-        : m_name(name), m_fields(std::move(fields)), m_layout(std::move(layout)), m_sizeOf(sizeOf), m_alignOf(alignOf)
+    StructDefinition(std::string_view name, FieldMap fields, std::vector<FieldInLayout> fieldLayout,
+                     std::vector<Type> memLayout, std::uint64_t sizeOf, std::uint64_t alignOf)
+        : m_name(name),
+          m_fields(std::move(fields)),
+          m_fieldLayout(std::move(fieldLayout)),
+          m_memLayout(std::move(memLayout)),
+          m_sizeOf(sizeOf),
+          m_alignOf(alignOf)
     {
     }
 
@@ -1846,9 +1871,14 @@ public:
         return m_fields;
     }
 
-    [[nodiscard]] const std::vector<Type>& getLayout() const
+    [[nodiscard]] const std::vector<FieldInLayout>& getFieldLayout() const
     {
-        return m_layout;
+        return m_fieldLayout;
+    }
+
+    [[nodiscard]] const std::vector<Type>& getMemLayout() const
+    {
+        return m_memLayout;
     }
 
     [[nodiscard]] std::uint64_t getSizeOf() const

@@ -154,18 +154,18 @@ const cld::Semantics::FieldMap&
 }
 
 llvm::ArrayRef<cld::Semantics::Type>
-    cld::Semantics::ProgramInterface::getLayout(const cld::Semantics::Type& structType) const
+    cld::Semantics::ProgramInterface::getMemoryLayout(const cld::Semantics::Type& structType) const
 {
     if (std::holds_alternative<AnonymousStructType>(structType.getVariant()))
     {
-        return cld::get<AnonymousStructType>(structType.getVariant()).getLayout();
+        return cld::get<AnonymousStructType>(structType.getVariant()).getMemLayout();
     }
     if (std::holds_alternative<StructType>(structType.getVariant()))
     {
         auto& structTy = cld::get<StructType>(structType.getVariant());
         auto* structDef = getStructDefinition(structTy.getName(), structTy.getScopeOrId());
         CLD_ASSERT(structDef);
-        return structDef->getLayout();
+        return structDef->getMemLayout();
     }
     CLD_UNREACHABLE;
 }
@@ -178,4 +178,21 @@ bool cld::Semantics::ProgramInterface::isBitfieldAccess(const Expression& expres
     }
     auto& mem = cld::get<MemberAccess>(expression.getVariant());
     return static_cast<bool>(mem.getField().bitFieldBounds);
+}
+
+llvm::ArrayRef<cld::Semantics::FieldInLayout>
+    cld::Semantics::ProgramInterface::getFieldLayout(const cld::Semantics::Type& structType) const
+{
+    if (std::holds_alternative<AnonymousStructType>(structType.getVariant()))
+    {
+        return cld::get<AnonymousStructType>(structType.getVariant()).getFieldLayout();
+    }
+    if (std::holds_alternative<StructType>(structType.getVariant()))
+    {
+        auto& structTy = cld::get<StructType>(structType.getVariant());
+        auto* structDef = getStructDefinition(structTy.getName(), structTy.getScopeOrId());
+        CLD_ASSERT(structDef);
+        return structDef->getFieldLayout();
+    }
+    CLD_UNREACHABLE;
 }
