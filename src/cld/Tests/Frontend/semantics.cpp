@@ -4448,6 +4448,17 @@ TEST_CASE("Semantics anonymous inline structs and unions", "[LLVM]")
 {
     SECTION("Initialization")
     {
+        SEMA_PRODUCES("struct __pthread_cond_s {\n"
+                      "    __extension__ union {\n"
+                      "        unsigned long long int __wsed;\n"
+                      "        struct {\n"
+                      "            unsigned int __low;\n"
+                      "            unsigned int __high;\n"
+                      "        };\n"
+                      "    };\n"
+                      "} s = {.__low = 5,.__high = 3};\n"
+                      "\n",
+                      ProducesNoErrors());
         SEMA_PRODUCES("__extension__ struct R {\n"
                       "    int f;\n"
                       "    struct {\n"

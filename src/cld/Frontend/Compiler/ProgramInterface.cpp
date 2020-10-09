@@ -181,18 +181,29 @@ bool cld::Semantics::ProgramInterface::isBitfieldAccess(const Expression& expres
 }
 
 llvm::ArrayRef<cld::Semantics::FieldInLayout>
-    cld::Semantics::ProgramInterface::getFieldLayout(const cld::Semantics::Type& structType) const
+    cld::Semantics::ProgramInterface::getFieldLayout(const cld::Semantics::Type& recordType) const
 {
-    if (std::holds_alternative<AnonymousStructType>(structType.getVariant()))
+    if (std::holds_alternative<AnonymousUnionType>(recordType.getVariant()))
     {
-        return cld::get<AnonymousStructType>(structType.getVariant()).getFieldLayout();
+        return cld::get<AnonymousUnionType>(recordType.getVariant()).getFieldLayout();
     }
-    if (std::holds_alternative<StructType>(structType.getVariant()))
+    if (std::holds_alternative<AnonymousStructType>(recordType.getVariant()))
     {
-        auto& structTy = cld::get<StructType>(structType.getVariant());
-        auto* structDef = getStructDefinition(structTy.getName(), structTy.getScopeOrId());
+        return cld::get<AnonymousStructType>(recordType.getVariant()).getFieldLayout();
+    }
+    if (std::holds_alternative<StructType>(recordType.getVariant()))
+    {
+        auto& structType = cld::get<StructType>(recordType.getVariant());
+        auto* structDef = getStructDefinition(structType.getName(), structType.getScopeOrId());
         CLD_ASSERT(structDef);
         return structDef->getFieldLayout();
+    }
+    if (std::holds_alternative<UnionType>(recordType.getVariant()))
+    {
+        auto& unionType = cld::get<UnionType>(recordType.getVariant());
+        auto* unionDef = getUnionDefinition(unionType.getName(), unionType.getScopeOrId());
+        CLD_ASSERT(unionDef);
+        return unionDef->getFieldLayout();
     }
     CLD_UNREACHABLE;
 }

@@ -857,7 +857,7 @@ cld::Semantics::Type
                     auto [prev, notRedefinition] = fields.insert(
                         {token->getText(),
                          {sharedType, token->getText(), token, {static_cast<std::size_t>(-1)}, value, {}}});
-                    fieldLayout.push_back({sharedType, {static_cast<std::size_t>(-1)}, value});
+                    fieldLayout.push_back({sharedType, static_cast<std::size_t>(-1), value});
                     if (!notRedefinition)
                     {
                         log(Errors::Semantics::REDEFINITION_OF_FIELD_N.args(*token, m_sourceInterface, *token));
@@ -872,9 +872,9 @@ cld::Semantics::Type
         }
         std::size_t currentSize = 0, currentAlignment = 0;
         std::vector<Type> memoryLayout;
+        std::size_t fieldLayoutCounter = 0;
         if (!structOrUnion->isUnion())
         {
-            std::size_t fieldLayoutCounter = 0;
             for (auto iter = fields.begin(); iter != fields.end();)
             {
                 if (iter->second.type->isUndefined())
@@ -949,8 +949,10 @@ cld::Semantics::Type
                         && (!m_sourceInterface.getLanguageOptions().discreteBitfields || prevSize == size))
                     {
                         iter.value().indices[0] = memoryLayout.size() - 1;
-                        fieldLayout[fieldLayoutCounter++].layoutIndex = memoryLayout.size() - 1;
                         storageLeft -= iter->second.bitFieldBounds->second;
+                        fieldLayout[fieldLayoutCounter].bitFieldBounds.emplace(
+                            used, used + iter->second.bitFieldBounds->second);
+                        fieldLayout[fieldLayoutCounter++].layoutIndex = memoryLayout.size() - 1;
                         iter.value().bitFieldBounds.emplace(used, used + iter->second.bitFieldBounds->second);
                         used = iter->second.bitFieldBounds->second;
                         iter++;
@@ -971,6 +973,7 @@ cld::Semantics::Type
                     used = iter->second.bitFieldBounds->second;
                     iter.value().bitFieldBounds.emplace(0, used);
                     iter.value().indices[0] = memoryLayout.size();
+                    fieldLayout[fieldLayoutCounter].bitFieldBounds.emplace(0, used);
                     fieldLayout[fieldLayoutCounter++].layoutIndex = memoryLayout.size();
                     memoryLayout.push_back(*iter->second.type);
                     iter++;
@@ -980,19 +983,35 @@ cld::Semantics::Type
         }
         else
         {
-            for (auto iter = fields.begin(); iter != fields.end(); iter++)
+            for (auto iter = fields.begin(); iter != fields.end();)
             {
                 auto& field = iter.value();
                 if (field.type->isUndefined())
                 {
+                    iter++;
                     continue;
                 }
                 field.indices[0] = iter - fields.begin();
-                auto size = field.type->getSizeOf(*this);
+                fieldLayout[fieldLayoutCounter++].layoutIndex = iter - fields.begin();
+                auto size = fieldLayout[fieldLayoutCounter - 1].type->getSizeOf(*this);
                 if (size > currentSize)
                 {
                     currentSize = size;
-                    currentAlignment = field.type->getAlignOf(*this);
+                    currentAlignment = fieldLayout[fieldLayoutCounter - 1].type->getAlignOf(*this);
+                }
+                if (!field.parentTypes.empty())
+                {
+                    iter = std::find_if_not(iter, fields.end(), [&](const auto& pair) {
+                        if (pair.second.parentTypes.empty())
+                        {
+                            return false;
+                        }
+                        return pair.second.parentTypes.front().get() == field.parentTypes.front().get();
+                    });
+                }
+                else
+                {
+                    iter++;
                 }
             }
         }
@@ -1009,7 +1028,8 @@ cld::Semantics::Type
             auto name = structOrUnion->getIdentifierLoc()->getText();
             if (structOrUnion->isUnion())
             {
-                m_unionDefinitions.emplace_back(name, std::move(fields), currentSize, currentAlignment);
+                m_unionDefinitions.emplace_back(name, std::move(fields), std::move(fieldLayout), currentSize,
+                                                currentAlignment);
                 if (definitionIsValid)
                 {
                     getCurrentScope().types.insert_or_assign(
@@ -1035,7 +1055,7 @@ cld::Semantics::Type
         {
             return AnonymousUnionType::create(isConst, isVolatile,
                                               reinterpret_cast<std::uintptr_t>(structOrUnion->begin()),
-                                              std::move(fields), currentSize, currentAlignment);
+                                              std::move(fields), std::move(fieldLayout), currentSize, currentAlignment);
         }
 
         return AnonymousStructType::create(

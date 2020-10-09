@@ -4055,3 +4055,33 @@ TEST_CASE("LLVM codegen inline functions", "[LLVM]")
         CHECK(!function->isDeclaration());
     }
 }
+
+TEST_CASE("LLVM codegen nameless anonymous struct or union fields", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    SECTION("Simple member access")
+    {
+        auto module = std::make_unique<llvm::Module>("", context);
+        auto program = generateProgram("struct __pthread_cond_s {\n"
+                                       "    __extension__ union {\n"
+                                       "        unsigned long long int __wsed;\n"
+                                       "        struct {\n"
+                                       "            unsigned int __low;\n"
+                                       "            unsigned int __high;\n"
+                                       "        };\n"
+                                       "    };\n"
+                                       "};\n"
+                                       "\n"
+                                       "static unsigned int* foo(struct __pthread_cond_s* c) {\n"
+                                       "   return &c->__low;\n"
+                                       "}\n"
+                                       "\n"
+                                       "unsigned int function(void) {\n"
+                                       "    struct __pthread_cond_s s = {.__low = 5,.__high = 3};\n"
+                                       "    return *foo(&s);\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        CHECK(cld::Tests::computeInJIT<unsigned int()>(std::move(module), "function") == 5);
+    }
+}

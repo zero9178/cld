@@ -481,17 +481,23 @@ class AnonymousUnionType final
 {
     std::uint64_t m_id;
     FieldMap m_fields;
+    std::vector<FieldInLayout> m_fieldLayout;
     std::uint64_t m_sizeOf;
     std::uint64_t m_alignOf;
 
-    AnonymousUnionType(std::uint64_t id, FieldMap&& fields, std::uint64_t sizeOf, std::uint64_t alignOf)
-        : m_id(id), m_fields(std::move(fields)), m_sizeOf(sizeOf), m_alignOf(alignOf)
+    AnonymousUnionType(std::uint64_t id, FieldMap&& fields, std::vector<FieldInLayout> fieldLayout,
+                       std::uint64_t sizeOf, std::uint64_t alignOf)
+        : m_id(id),
+          m_fields(std::move(fields)),
+          m_fieldLayout(std::move(fieldLayout)),
+          m_sizeOf(sizeOf),
+          m_alignOf(alignOf)
     {
     }
 
 public:
-    static Type create(bool isConst, bool isVolatile, std::uint64_t id, FieldMap fields, std::uint64_t sizeOf,
-                       std::uint64_t alignOf);
+    static Type create(bool isConst, bool isVolatile, std::uint64_t id, FieldMap fields,
+                       std::vector<FieldInLayout> fieldLayout, std::uint64_t sizeOf, std::uint64_t alignOf);
 
     [[nodiscard]] std::uint64_t getId() const
     {
@@ -501,6 +507,11 @@ public:
     [[nodiscard]] const FieldMap& getFields() const
     {
         return m_fields;
+    }
+
+    [[nodiscard]] const std::vector<FieldInLayout>& getFieldLayout() const
+    {
+        return m_fieldLayout;
     }
 
     [[nodiscard]] std::size_t getSizeOf(const ProgramInterface& program) const;
@@ -1900,12 +1911,18 @@ class UnionDefinition
 {
     std::string_view m_name;
     FieldMap m_fields;
+    std::vector<FieldInLayout> m_fieldLayout;
     std::uint64_t m_sizeOf;
     std::uint64_t m_alignOf;
 
 public:
-    UnionDefinition(std::string_view name, FieldMap fields, std::uint64_t sizeOf, std::uint64_t alignOf)
-        : m_name(name), m_fields(std::move(fields)), m_sizeOf(sizeOf), m_alignOf(alignOf)
+    UnionDefinition(std::string_view name, FieldMap fields, std::vector<FieldInLayout> fieldLayout,
+                    std::uint64_t sizeOf, std::uint64_t alignOf)
+        : m_name(name),
+          m_fields(std::move(fields)),
+          m_fieldLayout(std::move(fieldLayout)),
+          m_sizeOf(sizeOf),
+          m_alignOf(alignOf)
     {
     }
 
@@ -1917,6 +1934,11 @@ public:
     [[nodiscard]] const FieldMap& getFields() const
     {
         return m_fields;
+    }
+
+    [[nodiscard]] const std::vector<FieldInLayout>& getFieldLayout() const
+    {
+        return m_fieldLayout;
     }
 
     [[nodiscard]] std::uint64_t getSizeOf() const

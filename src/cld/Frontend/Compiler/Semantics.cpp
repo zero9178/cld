@@ -658,10 +658,11 @@ bool cld::Semantics::AnonymousUnionType::operator!=(const cld::Semantics::Anonym
 }
 
 cld::Semantics::Type cld::Semantics::AnonymousUnionType::create(bool isConst, bool isVolatile, std::uint64_t id,
-                                                                FieldMap fields, std::uint64_t sizeOf,
-                                                                std::uint64_t alignOf)
+                                                                FieldMap fields, std::vector<FieldInLayout> fieldLayout,
+                                                                std::uint64_t sizeOf, std::uint64_t alignOf)
 {
-    return cld::Semantics::Type(isConst, isVolatile, AnonymousUnionType(id, std::move(fields), sizeOf, alignOf));
+    return cld::Semantics::Type(isConst, isVolatile,
+                                AnonymousUnionType(id, std::move(fields), std::move(fieldLayout), sizeOf, alignOf));
 }
 
 std::size_t cld::Semantics::AnonymousUnionType::getSizeOf(const ProgramInterface&) const
