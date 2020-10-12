@@ -765,19 +765,19 @@ class CodeGenerator final
                 {
                     if (cld::Semantics::isUnion(*currentType))
                     {
-                        auto fields = m_programInterface.getFields(*currentType);
+                        auto fields = m_programInterface.getFieldLayout(*currentType);
                         if (current->vector.empty() || current->unionIndex != iter)
                         {
                             current->vector.resize(1);
                             current->vector[0] = {};
                             current->unionIndex = iter;
-                            if (cld::Semantics::isAggregate(*fields.values_container()[iter].second.type))
+                            if (cld::Semantics::isAggregate(*fields[iter].type))
                             {
                                 auto& vector = current->vector.back().emplace<Aggregate>();
-                                genAggregate(*fields.values_container()[iter].second.type, vector);
+                                genAggregate(*fields[iter].type, vector);
                             }
                         }
-                        currentType = fields.values_container()[iter].second.type.get();
+                        currentType = fields[iter].type.get();
                         current = &cld::get<Aggregate>(current->vector[0]);
                         continue;
                     }
@@ -833,6 +833,22 @@ class CodeGenerator final
                     }
                     return nullptr;
                 }
+                if (cld::Semantics::isUnion(*currentType))
+                {
+                    auto fields = m_programInterface.getFieldLayout(*currentType);
+                    if (current->vector.empty() || current->unionIndex != path.back())
+                    {
+                        current->vector.resize(1);
+                        current->vector[0] = {};
+                        current->unionIndex = path.back();
+                        if (cld::Semantics::isAggregate(*fields[path.back()].type))
+                        {
+                            auto& vector = current->vector.back().emplace<Aggregate>();
+                            genAggregate(*fields[path.back()].type, vector);
+                        }
+                    }
+                    return &cld::get<llvm::Constant*>(current->vector[0]);
+                }
                 return &cld::get<llvm::Constant*>(current->vector[path.back()]);
             }();
             if (value)
@@ -846,6 +862,7 @@ class CodeGenerator final
             if (cld::Semantics::isStruct(type))
             {
                 std::vector<llvm::Constant*> elements;
+                std::vector<llvm::Type*> elementTypes;
                 auto fields = m_programInterface.getFieldLayout(type);
                 for (std::size_t i = 0; i < aggregate.vector.size();)
                 {
@@ -865,11 +882,13 @@ class CodeGenerator final
                                 return llvm::Constant::getNullValue(
                                     llvmType->getStructElementType(fields[i].layoutIndex));
                             }));
+                        elementTypes.push_back(elements.back()->getType());
                         i++;
                         continue;
                     }
                     elements.push_back(
                         llvm::Constant::getNullValue(llvmType->getStructElementType(fields[i].layoutIndex)));
+                    elementTypes.push_back(elements.back()->getType());
                     for (; i < aggregate.vector.size() && fields[i].bitFieldBounds; i++)
                     {
                         auto* value = cld::match(
@@ -898,10 +917,13 @@ class CodeGenerator final
                         elements.back() = llvm::ConstantExpr::getOr(elements.back(), value);
                     }
                 }
-                return llvm::ConstantStruct::get(llvm::cast<llvm::StructType>(llvmType), elements);
+                return llvm::ConstantStruct::get(llvm::StructType::get(m_module.getContext(), elementTypes), elements);
             }
             if (cld::Semantics::isArray(type))
             {
+                bool isSame = true;
+                llvm::Type* elementType = nullptr;
+                std::vector<llvm::Type*> elementTypes;
                 std::vector<llvm::Constant*> elements;
                 for (std::size_t i = 0; i < aggregate.vector.size(); i++)
                 {
@@ -918,22 +940,37 @@ class CodeGenerator final
                             return self(cld::get<cld::Semantics::ArrayType>(type.getVariant()).getType(),
                                         llvmType->getArrayElementType(), subAggregate);
                         }));
+                    elementTypes.push_back(elements.back()->getType());
+                    if (elementType == nullptr)
+                    {
+                        elementType = elementTypes.back();
+                    }
+                    else
+                    {
+                        isSame = isSame && elementType == elementTypes.back();
+                    }
                 }
-                return llvm::ConstantArray::get(llvm::cast<llvm::ArrayType>(llvmType), elements);
+                if (isSame)
+                {
+                    return llvm::ConstantArray::get(llvm::ArrayType::get(elementType, elements.size()), elements);
+                }
+                return llvm::ConstantStruct::get(llvm::StructType::get(m_module.getContext(), elementTypes), elements);
             }
             // Union
-            auto fields = m_programInterface.getFields(type);
-            auto* llvmSubType = visit(*fields.values_container()[*aggregate.unionIndex].second.type);
+            auto fields = m_programInterface.getFieldLayout(type);
+            auto* llvmSubType = visit(*fields[*aggregate.unionIndex].type);
             llvm::Constant* element = cld::match(
                 aggregate.vector[0], [](llvm::Constant* constant) -> llvm::Constant* { return constant; },
                 [&](const Aggregate& subAggregate) -> llvm::Constant* {
-                    return self(*fields.values_container()[*aggregate.unionIndex].second.type, llvmSubType,
-                                subAggregate);
+                    return self(*fields[*aggregate.unionIndex].type, llvmSubType, subAggregate);
                 });
-            auto* padding = llvm::ArrayType::get(
-                m_builder.getInt8Ty(),
-                m_module.getDataLayout().getTypeAllocSize(llvmType).getKnownMinSize()
-                    - m_module.getDataLayout().getTypeAllocSize(element->getType()).getKnownMinSize());
+            auto paddingSize = m_module.getDataLayout().getTypeAllocSize(llvmType).getKnownMinSize()
+                               - m_module.getDataLayout().getTypeAllocSize(element->getType()).getKnownMinSize();
+            if (paddingSize == 0)
+            {
+                return llvm::ConstantStruct::get(llvm::StructType::get(element->getType()), element);
+            }
+            auto* padding = llvm::ArrayType::get(m_builder.getInt8Ty(), paddingSize);
             auto* newType = llvm::StructType::get(element->getType(), padding);
 
             return llvm::ConstantStruct::get(newType, {element, llvm::UndefValue::get(padding)});
@@ -1111,7 +1148,7 @@ public:
                 auto* unionDef = m_programInterface.getUnionDefinition(unionType.getName(), unionType.getScopeOrId());
                 if (!unionDef)
                 {
-                    auto* type = llvm::StructType::get(m_module.getContext());
+                    auto* type = llvm::StructType::create(m_module.getContext(), unionType.getName());
                     m_types.insert({unionType, type});
                     return type;
                 }
@@ -1135,7 +1172,8 @@ public:
                                          const std::shared_ptr<const cld::Semantics::Type>& rhs) {
                                          return lhs->getSizeOf(m_programInterface) < rhs->getSizeOf(m_programInterface);
                                      });
-                auto* type = llvm::StructType::get(m_module.getContext(), llvm::ArrayRef(visit(**largestField)));
+                auto* type = llvm::StructType::create(m_module.getContext(), unionType.getName());
+                type->setBody(llvm::ArrayRef(visit(**largestField)));
                 m_types.insert({unionType, type});
                 return type;
             },
@@ -1262,6 +1300,7 @@ public:
         auto* type = visit(declaration.getType());
         if (declaration.getLifetime() == cld::Semantics::Lifetime::Static)
         {
+            auto* prevType = type;
             llvm::Constant* constant = nullptr;
             if (declaration.getInitializer() && declaration.getKind() != cld::Semantics::Declaration::DeclarationOnly)
             {
@@ -1302,7 +1341,7 @@ public:
                 global->setInitializer(constant);
             }
 
-            m_lvalues.emplace(&declaration, global);
+            m_lvalues.emplace(&declaration, m_builder.CreateBitCast(global, llvm::PointerType::getUnqual(prevType)));
             return global;
         }
         // Place all allocas up top except variably modified types
@@ -2768,7 +2807,6 @@ public:
                 case cld::Semantics::Assignment::BitOr: rhsValue = m_builder.CreateOr(load, rhsValue); break;
                 case cld::Semantics::Assignment::BitXor: rhsValue = m_builder.CreateXor(load, rhsValue); break;
             }
-            load = cast(load, assignment.getRightExpression().getType(), assignment.getLeftExpression().getType());
         }
         rhsValue = m_builder.CreateAnd(rhsValue, mask);
         rhsValue =
@@ -3299,11 +3337,11 @@ public:
                         }
                         else if (cld::Semantics::isUnion(*currentType))
                         {
-                            auto fields = m_programInterface.getFields(*currentType);
-                            currentType = fields.values_container()[iter].second.type.get();
+                            auto fields = m_programInterface.getFieldLayout(*currentType);
+                            currentType = fields[iter].type.get();
                             currentPointer = m_builder.CreateBitCast(currentPointer,
                                                                      llvm::PointerType::getUnqual(visit(*currentType)));
-                            bitFieldBounds = fields.values_container()[iter].second.bitFieldBounds;
+                            bitFieldBounds = fields[iter].bitFieldBounds;
                         }
                         else
                         {

@@ -668,8 +668,8 @@ cld::Semantics::Type
                               cld::get<Syntax::TypeSpecifier>(*fieldStructOrUnion).getVariant())
                               ->extensionsEnabled())
                       || m_sourceInterface.getLanguageOptions().extension == LanguageOptions::Extension::GNU)
-                    || (!std::holds_alternative<AnonymousStructType>(type.getVariant())
-                        && !std::holds_alternative<AnonymousUnionType>(type.getVariant())))
+                    || (!std::holds_alternative<AnonymousStructType>(parentType->getVariant())
+                        && !std::holds_alternative<AnonymousUnionType>(parentType->getVariant())))
                 {
                     log(Errors::Semantics::FIELD_WITHOUT_A_NAME_IS_NOT_ALLOWED.args(specifiers, m_sourceInterface,
                                                                                     specifiers));
@@ -1001,13 +1001,17 @@ cld::Semantics::Type
                 }
                 if (!field.parentTypes.empty())
                 {
-                    iter = std::find_if_not(iter, fields.end(), [&](const auto& pair) {
+                    auto end = std::find_if_not(iter + 1, fields.end(), [&](const auto& pair) {
                         if (pair.second.parentTypes.empty())
                         {
                             return false;
                         }
                         return pair.second.parentTypes.front().get() == field.parentTypes.front().get();
                     });
+                    for (iter++; iter != end; iter++)
+                    {
+                        iter.value().indices[0] = fieldLayout[fieldLayoutCounter - 1].layoutIndex;
+                    }
                 }
                 else
                 {
