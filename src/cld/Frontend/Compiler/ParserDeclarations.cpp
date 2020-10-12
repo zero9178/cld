@@ -666,7 +666,7 @@ std::optional<cld::Syntax::StructOrUnionSpecifier>
             context.skipUntil(begin, end);
             return {};
         }
-        return StructOrUnionSpecifier(start, begin, isUnion, name, {}, false);
+        return StructOrUnionSpecifier(start, begin, isUnion, name, {}, context.extensionsEnabled());
     }
     const Lexer::CToken* openBrace = nullptr;
     if (expect(Lexer::TokenType::OpenBrace, begin, end, context))
@@ -676,8 +676,15 @@ std::optional<cld::Syntax::StructOrUnionSpecifier>
 
     std::vector<StructOrUnionSpecifier::StructDeclaration> structDeclarations;
     while (begin < end
-           && (firstIsInSpecifierQualifier(*begin, context) || begin->getTokenType() == Lexer::TokenType::Identifier))
+           && (firstIsInSpecifierQualifier(*begin, context) || begin->getTokenType() == Lexer::TokenType::Identifier
+               || begin->getTokenType() == Lexer::TokenType::GNUExtension))
     {
+        std::optional<ValueReset<bool>> extensionReset2;
+        if (begin->getTokenType() == Lexer::TokenType::GNUExtension)
+        {
+            extensionReset2.emplace(context.enableExtensions(true));
+            begin++;
+        }
         auto specifierQualifiers = parseSpecifierQualifierList(
             begin, end,
             context.withRecoveryTokens(firstDeclaratorSet | Context::fromTokenTypes(Lexer::TokenType::Colon)));

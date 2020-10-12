@@ -965,7 +965,8 @@ std::optional<cld::Syntax::UnaryExpression>
                 case Lexer::TokenType::Minus: return UnaryExpressionUnaryOperator::UnaryOperator::Minus;
                 case Lexer::TokenType::LogicalNegation: return UnaryExpressionUnaryOperator::UnaryOperator::LogicalNot;
                 case Lexer::TokenType::BitWiseNegation: return UnaryExpressionUnaryOperator::UnaryOperator::BitNot;
-                case Lexer::TokenType::GNUExtension: return UnaryExpressionUnaryOperator::UnaryOperator::GNUExtension;
+                case Lexer::TokenType::GNUExtension:
+                    return UnaryExpressionUnaryOperator::UnaryOperator::GNUExtension; // TODO:
                 default: CLD_UNREACHABLE;
             }
         }();
