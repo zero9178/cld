@@ -87,6 +87,7 @@ struct DefineDirective final
 /**
  *
  * <ControlLine> ::= <TokenType::Pound> <Identifier=include> <TOKENS> <TokenType::Newline>
+ *          [GNU]: | <TokenType::Pound> <Identifier=include_next> <TOKENS> <TokenType::Newline>
  *                 | <DefineDirectives>
  *                 | <TokenType::Pound> <Identifier=undef> <TokenType::Identifier> <TokenType::Newline>
  *                 | <TokenType::Pound> <Identifier=line> <TOKENS> <TokenType::Newline>

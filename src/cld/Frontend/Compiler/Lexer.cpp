@@ -33,9 +33,12 @@ bool isKeyword(std::string_view characters, const cld::LanguageOptions& language
            || characters == "default" || characters == "goto" || characters == "sizeof" || characters == "volatile"
            || characters == "restrict" || characters == "do" || characters == "if" || characters == "static"
            || characters == "while" || characters == "inline" || characters == "_Bool" || characters == "__attribute__"
-           || characters == "__inline__" || characters == "__extension__" || characters == "__typeof__"
-           || characters == "__asm__" || characters == "__volatile__" || characters == "__const__"
-           || characters == "__restrict__"
+           || characters == "__attribute" || characters == "__inline__" || characters == "__inline"
+           || characters == "__extension__" || characters == "__typeof__" || characters == "__typeof"
+           || characters == "__asm__" || characters == "__asm" || characters == "__volatile__"
+           || characters == "__volatile" || characters == "__const__" || characters == "__const"
+           || characters == "__restrict__" || characters == "__restrict" || characters == "__signed__"
+           || characters == "__signed"
            || (languageOptions.extension == cld::LanguageOptions::Extension::GNU
                && (characters == "asm" || characters == "typeof"));
 }
@@ -107,7 +110,7 @@ TokenType charactersToKeyword(std::string_view characters)
     {
         return TokenType::UnionKeyword;
     }
-    if (characters == "const" || characters == "__const__")
+    if (characters == "const" || characters == "__const__" || characters == "__const")
     {
         return TokenType::ConstKeyword;
     }
@@ -131,7 +134,7 @@ TokenType charactersToKeyword(std::string_view characters)
     {
         return TokenType::ForKeyword;
     }
-    if (characters == "signed")
+    if (characters == "signed" || characters == "__signed__" || characters == "__signed")
     {
         return TokenType::SignedKeyword;
     }
@@ -147,7 +150,7 @@ TokenType charactersToKeyword(std::string_view characters)
     {
         return TokenType::SizeofKeyword;
     }
-    if (characters == "volatile" || characters == "__volatile__")
+    if (characters == "volatile" || characters == "__volatile__" || characters == "__volatile")
     {
         return TokenType::VolatileKeyword;
     }
@@ -171,11 +174,11 @@ TokenType charactersToKeyword(std::string_view characters)
     {
         return TokenType::VoidKeyword;
     }
-    if (characters == "restrict" || characters == "__restrict__")
+    if (characters == "restrict" || characters == "__restrict__" || characters == "__restrict")
     {
         return TokenType::RestrictKeyword;
     }
-    if (characters == "inline" || characters == "__inline__")
+    if (characters == "inline" || characters == "__inline__" || characters == "__inline")
     {
         return TokenType::InlineKeyword;
     }
@@ -183,7 +186,7 @@ TokenType charactersToKeyword(std::string_view characters)
     {
         return TokenType::UnderlineBool;
     }
-    if (characters == "__attribute__")
+    if (characters == "__attribute__" || characters == "__attribute")
     {
         return TokenType::GNUAttribute;
     }
@@ -191,11 +194,11 @@ TokenType charactersToKeyword(std::string_view characters)
     {
         return TokenType::GNUExtension;
     }
-    if (characters == "__typeof__" || characters == "typeof")
+    if (characters == "__typeof__" || characters == "typeof" || characters == "__typeof")
     {
         return TokenType::GNUTypeOf;
     }
-    if (characters == "__asm__" || characters == "asm")
+    if (characters == "__asm__" || characters == "asm" || characters == "__asm")
     {
         return TokenType::GNUASM;
     }

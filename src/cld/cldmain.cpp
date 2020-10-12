@@ -343,13 +343,10 @@ void applyTargetSpecificLanguageOptions(cld::LanguageOptions& languageOptions, c
 
     languageOptions.additionalMacros.emplace_back("__llvm__", "1");
     languageOptions.additionalMacros.emplace_back("__cld__", "1");
-    if (languageOptions.extension == cld::LanguageOptions::Extension::GNU)
-    {
-        // TODO: Command line option for this
-        languageOptions.additionalMacros.emplace_back("__GNUC__", "4");
-        languageOptions.additionalMacros.emplace_back("__GNUC_MINOR__", "2");
-        languageOptions.additionalMacros.emplace_back("__GNUC_PATCHLEVEL__", "1");
-    }
+    // TODO: Command line option for this
+    languageOptions.additionalMacros.emplace_back("__GNUC__", "4");
+    languageOptions.additionalMacros.emplace_back("__GNUC_MINOR__", "2");
+    languageOptions.additionalMacros.emplace_back("__GNUC_PATCHLEVEL__", "1");
     if (cli.template get<OPT>() && *cli.template get<OPT>() > 0)
     {
         languageOptions.additionalMacros.emplace_back("__OPTIMIZE__", "1");

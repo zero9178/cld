@@ -1342,25 +1342,40 @@ public:
         }
         else
         {
-            if (isQuoted)
+            if (isQuoted || includeTag.includeToken->getValue() == "include_next")
             {
-                auto dir = cld::fs::u8path(m_files[m_currentFile].path);
-                dir.remove_filename();
-                if (cld::fs::exists(dir))
+                if (includeTag.includeToken->getValue() != "include_next")
                 {
-                    candidates.push_back(dir.string());
-                }
-                else
-                {
-                    // If we are not in a current file it's probably due to it being stdin or similar.
-                    // For those cases add the current working directory to the include candidates
-                    candidates.emplace_back(cld::fs::current_path().string());
+                    auto dir = cld::fs::u8path(m_files[m_currentFile].path);
+                    dir.remove_filename();
+                    if (cld::fs::exists(dir))
+                    {
+                        candidates.push_back(dir.string());
+                    }
+                    else
+                    {
+                        // If we are not in a current file it's probably due to it being stdin or similar.
+                        // For those cases add the current working directory to the include candidates
+                        candidates.emplace_back(cld::fs::current_path().string());
+                    }
                 }
                 candidates.insert(candidates.end(), m_options.includeQuoteDirectories.begin(),
                                   m_options.includeQuoteDirectories.end());
             }
             candidates.insert(candidates.end(), m_options.includeDirectories.begin(),
                               m_options.includeDirectories.end());
+            if (includeTag.includeToken->getValue() == "include_next")
+            {
+                auto dir = cld::fs::u8path(m_files[m_currentFile].path);
+                dir.remove_filename();
+                auto thisDir = std::find_if(candidates.begin(), candidates.end(), [&](const std::string& value) {
+                    return cld::fs::equivalent(cld::fs::u8path(value), dir);
+                });
+                if (thisDir != candidates.end())
+                {
+                    candidates.erase(candidates.begin(), thisDir + 1);
+                }
+            }
             for (const auto& candidate : candidates)
             {
                 auto filename = cld::fs::u8path(candidate);

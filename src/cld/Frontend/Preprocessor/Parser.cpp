@@ -141,7 +141,7 @@ cld::PP::Group cld::PP::parseGroup(Lexer::PPTokenIterator& begin, Lexer::PPToken
             parts.emplace_back(parseIfSection(begin, end, context));
         }
         else if (value == "include" || value == "define" || value == "undef" || value == "line" || value == "error"
-                 || value == "pragma")
+                 || value == "pragma" || value == "include_next")
         {
             parts.emplace_back(parseControlLine(begin, end, context));
         }
@@ -164,14 +164,15 @@ cld::PP::ControlLine cld::PP::parseControlLine(Lexer::PPTokenIterator& begin, Le
 {
     CLD_ASSERT(begin != end && begin->getTokenType() == Lexer::TokenType::Identifier);
     auto value = begin->getValue();
-    if (value == "include" || value == "line" || value == "error" || value == "pragma" || value == "define")
+    if (value == "include" || value == "line" || value == "error" || value == "pragma" || value == "define"
+        || value == "include_next")
     {
         begin++;
         const auto* eol = findNewline(begin, end);
         expect(Lexer::TokenType::Newline, eol, end, context);
         const auto* lineStart = begin;
         begin = eol;
-        if (value == "include")
+        if (value == "include" || value == "include_next")
         {
             return {ControlLine::IncludeTag{lineStart - 1, {lineStart, eol - 1}}};
         }
