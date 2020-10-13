@@ -770,6 +770,27 @@ TEST_CASE("Semantics function prototypes", "[semantics]")
         SEMA_PRODUCES("int f(int a[static 6]);", ProducesNoErrors());
         SEMA_PRODUCES("int f(int a[6][static 5]);", ProducesError(STATIC_ONLY_ALLOWED_IN_OUTERMOST_ARRAY));
     }
+    SECTION("With calling convention")
+    {
+        auto [translationUnit, errors] = generateSemantics("#define __cdecl __attribute__((__cdecl))\n"
+                                                           "\n"
+                                                           "int __cdecl atexit(void (__cdecl *)(void));",
+                                                           cld::Tests::x64windowsGnu);
+        REQUIRE_THAT(errors, ProducesNoErrors());
+        REQUIRE(translationUnit->getGlobals().size() == 1);
+        REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
+        auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
+        CHECK(decl->getNameToken()->getText() == "atexit");
+        CHECK(decl->getType()
+              == cld::Semantics::FunctionType::create(
+                  cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()),
+                  {{cld::Semantics::PointerType::create(
+                        false, false, false,
+                        cld::Semantics::FunctionType::create(cld::Semantics::PrimitiveType::createVoid(false, false),
+                                                             {}, false, false)),
+                    ""}},
+                  false, false));
+    }
     SEMA_PRODUCES("int f(int) = 5;", ProducesError(FUNCTION_PROTOTYPE_MUST_NOT_HAVE_AN_INITIALIZER));
     SEMA_PRODUCES("static inline int f(int);", ProducesNoErrors());
     SEMA_PRODUCES("int f(extern int a);",

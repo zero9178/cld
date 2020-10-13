@@ -1390,7 +1390,7 @@ using DirectAbstractDeclarator =
 
 /**
  * <DirectAbstractDeclaratorParentheses> ::= <TokenType::OpenParentheses> <AbstractDeclarator>
- * <TokenType::CloseParentheses>
+ *                                           <TokenType::CloseParentheses>
  */
 class DirectAbstractDeclaratorParentheses final : public Node
 {

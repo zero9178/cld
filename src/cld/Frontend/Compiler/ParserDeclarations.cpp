@@ -1462,6 +1462,11 @@ std::optional<cld::Syntax::DirectAbstractDeclarator>
                     }
                 })};
                 begin++;
+                // TODO: store
+                // This __attribute__ may either be part of the declaration specifiers of the parameter type list
+                // or part of the DirectAbstractDeclaratorParentheses. We parse it here to be able to resolve the
+                // ambiguity
+                parseGNUAttributes(begin, end, context);
                 if (begin < end && firstIsInDeclarationSpecifier(*begin, context))
                 {
                     auto parameterTypeList = parseParameterTypeList(
