@@ -168,8 +168,11 @@ bool cld::Semantics::SemanticAnalysis::doAssignmentLikeConstraints(
             incompatibleTypes();
             return false;
         }
-        rhsValue = Expression(removeQualifiers(lhsType), ValueCategory::Rvalue,
-                              Conversion(Conversion::Implicit, std::make_unique<Expression>(std::move(rhsValue))));
+        if (removeQualifiers(lhsElementType) != removeQualifiers(rhsElementType))
+        {
+            rhsValue = Expression(removeQualifiers(lhsType), ValueCategory::Rvalue,
+                                  Conversion(Conversion::Implicit, std::make_unique<Expression>(std::move(rhsValue))));
+        }
         return true;
     }
 
@@ -1822,6 +1825,8 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                     log(Errors::Semantics::EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_ARITHMETIC_TYPE.args(
                         rhsValue, m_sourceInterface, *token, rhsValue));
                 }
+                value = Expression(rhsValue.getType(), ValueCategory::Rvalue,
+                                   Conversion(Conversion::Implicit, std::make_unique<Expression>(std::move(value))));
             }
             else if (!rhsValue.isUndefined() && !isArithmetic(rhsValue.getType()))
             {
@@ -1847,6 +1852,9 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                             rhsValue, m_sourceInterface, *token, rhsValue, *constant));
                     }
                 }
+                rhsValue =
+                    Expression(value.getType(), ValueCategory::Rvalue,
+                               Conversion(Conversion::Implicit, std::make_unique<Expression>(std::move(rhsValue))));
             }
             else if (!rhsValue.isUndefined() && !std::holds_alternative<PointerType>(rhsValue.getType().getVariant()))
             {
@@ -1864,6 +1872,21 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                 {
                     log(Errors::Semantics::CANNOT_COMPARE_POINTERS_OF_INCOMPATIBLE_TYPES.args(value, m_sourceInterface,
                                                                                               value, *token, rhsValue));
+                }
+                if (valueElementType != rhsElementType)
+                {
+                    if (isVoid(valueElementType))
+                    {
+                        value = Expression(
+                            rhsValue.getType(), ValueCategory::Rvalue,
+                            Conversion(Conversion::Implicit, std::make_unique<Expression>(std::move(value))));
+                    }
+                    else
+                    {
+                        rhsValue = Expression(
+                            value.getType(), ValueCategory::Rvalue,
+                            Conversion(Conversion::Implicit, std::make_unique<Expression>(std::move(rhsValue))));
+                    }
                 }
             }
         }
@@ -2032,13 +2055,15 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                 log(Errors::Semantics::EXPECTED_THIRD_OPERAND_OF_CONDITIONAL_EXPRESSION_TO_BE_AN_ARITHMETIC_TYPE.args(
                     third, m_sourceInterface, third, *node.getOptionalQuestionMark(), *node.getOptionalColon()));
             }
+            second = Expression(third.getType(), ValueCategory::Rvalue,
+                                Conversion(Conversion::Implicit, std::make_unique<Expression>(std::move(second))));
         }
         else if (!third.isUndefined() && !isArithmetic(third.getType()))
         {
             log(Errors::Semantics::EXPECTED_THIRD_OPERAND_OF_CONDITIONAL_EXPRESSION_TO_BE_AN_ARITHMETIC_TYPE.args(
                 third, m_sourceInterface, third, *node.getOptionalQuestionMark(), *node.getOptionalColon()));
         }
-        resultType = second.getType();
+        resultType = third.getType();
     }
     else if (isVoid(second.getType()))
     {
@@ -2065,10 +2090,9 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                     third, m_sourceInterface, third, *constant, *node.getOptionalQuestionMark(),
                     *node.getOptionalColon()));
             }
-            else
-            {
-                resultType = second.getType();
-            }
+            third = Expression(second.getType(), ValueCategory::Rvalue,
+                               Conversion(Conversion::Implicit, std::make_unique<Expression>(std::move(third))));
+            resultType = second.getType();
         }
         else if (!third.isUndefined() && !std::holds_alternative<PointerType>(third.getType().getVariant()))
         {

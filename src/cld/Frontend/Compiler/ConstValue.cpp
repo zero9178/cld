@@ -62,8 +62,7 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::castTo(const cld::Semanti
         *issues = NoIssue;
     }
     return match(
-        m_value, [](std::monostate) -> ConstValue { return {}; },
-        [](AddressConstant) -> ConstValue { CLD_UNREACHABLE; },
+        m_value, [](std::monostate) -> ConstValue { return {}; }, [&](AddressConstant) -> ConstValue { return *this; },
         [&](VoidStar address) -> ConstValue {
             return match(
                 type.getVariant(), [](const auto&) -> ConstValue { CLD_UNREACHABLE; },
@@ -180,7 +179,8 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::castTo(const cld::Semanti
                 },
                 [&](const PointerType& pointerType) -> ConstValue {
                     CLD_ASSERT(program);
-                    if (program->isCompleteType(pointerType.getElementType()))
+                    if (program->isCompleteType(pointerType.getElementType())
+                        && !std::holds_alternative<FunctionType>(pointerType.getElementType().getVariant()))
                     {
                         return {VoidStar{integer.getZExtValue(),
                                          static_cast<std::uint32_t>(pointerType.getElementType().getSizeOf(*program))}};

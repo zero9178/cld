@@ -1196,6 +1196,31 @@ TEST_CASE("Semantics function definitions")
     SEMA_PRODUCES("static int bar(int n,int r[3][5][n]) {}", ProducesNoErrors());
     SECTION("Identifier list")
     {
+        auto [translationUnit, errors] = generateSemantics("void test_inflate(compr,comprLen,uncompr,uncomprLen)\n"
+                                                           "char* compr,*uncompr;\n"
+                                                           "long comprLen,uncomprLen;\n"
+                                                           "{}");
+        REQUIRE(translationUnit->getGlobals().size() == 1);
+        auto& first = translationUnit->getGlobals()[0];
+        REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(first));
+        auto& functionDefinition = *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(first);
+        REQUIRE(functionDefinition.getParameterDeclarations().size() == 4);
+        CHECK(functionDefinition.getParameterDeclarations()[0]->getNameToken()->getText() == "compr");
+        CHECK(functionDefinition.getParameterDeclarations()[0]->getType()
+              == cld::Semantics::PointerType::create(
+                  false, false, false,
+                  cld::Semantics::PrimitiveType::createChar(false, false, cld::LanguageOptions::native())));
+        CHECK(functionDefinition.getParameterDeclarations()[1]->getNameToken()->getText() == "comprLen");
+        CHECK(functionDefinition.getParameterDeclarations()[1]->getType()
+              == cld::Semantics::PrimitiveType::createLong(false, false, cld::LanguageOptions::native()));
+        CHECK(functionDefinition.getParameterDeclarations()[2]->getNameToken()->getText() == "uncompr");
+        CHECK(functionDefinition.getParameterDeclarations()[2]->getType()
+              == cld::Semantics::PointerType::create(
+                  false, false, false,
+                  cld::Semantics::PrimitiveType::createChar(false, false, cld::LanguageOptions::native())));
+        CHECK(functionDefinition.getParameterDeclarations()[3]->getNameToken()->getText() == "uncomprLen");
+        CHECK(functionDefinition.getParameterDeclarations()[3]->getType()
+              == cld::Semantics::PrimitiveType::createLong(false, false, cld::LanguageOptions::native()));
         SEMA_PRODUCES("void foo(voi)\n"
                       "{}",
                       ProducesError(PARAMETER_N_IN_IDENTIFIER_LIST_DOES_NOT_HAVE_A_MATCHING_DECLARATION, "'voi'"));

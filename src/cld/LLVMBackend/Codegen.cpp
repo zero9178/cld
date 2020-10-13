@@ -1431,10 +1431,11 @@ public:
             auto* ft = llvm::cast<llvm::FunctionType>(visit(functionDefinition.getType()));
             function = llvm::Function::Create(ft, linkageType, -1,
                                               llvm::StringRef{functionDefinition.getNameToken()->getText()}, &m_module);
-            m_lvalues.emplace(&functionDefinition, function);
         }
+        m_lvalues.emplace(&functionDefinition, function);
         auto& ft = cld::get<cld::Semantics::FunctionType>(functionDefinition.getType().getVariant());
-        if (functionDefinition.getInlineKind() == cld::Semantics::InlineKind::InlineDefinition)
+        if (functionDefinition.getInlineKind() == cld::Semantics::InlineKind::InlineDefinition
+            && functionDefinition.getLinkage() == cld::Semantics::Linkage::External)
         {
             applyFunctionAttributes(*function, function->getFunctionType(), ft);
             return;
@@ -2009,8 +2010,7 @@ public:
                     return value;
                 }
 
-                return m_builder.CreateLoad(value->getType()->getPointerElementType(), value,
-                                            conversion.getExpression().getType().isVolatile());
+                return m_builder.CreateLoad(value, conversion.getExpression().getType().isVolatile());
             }
             case cld::Semantics::Conversion::IntegerPromotion:
             {

@@ -195,6 +195,25 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
                     .args(node.getDeclarations(), m_sourceInterface, node.getDeclarations()));
         }
     }
+    else if (identifierList)
+    {
+        // parameterDeclarations is currently in the order of how the declarations appear but we need it in the order
+        // of the identifiers in the identifierList
+        auto begin = parameterDeclarations.begin();
+        for (auto& iter : identifierList->getIdentifiers())
+        {
+            auto element = std::find_if(begin, parameterDeclarations.end(), [iter](const auto& ptr) {
+                return ptr->getNameToken()->getText() == iter->getText();
+            });
+            if (element == parameterDeclarations.end())
+            {
+                // Possible in error cases
+                continue;
+            }
+            std::swap(*begin, *element);
+            begin++;
+        }
+    }
 
     const auto* loc = declaratorToLoc(node.getDeclarator());
     if (loc->getText() == "__func__")
