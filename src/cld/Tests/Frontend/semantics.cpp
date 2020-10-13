@@ -2359,14 +2359,21 @@ TEST_CASE("Semantics unary expressions", "[semantics]")
 
 TEST_CASE("Semantics cast expression", "[semantics]")
 {
-    auto& exp = generateExpression("void foo(int* const i) {\n"
-                                   "(const int* const)i;\n"
-                                   "}");
-    CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-    CHECK(exp.getType()
-          == PointerType::create(false, false, false,
-                                 PrimitiveType::createInt(true, false, cld::LanguageOptions::native())));
-    CHECK(std::holds_alternative<Cast>(exp.getVariant()));
+    SECTION("Simple")
+    {
+        auto& exp = generateExpression("void foo(int* const i) {\n"
+                                       "(const int* const)i;\n"
+                                       "}");
+        CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
+        CHECK(exp.getType()
+              == PointerType::create(false, false, false,
+                                     PrimitiveType::createInt(true, false, cld::LanguageOptions::native())));
+        CHECK(std::holds_alternative<Cast>(exp.getVariant()));
+    }
+    SEMA_PRODUCES("void foo(int* i) {\n"
+                  " (void)i;\n"
+                  "}",
+                  ProducesNoErrors());
     SEMA_PRODUCES("void foo(int* i) {\n"
                   " (struct r)i;\n"
                   "}",

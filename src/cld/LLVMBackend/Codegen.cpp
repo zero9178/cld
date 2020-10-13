@@ -620,13 +620,17 @@ class CodeGenerator final
         return m_builder.CreateShl(lhs, rhs);
     }
 
-    llvm::Value* shr(llvm::Value* lhs, const cld::Semantics::Type&, llvm::Value* rhs,
+    llvm::Value* shr(llvm::Value* lhs, const cld::Semantics::Type& lhsType, llvm::Value* rhs,
                      const cld::Semantics::Type& rhsType)
     {
         if (lhs->getType() != rhs->getType())
         {
             rhs = m_builder.CreateIntCast(rhs, lhs->getType(),
                                           cld::get<cld::Semantics::PrimitiveType>(rhsType.getVariant()).isSigned());
+        }
+        if (!cld::get<cld::Semantics::PrimitiveType>(lhsType.getVariant()).isSigned())
+        {
+            return m_builder.CreateLShr(lhs, rhs);
         }
         return m_builder.CreateAShr(lhs, rhs);
     }
@@ -1297,15 +1301,25 @@ public:
             m_lvalues.emplace(&declaration, function);
             return function;
         }
-        auto* type = visit(declaration.getType());
         if (declaration.getLifetime() == cld::Semantics::Lifetime::Static)
         {
+            auto& declType = [&]() -> decltype(auto) {
+                if (m_currentFunction)
+                {
+                    return declaration.getType();
+                }
+
+                auto& decl =
+                    m_programInterface.getScopes()[0].declarations.at(declaration.getNameToken()->getText()).declared;
+                return cld::get<const cld::Semantics::Declaration*>(decl)->getType();
+            }();
+            auto* type = visit(declType);
+
             auto* prevType = type;
             llvm::Constant* constant = nullptr;
             if (declaration.getInitializer() && declaration.getKind() != cld::Semantics::Declaration::DeclarationOnly)
             {
-                constant =
-                    llvm::cast<llvm::Constant>(visit(*declaration.getInitializer(), declaration.getType(), type));
+                constant = llvm::cast<llvm::Constant>(visit(*declaration.getInitializer(), declType, type));
                 type = constant->getType();
             }
             else if (declaration.getKind() != cld::Semantics::Declaration::DeclarationOnly)
@@ -1326,17 +1340,17 @@ public:
             if (m_currentFunction || m_cGlobalVariables.count(declaration.getNameToken()->getText()) == 0)
             {
                 global = new llvm::GlobalVariable(
-                    m_module, type, declaration.getType().isConst() && linkageType != llvm::GlobalValue::CommonLinkage,
-                    linkageType, constant, llvm::StringRef{declaration.getNameToken()->getText()});
-                if (m_programInterface.isCompleteType(declaration.getType()))
+                    m_module, type, declType.isConst() && linkageType != llvm::GlobalValue::CommonLinkage, linkageType,
+                    constant, llvm::StringRef{declaration.getNameToken()->getText()});
+                if (m_programInterface.isCompleteType(declType))
                 {
-                    global->setAlignment(llvm::MaybeAlign(declaration.getType().getAlignOf(m_programInterface)));
+                    global->setAlignment(llvm::MaybeAlign(declType.getAlignOf(m_programInterface)));
                 }
             }
             else
             {
                 global = m_cGlobalVariables[declaration.getNameToken()->getText()];
-                global->setConstant(declaration.getType().isConst() && linkageType != llvm::GlobalValue::CommonLinkage);
+                global->setConstant(declType.isConst() && linkageType != llvm::GlobalValue::CommonLinkage);
                 global->setLinkage(linkageType);
                 global->setInitializer(constant);
             }
@@ -1344,6 +1358,7 @@ public:
             m_lvalues.emplace(&declaration, m_builder.CreateBitCast(global, llvm::PointerType::getUnqual(prevType)));
             return global;
         }
+        auto* type = visit(declaration.getType());
         // Place all allocas up top except variably modified types
         llvm::AllocaInst* var = nullptr;
         if (cld::Semantics::isVariableLengthArray(declaration.getType()))
@@ -2350,7 +2365,7 @@ public:
                 m_builder.CreateBr(continueBranch);
                 m_builder.SetInsertPoint(continueBranch);
                 auto* phi = m_builder.CreatePHI(m_builder.getInt1Ty(), 2);
-                phi->addIncoming(lhs, falseBranch);
+                phi->addIncoming(m_builder.getFalse(), falseBranch);
                 phi->addIncoming(rhs, trueBranch);
                 return m_builder.CreateZExt(phi, m_builder.getInt32Ty());
             }
@@ -2371,7 +2386,7 @@ public:
                 m_builder.CreateBr(continueBranch);
                 m_builder.SetInsertPoint(continueBranch);
                 auto* phi = m_builder.CreatePHI(m_builder.getInt1Ty(), 2);
-                phi->addIncoming(lhs, trueBranch);
+                phi->addIncoming(m_builder.getTrue(), trueBranch);
                 phi->addIncoming(rhs, falseBranch);
                 return m_builder.CreateZExt(phi, m_builder.getInt32Ty());
             }

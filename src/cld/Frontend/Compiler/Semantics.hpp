@@ -797,28 +797,19 @@ public:
 class Cast final
 {
     Lexer::CTokenIterator m_openParentheses;
-    Type m_newType;
     Lexer::CTokenIterator m_closeParentheses;
     std::unique_ptr<Expression> m_expression;
 
 public:
-    Cast(Lexer::CTokenIterator openParentheses, Type newType, Lexer::CTokenIterator closeParentheses,
+    Cast(Lexer::CTokenIterator openParentheses, Lexer::CTokenIterator closeParentheses,
          std::unique_ptr<Expression> expression)
-        : m_openParentheses(openParentheses),
-          m_newType(std::move(newType)),
-          m_closeParentheses(closeParentheses),
-          m_expression(std::move(expression))
+        : m_openParentheses(openParentheses), m_closeParentheses(closeParentheses), m_expression(std::move(expression))
     {
     }
 
     [[nodiscard]] Lexer::CTokenIterator getOpenParentheses() const
     {
         return m_openParentheses;
-    }
-
-    [[nodiscard]] const Type& getNewType() const
-    {
-        return m_newType;
     }
 
     [[nodiscard]] Lexer::CTokenIterator getCloseParentheses() const

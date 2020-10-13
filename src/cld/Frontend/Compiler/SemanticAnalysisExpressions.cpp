@@ -1381,7 +1381,13 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                 return Expression(node);
             }
             value = lvalueConversion(std::move(value));
-            if (!isScalar(type) && !isVoid(type))
+            if (isVoid(type))
+            {
+                return Expression(
+                    removeQualifiers(type), ValueCategory::Rvalue,
+                    Cast(cast.openParentheses, cast.closeParentheses, std::make_unique<Expression>(std::move(value))));
+            }
+            if (!isScalar(type))
             {
                 log(Errors::Semantics::TYPE_IN_CAST_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
                     cast.typeName, m_sourceInterface, cast.typeName, type));
@@ -1413,8 +1419,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                 }
             }
             return Expression(type, ValueCategory::Rvalue,
-                              Cast(cast.openParentheses, type, cast.closeParentheses,
-                                   std::make_unique<Expression>(std::move(value))));
+                Cast(cast.openParentheses, cast.closeParentheses, std::make_unique<Expression>(std::move(value))));
         });
 }
 

@@ -1592,7 +1592,7 @@ cld::Semantics::ConstValue
             CLD_UNREACHABLE;
         },
         [&](const Cast& cast) -> ConstValue {
-            if (mode == Integer && !isInteger(cast.getNewType()))
+            if (mode == Integer && !isInteger(expression.getType()))
             {
                 logger(Errors::Semantics::CANNOT_CAST_TO_NON_INTEGER_TYPE_IN_INTEGER_CONSTANT_EXPRESSION.args(
                     std::forward_as_tuple(*(cast.getOpenParentheses() + 1), *(cast.getCloseParentheses() - 1)),
@@ -1600,7 +1600,7 @@ cld::Semantics::ConstValue
                     std::forward_as_tuple(*(cast.getOpenParentheses() + 1), *(cast.getCloseParentheses() - 1))));
                 return {};
             }
-            if (mode == Arithmetic && !isArithmetic(cast.getNewType()))
+            if (mode == Arithmetic && !isArithmetic(expression.getType()))
             {
                 logger(Errors::Semantics::CANNOT_CAST_TO_NON_ARITHMETIC_TYPE_IN_ARITHMETIC_CONSTANT_EXPRESSION.args(
                     std::forward_as_tuple(*(cast.getOpenParentheses() + 1), *(cast.getCloseParentheses() - 1)),
@@ -1610,11 +1610,11 @@ cld::Semantics::ConstValue
             }
             ConstValue::Issue issue;
             auto original = evaluate(cast.getExpression(), mode, logger);
-            auto ret = original.castTo(cast.getNewType(), this, m_sourceInterface.getLanguageOptions(), &issue);
+            auto ret = original.castTo(expression.getType(), this, m_sourceInterface.getLanguageOptions(), &issue);
             if (issue == ConstValue::NotRepresentable)
             {
                 logger(Warnings::Semantics::VALUE_OF_N_IS_TO_LARGE_FOR_INTEGER_TYPE_N.args(
-                    cast.getExpression(), m_sourceInterface, original, cast.getNewType(), cast.getExpression()));
+                    cast.getExpression(), m_sourceInterface, original, expression.getType(), cast.getExpression()));
             }
             return ret;
         },

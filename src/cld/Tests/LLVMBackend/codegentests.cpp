@@ -560,17 +560,17 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
 TEST_CASE("LLVM codegen global variables", "[LLVM]")
 {
     llvm::LLVMContext context;
-    llvm::Module module("", context);
+    auto module = std::make_unique<llvm::Module>("", context);
     SECTION("Tentative definition")
     {
         SECTION("Single")
         {
             auto program = generateProgram("int foo;");
-            cld::CGLLVM::generateLLVM(module, program);
-            CAPTURE(module);
-            REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
-            CHECK(module.getGlobalList().size() == 1);
-            auto* variable = module.getGlobalVariable("foo");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(module->getGlobalList().size() == 1);
+            auto* variable = module->getGlobalVariable("foo");
             REQUIRE(variable);
             CHECK(variable->getLinkage() == llvm::GlobalValue::CommonLinkage);
             CHECK(!variable->isDeclaration());
@@ -582,11 +582,11 @@ TEST_CASE("LLVM codegen global variables", "[LLVM]")
         {
             auto program = generateProgram("int foo;\n"
                                            "int foo;");
-            cld::CGLLVM::generateLLVM(module, program);
-            CAPTURE(module);
-            REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
-            CHECK(module.getGlobalList().size() == 1);
-            auto* variable = module.getGlobalVariable("foo");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(module->getGlobalList().size() == 1);
+            auto* variable = module->getGlobalVariable("foo");
             REQUIRE(variable);
             CHECK(variable->getLinkage() == llvm::GlobalValue::CommonLinkage);
             CHECK(!variable->isDeclaration());
@@ -594,16 +594,39 @@ TEST_CASE("LLVM codegen global variables", "[LLVM]")
             CHECK(variable->getType()->getPointerElementType()->isIntegerTy(cld::LanguageOptions::native().sizeOfInt
                                                                             * 8));
         }
+        SECTION("Using multiple")
+        {
+            auto program = generateProgram("int foo[];\n"
+                                           "\n"
+                                           "int* bar(void) {\n"
+                                           "return foo;\n"
+                                           "}\n"
+                                           "int foo[5] = {3,3,3,3,3};\n"
+                                           "\n"
+                                           "int function(void) {\n"
+                                           "return bar() == foo;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            auto* variable = module->getGlobalVariable("foo");
+            REQUIRE(variable);
+            CHECK(variable->getLinkage() == llvm::GlobalValue::ExternalLinkage);
+            CHECK_FALSE(variable->isDeclaration());
+            REQUIRE(variable->getType()->isPointerTy());
+            CHECK(variable->getType()->getPointerElementType()->isArrayTy());
+            CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 1);
+        }
         SECTION("Internal linkage")
         {
             SECTION("Single")
             {
                 auto program = generateProgram("static int foo;");
-                cld::CGLLVM::generateLLVM(module, program);
-                CAPTURE(module);
-                REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
-                CHECK(module.getGlobalList().size() == 1);
-                auto* variable = module.getGlobalVariable("foo", true);
+                cld::CGLLVM::generateLLVM(*module, program);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                CHECK(module->getGlobalList().size() == 1);
+                auto* variable = module->getGlobalVariable("foo", true);
                 REQUIRE(variable);
                 CHECK(variable->getLinkage() == llvm::GlobalValue::InternalLinkage);
                 CHECK(!variable->isDeclaration());
@@ -615,11 +638,11 @@ TEST_CASE("LLVM codegen global variables", "[LLVM]")
             {
                 auto program = generateProgram("static int foo;\n"
                                                "static int foo;");
-                cld::CGLLVM::generateLLVM(module, program);
-                CAPTURE(module);
-                REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
-                CHECK(module.getGlobalList().size() == 1);
-                auto* variable = module.getGlobalVariable("foo", true);
+                cld::CGLLVM::generateLLVM(*module, program);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                CHECK(module->getGlobalList().size() == 1);
+                auto* variable = module->getGlobalVariable("foo", true);
                 REQUIRE(variable);
                 CHECK(variable->getLinkage() == llvm::GlobalValue::InternalLinkage);
                 CHECK(!variable->isDeclaration());
@@ -634,11 +657,11 @@ TEST_CASE("LLVM codegen global variables", "[LLVM]")
         SECTION("Normal")
         {
             auto program = generateProgram("extern int foo;");
-            cld::CGLLVM::generateLLVM(module, program);
-            CAPTURE(module);
-            REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
-            CHECK(module.getGlobalList().size() == 1);
-            auto* variable = module.getGlobalVariable("foo");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(module->getGlobalList().size() == 1);
+            auto* variable = module->getGlobalVariable("foo");
             REQUIRE(variable);
             CHECK(variable->getLinkage() == llvm::GlobalValue::ExternalLinkage);
             CHECK(variable->isDeclaration());
@@ -649,11 +672,11 @@ TEST_CASE("LLVM codegen global variables", "[LLVM]")
         SECTION("With ignored init")
         {
             auto program = generateProgram("extern int foo = 5;");
-            cld::CGLLVM::generateLLVM(module, program);
-            CAPTURE(module);
-            REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
-            CHECK(module.getGlobalList().size() == 1);
-            auto* variable = module.getGlobalVariable("foo");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(module->getGlobalList().size() == 1);
+            auto* variable = module->getGlobalVariable("foo");
             REQUIRE(variable);
             CHECK(variable->getLinkage() == llvm::GlobalValue::ExternalLinkage);
             CHECK(variable->isDeclaration());
@@ -669,11 +692,11 @@ TEST_CASE("LLVM codegen global variables", "[LLVM]")
             SECTION("Single")
             {
                 auto program = generateProgram("int foo = 5;");
-                cld::CGLLVM::generateLLVM(module, program);
-                CAPTURE(module);
-                REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
-                CHECK(module.getGlobalList().size() == 1);
-                auto* variable = module.getGlobalVariable("foo");
+                cld::CGLLVM::generateLLVM(*module, program);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                CHECK(module->getGlobalList().size() == 1);
+                auto* variable = module->getGlobalVariable("foo");
                 REQUIRE(variable);
                 CHECK(variable->getLinkage() == llvm::GlobalValue::ExternalLinkage);
                 CHECK(!variable->isDeclaration());
@@ -685,11 +708,11 @@ TEST_CASE("LLVM codegen global variables", "[LLVM]")
             {
                 auto program = generateProgram("int foo;\n"
                                                "int foo = 3;");
-                cld::CGLLVM::generateLLVM(module, program);
-                CAPTURE(module);
-                REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
-                CHECK(module.getGlobalList().size() == 1);
-                auto* variable = module.getGlobalVariable("foo");
+                cld::CGLLVM::generateLLVM(*module, program);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                CHECK(module->getGlobalList().size() == 1);
+                auto* variable = module->getGlobalVariable("foo");
                 REQUIRE(variable);
                 CHECK(variable->getLinkage() == llvm::GlobalValue::ExternalLinkage);
                 CHECK(!variable->isDeclaration());
@@ -703,11 +726,11 @@ TEST_CASE("LLVM codegen global variables", "[LLVM]")
             SECTION("Single")
             {
                 auto program = generateProgram("static int foo = 5;");
-                cld::CGLLVM::generateLLVM(module, program);
-                CAPTURE(module);
-                REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
-                CHECK(module.getGlobalList().size() == 1);
-                auto* variable = module.getGlobalVariable("foo", true);
+                cld::CGLLVM::generateLLVM(*module, program);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                CHECK(module->getGlobalList().size() == 1);
+                auto* variable = module->getGlobalVariable("foo", true);
                 REQUIRE(variable);
                 CHECK(variable->getLinkage() == llvm::GlobalValue::InternalLinkage);
                 CHECK(!variable->isDeclaration());
@@ -719,11 +742,11 @@ TEST_CASE("LLVM codegen global variables", "[LLVM]")
             {
                 auto program = generateProgram("static int foo;\n"
                                                "static int foo = 3;");
-                cld::CGLLVM::generateLLVM(module, program);
-                CAPTURE(module);
-                REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
-                CHECK(module.getGlobalList().size() == 1);
-                auto* variable = module.getGlobalVariable("foo", true);
+                cld::CGLLVM::generateLLVM(*module, program);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                CHECK(module->getGlobalList().size() == 1);
+                auto* variable = module->getGlobalVariable("foo", true);
                 REQUIRE(variable);
                 CHECK(variable->getLinkage() == llvm::GlobalValue::InternalLinkage);
                 CHECK(!variable->isDeclaration());
@@ -1909,13 +1932,30 @@ TEST_CASE("LLVM codegen binary expressions", "[LLVM]")
     }
     SECTION("Right shift")
     {
-        auto program = generateProgram("int rshift(int r,int f) {\n"
-                                       "return r >> f;\n"
-                                       "}");
-        cld::CGLLVM::generateLLVM(*module, program);
-        CAPTURE(*module);
-        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
-        CHECK(cld::Tests::computeInJIT<int(int, int)>(std::move(module), "rshift", 127, 4) == 7);
+        SECTION("signed")
+        {
+            auto program = generateProgram("int rshift(int r,int f) {\n"
+                                           "return r >> f;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK_THAT(*module, ContainsIR("ashr"));
+            CHECK(cld::Tests::computeInJIT<int(int, int)>(std::move(module), "rshift", 127, 4) == 7);
+        }
+        SECTION("unsigned")
+        {
+            auto program = generateProgram("unsigned int rshift(unsigned int r,unsigned int f) {\n"
+                                           "return r >> f;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK_THAT(*module, ContainsIR("lshr"));
+            CHECK(
+                cld::Tests::computeInJIT<unsigned int(unsigned int, unsigned int)>(std::move(module), "rshift", 127, 4)
+                == 7);
+        }
     }
     SECTION("Greater than")
     {
