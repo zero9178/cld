@@ -265,7 +265,8 @@ cld::Message cld::detail::Diagnostic::DiagnosticBase::print(std::pair<PointLocat
                                                             llvm::ArrayRef<Modifiers> modifiers,
                                                             const SourceInterface& sourceInterface) const
 {
-    if (sourceInterface.getLanguageOptions().disabledWarnings.count(to_string(m_name)))
+    if (m_severity == Severity::Warning
+        && !sourceInterface.getLanguageOptions().enabledWarnings.count(to_string(m_name)))
     {
         return {};
     }
@@ -519,7 +520,12 @@ void cld::detail::Diagnostic::DiagnosticBase::evaluateFormatsInMessage(std::stri
             ss << arguments[index].customModifiers[view];
         }
     }
-    ss.write(message.data(), message.size()) << '\n';
+    ss.write(message.data(), message.size());
+    if (m_severity == Severity::Warning)
+    {
+        ss << " [" << m_name << "]";
+    }
+    ss << '\n';
 }
 
 cld::Message cld::detail::Diagnostic::DiagnosticBase::print(std::string_view message,
@@ -538,4 +544,20 @@ cld::Message cld::detail::Diagnostic::DiagnosticBase::print(std::string_view mes
     evaluateFormatsInMessage(message, arguments, ss);
     ss.flush();
     return Message(m_severity, std::move(result));
+}
+
+std::unordered_set<std::string_view>& cld::detail::Diagnostic::DiagnosticBase::allWarnings()
+{
+    static std::unordered_set<std::string_view> set;
+    return set;
+}
+
+const std::unordered_set<std::string_view>& cld::diag::getAllWarnings()
+{
+    return detail::Diagnostic::DiagnosticBase::allWarnings();
+}
+
+cld::detail::Diagnostic::WarningRegistrar::WarningRegistrar(std::string_view name)
+{
+    DiagnosticBase::allWarnings().emplace(name);
 }

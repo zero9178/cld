@@ -83,7 +83,7 @@ int main()
         options.includeDirectories.emplace_back(std::getenv("CSMITH_INC"));
         options.additionalMacros.emplace_back("CSMITH_MINIMAL", "");
         options.additionalMacros.emplace_back("STANDALONE", "");
-        options.disabledWarnings.insert("macro-redefined");
+        options.enabledWarnings.erase("macro-redefined");
         bool errors = false;
         auto pptokens = cld::Lexer::tokenize(std::move(input), options, &llvm::errs(), &errors,
                                              (cld::fs::current_path() / "test.c").u8string());

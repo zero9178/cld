@@ -132,7 +132,7 @@ int main(int argc, char** argv)
         {
             options.includeDirectories.push_back(argv[i]);
         }
-        options.disabledWarnings.insert("macro-redefined");
+        options.enabledWarnings.erase("macro-redefined");
         bool errors = false;
         auto pptokens = cld::Lexer::tokenize(std::move(input), options, &llvm::errs(), &errors, filename);
         if (errors)

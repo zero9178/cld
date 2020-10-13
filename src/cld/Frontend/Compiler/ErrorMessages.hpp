@@ -26,11 +26,12 @@
     constexpr auto variableName =                                     \
         ::cld::makeDiagnostic<detail::variableName##Text, __VA_ARGS__>(::cld::Severity::Note, "")
 
-#define CREATE_WARNING_3(variableName, cliName, format)               \
-    namespace detail                                                  \
-    {                                                                 \
-    constexpr auto variableName##Text = ::ctll::fixed_string{format}; \
-    }                                                                 \
+#define CREATE_WARNING_3(variableName, cliName, format)                                        \
+    namespace detail                                                                           \
+    {                                                                                          \
+    constexpr auto variableName##Text = ::ctll::fixed_string{format};                          \
+    inline auto variableName##Register = ::cld::detail::Diagnostic::WarningRegistrar(cliName); \
+    }                                                                                          \
     constexpr auto variableName = ::cld::makeDiagnostic<detail::variableName##Text>(::cld::Severity::Warning, cliName)
 
 #define CREATE_WARNING_4(...) CREATE_WARNING_VAARG(__VA_ARGS__)
@@ -42,12 +43,13 @@
 
 #define CREATE_WARNING(...) P99_PASTE2(CREATE_WARNING_, CLD_MACRO_COUNT_ARGUMENTS(__VA_ARGS__))(__VA_ARGS__)
 
-#define CREATE_WARNING_VAARG(variableName, cliName, format, ...)      \
-    namespace detail                                                  \
-    {                                                                 \
-    constexpr auto variableName##Text = ::ctll::fixed_string{format}; \
-    }                                                                 \
-    constexpr auto variableName =                                     \
+#define CREATE_WARNING_VAARG(variableName, cliName, format, ...)                               \
+    namespace detail                                                                           \
+    {                                                                                          \
+    constexpr auto variableName##Text = ::ctll::fixed_string{format};                          \
+    inline auto variableName##Register = ::cld::detail::Diagnostic::WarningRegistrar(cliName); \
+    }                                                                                          \
+    constexpr auto variableName =                                                              \
         ::cld::makeDiagnostic<detail::variableName##Text, __VA_ARGS__>(::cld::Severity::Warning, cliName)
 
 #define CREATE_ERROR_2(variableName, format)                          \

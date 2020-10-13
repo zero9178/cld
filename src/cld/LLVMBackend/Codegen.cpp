@@ -1997,7 +1997,7 @@ public:
         {
             case cld::Semantics::Conversion::LValue:
             {
-                if (std::holds_alternative<cld::Semantics::ArrayType>(conversion.getExpression().getType().getVariant())
+                if (cld::Semantics::isArray(conversion.getExpression().getType())
                     && !cld::Semantics::isVariableLengthArray(conversion.getExpression().getType()))
                 {
                     return m_builder.CreateInBoundsGEP(value, {m_builder.getInt64(0), m_builder.getInt64(0)});
@@ -2015,6 +2015,11 @@ public:
             case cld::Semantics::Conversion::IntegerPromotion:
             {
                 auto& prevType = conversion.getExpression().getType();
+                if (cld::Semantics::isEnum(prevType))
+                {
+                    // This should be a noop for enums
+                    return value;
+                }
                 return m_builder.CreateIntCast(
                     value, visit(expression.getType()),
                     cld::get<cld::Semantics::PrimitiveType>(prevType.getVariant()).isSigned());
@@ -2340,6 +2345,7 @@ public:
                 auto* rhs = visit(binaryExpression.getRightExpression());
                 rhs = m_builder.CreateTrunc(rhs, m_builder.getInt1Ty());
                 m_builder.CreateBr(continueBranch);
+                trueBranch = m_builder.GetInsertBlock();
                 m_builder.SetInsertPoint(falseBranch);
                 m_builder.CreateBr(continueBranch);
                 m_builder.SetInsertPoint(continueBranch);
@@ -2360,6 +2366,7 @@ public:
                 auto* rhs = visit(binaryExpression.getRightExpression());
                 rhs = m_builder.CreateTrunc(rhs, m_builder.getInt1Ty());
                 m_builder.CreateBr(continueBranch);
+                falseBranch = m_builder.GetInsertBlock();
                 m_builder.SetInsertPoint(trueBranch);
                 m_builder.CreateBr(continueBranch);
                 m_builder.SetInsertPoint(continueBranch);
@@ -2663,9 +2670,11 @@ public:
         m_builder.SetInsertPoint(trueBranch);
         auto* trueValue = visit(conditional.getTrueExpression());
         m_builder.CreateBr(contBr);
+        trueBranch = m_builder.GetInsertBlock();
         m_builder.SetInsertPoint(falseBranch);
         auto* falseValue = visit(conditional.getFalseExpression());
         m_builder.CreateBr(contBr);
+        falseBranch = m_builder.GetInsertBlock();
         m_builder.SetInsertPoint(contBr);
         auto* phi = m_builder.CreatePHI(trueValue->getType(), 2);
         phi->addIncoming(trueValue, trueBranch);

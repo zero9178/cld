@@ -10,6 +10,7 @@
 #include <array>
 #include <optional>
 #include <unordered_map>
+#include <unordered_set>
 
 #include <ctre.hpp>
 
@@ -159,12 +160,20 @@ constexpr bool checkForNoDuplicates()
     }
 }
 
+class WarningRegistrar
+{
+public:
+    explicit WarningRegistrar(std::string_view name);
+};
+
 class DiagnosticBase
 {
     Severity m_severity;
     std::string_view m_name;
 
 public:
+    static std::unordered_set<std::string_view>& allWarnings();
+
     struct PointLocation
     {
         std::uint64_t offset;
@@ -327,7 +336,6 @@ public:
     };
 
 private:
-
     constexpr static std::array<std::underlying_type_t<Constraint>, N> getConstraints();
 
     template <std::size_t... ints>
@@ -684,6 +692,8 @@ private:
 namespace diag
 {
 std::tuple<const Lexer::TokenBase&, std::uint64_t> after(const Lexer::TokenBase& token);
+
+const std::unordered_set<std::string_view>& getAllWarnings();
 } // namespace diag
 
 template <const auto& text, class... Args>

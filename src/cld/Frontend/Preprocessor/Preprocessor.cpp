@@ -71,13 +71,13 @@ class Preprocessor final : private cld::PPSourceInterface
 
     bool log(const cld::Message& message)
     {
-        if (message.getSeverity() == cld::Severity::Error)
-        {
-            m_errorsOccurred = true;
-        }
         if (m_reporter)
         {
             *m_reporter << message;
+        }
+        if (message.getSeverity() == cld::Severity::Error)
+        {
+            m_errorsOccurred = true;
         }
         return message.getSeverity() != cld::Severity::None;
     }
@@ -173,10 +173,11 @@ class Preprocessor final : private cld::PPSourceInterface
             auto index = nameToIndex.find(iter->getValue());
             CLD_ASSERT(index != nameToIndex.end());
             std::vector<cld::Lexer::PPToken> copy = arguments[index->second];
-            for (auto tokenIter = copy.begin(); tokenIter != copy.end(); tokenIter++)
+            for (auto tokenIter = copy.begin(); tokenIter != copy.end();)
             {
                 if (tokenIter->getTokenType() != cld::Lexer::TokenType::Newline)
                 {
+                    tokenIter++;
                     continue;
                 }
                 if (tokenIter + 1 != copy.end())
@@ -184,6 +185,10 @@ class Preprocessor final : private cld::PPSourceInterface
                     (tokenIter + 1)->setLeadingWhitespace(true);
                 }
                 tokenIter = copy.erase(tokenIter);
+                if (tokenIter != copy.end())
+                {
+                    tokenIter++;
+                }
             }
             auto i = ++m_macroID;
             m_disabledMacros.push_back({});

@@ -53,6 +53,22 @@ CLD_CLI_OPT(HELP, ("--help", "-help"))("Display all options");
 CLD_CLI_OPT(STANDARD_VERSION, ("-std=<arg>", "--std=<arg>", "--std <arg>"), (std::string_view, arg))
 ("C standard version");
 
+CLD_CLI_OPT(WARNINGS, ("-W[no-]<warning>", "--warn-[no-]<warning>", "--warn-=[no-]<warning>"),
+            (std::string_view, warning))
+("Enable/disable specified warning", cld::CLIMultiArg::List);
+
+namespace cld::cli
+{
+template <>
+struct InitialStorage<WARNINGS>
+{
+    static auto getInitial()
+    {
+        return cld::diag::getAllWarnings();
+    }
+};
+} // namespace cld::cli
+
 namespace
 {
 enum class Action
@@ -163,7 +179,11 @@ std::optional<cld::fs::path> compileCFile(Action action, const cld::fs::path& cS
     }
     auto targetMachine = cld::CGLLVM::generateLLVM(module, program, triple, cm, ol);
 #ifndef NDEBUG
-    llvm::verifyModule(module, &llvm::errs());
+    if (llvm::verifyModule(module, &llvm::errs()))
+    {
+        llvm::errs().flush();
+        module.print(llvm::outs(), nullptr);
+    }
 #endif
     std::string outputFile;
     if (cli.template get<OUTPUT_FILE>())
@@ -520,10 +540,9 @@ int cld::main(llvm::MutableArrayRef<std::string_view> elements, llvm::raw_ostrea
     llvm::InitializeAllAsmPrinters();
     llvm::InitializeAllAsmParsers();
 
-    auto cli =
-        cld::parseCommandLine<OUTPUT_FILE, COMPILE_ONLY, ASSEMBLY_OUTPUT, PREPROCESS_ONLY, TARGET, EMIT_LLVM, OPT,
-                              DEFINE_MACRO, INCLUDES, PIE, PIC, FREESTANDING, HELP, VERSION, STANDARD_VERSION>(
-            elements);
+    auto cli = cld::parseCommandLine<OUTPUT_FILE, COMPILE_ONLY, ASSEMBLY_OUTPUT, PREPROCESS_ONLY, TARGET, EMIT_LLVM,
+                                     OPT, DEFINE_MACRO, INCLUDES, PIE, PIC, FREESTANDING, HELP, VERSION,
+                                     STANDARD_VERSION, WARNINGS>(elements);
     auto triple = cld::Triple::defaultTarget();
     if (cli.get<TARGET>())
     {
@@ -558,6 +577,7 @@ int cld::main(llvm::MutableArrayRef<std::string_view> elements, llvm::raw_ostrea
     {
         options.extension = cld::LanguageOptions::Extension::GNU;
     }
+    options.enabledWarnings = cli.get<WARNINGS>();
     options.freeStanding = cli.get<FREESTANDING>().has_value();
     for (auto& iter : cli.get<INCLUDES>())
     {

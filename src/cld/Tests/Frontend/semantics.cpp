@@ -1346,6 +1346,17 @@ TEST_CASE("Semantics type compatibility", "[semantics]")
     }
     SECTION("Functions")
     {
+        SEMA_PRODUCES(
+            "int inflate_table(int type,unsigned short* lens,unsigned codes,int** table,unsigned* bits,unsigned short* work);\n"
+            "int foo(type,lens,codes,table,bits,work)\n"
+            "int type;\n"
+            "unsigned short* lens;\n"
+            "unsigned codes;\n"
+            "int**table;\n"
+            "unsigned * bits;\n"
+            "unsigned short *work;\n"
+            "{}",
+            ProducesNoErrors());
         SEMA_PRODUCES("int foo();\n"
                       "int foo();",
                       ProducesNoErrors());

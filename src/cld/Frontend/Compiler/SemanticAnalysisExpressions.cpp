@@ -2227,6 +2227,21 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::defaultArgumentProm
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::integerPromotion(Expression&& expression)
 {
     expression = lvalueConversion(std::move(expression));
+    if (isEnum(expression.getType()))
+    {
+        if (std::holds_alternative<AnonymousEnumType>(expression.getType().getVariant()))
+        {
+            return Expression(
+                cld::get<AnonymousEnumType>(expression.getType().getVariant()).getType(), ValueCategory::Rvalue,
+                Conversion(Conversion::IntegerPromotion, std::make_unique<Expression>(std::move(expression))));
+        }
+        auto& enumType = cld::get<EnumType>(expression.getType().getVariant());
+        auto* enumDef = getEnumDefinition(enumType.getName(), enumType.getScopeOrId());
+        CLD_ASSERT(enumDef);
+        return Expression(
+            enumDef->getType(), ValueCategory::Rvalue,
+            Conversion(Conversion::IntegerPromotion, std::make_unique<Expression>(std::move(expression))));
+    }
     if (!std::holds_alternative<PrimitiveType>(expression.getType().getVariant()))
     {
         return std::move(expression);

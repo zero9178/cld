@@ -1138,22 +1138,22 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::integerPromotion(const Ty
     }
     if (!std::holds_alternative<PrimitiveType>(type.getVariant()))
     {
-        return type;
+        return lvalueConversion(type);
     }
     auto& prim = cld::get<PrimitiveType>(type.getVariant());
     if (prim.isFloatingPoint())
     {
-        return type;
+        return lvalueConversion(type);
     }
     if (prim.getBitCount() == 0)
     {
-        return type;
+        return lvalueConversion(type);
     }
     if (prim.getBitCount() < m_sourceInterface.getLanguageOptions().sizeOfInt * 8)
     {
         return PrimitiveType::createInt(type.isConst(), type.isVolatile(), m_sourceInterface.getLanguageOptions());
     }
-    return type;
+    return lvalueConversion(type);
 }
 
 cld::Semantics::Type cld::Semantics::SemanticAnalysis::compositeType(const cld::Semantics::Type& lhs,

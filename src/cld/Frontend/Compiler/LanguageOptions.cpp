@@ -5,9 +5,11 @@
 #include <limits>
 #include <numeric>
 
+#include "Diagnostic.hpp"
+
 cld::LanguageOptions cld::LanguageOptions::native(Language language)
 {
-    return cld::LanguageOptions{
+    auto temp = cld::LanguageOptions{
         language,
         sizeof(bool),
         std::is_signed_v<char>,
@@ -65,11 +67,14 @@ cld::LanguageOptions cld::LanguageOptions::native(Language language)
             }
         }(),
     };
+    temp.enabledWarnings = cld::diag::getAllWarnings();
+    return temp;
 }
 
 cld::LanguageOptions cld::LanguageOptions::fromTriple(Triple triple, Language language)
 {
     LanguageOptions options;
+    options.enabledWarnings = cld::diag::getAllWarnings();
     options.language = language;
     options.sizeOfUnderlineBool = 1;
     options.charIsSigned = true;

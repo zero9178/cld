@@ -2044,6 +2044,39 @@ TEST_CASE("LLVM codegen binary expressions", "[LLVM]")
             REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
             CHECK(cld::Tests::computeInJIT<int(float, float)>(std::move(module), "cmp", 127, 4) == 0);
         }
+        SECTION("non void pointers")
+        {
+            auto program = generateProgram("int cmp(int* r,int* f) {\n"
+                                           "return r == f;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            int i;
+            CHECK(cld::Tests::computeInJIT<int(int*, int*)>(std::move(module), "cmp", &i, &i) == 1);
+        }
+        SECTION("Null pointer constants")
+        {
+            auto program = generateProgram("int cmp(int* r) {\n"
+                                           "return r == 0;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            int i;
+            CHECK(cld::Tests::computeInJIT<int(int*)>(std::move(module), "cmp", &i) == 0);
+        }
+        SECTION("void pointers")
+        {
+            auto program = generateProgram("int cmp(int* r,void* f) {\n"
+                                           "return r == f;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            int i;
+            CHECK(cld::Tests::computeInJIT<int(int*, int*)>(std::move(module), "cmp", &i, &i) == 1);
+        }
     }
     SECTION("Not Equal")
     {
@@ -2066,6 +2099,39 @@ TEST_CASE("LLVM codegen binary expressions", "[LLVM]")
             CAPTURE(*module);
             REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
             CHECK(cld::Tests::computeInJIT<int(float, float)>(std::move(module), "cmp", 127, 4) == 1);
+        }
+        SECTION("non void pointers")
+        {
+            auto program = generateProgram("int cmp(int* r,int* f) {\n"
+                                           "return r != f;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            int i;
+            CHECK(cld::Tests::computeInJIT<int(int*, int*)>(std::move(module), "cmp", &i, &i) == 0);
+        }
+        SECTION("Null pointer constants")
+        {
+            auto program = generateProgram("int cmp(int* r) {\n"
+                                           "return r != 0;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            int i;
+            CHECK(cld::Tests::computeInJIT<int(int*)>(std::move(module), "cmp", &i) == 1);
+        }
+        SECTION("void pointers")
+        {
+            auto program = generateProgram("int cmp(int* r,void* f) {\n"
+                                           "return r != f;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            int i;
+            CHECK(cld::Tests::computeInJIT<int(int*, int*)>(std::move(module), "cmp", &i, &i) == 0);
         }
     }
     SECTION("Less than")
@@ -4014,6 +4080,17 @@ TEST_CASE("LLVM codegen inline functions", "[LLVM]")
         REQUIRE(function);
         CHECK(function->isDeclaration());
     }
+    SECTION("InlineDefinition with internal linkage")
+    {
+        auto program = generateProgram("inline static int foo(void) {\n"
+                                       "return 5;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        auto* function = module->getFunction("foo");
+        REQUIRE(function);
+        CHECK_FALSE(function->isDeclaration());
+    }
     SECTION("extern inline")
     {
         SECTION("extern in definition")
@@ -4025,7 +4102,7 @@ TEST_CASE("LLVM codegen inline functions", "[LLVM]")
             CAPTURE(*module);
             auto* function = module->getFunction("foo");
             REQUIRE(function);
-            CHECK(!function->isDeclaration());
+            CHECK_FALSE(function->isDeclaration());
         }
         SECTION("extern in declaration")
         {
@@ -4038,7 +4115,7 @@ TEST_CASE("LLVM codegen inline functions", "[LLVM]")
             CAPTURE(*module);
             auto* function = module->getFunction("foo");
             REQUIRE(function);
-            CHECK(!function->isDeclaration());
+            CHECK_FALSE(function->isDeclaration());
         }
     }
     SECTION("Inline in declaration only")
@@ -4052,7 +4129,7 @@ TEST_CASE("LLVM codegen inline functions", "[LLVM]")
         CAPTURE(*module);
         auto* function = module->getFunction("foo");
         REQUIRE(function);
-        CHECK(!function->isDeclaration());
+        CHECK_FALSE(function->isDeclaration());
     }
 }
 
@@ -4113,25 +4190,26 @@ TEST_CASE("LLVM codegen nameless anonymous struct or union fields", "[LLVM]")
     SECTION("Simple member access and static array initializer")
     {
         auto module = std::make_unique<llvm::Module>("", context);
-        auto program = generateProgram("struct __pthread_cond_s {\n"
-                                       "    __extension__ union {\n"
-                                       "        unsigned long long int __wsed;\n"
-                                       "        struct {\n"
-                                       "            unsigned int __low;\n"
-                                       "            unsigned int __high;\n"
-                                       "        };\n"
-                                       "    };\n"
-                                       "};\n"
-                                       "\n"
-                                       "static unsigned int* foo(struct __pthread_cond_s* c) {\n"
-                                       "   return &c->__low;\n"
-                                       "}\n"
-                                       "\n"
-                                       "struct __pthread_cond_s s[2] = {[0] = {.__low = 5,.__high = 3},[1].__wsed = 5};\n"
-                                       "\n"
-                                       "unsigned int function(void) {\n"
-                                       "    return *foo(s);\n"
-                                       "}");
+        auto program =
+            generateProgram("struct __pthread_cond_s {\n"
+                            "    __extension__ union {\n"
+                            "        unsigned long long int __wsed;\n"
+                            "        struct {\n"
+                            "            unsigned int __low;\n"
+                            "            unsigned int __high;\n"
+                            "        };\n"
+                            "    };\n"
+                            "};\n"
+                            "\n"
+                            "static unsigned int* foo(struct __pthread_cond_s* c) {\n"
+                            "   return &c->__low;\n"
+                            "}\n"
+                            "\n"
+                            "struct __pthread_cond_s s[2] = {[0] = {.__low = 5,.__high = 3},[1].__wsed = 5};\n"
+                            "\n"
+                            "unsigned int function(void) {\n"
+                            "    return *foo(s);\n"
+                            "}");
         cld::CGLLVM::generateLLVM(*module, program);
         CAPTURE(*module);
         CHECK(cld::Tests::computeInJIT<unsigned int()>(std::move(module), "function") == 5);
