@@ -1389,7 +1389,7 @@ using DirectAbstractDeclarator =
                  DirectAbstractDeclaratorStatic>;
 
 /**
- * <DirectAbstractDeclaratorParentheses> ::= <TokenType::OpenParentheses> <AbstractDeclarator>
+ * <DirectAbstractDeclaratorParentheses> ::= <TokenType::OpenParentheses> [<GNUAttributes>] <AbstractDeclarator>
  *                                           <TokenType::CloseParentheses>
  */
 class DirectAbstractDeclaratorParentheses final : public Node
@@ -1457,7 +1457,7 @@ public:
 
 /**
  * <DirectAbstractDeclaratorAsterisk> ::= [<DirectAbstractDeclarator>] <TokenType::OpenSquareBracket>
- * <TokenType::Asterisk> <TokenType::CloseSquareBracket>
+ *                                        <TokenType::Asterisk> <TokenType::CloseSquareBracket>
  */
 class DirectAbstractDeclaratorAsterisk final : public Node
 {
@@ -1504,7 +1504,7 @@ class AbstractDeclarator final : public Node
 
 public:
     AbstractDeclarator(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::vector<Pointer>&& pointers,
-                       std::optional<DirectAbstractDeclarator>&& directAbstractDeclarator);
+                       std::optional<DirectAbstractDeclarator>&& directAbstractDeclarator = {});
 
     [[nodiscard]] const std::vector<Pointer>& getPointers() const;
 
@@ -1523,6 +1523,14 @@ struct ParameterDeclaration : public Node
 {
     std::vector<DeclarationSpecifier> declarationSpecifiers;
     std::variant<std::unique_ptr<Declarator>, std::unique_ptr<AbstractDeclarator>> declarator;
+
+    ParameterDeclaration(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
+                         std::vector<DeclarationSpecifier> declarationSpecifiers,
+                         std::variant<std::unique_ptr<Declarator>, std::unique_ptr<AbstractDeclarator>> variant =
+                             std::unique_ptr<AbstractDeclarator>{})
+        : Node(begin, end), declarationSpecifiers(std::move(declarationSpecifiers)), declarator(std::move(variant))
+    {
+    }
 };
 
 /**
@@ -1956,8 +1964,8 @@ public:
 /**
  * <ExternalDeclaration> ::= <FunctionDefinition> | <Declaration>
  *
- * [GNU]: <ExternalDeclaration> ::= { <TokenType::GNUExtension> } (<FunctionDefinition> | <Declaration> | <GNUSimpleASM>
- * <TokenType::SemiColon> )
+ * [GNU]: <ExternalDeclaration> ::= { <TokenType::GNUExtension> } (<FunctionDefinition> | <Declaration> |
+ *                                    [<GNUSimpleASM>] <TokenType::SemiColon> )
  */
 using ExternalDeclaration = std::variant<Declaration, FunctionDefinition, GNUSimpleASM>;
 

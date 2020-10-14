@@ -1264,6 +1264,7 @@ cld::Syntax::DirectAbstractDeclaratorParentheses::DirectAbstractDeclaratorParent
     Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::unique_ptr<AbstractDeclarator>&& abstractDeclarator)
     : Node(begin, end), m_abstractDeclarator(std::move(abstractDeclarator))
 {
+    CLD_ASSERT(m_abstractDeclarator);
 }
 
 const cld::Syntax::AbstractDeclarator& cld::Syntax::DirectAbstractDeclaratorParentheses::getAbstractDeclarator() const
