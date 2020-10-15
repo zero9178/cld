@@ -5,12 +5,12 @@
 #include <llvm/ADT/APInt.h>
 #include <llvm/ADT/APSInt.h>
 
-#include <cld/Common/Filesystem.hpp>
-#include <cld/Common/Text.hpp>
 #include <cld/Frontend/Compiler/Diagnostic.hpp>
 #include <cld/Frontend/Compiler/LanguageOptions.hpp>
 #include <cld/Frontend/Compiler/Semantics.hpp>
 #include <cld/Frontend/Preprocessor/Preprocessor.hpp>
+#include <cld/Support/Filesystem.hpp>
+#include <cld/Support/Text.hpp>
 
 #include <numeric>
 

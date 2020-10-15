@@ -1,6 +1,6 @@
 #include "SemanticAnalysis.hpp"
 
-#include <cld/Common/Text.hpp>
+#include <cld/Support/Text.hpp>
 
 #include <algorithm>
 #include <array>

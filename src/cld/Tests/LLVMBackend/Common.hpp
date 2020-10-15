@@ -4,12 +4,12 @@
 
 #include <llvm/IR/Module.h>
 
-#include <cld/Common/function_ref.hpp>
 #include <cld/Frontend/Compiler/Lexer.hpp>
 #include <cld/Frontend/Compiler/Parser.hpp>
 #include <cld/Frontend/Compiler/Program.hpp>
 #include <cld/Frontend/Compiler/Semantics.hpp>
 #include <cld/Frontend/Preprocessor/Preprocessor.hpp>
+#include <cld/Support/function_ref.hpp>
 
 #include <regex>
 

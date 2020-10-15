@@ -23,6 +23,8 @@ option(CLD_USE_EXCEPTIONS "Use exceptions" "${DEFAULT_CLD_USE_EXCEPTIONS}")
 option(CLD_COVERAGE "Compile with coverage" OFF)
 option(CLD_DEFAULT_TARGET "Default compiler target" "")
 
+include(GNUInstallDirs)
+
 if (CLD_ENABLE_ASSERTS)
     add_compile_definitions(CLD_USE_ASSERTS)
 endif ()
@@ -52,7 +54,6 @@ endif ()
 
 find_package(LLVM REQUIRED 11)
 
-include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
 include_directories(SYSTEM 3rdParty)
 include_directories(src)
 message(STATUS ${LLVM_INCLUDE_DIRS})
@@ -200,7 +201,7 @@ if (${CLD_BUILD_TESTS})
     add_subdirectory(src/cld/Tests)
 endif ()
 
-add_subdirectory(src/cld/Common)
+add_subdirectory(src/cld/Support)
 add_subdirectory(src/cld/Frontend)
 add_subdirectory(src/cld/LLVMBackend)
 
@@ -213,3 +214,16 @@ target_link_libraries(cldMain LLVMBackend ${llvm_all})
 
 add_executable(cld src/cld/main.cpp)
 target_link_libraries(cld cldMain)
+
+install(TARGETS cld cldMain Support Frontend LLVMBackend
+        EXPORT cldConfig
+        RUNTIME DESTINATION ${CMAKE_INSTALL_DIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        )
+
+export(TARGETS cld cldMain Support Frontend LLVMBackend NAMESPACE cld:: FILE "${CMAKE_CURRENT_BINARY_DIR}/cldConfig.cmake")
+
+install(DIRECTORY src/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} FILES_MATCHING PATTERN "*.hpp" PATTERN "cld/Tests" EXCLUDE PATTERN "cld/Fuzzer" EXCLUDE)
+
+install(EXPORT cldConfig DESTINATION "${CMAKE_INSTALL_DATADIR}/cld/cmake" NAMESPACE cld::)

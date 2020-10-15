@@ -3,9 +3,9 @@
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/Support/Unicode.h>
 
-#include <cld/Common/Constexpr.hpp>
-#include <cld/Common/Text.hpp>
-#include <cld/Common/Util.hpp>
+#include <cld/Support/Constexpr.hpp>
+#include <cld/Support/Text.hpp>
+#include <cld/Support/Util.hpp>
 
 #include <array>
 #include <optional>

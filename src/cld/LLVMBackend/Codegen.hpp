@@ -3,7 +3,7 @@
 #include <llvm/IR/Module.h>
 #include <llvm/Target/TargetMachine.h>
 
-#include <cld/Common/Triple.hpp>
+#include <cld/Support/Triple.hpp>
 
 namespace cld
 {

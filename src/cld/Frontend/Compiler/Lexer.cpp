@@ -4,8 +4,8 @@
 #include <llvm/Support/Error.h>
 #include <llvm/Support/UnicodeCharRanges.h>
 
-#include <cld/Common/ScopeExit.hpp>
-#include <cld/Common/Text.hpp>
+#include <cld/Support/ScopeExit.hpp>
+#include <cld/Support/Text.hpp>
 
 #include <algorithm>
 #include <numeric>

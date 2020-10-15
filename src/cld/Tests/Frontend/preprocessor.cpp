@@ -2,11 +2,11 @@
 
 #include <llvm/ADT/ScopeExit.h>
 
-#include <cld/Common/Filesystem.hpp>
-#include <cld/Common/Text.hpp>
 #include <cld/Frontend/Compiler/ErrorMessages.hpp>
 #include <cld/Frontend/Compiler/SourceObject.hpp>
 #include <cld/Frontend/Preprocessor/Preprocessor.hpp>
+#include <cld/Support/Filesystem.hpp>
+#include <cld/Support/Text.hpp>
 
 #include "TestConfig.hpp"
 

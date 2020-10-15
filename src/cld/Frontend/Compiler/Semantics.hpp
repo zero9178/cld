@@ -1,6 +1,6 @@
 #pragma once
 
-#include <cld/Common/MonadicInheritance.h>
+#include <cld/Support/MonadicInheritance.h>
 
 #include <map>
 #include <memory>

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <cld/Common/Text.hpp>
+#include <cld/Support/Text.hpp>
 
 #include <type_traits>
 

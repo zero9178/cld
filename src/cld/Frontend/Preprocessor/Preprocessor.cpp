@@ -1,11 +1,11 @@
 #include "Preprocessor.hpp"
 
-#include <cld/Common/Filesystem.hpp>
-#include <cld/Common/ScopeExit.hpp>
-#include <cld/Common/Text.hpp>
 #include <cld/Frontend/Compiler/ErrorMessages.hpp>
 #include <cld/Frontend/Compiler/Parser.hpp>
 #include <cld/Frontend/Compiler/SemanticAnalysis.hpp>
+#include <cld/Support/Filesystem.hpp>
+#include <cld/Support/ScopeExit.hpp>
+#include <cld/Support/Text.hpp>
 
 #include <ctime>
 #include <stack>

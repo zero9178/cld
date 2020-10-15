@@ -8,7 +8,6 @@
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Target/TargetMachine.h>
 
-#include <cld/Common/Filesystem.hpp>
 #include <cld/Frontend/Compiler/LanguageOptions.hpp>
 #include <cld/Frontend/Compiler/Lexer.hpp>
 #include <cld/Frontend/Compiler/Parser.hpp>
@@ -17,6 +16,7 @@
 #include <cld/Frontend/Compiler/SourceObject.hpp>
 #include <cld/Frontend/Preprocessor/Preprocessor.hpp>
 #include <cld/LLVMBackend/Codegen.hpp>
+#include <cld/Support/Filesystem.hpp>
 
 int main(int, char** argv)
 {

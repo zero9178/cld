@@ -2,9 +2,9 @@
 
 #include <llvm/ADT/ArrayRef.h>
 
-#include <cld/Common/Expected.hpp>
-#include <cld/Common/ScopeExit.hpp>
-#include <cld/Common/function_ref.hpp>
+#include <cld/Support/Expected.hpp>
+#include <cld/Support/ScopeExit.hpp>
+#include <cld/Support/function_ref.hpp>
 
 #include <functional>
 

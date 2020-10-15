@@ -4,7 +4,7 @@
 #include <llvm/ADT/APSInt.h>
 #include <llvm/Support/raw_ostream.h>
 
-#include <cld/Common/Util.hpp>
+#include <cld/Support/Util.hpp>
 
 #include <memory>
 #include <optional>

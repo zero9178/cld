@@ -8,15 +8,15 @@
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/TargetSelect.h>
 
-#include <cld/Common/CommandLine.hpp>
-#include <cld/Common/Filesystem.hpp>
-#include <cld/Common/Triple.hpp>
 #include <cld/Frontend/Compiler/ErrorMessages.hpp>
 #include <cld/Frontend/Compiler/LanguageOptions.hpp>
 #include <cld/Frontend/Compiler/Parser.hpp>
 #include <cld/Frontend/Compiler/Program.hpp>
 #include <cld/Frontend/Preprocessor/Preprocessor.hpp>
 #include <cld/LLVMBackend/Codegen.hpp>
+#include <cld/Support/CommandLine.hpp>
+#include <cld/Support/Filesystem.hpp>
+#include <cld/Support/Triple.hpp>
 
 CLD_CLI_OPT(OUTPUT_FILE, ("-o <file>", "--output=<file>", "--output <file>"), (std::string_view, file))
 ("Path of the output file");

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <cld/Common/Triple.hpp>
+#include <cld/Support/Triple.hpp>
 
 #include <cstdint>
 #include <string>
