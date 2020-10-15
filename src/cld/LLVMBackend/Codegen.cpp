@@ -2,6 +2,8 @@
 
 #include <llvm/IR/DIBuilder.h>
 #include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/IntrinsicInst.h>
+#include <llvm/IR/Intrinsics.h>
 #include <llvm/Support/TargetRegistry.h>
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Target/TargetOptions.h>
@@ -2907,6 +2909,23 @@ public:
                     }
                     list2 = m_builder.CreateBitCast(list2, m_builder.getInt8PtrTy());
                     return m_builder.CreateIntrinsic(llvm::Intrinsic::vacopy, {}, {list1, list2});
+                }
+                case cld::Semantics::BuiltinFunction::LLAbs:
+                case cld::Semantics::BuiltinFunction::LAbs:
+                case cld::Semantics::BuiltinFunction::Abs:
+                {
+                    auto* longLong = visit(call.getArgumentExpressions()[0]);
+                    auto* neg = m_builder.CreateNSWNeg(longLong);
+                    auto* isNegative =
+                        m_builder.CreateICmpSLT(longLong, llvm::ConstantInt::get(longLong->getType(), 0));
+                    return m_builder.CreateSelect(isNegative, neg, longLong);
+                }
+                case cld::Semantics::BuiltinFunction::FAbs:
+                case cld::Semantics::BuiltinFunction::FAbsf:
+                case cld::Semantics::BuiltinFunction::FAbsl:
+                {
+                    auto* floatingPoint = visit(call.getArgumentExpressions()[0]);
+                    return m_builder.CreateUnaryIntrinsic(llvm::Intrinsic::fabs, floatingPoint);
                 }
             }
             CLD_UNREACHABLE;

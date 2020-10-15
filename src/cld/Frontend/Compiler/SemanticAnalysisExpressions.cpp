@@ -1418,7 +1418,8 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                     return Expression(node);
                 }
             }
-            return Expression(type, ValueCategory::Rvalue,
+            return Expression(
+                type, ValueCategory::Rvalue,
                 Cast(cast.openParentheses, cast.closeParentheses, std::make_unique<Expression>(std::move(value))));
         });
 }
@@ -2236,8 +2237,9 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::integerPromotion(Ex
     {
         if (std::holds_alternative<AnonymousEnumType>(expression.getType().getVariant()))
         {
+            auto type = cld::get<AnonymousEnumType>(expression.getType().getVariant()).getType();
             return Expression(
-                cld::get<AnonymousEnumType>(expression.getType().getVariant()).getType(), ValueCategory::Rvalue,
+                std::move(type), ValueCategory::Rvalue,
                 Conversion(Conversion::IntegerPromotion, std::make_unique<Expression>(std::move(expression))));
         }
         auto& enumType = cld::get<EnumType>(expression.getType().getVariant());

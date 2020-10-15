@@ -1770,6 +1770,64 @@ const cld::Semantics::ProgramInterface::DeclarationInScope::Variant* CLD_NULLABL
         static DeclarationInScope::Variant temp = &builtinVAStart;
         return &temp;
     }
+    if (name == "__builtin_llabs")
+    {
+        static BuiltinFunction builtinLLAbs(FunctionType::create(PrimitiveType::createLongLong(false, false),
+                                                                 {{PrimitiveType::createLongLong(false, false), ""}},
+                                                                 false, false),
+                                            BuiltinFunction::LLAbs);
+        static DeclarationInScope::Variant temp = &builtinLLAbs;
+        return &temp;
+    }
+    if (name == "__builtin_labs")
+    {
+        static BuiltinFunction builtinLAbs(
+            FunctionType::create(
+                PrimitiveType::createLong(false, false, m_sourceInterface.getLanguageOptions()),
+                {{PrimitiveType::createLong(false, false, m_sourceInterface.getLanguageOptions()), ""}}, false, false),
+            BuiltinFunction::LAbs);
+        static DeclarationInScope::Variant temp = &builtinLAbs;
+        return &temp;
+    }
+    if (name == "__builtin_abs")
+    {
+        static BuiltinFunction builtinAbs(
+            FunctionType::create(PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions()),
+                                 {{PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions()), ""}},
+                                 false, false),
+            BuiltinFunction::Abs);
+        static DeclarationInScope::Variant temp = &builtinAbs;
+        return &temp;
+    }
+    if (name == "__builtin_fabs")
+    {
+        static BuiltinFunction builtinFAbs(FunctionType::create(PrimitiveType::createDouble(false, false),
+                                                                {{PrimitiveType::createDouble(false, false), ""}},
+                                                                false, false),
+                                           BuiltinFunction::FAbs);
+        static DeclarationInScope::Variant temp = &builtinFAbs;
+        return &temp;
+    }
+    if (name == "__builtin_fabsf")
+    {
+        static BuiltinFunction builtinFAbsf(FunctionType::create(PrimitiveType::createFloat(false, false),
+                                                                 {{PrimitiveType::createFloat(false, false), ""}},
+                                                                 false, false),
+                                            BuiltinFunction::FAbsf);
+        static DeclarationInScope::Variant temp = &builtinFAbsf;
+        return &temp;
+    }
+    if (name == "__builtin_fabsl")
+    {
+        static BuiltinFunction builtinFAbsl(
+            FunctionType::create(
+                PrimitiveType::createLongDouble(false, false, m_sourceInterface.getLanguageOptions()),
+                {{PrimitiveType::createLongDouble(false, false, m_sourceInterface.getLanguageOptions()), ""}}, false,
+                false),
+            BuiltinFunction::FAbsl);
+        static DeclarationInScope::Variant temp = &builtinFAbsl;
+        return &temp;
+    }
     return nullptr;
 }
 

@@ -2168,7 +2168,13 @@ public:
     {
         VAStart,
         VAEnd,
-        VACopy
+        VACopy,
+        LLAbs,
+        LAbs,
+        Abs,
+        FAbs,
+        FAbsf,
+        FAbsl,
     };
 
 private:

@@ -41,9 +41,40 @@ cld::Triple cld::Triple::native()
     return Triple(architecture, operatingSystem, environment);
 }
 
-cld::Triple cld::Triple::fromString(std::string_view)
+cld::Triple cld::Triple::fromString(std::string_view triple)
 {
-    // TODO:
-    // return cld::Triple(cld::Architecture::x86, cld::Platform::Unknown, cld::Environment::GNU);
-    CLD_UNREACHABLE;
+    auto first = triple.substr(0, triple.find('-'));
+    triple.remove_prefix(std::min(first.size() + 1, triple.size()));
+    auto second = triple.substr(0, triple.find('-'));
+    triple.remove_prefix(std::min(second.size() + 1, triple.size()));
+    auto third = triple.substr(0, triple.find('-'));
+    triple.remove_prefix(std::min(third.size() + 1, triple.size()));
+    Architecture architecture = Architecture::Unknown;
+    if (first == "x86_64")
+    {
+        architecture = Architecture::x86_64;
+    }
+    else if (first == "x86")
+    {
+        architecture = Architecture::x86;
+    }
+    Platform platform = Platform::Unknown;
+    if (second == "windows")
+    {
+        platform = Platform::Windows;
+    }
+    else if (second == "linux")
+    {
+        platform = Platform::Linux;
+    }
+    Environment environment = Environment::Unknown;
+    if (third == "gnu")
+    {
+        environment = Environment::GNU;
+    }
+    else if (third == "msvc")
+    {
+        environment = Environment::MSVC;
+    }
+    return Triple(architecture, platform, environment);
 }
