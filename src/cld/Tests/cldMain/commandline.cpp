@@ -73,6 +73,21 @@ TEST_CASE("Commandline options", "[cld]")
         CHECK(cld::main(vector) != 0);
         CLD_MAIN_PRODUCES(ProducesNoErrors(), {"-c", "main.c", "-Iheaders"});
     }
+    SECTION("output file")
+    {
+        auto dummyFile = createInclude("main.c", "int main(void) { return 0; }");
+        cld::fs::remove(cld::fs::u8path("test.o"));
+        std::vector<std::string_view> vector = {"-c", "main.c", "-o", "test.o"};
+        CHECK(cld::main(vector) == 0);
+        CHECK(cld::fs::exists(cld::fs::u8path("test.o")));
+    }
+    SECTION("disabling warnings")
+    {
+        auto dummyFile = createInclude("main.c", "#define foo 0\n"
+                                                 "#define foo 0\n"
+                                                 "int main(void) { return foo; }");
+        CLD_MAIN_PRODUCES(ProducesNoWarnings(), {"-c", "main.c", "-Wno-macro-redefined"});
+    }
     auto dummyFile = createInclude("main.c", "int main(void) { return 0; }");
     CLD_MAIN_PRODUCES(ProducesError(UNKNOWN_LANGUAGE_STANDARD_N, "java8"), {"-std=java8", "-c", "main.c"});
     CLD_MAIN_PRODUCES(ProducesError(NO_SOURCE_FILES_SPECIFIED), {"-c"});
