@@ -2,6 +2,8 @@
 
 #include <llvm/Support/TargetSelect.h>
 
+#include <TestConfig.hpp>
+
 int main(int argc, char* argv[])
 {
 #ifdef _MSC_VER
@@ -10,10 +12,11 @@ int main(int argc, char* argv[])
     _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
     _CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
 #endif
-
     llvm::InitializeNativeTarget();
     llvm::InitializeNativeTargetAsmParser();
     llvm::InitializeNativeTargetAsmPrinter();
+
+    auto enable = cld::Tests::enableParallelization();
 
     Catch::Session session; // There must be exactly one instance
     // writing to session.configData() here sets defaults

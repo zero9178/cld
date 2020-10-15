@@ -6,3 +6,4 @@ set_source_files_properties(main.cpp PROPERTIES COMPILE_DEFINITIONS CATCH_CONFIG
 if (CLD_USE_PCH)
     target_precompile_headers(cldMainTests PRIVATE <cld/Frontend/Compiler/ErrorMessages.hpp> <catch.hpp>)
 endif ()
+catch_discover_tests(cldMainTests)

@@ -1,10 +1,11 @@
 
-add_executable(CompilerTests lexer.cpp parser.cpp main.cpp semantics.cpp constantevaluator.cpp preprocessor.cpp preprocessor_parser.cpp diagnostics.cpp commandline.cpp)
-target_link_libraries(CompilerTests Frontend testCommon)
+add_executable(FrontendTests lexer.cpp parser.cpp main.cpp semantics.cpp constantevaluator.cpp preprocessor.cpp preprocessor_parser.cpp diagnostics.cpp commandline.cpp)
+target_link_libraries(FrontendTests Frontend testCommon)
 set_source_files_properties(main.cpp PROPERTIES COMPILE_DEFINITIONS CATCH_CONFIG_RUNNER SKIP_PRECOMPILE_HEADERS ON)
 if (CLD_USE_PCH)
-    target_precompile_headers(CompilerTests PRIVATE <cld/Frontend/Compiler/ErrorMessages.hpp> <catch.hpp>)
+    target_precompile_headers(FrontendTests PRIVATE <cld/Frontend/Compiler/ErrorMessages.hpp> <catch.hpp>)
 endif ()
+catch_discover_tests(FrontendTests)
 
 add_executable(fuzzerCrashRunner fuzzerCrashRunner.cpp)
 target_link_libraries(fuzzerCrashRunner Frontend)

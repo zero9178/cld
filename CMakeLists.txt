@@ -183,6 +183,7 @@ else ()
 endif ()
 
 if (${CLD_BUILD_TESTS})
+    enable_testing()
     if (CLD_FUZZER AND "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" AND NOT MINGW)
         add_compile_definitions(CLD_IN_FUZZER)
         if (WIN32)

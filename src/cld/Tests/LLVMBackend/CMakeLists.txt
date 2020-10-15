@@ -5,5 +5,7 @@ add_executable(LLVMBackendTests main.cpp codegentests.cpp Common.cpp)
 target_link_libraries(LLVMBackendTests LLVMBackend ${llvm_jit} testCommon)
 set_source_files_properties(main.cpp PROPERTIES COMPILE_DEFINITIONS CATCH_CONFIG_RUNNER SKIP_PRECOMPILE_HEADERS ON)
 
+catch_discover_tests(LLVMBackendTests)
+
 add_executable(codegenCrashRunner codegenCrashRunner.cpp)
 target_link_libraries(codegenCrashRunner LLVMBackend)

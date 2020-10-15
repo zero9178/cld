@@ -464,7 +464,7 @@ constexpr auto parseOptions(std::string_view description, CLIMultiArg multiArg =
     constexpr auto value = std::apply(
         [&](auto&&... values) {
 #if defined(_MSC_VER) && !defined(__clang__)
-            constexpr auto arguments = T::parseOptionsImpl().second;
+            constexpr auto arguments = std::get<1>(T::parseOptionsImpl());
 #endif
             using Tuple =
                 std::tuple<std::conditional_t<isOptional(std::u32string_view(

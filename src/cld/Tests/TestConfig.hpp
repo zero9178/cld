@@ -251,6 +251,14 @@ public:
 
 [[nodiscard]] FileScope createInclude(std::string_view path, std::string_view content);
 
+struct EndTest
+{
+    cld::fs::path path;
+    ~EndTest();
+};
+
+[[nodiscard]] EndTest enableParallelization();
+
 } // namespace cld::Tests
 
 // IT'S ONLY FOR TESTS I SWEAR. It's in a namepspace for mangling
