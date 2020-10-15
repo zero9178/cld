@@ -543,6 +543,11 @@ int cld::main(llvm::MutableArrayRef<std::string_view> elements, llvm::raw_ostrea
     auto cli = cld::parseCommandLine<OUTPUT_FILE, COMPILE_ONLY, ASSEMBLY_OUTPUT, PREPROCESS_ONLY, TARGET, EMIT_LLVM,
                                      OPT, DEFINE_MACRO, INCLUDES, PIE, PIC, FREESTANDING, HELP, VERSION,
                                      STANDARD_VERSION, WARNINGS>(elements);
+    if (cli.get<HELP>())
+    {
+        cli.printHelp(llvm::outs());
+        return 0;
+    }
     auto triple = cld::Triple::defaultTarget();
     if (cli.get<TARGET>())
     {

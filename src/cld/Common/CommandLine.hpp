@@ -24,19 +24,22 @@ enum class CLIMultiArg
     BitwiseMerge
 };
 
-template <class ReturnType, std::size_t args, class... Alternatives>
+template <class ReturnType, std::size_t firstOptionStringSize, std::size_t args, class... Alternatives>
 class CommandLineOption
 {
+    std::array<char, firstOptionStringSize> m_firstOptionString;
     std::tuple<Alternatives...> m_alternatives;
     std::array<std::u32string_view, args> m_argNameToRetTypePos;
     std::string_view m_description;
     CLIMultiArg m_multiArg;
 
 public:
-    constexpr CommandLineOption(type_identity<ReturnType>, std::tuple<Alternatives...> alternatives,
+    constexpr CommandLineOption(type_identity<ReturnType>, std::array<char, firstOptionStringSize> firstOptionString,
+                                std::tuple<Alternatives...> alternatives,
                                 std::array<std::u32string_view, args> argNameToRetTypePos, std::string_view description,
                                 CLIMultiArg multiArg)
-        : m_alternatives(std::move(alternatives)),
+        : m_firstOptionString(firstOptionString),
+          m_alternatives(std::move(alternatives)),
           m_argNameToRetTypePos(argNameToRetTypePos),
           m_description(description),
           m_multiArg(multiArg)
@@ -63,6 +66,11 @@ public:
     constexpr std::string_view getDescription() const
     {
         return m_description;
+    }
+
+    constexpr std::string_view getFirstOptionString() const
+    {
+        return {m_firstOptionString.data(), m_firstOptionString.size()};
     }
 };
 
@@ -336,111 +344,6 @@ constexpr auto toPair()
     }
 }
 
-template <const auto&... args>
-struct Pack
-{
-    constexpr static auto parseOptionsImpl()
-    {
-        constexpr auto tuple = std::make_tuple(parseOption<args, 0>()...);
-        static_assert((std::apply([](auto&&... input) { (validateTokens(input), ...); }, tuple), true));
-        constexpr auto allArgsTuple = std::apply(
-            [](auto&&... input) {
-                return std::apply([](auto&&... input) { return filterOutArgs(input...); }, std::tuple_cat(input...));
-            },
-            tuple);
-        // libc++ until either version LLVM 11 or 12 does not support constexpr std::array<T,0>
-        if constexpr (std::tuple_size_v<std::decay_t<decltype(allArgsTuple)>> != 0)
-        {
-            constexpr auto allArgsSVArray = std::apply(
-                [](auto&&... input) { return std::array<std::u32string_view, sizeof...(input)>{input.value...}; },
-                allArgsTuple);
-            constexpr std::size_t setSize = unique<false>(allArgsSVArray);
-            constexpr auto uniqueSet = unique<true, allArgsSVArray.size(), setSize>(allArgsSVArray);
-
-            constexpr auto foundOptionals = evaluateOptional(uniqueSet, tuple);
-            return std::pair{tuple, foundOptionals};
-        }
-        else
-        {
-            return std::pair{tuple, std::make_tuple()};
-        }
-    }
-};
-
-template <class T>
-type_identity<T> unpack(const std::in_place_type_t<T>&)
-{
-    return {};
-}
-
-template <std::size_t i>
-constexpr bool isOptional(std::u32string_view text, std::array<std::pair<std::u32string_view, bool>, i> array)
-{
-    for (std::size_t i2 = 0; i2 < i; i2++)
-    {
-        if (array[i2].first == text)
-        {
-            return array[i2].second;
-        }
-    }
-    return true;
-}
-
-constexpr bool isOptional(std::u32string_view, std::tuple<>)
-{
-    return true;
-}
-
-template <class T, auto&... args>
-constexpr auto parseOptions(std::string_view description, CLIMultiArg multiArg = CLIMultiArg::Overwrite)
-{
-    constexpr auto pair = T::parseOptionsImpl();
-    constexpr auto lexems = pair.first;
-    constexpr auto arguments = pair.second;
-    constexpr auto tuple = [] {
-        if constexpr (sizeof...(args) == 0)
-        {
-            return std::make_tuple();
-        }
-        else
-        {
-            return toPair<args...>();
-        }
-    }();
-    constexpr auto value = std::apply(
-        [&](auto&&... values) {
-#if defined(_MSC_VER) && !defined(__clang__)
-            constexpr auto arguments = T::parseOptionsImpl().second;
-#endif
-            using Tuple =
-                std::tuple<std::conditional_t<isOptional(std::u32string_view(
-                                                             std::decay_t<decltype(values.first)>::pointer->begin(),
-                                                             std::decay_t<decltype(values.first)>::pointer->size()),
-                                                         arguments),
-                                              std::optional<typename decltype(unpack(values.second))::type>,
-                                              typename decltype(unpack(values.second))::type>...>;
-            if constexpr (std::tuple_size_v<Tuple> == 1)
-            {
-                return type_identity<std::tuple_element_t<0, Tuple>>{};
-            }
-            else
-            {
-                return type_identity<Tuple>{};
-            }
-        },
-        tuple);
-
-    return CommandLineOption(value, lexems,
-                             std::apply(
-                                 [](auto&&... values) {
-                                     return std::array<std::u32string_view, sizeof...(values)>{
-                                         std::u32string_view(std::decay_t<decltype(values.first)>::pointer->begin(),
-                                                             std::decay_t<decltype(values.first)>::pointer->size())...};
-                                 },
-                                 tuple),
-                             description, multiArg);
-}
-
 template <bool sizeOrArray, std::size_t maxSize>
 constexpr auto utf32ToUtf8(std::u32string_view stringView)
 {
@@ -480,6 +383,116 @@ constexpr auto utf32ToUtf8(std::u32string_view stringView)
     {
         return result;
     }
+}
+
+template <const auto&... args>
+struct Pack
+{
+    constexpr static auto parseOptionsImpl()
+    {
+        constexpr auto tuple = std::make_tuple(parseOption<args, 0>()...);
+        static_assert((std::apply([](auto&&... input) { (validateTokens(input), ...); }, tuple), true));
+        constexpr auto allArgsTuple = std::apply(
+            [](auto&&... input) {
+                return std::apply([](auto&&... input) { return filterOutArgs(input...); }, std::tuple_cat(input...));
+            },
+            tuple);
+        constexpr auto firstString = std::get<0>(std::tuple(args...));
+        constexpr std::size_t u8Size =
+            utf32ToUtf8<false, firstString.size()>({firstString.begin(), firstString.size()});
+        constexpr std::array<char, u8Size> u8String =
+            utf32ToUtf8<true, u8Size>({firstString.begin(), firstString.size()});
+        // libc++ until either version LLVM 11 or 12 does not support constexpr std::array<T,0>
+        if constexpr (std::tuple_size_v<std::decay_t<decltype(allArgsTuple)>> != 0)
+        {
+            constexpr auto allArgsSVArray = std::apply(
+                [](auto&&... input) { return std::array<std::u32string_view, sizeof...(input)>{input.value...}; },
+                allArgsTuple);
+            constexpr std::size_t setSize = unique<false>(allArgsSVArray);
+            constexpr auto uniqueSet = unique<true, allArgsSVArray.size(), setSize>(allArgsSVArray);
+
+            constexpr auto foundOptionals = evaluateOptional(uniqueSet, tuple);
+            return std::tuple{tuple, foundOptionals, u8String};
+        }
+        else
+        {
+            return std::tuple{tuple, std::make_tuple(), u8String};
+        }
+    }
+};
+
+template <class T>
+type_identity<T> unpack(const std::in_place_type_t<T>&)
+{
+    return {};
+}
+
+template <std::size_t i>
+constexpr bool isOptional(std::u32string_view text, std::array<std::pair<std::u32string_view, bool>, i> array)
+{
+    for (std::size_t i2 = 0; i2 < i; i2++)
+    {
+        if (array[i2].first == text)
+        {
+            return array[i2].second;
+        }
+    }
+    return true;
+}
+
+constexpr bool isOptional(std::u32string_view, std::tuple<>)
+{
+    return true;
+}
+
+template <class T, auto&... args>
+constexpr auto parseOptions(std::string_view description, CLIMultiArg multiArg = CLIMultiArg::Overwrite)
+{
+    constexpr auto parsedTuple = T::parseOptionsImpl();
+    constexpr auto lexems = std::get<0>(parsedTuple);
+    constexpr auto arguments = std::get<1>(parsedTuple);
+    constexpr auto tuple = [] {
+        if constexpr (sizeof...(args) == 0)
+        {
+            return std::make_tuple();
+        }
+        else
+        {
+            return toPair<args...>();
+        }
+    }();
+    constexpr auto value = std::apply(
+        [&](auto&&... values) {
+#if defined(_MSC_VER) && !defined(__clang__)
+            constexpr auto arguments = T::parseOptionsImpl().second;
+#endif
+            using Tuple =
+                std::tuple<std::conditional_t<isOptional(std::u32string_view(
+                                                             std::decay_t<decltype(values.first)>::pointer->begin(),
+                                                             std::decay_t<decltype(values.first)>::pointer->size()),
+                                                         arguments),
+                                              std::optional<typename decltype(unpack(values.second))::type>,
+                                              typename decltype(unpack(values.second))::type>...>;
+            if constexpr (std::tuple_size_v<Tuple> == 1)
+            {
+                return type_identity<std::tuple_element_t<0, Tuple>>{};
+            }
+            else
+            {
+                return type_identity<Tuple>{};
+            }
+        },
+        tuple);
+
+    return CommandLineOption(value, std::get<2>(parsedTuple), lexems,
+                             std::apply(
+                                 [](auto&&... values) {
+                                     return std::array<std::u32string_view, sizeof...(values)>{
+                                         std::u32string_view(std::decay_t<decltype(values.first)>::pointer->begin(),
+                                                             std::decay_t<decltype(values.first)>::pointer->size())...};
+                                 },
+                                 tuple),
+                             description, multiArg);
 }
 
 template <std::size_t size>
@@ -817,6 +830,8 @@ using OptionStorage =
                                           std::vector<typename std::decay_t<decltype(option)>::value_type>>,
                        std::optional<typename std::decay_t<decltype(option)>::value_type>>;
 
+void printHelp(llvm::raw_ostream& os, std::vector<std::pair<std::string_view, std::string_view>> options);
+
 } // namespace detail::CommandLine
 
 template <class Storage>
@@ -848,6 +863,24 @@ public:
     {
         return std::get<2>(std::get<std::tuple<detail::CommandLine::Pointer<&option>,
                                                detail::CommandLine::OptionStorage<option>, int>>(m_storage));
+    }
+
+    void printHelp(llvm::raw_ostream& os) const
+    {
+        std::vector<std::pair<std::string_view, std::string_view>> textAndDesc;
+        std::apply(
+            [&](auto&&... values) {
+                (
+                    [&](auto&& tuple) {
+                        using Tuple = std::decay_t<decltype(tuple)>;
+                        using Pointer = std::tuple_element_t<0, Tuple>;
+                        textAndDesc.emplace_back(Pointer::pointer->getFirstOptionString(),
+                                                 Pointer::pointer->getDescription());
+                    }(values),
+                    ...);
+            },
+            m_storage);
+        ::cld::detail::CommandLine::printHelp(os, std::move(textAndDesc));
     }
 };
 
