@@ -4176,9 +4176,9 @@ TEST_CASE("LLVM codegen inline functions", "[LLVM]")
 TEST_CASE("LLVM codegen nameless anonymous struct or union fields", "[LLVM]")
 {
     llvm::LLVMContext context;
+    auto module = std::make_unique<llvm::Module>("", context);
     SECTION("Simple member access and auto initializer")
     {
-        auto module = std::make_unique<llvm::Module>("", context);
         auto program = generateProgram("struct __pthread_cond_s {\n"
                                        "    __extension__ union {\n"
                                        "        unsigned long long int __wsed;\n"
@@ -4203,7 +4203,6 @@ TEST_CASE("LLVM codegen nameless anonymous struct or union fields", "[LLVM]")
     }
     SECTION("Simple member access and static initializer")
     {
-        auto module = std::make_unique<llvm::Module>("", context);
         auto program = generateProgram("struct __pthread_cond_s {\n"
                                        "    __extension__ union {\n"
                                        "        unsigned long long int __wsed;\n"
@@ -4229,7 +4228,6 @@ TEST_CASE("LLVM codegen nameless anonymous struct or union fields", "[LLVM]")
     }
     SECTION("Simple member access and static array initializer")
     {
-        auto module = std::make_unique<llvm::Module>("", context);
         auto program =
             generateProgram("struct __pthread_cond_s {\n"
                             "    __extension__ union {\n"
@@ -4253,5 +4251,74 @@ TEST_CASE("LLVM codegen nameless anonymous struct or union fields", "[LLVM]")
         cld::CGLLVM::generateLLVM(*module, program);
         CAPTURE(*module);
         CHECK(cld::Tests::computeInJIT<unsigned int()>(std::move(module), "function") == 5);
+    }
+}
+
+TEST_CASE("LLVM codegen miscellaneous builtins", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    auto module = std::make_unique<llvm::Module>("", context);
+    SECTION("__builtin_*abs*")
+    {
+        SECTION("abs")
+        {
+            auto program = generateProgram("int function(void) {\n"
+                                           "return __builtin_abs(5) == 5 && __builtin_abs(-5) == 5;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 1);
+        }
+        SECTION("llabs")
+        {
+            auto program = generateProgram("int function(void) {\n"
+                                           "return __builtin_llabs(5ll) == 5ll && __builtin_llabs(-5ll) == 5ll;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 1);
+        }
+        SECTION("labs")
+        {
+            auto program = generateProgram("int function(void) {\n"
+                                           "return __builtin_labs(5L) == 5L && __builtin_abs(-5L) == 5L;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 1);
+        }
+        SECTION("fabs")
+        {
+            auto program = generateProgram("int function(void) {\n"
+                                           "return __builtin_fabs(5.) == 5. && __builtin_abs(-5.) == 5.;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 1);
+        }
+        SECTION("fabsf")
+        {
+            auto program = generateProgram("int function(void) {\n"
+                                           "return __builtin_fabsf(5.f) == 5.f && __builtin_abs(-5.f) == 5.f;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 1);
+        }
+        SECTION("fabsl")
+        {
+            auto program = generateProgram("int function(void) {\n"
+                                           "return __builtin_fabsl(5.l) == 5.l && __builtin_abs(-5.l) == 5.l;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 1);
+        }
     }
 }
