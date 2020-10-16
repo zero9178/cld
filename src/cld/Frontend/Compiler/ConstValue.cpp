@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <utility>
 
-#include "SemanticAnalysis.hpp"
+#include "ProgramInterface.hpp"
 #include "Semantics.hpp"
 
 cld::Semantics::ConstValue::ConstValue(const cld::Semantics::ConstValue::ValueType& value) : m_value(value) {}
