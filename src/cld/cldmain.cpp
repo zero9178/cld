@@ -530,9 +530,16 @@ void applyTargetSpecificLanguageOptions(cld::LanguageOptions& languageOptions, c
     languageOptions.additionalMacros.emplace_back("__FINITE_MATH_ONLY__", "0");
     languageOptions.additionalMacros.emplace_back("__GNUC_STDC_INLINE__", "1");
 }
+
+void printVersion(llvm::raw_ostream& os)
+{
+    os << "cld version " << CLD_VERSION << '\n';
+    os.flush();
+}
+
 } // namespace
 
-int cld::main(llvm::MutableArrayRef<std::string_view> elements, llvm::raw_ostream* reporter)
+int cld::main(llvm::MutableArrayRef<std::string_view> elements, llvm::raw_ostream* reporter, llvm::raw_ostream* out)
 {
     llvm::InitializeAllTargetInfos();
     llvm::InitializeAllTargets();
@@ -545,7 +552,18 @@ int cld::main(llvm::MutableArrayRef<std::string_view> elements, llvm::raw_ostrea
                                      STANDARD_VERSION, WARNINGS>(elements);
     if (cli.get<HELP>())
     {
-        cli.printHelp(llvm::outs());
+        if (out)
+        {
+            cli.printHelp(*out);
+        }
+        return 0;
+    }
+    if (cli.get<VERSION>())
+    {
+        if (out)
+        {
+            printVersion(*out);
+        }
         return 0;
     }
     auto triple = cld::Triple::defaultTarget();

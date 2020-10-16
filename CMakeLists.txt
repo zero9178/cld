@@ -14,7 +14,8 @@ if (MSVC AND CLD_FUZZER)
     set(DEFAULT_CLD_USE_EXCEPTIONS OFF)
 endif ()
 
-project(cld CXX)
+
+project(cld LANGUAGES CXX VERSION 1.0.0)
 set(CMAKE_CXX_STANDARD 17)
 option(CLD_BUILD_TESTS "Build tests" ON)
 option(CLD_FUZZER "Build compiler with libfuzzer instrumentation and fuzzers" OFF)
@@ -211,6 +212,7 @@ message(STATUS "${llvm_all}")
 
 add_library(cldMain src/cld/cldmain.cpp)
 target_link_libraries(cldMain LLVMBackend ${llvm_all})
+target_compile_definitions(cldMain PRIVATE CLD_VERSION="${PROJECT_VERSION}")
 
 add_executable(cld src/cld/main.cpp)
 target_link_libraries(cld cldMain)

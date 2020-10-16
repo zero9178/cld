@@ -88,6 +88,16 @@ TEST_CASE("Commandline options", "[cld]")
                                                  "int main(void) { return foo; }");
         CLD_MAIN_PRODUCES(ProducesNoWarnings(), {"-c", "main.c", "-Wno-macro-redefined"});
     }
+    SECTION("Version")
+    {
+        std::vector<std::string_view> vector = {"--version"};
+        std::string s;
+        llvm::raw_string_ostream ss(s);
+        auto ret = cld::main(vector, nullptr, &ss);
+        CHECK(ret == 0);
+        ss.flush();
+        CHECK_THAT(s, Catch::Matches("cld version \\d+\\.\\d+\\.\\d+(.|\\n)*"));
+    }
     auto dummyFile = createInclude("main.c", "int main(void) { return 0; }");
     CLD_MAIN_PRODUCES(ProducesError(UNKNOWN_LANGUAGE_STANDARD_N, "java8"), {"-std=java8", "-c", "main.c"});
     CLD_MAIN_PRODUCES(ProducesError(NO_SOURCE_FILES_SPECIFIED), {"-c"});

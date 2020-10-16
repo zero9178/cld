@@ -8,5 +8,6 @@
 
 namespace cld
 {
-int main(llvm::MutableArrayRef<std::string_view> ref, llvm::raw_ostream* reporter = &llvm::errs());
+int main(llvm::MutableArrayRef<std::string_view> ref, llvm::raw_ostream* err = &llvm::errs(),
+         llvm::raw_ostream* out = &llvm::outs());
 } // namespace cld
