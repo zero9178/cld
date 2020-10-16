@@ -13,32 +13,34 @@ each other but builds on top of the previous phase.
 As an example, checking if C source code is valid and emit errors to stderr is simply:
 
 ```cpp
-bool errors = false;
-auto pptokens = cld::Lexer::tokenize(std::move(input),options,&llvm::errs(),&errors);
-if (errors)
-{
-    return -1;    
-}
-pptokens = cld::PP::preprocess(std::move(pptokens),&llvm::errs(),&errors);
-if (errors)
-{
-    return -1;
-}
-auto ctokens = cld::Lexer::toCTokens(pptokens,&llvm::errs(),&errors);
-if (errors)
-{
-    return -1;
-}
-auto tree = cld::Parser::buildTree(ctokens,&llvm::errs(),&errors);
-if (errors)
-{
-    return -1;
-}
-cld::Semantics::analyse(tree,std::move(ctokens),&llvm::errs(),&errors);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ```
 
 Compiling C source code can be done just like with GCC:
 `cld -c test.c` which will then produce a `test.o` object file.
+
+Projects that have already successfully been compiled include zlib using both glibc and MinGW as libc.
 
 ## WIP
 
