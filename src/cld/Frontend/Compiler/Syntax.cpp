@@ -1433,3 +1433,55 @@ cld::Lexer::CTokenIterator cld::Syntax::PrimaryExpressionBuiltinVAArg::getCloseP
 {
     return m_closeParentheses;
 }
+
+cld::Syntax::PrimaryExpressionBuiltinOffsetOf::PrimaryExpressionBuiltinOffsetOf(
+    cld::Lexer::CTokenIterator begin, cld::Lexer::CTokenIterator end, cld::Lexer::CTokenIterator builtinToken,
+    cld::Lexer::CTokenIterator openParentheses, std::unique_ptr<TypeName>&& typeName, cld::Lexer::CTokenIterator comma,
+    cld::Lexer::CTokenIterator memberName, std::vector<Variant>&& memberSuffixes,
+    cld::Lexer::CTokenIterator closeParentheses)
+    : Node(begin, end),
+      m_builtinToken(builtinToken),
+      m_openParentheses(openParentheses),
+      m_typeName(std::move(typeName)),
+      m_comma(comma),
+      m_memberName(memberName),
+      m_memberSuffix(std::move(memberSuffixes)),
+      m_closeParentheses(closeParentheses)
+{
+    CLD_ASSERT(m_typeName);
+}
+
+cld::Lexer::CTokenIterator cld::Syntax::PrimaryExpressionBuiltinOffsetOf::getBuiltinToken() const
+{
+    return m_builtinToken;
+}
+
+cld::Lexer::CTokenIterator cld::Syntax::PrimaryExpressionBuiltinOffsetOf::getOpenParentheses() const
+{
+    return m_openParentheses;
+}
+
+const cld::Syntax::TypeName& cld::Syntax::PrimaryExpressionBuiltinOffsetOf::getTypeName() const
+{
+    return *m_typeName;
+}
+
+cld::Lexer::CTokenIterator cld::Syntax::PrimaryExpressionBuiltinOffsetOf::getComma() const
+{
+    return m_comma;
+}
+
+cld::Lexer::CTokenIterator cld::Syntax::PrimaryExpressionBuiltinOffsetOf::getMemberName() const
+{
+    return m_memberName;
+}
+
+auto cld::Syntax::PrimaryExpressionBuiltinOffsetOf::getMemberSuffix() const -> const std::vector<Variant>&
+{
+    return m_memberSuffix;
+}
+
+cld::Lexer::CTokenIterator cld::Syntax::PrimaryExpressionBuiltinOffsetOf::getCloseParentheses() const
+{
+    return m_closeParentheses;
+}

@@ -255,7 +255,7 @@ public:
 };
 
 /**
- * [GNU] <UnaryExpressionBuiltinVAArg> ::= <Identifier=__builtin_va_arg> <TokenType::OpenParentheses>
+ * [GNU]: <PrimaryExpressionBuiltinVAArg> ::= <Identifier=__builtin_va_arg> <TokenType::OpenParentheses>
  *                                         <NonCommaExpression> <TokenType::Comma> <TypeName>
  *                                         <TokenType::CloseParentheses>
  */
@@ -275,17 +275,62 @@ public:
                                   Lexer::CTokenIterator comma, std::unique_ptr<TypeName>&& typeName,
                                   Lexer::CTokenIterator closeParentheses);
 
-    Lexer::CTokenIterator getBuiltinToken() const;
+    [[nodiscard]] Lexer::CTokenIterator getBuiltinToken() const;
 
-    Lexer::CTokenIterator getOpenParentheses() const;
+    [[nodiscard]] Lexer::CTokenIterator getOpenParentheses() const;
 
-    const AssignmentExpression& getAssignmentExpression() const;
+    [[nodiscard]] const AssignmentExpression& getAssignmentExpression() const;
 
-    Lexer::CTokenIterator getComma() const;
+    [[nodiscard]] Lexer::CTokenIterator getComma() const;
 
-    const TypeName& getTypeName() const;
+    [[nodiscard]] const TypeName& getTypeName() const;
 
-    Lexer::CTokenIterator getCloseParentheses() const;
+    [[nodiscard]] Lexer::CTokenIterator getCloseParentheses() const;
+};
+
+/**
+ * [GNU]: <PrimaryExpressionBuiltinOffsetOf> ::= <Identifier=__builtin_offsetof> <TokenType::OpenParentheses>
+ *                                               <TypeName> <TokenType::Comma> <MemberDesignation>
+ *                                               <TokenType::CloseParentheses>
+ *
+ * <MemberDesignation> ::= <TokenType::Identifier> { <TokenType::Identifier> | <TokenType::OpenSquareBracket>
+ *                                                                        <Expression> <TokenType::CloseSquareBracket> }
+ */
+class PrimaryExpressionBuiltinOffsetOf final : public Node
+{
+    Lexer::CTokenIterator m_builtinToken;
+    Lexer::CTokenIterator m_openParentheses;
+    std::unique_ptr<TypeName> m_typeName;
+    Lexer::CTokenIterator m_comma;
+    Lexer::CTokenIterator m_memberName;
+
+public:
+    using Variant = std::variant<Lexer::CTokenIterator, std::unique_ptr<Expression>>;
+
+private:
+    std::vector<Variant> m_memberSuffix;
+    Lexer::CTokenIterator m_closeParentheses;
+
+public:
+    PrimaryExpressionBuiltinOffsetOf(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
+                                     Lexer::CTokenIterator builtinToken, Lexer::CTokenIterator openParentheses,
+                                     std::unique_ptr<TypeName>&& typeName, Lexer::CTokenIterator comma,
+                                     Lexer::CTokenIterator memberName, std::vector<Variant>&& memberSuffixes,
+                                     Lexer::CTokenIterator closeParentheses);
+
+    [[nodiscard]] Lexer::CTokenIterator getBuiltinToken() const;
+
+    [[nodiscard]] Lexer::CTokenIterator getOpenParentheses() const;
+
+    [[nodiscard]] const TypeName& getTypeName() const;
+
+    [[nodiscard]] Lexer::CTokenIterator getComma() const;
+
+    [[nodiscard]] Lexer::CTokenIterator getMemberName() const;
+
+    [[nodiscard]] const std::vector<Variant>& getMemberSuffix() const;
+
+    [[nodiscard]] Lexer::CTokenIterator getCloseParentheses() const;
 };
 
 /**
