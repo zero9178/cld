@@ -778,7 +778,7 @@ public:
           m_offset(offset),
           m_lineStarts(std::move(lineStarts)),
           m_characterToSourceSpace(characterToSourceSpace),
-          m_fakeFile{cld::to_string(path), cld::to_string(sourceSpace), {}, {}},
+          m_fakeFile{cld::to_string(path), cld::to_string(sourceSpace), {}, {}, false},
           m_languageOptions(languageOptions)
     {
     }
@@ -1859,7 +1859,7 @@ cld::PPSourceObject cld::Lexer::tokenize(std::string source, LanguageOptions lan
 
     return PPSourceObject(
         context.getResult(),
-        {Source::File{to_string(sourcePath), std::move(source), std::move(starts), context.getResult()}},
+        {Source::File{to_string(sourcePath), std::move(source), std::move(starts), context.getResult(), false}},
         languageOptions, {}, {{std::move(characterToSourceSpace)}});
 }
 

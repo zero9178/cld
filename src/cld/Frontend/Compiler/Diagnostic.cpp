@@ -266,7 +266,8 @@ cld::Message cld::detail::Diagnostic::DiagnosticBase::print(std::pair<PointLocat
                                                             const SourceInterface& sourceInterface) const
 {
     if (m_severity == Severity::Warning
-        && !sourceInterface.getLanguageOptions().enabledWarnings.count(to_string(m_name)))
+        && (!sourceInterface.getLanguageOptions().enabledWarnings.count(to_string(m_name))
+            || sourceInterface.getFiles()[location.first.fileId].systemHeader))
     {
         return {};
     }

@@ -40,6 +40,9 @@ CLD_CLI_OPT(OPT, ("-O<level>", "-O", "--optimize", "--optimize=<level>"), (std::
 CLD_CLI_OPT(INCLUDES, ("-I<dir>", "--include-directory <dir>", "--include-directory=<dir>"), (std::string_view, dir))
 ("Additional include directories", cld::CLIMultiArg::List);
 
+CLD_CLI_OPT(ISYSTEM, ("-isystem<dir>"), (std::string, dir))
+("Append to system include directories", cld::CLIMultiArg::List);
+
 CLD_CLI_OPT(PIE, ("-f[no-]PIE"))("Build a position independent executable");
 
 CLD_CLI_OPT(PIC, ("-f[no-]PIC"))("Build position independent code");
@@ -553,7 +556,7 @@ int cld::main(llvm::MutableArrayRef<std::string_view> elements, llvm::raw_ostrea
 
     auto cli = cld::parseCommandLine<OUTPUT_FILE, COMPILE_ONLY, ASSEMBLY_OUTPUT, PREPROCESS_ONLY, TARGET, EMIT_LLVM,
                                      OPT, DEFINE_MACRO, INCLUDES, PIE, PIC, FREESTANDING, HELP, VERSION,
-                                     STANDARD_VERSION, WARNINGS>(elements);
+                                     STANDARD_VERSION, WARNINGS, ISYSTEM>(elements);
     if (cli.get<HELP>())
     {
         if (out)
@@ -606,15 +609,21 @@ int cld::main(llvm::MutableArrayRef<std::string_view> elements, llvm::raw_ostrea
     }
     options.enabledWarnings = cli.get<WARNINGS>();
     options.freeStanding = cli.get<FREESTANDING>().has_value();
+    applyTargetSpecificLanguageOptions(options, triple, cli);
     for (auto& iter : cli.get<INCLUDES>())
     {
-        options.includeDirectories.emplace_back(iter);
+        if (std::none_of(cli.get<ISYSTEM>().begin(), cli.get<ISYSTEM>().end(), [&iter](const cld::fs::path& path) {
+                return cld::fs::equivalent(path, cld::fs::u8path(iter));
+            }))
+        {
+            options.includeDirectories.emplace_back(iter);
+        }
     }
+    options.systemDirectories = cli.get<ISYSTEM>();
     for (auto& [name, maybeValue] : cli.get<DEFINE_MACRO>())
     {
         options.additionalMacros.emplace_back(name, maybeValue.value_or(""));
     }
-    applyTargetSpecificLanguageOptions(options, triple, cli);
 
     if (cli.getUnrecognized().empty())
     {

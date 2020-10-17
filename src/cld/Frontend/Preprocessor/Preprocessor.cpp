@@ -1153,8 +1153,13 @@ public:
             {
                 iter2.setFileId(m_files.size());
             }
-            m_files.push_back({std::move(iter.path), std::move(iter.source), std::move(iter.starts),
-                               std::move(iter.ppTokens), includePos});
+            m_files.push_back({std::move(iter.path),
+                               std::move(iter.source),
+                               std::move(iter.starts),
+                               std::move(iter.ppTokens),
+                               iter.systemHeader,
+                               includePos,
+                               {}});
             m_intervalMaps.push_back(std::move(sourceObject.getIntervalMap()[0]));
         }
         m_currentFile = m_files.size() - 1;
@@ -1330,6 +1335,7 @@ public:
             }
         }
 
+        bool systemHeader = false;
         cld::fs::ifstream result;
         cld::fs::path resultPath;
         std::vector<std::string> candidates;
@@ -1362,6 +1368,7 @@ public:
             }
             candidates.insert(candidates.end(), m_options.includeDirectories.begin(),
                               m_options.includeDirectories.end());
+            candidates.insert(candidates.end(), m_options.systemDirectories.begin(), m_options.systemDirectories.end());
             if (includeTag.includeToken->getValue() == "include_next")
             {
                 auto dir = cld::fs::u8path(m_files[m_currentFile].path);
@@ -1374,14 +1381,17 @@ public:
                     candidates.erase(candidates.begin(), thisDir + 1);
                 }
             }
-            for (const auto& candidate : candidates)
+            for (auto iter = candidates.begin(); iter != candidates.end(); iter++)
             {
-                auto filename = cld::fs::u8path(candidate);
+                auto filename = cld::fs::u8path(*iter);
                 filename /= cld::fs::u8path(path);
                 result.open(filename, std::ios_base::in | std::ios_base::binary | std::ios_base::ate);
                 if (result.is_open())
                 {
                     resultPath = std::move(filename);
+                    systemHeader = std::unordered_set<std::string_view>(m_options.systemDirectories.begin(),
+                                                                        m_options.systemDirectories.end())
+                                       .count(*iter);
                     break;
                 }
             }
@@ -1407,6 +1417,13 @@ public:
         {
             m_errorsOccurred = true;
             return;
+        }
+        if (systemHeader)
+        {
+            for (auto& iter : newFile.getFiles())
+            {
+                iter.systemHeader = true;
+            }
         }
         include(std::move(newFile), std::pair{m_currentFile, includeTag.includeToken->getOffset()});
     }
