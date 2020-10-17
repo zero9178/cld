@@ -319,6 +319,10 @@ public:
 
     Expression visit(const Syntax::PrimaryExpressionParentheses& node);
 
+    Expression visit(const Syntax::PrimaryExpressionBuiltinVAArg& node);
+
+    Expression visit(const Syntax::PrimaryExpressionBuiltinOffsetOf& node);
+
     Expression visit(const Syntax::PostFixExpression& node);
 
     Expression visit(const Syntax::PostFixExpressionPrimaryExpression& node);
@@ -346,8 +350,6 @@ public:
     Expression visit(const Syntax::UnaryExpressionSizeOf& node);
 
     Expression visit(const Syntax::UnaryExpressionDefined& node);
-
-    Expression visit(const Syntax::PrimaryExpressionBuiltinVAArg& node);
 
     Expression visit(const Syntax::CastExpression& node);
 

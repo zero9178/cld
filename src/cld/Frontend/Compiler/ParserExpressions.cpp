@@ -1034,6 +1034,63 @@ std::optional<cld::Syntax::PostFixExpression>
                                                   std::make_unique<TypeName>(std::move(*type)), begin - 1));
             }
         }
+        else if (begin < end && begin->getTokenType() == Lexer::TokenType::Identifier
+                 && begin->getText() == "__builtin_offsetof")
+        {
+            const auto* builtInToken = begin++;
+            const Lexer::CToken* openParentheses = nullptr;
+            if (expect(Lexer::TokenType::OpenParentheses, begin, end, context))
+            {
+                openParentheses = begin - 1;
+            }
+            auto type = parseTypeName(
+                begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
+            expect(Lexer::TokenType::Comma, begin, end, context);
+            const auto* comma = begin - 1;
+            expect(Lexer::TokenType::Identifier, begin, end, context);
+            const auto* member = begin - 1;
+
+            std::vector<PrimaryExpressionBuiltinOffsetOf::Variant> suffixes;
+            while (begin != end
+                   && (begin->getTokenType() == Lexer::TokenType::Dot
+                       || begin->getTokenType() == Lexer::TokenType::OpenSquareBracket))
+            {
+                if (begin->getTokenType() == Lexer::TokenType::Dot)
+                {
+                    begin++;
+                    expect(Lexer::TokenType::Identifier, begin, end, context);
+                    suffixes.emplace_back(begin - 1);
+                }
+                else
+                {
+                    const auto* openSquareBracket = begin++;
+                    auto expression = parseExpression(begin, end, context);
+                    expect(Lexer::TokenType::CloseSquareBracket, begin, end, context, [&] {
+                        return Notes::TO_MATCH_N_HERE.args(*openSquareBracket, context.getSourceInterface(),
+                                                           *openSquareBracket);
+                    });
+                    suffixes.emplace_back(std::make_unique<Expression>(std::move(expression)));
+                }
+            }
+
+            if (openParentheses)
+            {
+                expect(Lexer::TokenType::CloseParentheses, begin, end, context, [&] {
+                    return Notes::TO_MATCH_N_HERE.args(*openParentheses, context.getSourceInterface(),
+                                                       *openParentheses);
+                });
+            }
+            else
+            {
+                expect(Lexer::TokenType::CloseParentheses, begin, end, context);
+            }
+            if (type && openParentheses != nullptr)
+            {
+                newPrimary = PrimaryExpression(PrimaryExpressionBuiltinOffsetOf(
+                    start, begin, builtInToken, openParentheses, std::make_unique<TypeName>(std::move(*type)), comma,
+                    member, std::move(suffixes), begin - 1));
+            }
+        }
         else if (begin < end && begin->getTokenType() == Lexer::TokenType::Identifier)
         {
             begin++;

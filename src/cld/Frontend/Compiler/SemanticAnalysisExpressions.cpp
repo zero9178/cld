@@ -543,6 +543,39 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
     return visit(node.getExpression());
 }
 
+cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::PrimaryExpressionBuiltinVAArg& vaArg)
+{
+    auto expression = visit(vaArg.getAssignmentExpression());
+    auto& vaList = *getTypedef("__builtin_va_list");
+    if (isArray(expression.getType()))
+    {
+        // Do Pointer decay
+        expression = lvalueConversion(std::move(expression));
+    }
+    if (!expression.getType().isUndefined() && !typesAreCompatible(expression.getType(), adjustParameterType(vaList)))
+    {
+        log(Errors::Semantics::CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_VA_LIST.args(
+            expression, m_sourceInterface, 1, expression));
+    }
+    auto type =
+        declaratorsToType(vaArg.getTypeName().getSpecifierQualifiers(), vaArg.getTypeName().getAbstractDeclarator());
+    if (!isCompleteType(type))
+    {
+        log(Errors::Semantics::INCOMPLETE_TYPE_N_IN_VA_ARG.args(vaArg.getTypeName(), m_sourceInterface, type,
+                                                                vaArg.getTypeName()));
+        return Expression(vaArg);
+    }
+    type = removeQualifiers(std::move(type));
+    return Expression(std::move(type), ValueCategory::Rvalue,
+                      BuiltinVAArg(vaArg.getBuiltinToken(), vaArg.getOpenParentheses(),
+                                   std::make_unique<Expression>(std::move(expression)), vaArg.getCloseParentheses()));
+}
+
+cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::PrimaryExpressionBuiltinOffsetOf& node)
+{
+    return Expression(node);
+}
+
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::PostFixExpression& node)
 {
     return cld::match(node, [&](auto&& value) { return visit(value); });
@@ -1324,42 +1357,6 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
 
     return Expression(PrimitiveType::createLongLong(false, false), ValueCategory::Rvalue,
                       Constant(llvm::APSInt(64, false), node.begin(), node.end()));
-}
-
-cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::PrimaryExpressionBuiltinVAArg& vaArg)
-{
-    if (getCurrentFunctionScope())
-    {
-        if (!cld::get<FunctionType>(getCurrentFunctionScope()->currentFunction->getType().getVariant()).isLastVararg())
-        {
-            log(Errors::Semantics::CANNOT_USE_VA_ARG_IN_A_FUNCTION_WITH_FIXED_ARGUMENT_COUNT.args(
-                *vaArg.getBuiltinToken(), m_sourceInterface, *vaArg.getBuiltinToken()));
-        }
-    }
-    auto expression = visit(vaArg.getAssignmentExpression());
-    auto& vaList = *getTypedef("__builtin_va_list");
-    if (!expression.getType().isUndefined() && !typesAreCompatible(expression.getType(), vaList))
-    {
-        log(Errors::Semantics::CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_VA_LIST.args(
-            expression, m_sourceInterface, 1, expression));
-    }
-    if (isArray(expression.getType()))
-    {
-        // Do Pointer decay
-        expression = lvalueConversion(std::move(expression));
-    }
-    auto type =
-        declaratorsToType(vaArg.getTypeName().getSpecifierQualifiers(), vaArg.getTypeName().getAbstractDeclarator());
-    if (!isCompleteType(type))
-    {
-        log(Errors::Semantics::INCOMPLETE_TYPE_N_IN_VA_ARG.args(vaArg.getTypeName(), m_sourceInterface, type,
-                                                                vaArg.getTypeName()));
-        return Expression(vaArg);
-    }
-    type = removeQualifiers(std::move(type));
-    return Expression(std::move(type), ValueCategory::Rvalue,
-                      BuiltinVAArg(vaArg.getBuiltinToken(), vaArg.getOpenParentheses(),
-                                   std::make_unique<Expression>(std::move(expression)), vaArg.getCloseParentheses()));
 }
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::CastExpression& node)

@@ -338,9 +338,11 @@ public:
  *                       | <PrimaryExpressionConstant>
  *                       | <PrimaryExpressionParentheses>
  *                 [GNU] | <PrimaryExpressionBuiltinVAArg>
+ *                 [GNU] | <PrimaryExpressionBuiltinOffsetOf>
  */
-using PrimaryExpression = std::variant<PrimaryExpressionIdentifier, PrimaryExpressionConstant,
-                                       PrimaryExpressionParentheses, PrimaryExpressionBuiltinVAArg>;
+using PrimaryExpression =
+    std::variant<PrimaryExpressionIdentifier, PrimaryExpressionConstant, PrimaryExpressionParentheses,
+                 PrimaryExpressionBuiltinVAArg, PrimaryExpressionBuiltinOffsetOf>;
 
 /**
  * <PostFixExpression> ::= <PostFixExpressionPrimaryExpression>
