@@ -3852,6 +3852,7 @@ TEST_CASE("Semantics initializer list", "[semantics]")
     }
     SECTION("Initializing arrays")
     {
+        SEMA_PRODUCES("const char* c[] = {\"test\",\"a\"};", ProducesNoErrors());
         SEMA_PRODUCES("int r[5] = {3,3,53,34,3};", ProducesNoErrors());
         SEMA_PRODUCES("int r[5] = {3,3,53,34,3,5};", ProducesError(NO_MORE_SUB_OBJECTS_TO_INITIALIZE));
         SEMA_PRODUCES("struct Point {\n"
@@ -4417,11 +4418,6 @@ TEST_CASE("Semantics varargs", "[semantics]")
     }
     SECTION("__builtin_va_arg")
     {
-        SEMA_PRODUCES("void foo(void) {\n"
-                      "__builtin_va_list list;\n"
-                      "__builtin_va_arg(list,int);\n"
-                      "}",
-                      ProducesError(CANNOT_USE_VA_ARG_IN_A_FUNCTION_WITH_FIXED_ARGUMENT_COUNT));
         SEMA_PRODUCES("void foo(int i,...) {\n"
                       "__builtin_va_arg(5,int);\n"
                       "}",

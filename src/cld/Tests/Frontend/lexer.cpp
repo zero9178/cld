@@ -44,9 +44,8 @@ using namespace Catch::Matchers;
 
 namespace
 {
-
-//MSVC has a bug where it attempts to use the deleted copy constructor here. As a workaround we return straight
-//away and instead use a constructor to check for the errors
+// MSVC has a bug where it attempts to use the deleted copy constructor here. As a workaround we return straight
+// away and instead use a constructor to check for the errors
 
 [[nodiscard]] cld::CSourceObject lexes(std::string code,
                                        const cld::LanguageOptions& options = cld::LanguageOptions::native())
@@ -506,6 +505,7 @@ TEST_CASE("Lexing character literals", "[lexer]")
     SECTION("Octals")
     {
         LEXER_OUTPUTS_WITH("'\\9'", (ProducesError(INVALID_OCTAL_CHARACTER, "9")));
+        LEXER_OUTPUTS_WITH("'\\301'", (ProducesNoErrors()));
         auto result = lexes("'\\070'");
         REQUIRE(result.data().size() == 1);
         REQUIRE(result.data()[0].getTokenType() == cld::Lexer::TokenType::Literal);
@@ -562,6 +562,7 @@ TEST_CASE("Lexing character literals", "[lexer]")
         CHECK(value.getBitWidth() == 8 * sizeof(wchar_t));
         CHECK(value.isSigned() == std::is_signed_v<wchar_t>);
     }
+    LEXER_OUTPUTS_WITH("'\\\\'", ProducesNoErrors());
     LEXER_OUTPUTS_WITH("'asdf'", ProducesWarning(DISCARDING_ALL_BUT_FIRST_CHARACTER));
     LEXER_OUTPUTS_WITH("'as\ndawd'", ProducesError(NEWLINE_IN_CHARACTER_LITERAL_USE_BACKLASH_N));
 }

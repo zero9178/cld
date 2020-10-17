@@ -2224,6 +2224,8 @@ Program analyse(const Syntax::TranslationUnit& parseTree, CSourceObject&& cToken
 
 [[nodiscard]] bool isArray(const Type& type);
 
+[[nodiscard]] bool isCharArray(const Type& type, const LanguageOptions& options);
+
 [[nodiscard]] const Type& getArrayElementType(const Type& type);
 
 [[nodiscard]] Type adjustParameterType(Type type);
@@ -2251,6 +2253,10 @@ Program analyse(const Syntax::TranslationUnit& parseTree, CSourceObject&& cToken
 [[nodiscard]] bool isVariablyModified(const Type& type);
 
 [[nodiscard]] bool isVariableLengthArray(const Type& type);
+
+[[nodiscard]] bool isCharacterLikeType(const Type& type, const LanguageOptions& options);
+
+[[nodiscard]] Type removeQualifiers(Type type);
 
 } // namespace cld::Semantics
 

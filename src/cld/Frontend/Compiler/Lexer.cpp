@@ -1158,7 +1158,11 @@ StateMachine Start::advance(std::uint32_t c, Context& context)
 
 std::pair<StateMachine, bool> CharacterLiteral::advance(char c, Context& context)
 {
-    if (c == '\'' && (characters.empty() || characters.back() != '\\'))
+    if (c == '\''
+        && (std::find_if_not(characters.rbegin(), characters.rend(), [](char c) { return c == '\\'; })
+            - characters.rbegin())
+                   % 2
+               == 0)
     {
         context.push(TokenType::Literal, characters);
         return {Start{}, true};
@@ -1975,10 +1979,10 @@ enum class Literal
 std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view characters, ConversionContext& context,
                                                             bool wide, Literal literalType)
 {
-    std::uint32_t largestCharacter = [&context, wide]() -> std::uint32_t {
+    const std::uint32_t largestCharacter = [&context, wide]() -> std::uint32_t {
+        std::uint8_t size = 1;
         if (wide)
         {
-            std::uint8_t size = 0;
             switch (context.sourceInterface.getLanguageOptions().wcharUnderlyingType)
             {
                 case cld::LanguageOptions::WideCharType ::Int:
@@ -1988,9 +1992,8 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view cha
                     size = context.sourceInterface.getLanguageOptions().sizeOfShort;
                     break;
             }
-            return 0xFFFFFFFFu >> (32 - 8 * size);
         }
-        return 0x7F;
+        return 0xFFFFFFFFu >> (32 - 8 * size);
     }();
     std::vector<llvm::UTF32> result;
     result.resize(characters.size());

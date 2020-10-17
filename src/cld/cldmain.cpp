@@ -529,6 +529,10 @@ void applyTargetSpecificLanguageOptions(cld::LanguageOptions& languageOptions, c
 
     languageOptions.additionalMacros.emplace_back("__FINITE_MATH_ONLY__", "0");
     languageOptions.additionalMacros.emplace_back("__GNUC_STDC_INLINE__", "1");
+    if (languageOptions.extension == cld::LanguageOptions::Extension::None)
+    {
+        languageOptions.additionalMacros.emplace_back("__STRICT_ANSI__", "1");
+    }
 }
 
 void printVersion(llvm::raw_ostream& os)

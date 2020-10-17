@@ -907,10 +907,13 @@ cld::Semantics::Type
                     }
                     auto alignment = parentType->getAlignOf(*this);
                     currentAlignment = std::max(currentAlignment, alignment);
-                    auto rest = currentSize % alignment;
-                    if (rest != 0)
+                    if (alignment != 0)
                     {
-                        currentSize += alignment - rest;
+                        auto rest = currentSize % alignment;
+                        if (rest != 0)
+                        {
+                            currentSize += alignment - rest;
+                        }
                     }
                     auto subSize = parentType->getSizeOf(*this);
                     currentSize += subSize;
@@ -993,11 +996,14 @@ cld::Semantics::Type
                 }
                 field.indices[0] = iter - fields.begin();
                 fieldLayout[fieldLayoutCounter++].layoutIndex = iter - fields.begin();
-                auto size = fieldLayout[fieldLayoutCounter - 1].type->getSizeOf(*this);
-                if (size > currentSize)
+                if (!fieldLayout[fieldLayoutCounter - 1].type->isUndefined())
                 {
-                    currentSize = size;
-                    currentAlignment = fieldLayout[fieldLayoutCounter - 1].type->getAlignOf(*this);
+                    auto size = fieldLayout[fieldLayoutCounter - 1].type->getSizeOf(*this);
+                    if (size > currentSize)
+                    {
+                        currentSize = size;
+                        currentAlignment = fieldLayout[fieldLayoutCounter - 1].type->getAlignOf(*this);
+                    }
                 }
                 if (!field.parentTypes.empty())
                 {
@@ -1396,9 +1402,14 @@ void cld::Semantics::SemanticAnalysis::handleArray(cld::Semantics::Type& type,
         return;
     }
     auto expr = visit(*assignmentExpression);
-    if (!isInteger(expr.getType()))
+    if (!expr.getType().isUndefined() && !isInteger(expr.getType()))
     {
         log(Errors::Semantics::ARRAY_SIZE_MUST_BE_AN_INTEGER_TYPE.args(expr, m_sourceInterface, expr));
+        type = Type{};
+        return;
+    }
+    if (expr.getType().isUndefined())
+    {
         type = Type{};
         return;
     }

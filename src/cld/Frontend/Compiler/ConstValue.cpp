@@ -163,11 +163,17 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::castTo(const cld::Semanti
                         auto apInt = primitiveType.isSigned() ?
                                          llvm::APInt::getSignedMaxValue(primitiveType.getBitCount()) :
                                          llvm::APInt::getMaxValue(primitiveType.getBitCount());
-                        auto other = integer.extOrTrunc(
-                            std::max<std::size_t>(primitiveType.getBitCount(), integer.getBitWidth()));
-                        apInt = apInt.zextOrTrunc(
-                            std::max<std::size_t>(primitiveType.getBitCount(), integer.getBitWidth()));
-                        if (apInt.ult(other))
+                        // if the cast is to an unsigned type then its maximum value has the highest bit set.
+                        // Since we are doing a signed comparison we need to increase the bitwidth by at least one
+                        // so that it is not thought off as a signed integer
+                        if (apInt.isNegative() && !primitiveType.isSigned())
+                        {
+                            apInt = apInt.zext(apInt.getBitWidth() + 1);
+                        }
+                        auto other =
+                            integer.extOrTrunc(std::max<std::size_t>(apInt.getBitWidth(), integer.getBitWidth()));
+                        apInt = apInt.zextOrTrunc(std::max<std::size_t>(apInt.getBitWidth(), integer.getBitWidth()));
+                        if (apInt.slt(other))
                         {
                             *issues = Issue::NotRepresentable;
                         }

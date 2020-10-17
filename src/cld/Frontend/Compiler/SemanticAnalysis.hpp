@@ -180,8 +180,6 @@ class SemanticAnalysis final : public ProgramInterface
 
     static Type lvalueConversion(Type type);
 
-    static Type removeQualifiers(Type type);
-
     Expression defaultArgumentPromotion(Expression&& type);
 
     Expression integerPromotion(Expression&& expression);

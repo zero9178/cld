@@ -495,6 +495,13 @@ TEST_CASE("PP Builtin macros", "[PP]")
 
 TEST_CASE("PP Function like Macros", "[PP]")
 {
+    SECTION("Recursive with argument name")
+    {
+        auto ret = preprocessResult("#define GLOBAL(t, v) v\n"
+                                    "#define vfsList GLOBAL(sqlite3_vfs*,vfsList)\n"
+                                    "vfsList");
+        CHECK_THAT(ret, ProducesPP("vfsList"));
+    }
     SECTION("Normal")
     {
         auto ret = preprocessResult("#define max(a, b) ((a) > (b) ? (a) : (b))\n"

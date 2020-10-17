@@ -498,6 +498,15 @@ bool cld::Semantics::isArray(const Type& type)
            || std::holds_alternative<AbstractArrayType>(type.getVariant());
 }
 
+bool cld::Semantics::isCharArray(const Type& type, const LanguageOptions& options)
+{
+    if (!isArray(type))
+    {
+        return false;
+    }
+    return isCharacterLikeType(getArrayElementType(type), options);
+}
+
 const cld::Semantics::Type& cld::Semantics::getArrayElementType(const Type& type)
 {
     return cld::match(
@@ -570,6 +579,32 @@ bool cld::Semantics::isCharType(const cld::Semantics::Type& type)
     return primitive->getKind() == PrimitiveType::Kind::Char
            || primitive->getKind() == PrimitiveType::Kind::UnsignedChar
            || primitive->getKind() == PrimitiveType::Kind::SignedChar;
+}
+
+bool cld::Semantics::isCharacterLikeType(const Type& type, const LanguageOptions& options)
+{
+    if (isCharType(type))
+    {
+        return true;
+    }
+    return removeQualifiers(type) == PrimitiveType::createWcharT(false, false, options);
+}
+
+cld::Semantics::Type cld::Semantics::removeQualifiers(Type type)
+{
+    if (type.isConst() || type.isVolatile()
+        || (std::holds_alternative<PointerType>(type.getVariant())
+            && cld::get<PointerType>(type.getVariant()).isRestricted()))
+    {
+        if (!std::holds_alternative<PointerType>(type.getVariant())
+            || !cld::get<PointerType>(type.getVariant()).isRestricted())
+        {
+            return Type(false, false, std::move(type).getVariant());
+        }
+        return PointerType::create(false, false, false,
+                                   cld::get<cld::Semantics::PointerType>(type.getVariant()).getElementType());
+    }
+    return type;
 }
 
 bool cld::Semantics::isAggregate(const Type& type)

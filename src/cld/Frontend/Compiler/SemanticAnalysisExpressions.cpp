@@ -2,23 +2,6 @@
 
 #include "ErrorMessages.hpp"
 
-cld::Semantics::Type cld::Semantics::SemanticAnalysis::removeQualifiers(Type type)
-{
-    if (type.isConst() || type.isVolatile()
-        || (std::holds_alternative<PointerType>(type.getVariant())
-            && cld::get<PointerType>(type.getVariant()).isRestricted()))
-    {
-        if (!std::holds_alternative<PointerType>(type.getVariant())
-            || !cld::get<PointerType>(type.getVariant()).isRestricted())
-        {
-            return Type(false, false, std::move(type).getVariant());
-        }
-        return PointerType::create(false, false, false,
-                                   cld::get<cld::Semantics::PointerType>(type.getVariant()).getElementType());
-    }
-    return type;
-}
-
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::Expression& node)
 {
     if (node.getOptionalAssignmentExpressions().empty())
@@ -2366,9 +2349,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::doSingleElementInit
     if (isArray(type))
     {
         auto& elementType = getArrayElementType(type);
-        if (!isCharType(elementType)
-            && removeQualifiers(elementType)
-                   != PrimitiveType::createWcharT(false, false, m_sourceInterface.getLanguageOptions()))
+        if (!isCharacterLikeType(elementType, m_sourceInterface.getLanguageOptions()))
         {
             log(Errors::Semantics::ARRAY_MUST_BE_INITIALIZED_WITH_INITIALIZER_LIST.args(expression, m_sourceInterface,
                                                                                         expression));
@@ -2966,8 +2947,8 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
             {
                 expression = lvalueConversion(std::move(expression));
             }
-            else if (currentIndex == 0 && &top == current && isArray(*top.type)
-                     && node.getNonCommaExpressionsAndBlocks().size() == 1 && designationList.empty())
+            else if (currentIndex == 0 && &top == current && node.getNonCommaExpressionsAndBlocks().size() == 1
+                     && designationList.empty() && isCharArray(*top.type, m_sourceInterface.getLanguageOptions()))
             {
                 // Handles the case of a string literal being used to initialize the top level object with optional
                 // braces surrounding it
@@ -2976,7 +2957,8 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
             while (isAggregate(*current->at(currentIndex).type))
             {
                 if (typesAreCompatible(removeQualifiers(expression.getType()), *current->at(currentIndex).type)
-                    || (isArray(*current->at(currentIndex).type) && isStringLiteralExpr(expression)))
+                    || (isCharArray(*current->at(currentIndex).type, m_sourceInterface.getLanguageOptions())
+                        && isStringLiteralExpr(expression)))
                 {
                     break;
                 }

@@ -409,6 +409,7 @@ constexpr decltype(auto) visitImpl(Callable&& callable, Variant&& variant, std::
 template <class Callable, class Variant>
 constexpr decltype(auto) visit(Callable&& callable, Variant&& variant)
 {
+    CLD_ASSERT(!variant.valueless_by_exception());
     return visitImpl<std::variant_size_v<std::decay_t<Variant>> - 1>(std::forward<Callable>(callable),
                                                                      std::forward<Variant>(variant));
 }
@@ -417,6 +418,7 @@ constexpr decltype(auto) visit(Callable&& callable, Variant&& variant)
 template <typename Variant, typename... Matchers>
 constexpr decltype(auto) match(Variant&& variant, Matchers&&... matchers)
 {
+    CLD_ASSERT(!variant.valueless_by_exception());
     return detail::visit(detail::overload{std::forward<Matchers>(matchers)...}, std::forward<Variant>(variant));
 }
 

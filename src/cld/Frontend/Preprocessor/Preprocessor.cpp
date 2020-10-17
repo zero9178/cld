@@ -46,15 +46,7 @@ class Preprocessor final : private cld::PPSourceInterface
     };
     std::unordered_map<std::string_view, Macro> m_defines;
 
-    struct PairHash
-    {
-        std::size_t operator()(const std::pair<std::uint64_t, std::uint32_t>& pair) const noexcept
-        {
-            return cld::hashCombine(pair.first, pair.second);
-        }
-    };
-
-    std::vector<std::unordered_set<std::pair<std::uint64_t, std::uint32_t>, PairHash>> m_disabledMacros{1};
+    std::vector<std::unordered_set<cld::Lexer::PPTokenIterator>> m_disabledMacros{1};
     std::vector<cld::Source::File> m_files;
     std::vector<cld::Lexer::IntervalMap> m_intervalMaps;
     bool m_errorsOccurred = false;
@@ -192,6 +184,11 @@ class Preprocessor final : private cld::PPSourceInterface
             }
             auto i = ++m_macroID;
             m_disabledMacros.push_back({});
+            if (!copy.empty())
+            {
+                m_disabledMacros.back().insert(m_disabledMacros[copy.front().getMacroId()].begin(),
+                                               m_disabledMacros[copy.front().getMacroId()].end());
+            }
             m_substitutions.push_back({});
             for (auto& token : copy)
             {
@@ -453,8 +450,8 @@ class Preprocessor final : private cld::PPSourceInterface
             CLD_ASSERT(scratchPadPP.getFiles().size() == 1);
             if (errors || scratchPadPP.getFiles()[0].ppTokens.size() != 1)
             {
-                if(log(cld::Warnings::PP::TOKEN_CONCATENATION_RESULTING_IN_AN_INVALID_TOKEN_IS_UB.args(*iter, *this, lhs,
-                                                                                                    *iter, rhs)))
+                if (log(cld::Warnings::PP::TOKEN_CONCATENATION_RESULTING_IN_AN_INVALID_TOKEN_IS_UB.args(
+                        *iter, *this, lhs, *iter, rhs)))
                 {
                     log(cld::Notes::PP::WHEN_CONCATENATING_N_AND_N.args(*iter, *this, lhs, *iter, rhs));
                 }
@@ -580,9 +577,7 @@ class Preprocessor final : private cld::PPSourceInterface
             auto result = m_defines.find(name);
             if (result == m_defines.end()
                 || (iter->getMacroId() < m_disabledMacros.size()
-                    && m_disabledMacros[iter->getMacroId()].count(
-                           {result->second.identifierPos->getOffset(), result->second.identifierPos->getFileId()})
-                           > 0))
+                    && m_disabledMacros[iter->getMacroId()].count(result->second.identifierPos) > 0))
             {
                 iter++;
                 continue;
@@ -606,8 +601,7 @@ class Preprocessor final : private cld::PPSourceInterface
             {
                 // Object like macro
                 auto i = ++m_macroID;
-                m_disabledMacros.push_back(
-                    {{result->second.identifierPos->getOffset(), result->second.identifierPos->getFileId()}});
+                m_disabledMacros.push_back({result->second.identifierPos});
                 m_disabledMacros[i].insert(m_disabledMacros[iter->getMacroId()].begin(),
                                            m_disabledMacros[iter->getMacroId()].end());
                 std::vector<cld::Lexer::PPToken> temp = result->second.replacement;
@@ -639,8 +633,7 @@ class Preprocessor final : private cld::PPSourceInterface
             // Function like macro
             auto* namePos = iter;
             auto i = ++m_macroID;
-            m_disabledMacros.push_back(
-                {{result->second.identifierPos->getOffset(), result->second.identifierPos->getFileId()}});
+            m_disabledMacros.push_back({result->second.identifierPos});
             m_disabledMacros[i].insert(m_disabledMacros[iter->getMacroId()].begin(),
                                        m_disabledMacros[iter->getMacroId()].end());
             m_substitutions.push_back({});
