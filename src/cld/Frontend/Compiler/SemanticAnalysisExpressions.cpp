@@ -528,9 +528,12 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::PrimaryExpressionBuiltinVAArg& vaArg)
 {
-    auto expression = lvalueConversion(visit(vaArg.getAssignmentExpression()));
+    auto expression = visit(vaArg.getAssignmentExpression());
+    auto [isConst, isVolatile] = std::pair{expression.getType().isConst(), expression.getType().isVolatile()};
+    expression = lvalueConversion(std::move(expression));
     auto& vaList = *getTypedef("__builtin_va_list");
-    if (!expression.getType().isUndefined() && !typesAreCompatible(expression.getType(), adjustParameterType(vaList)))
+    if (!expression.getType().isUndefined()
+        && (!typesAreCompatible(expression.getType(), adjustParameterType(vaList)) || isConst || isVolatile))
     {
         log(Errors::Semantics::CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_VA_LIST.args(
             expression, m_sourceInterface, 1, expression));
