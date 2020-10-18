@@ -1979,6 +1979,7 @@ DECL_BUILTIN("long double __builtin_fabsl(long double)", FAbsl);
 DECL_BUILTIN("double __builtin_inf()", Inf);
 DECL_BUILTIN("float __builtin_inff()", Inff);
 DECL_BUILTIN("long double __builtin_infl()", Infl);
+DECL_BUILTIN("void __sync_synchronize()", SyncSynchronize);
 
 const cld::Semantics::ProgramInterface::DeclarationInScope::Variant* CLD_NULLABLE
     cld::Semantics::SemanticAnalysis::getBuiltinFuncDecl(std::string_view name)
@@ -2010,6 +2011,7 @@ const cld::Semantics::ProgramInterface::DeclarationInScope::Variant* CLD_NULLABL
     DEF_BUILTIN(Inf);
     DEF_BUILTIN(Inff);
     DEF_BUILTIN(Infl);
+    DEF_BUILTIN(SyncSynchronize);
     return nullptr;
 }
 
@@ -2047,7 +2049,7 @@ void cld::Semantics::SemanticAnalysis::createBuiltins()
             fields.insert({"overflow_arg_area", {voidStar, "overflow_arg_area", nullptr, {2}, {}, {}}});
             fields.insert({"reg_save_area", {voidStar, "reg_save_area", nullptr, {3}, {}, {}}});
             auto fieldLayout = std::vector<FieldInLayout>{
-                {unsignedInt, 0, {}}, {unsignedInt, 1, {}}, {voidStar, 2, {}}, {voidStar, 3, {}}};
+                {unsignedInt, 0, {}, 0}, {unsignedInt, 1, {}, 4}, {voidStar, 2, {}, 8}, {voidStar, 3, {}, 16}};
             auto memLayout = std::vector<Type>{*unsignedInt, *unsignedInt, *voidStar, *voidStar};
             m_structDefinitions.emplace_back("__va_list_tag", std::move(fields), std::move(fieldLayout),
                                              std::move(memLayout), 24, 16);

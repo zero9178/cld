@@ -2937,6 +2937,8 @@ public:
                         false, false, m_sourceInterface.getLanguageOptions()));
                     return llvm::ConstantFP::getInfinity(type);
                 }
+                case cld::Semantics::BuiltinFunction::SyncSynchronize:
+                    return m_builder.CreateFence(llvm::AtomicOrdering::SequentiallyConsistent);
             }
             CLD_UNREACHABLE;
         }

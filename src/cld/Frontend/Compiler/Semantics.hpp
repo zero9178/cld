@@ -2226,7 +2226,8 @@ public:
         FAbsl,
         Inf,
         Inff,
-        Infl
+        Infl,
+        SyncSynchronize
     };
 
 private:
