@@ -305,7 +305,14 @@ class PrimaryExpressionBuiltinOffsetOf final : public Node
     Lexer::CTokenIterator m_memberName;
 
 public:
-    using Variant = std::variant<Lexer::CTokenIterator, std::unique_ptr<Expression>>;
+    struct Subscript
+    {
+        Lexer::CTokenIterator openBracket;
+        std::unique_ptr<Expression> expression;
+        Lexer::CTokenIterator closeBracket;
+    };
+
+    using Variant = std::variant<Lexer::CTokenIterator, Subscript>;
 
 private:
     std::vector<Variant> m_memberSuffix;

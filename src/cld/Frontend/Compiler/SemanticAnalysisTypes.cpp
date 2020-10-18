@@ -662,7 +662,7 @@ cld::Semantics::Type
                         return true;
                     });
                 auto parentType = std::make_shared<const Type>(std::move(type));
-                fieldLayout.push_back({parentType, static_cast<std::size_t>(-1), {}});
+                fieldLayout.push_back({parentType, static_cast<std::size_t>(-1), {}, {}});
                 if (!((fieldStructOrUnion != specifiers.end()
                        && cld::get<std::unique_ptr<Syntax::StructOrUnionSpecifier>>(
                               cld::get<Syntax::TypeSpecifier>(*fieldStructOrUnion).getVariant())
@@ -857,7 +857,7 @@ cld::Semantics::Type
                     auto [prev, notRedefinition] = fields.insert(
                         {token->getText(),
                          {sharedType, token->getText(), token, {static_cast<std::size_t>(-1)}, value, {}}});
-                    fieldLayout.push_back({sharedType, static_cast<std::size_t>(-1), value});
+                    fieldLayout.push_back({sharedType, static_cast<std::size_t>(-1), value, {}});
                     if (!notRedefinition)
                     {
                         log(Errors::Semantics::REDEFINITION_OF_FIELD_N.args(*token, m_sourceInterface, *token));
@@ -901,6 +901,7 @@ cld::Semantics::Type
                         return pair.second.parentTypes.front().get() == parentType.get();
                     });
                     fieldLayout[fieldLayoutCounter++].layoutIndex = memoryLayout.size();
+                    fieldLayout[fieldLayoutCounter - 1].offset = currentSize;
                     for (; iter != end; iter++)
                     {
                         iter.value().indices[0] = memoryLayout.size();
@@ -922,6 +923,10 @@ cld::Semantics::Type
                 }
                 if (!iter->second.bitFieldBounds)
                 {
+                    iter.value().indices[0] = memoryLayout.size();
+                    fieldLayout[fieldLayoutCounter++].layoutIndex = memoryLayout.size();
+                    fieldLayout[fieldLayoutCounter - 1].offset = currentSize;
+                    memoryLayout.push_back(*iter->second.type);
                     auto alignment = iter->second.type->getAlignOf(*this);
                     currentAlignment = std::max(currentAlignment, alignment);
                     auto rest = currentSize % alignment;
@@ -931,9 +936,6 @@ cld::Semantics::Type
                     }
                     auto subSize = iter->second.type->getSizeOf(*this);
                     currentSize += subSize;
-                    iter.value().indices[0] = memoryLayout.size();
-                    fieldLayout[fieldLayoutCounter++].layoutIndex = memoryLayout.size();
-                    memoryLayout.push_back(*iter->second.type);
                     iter++;
                     continue;
                 }

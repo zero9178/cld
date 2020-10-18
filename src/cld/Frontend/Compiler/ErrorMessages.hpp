@@ -352,11 +352,11 @@ CREATE_ERROR(POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_SUBSCRIPT_OPERATOR,
 
 // Member access
 
-CREATE_ERROR(EXPECTED_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_DOT_OPERATOR,
-             "Expected struct or union type on the left side of '.' operator", AnnotateExpr<0>);
+CREATE_ERROR(EXPECTED_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_THE_DOT_OPERATOR,
+             "Expected struct or union type on the left side of the '.' operator", AnnotateExpr<0>);
 
-CREATE_ERROR(EXPECTED_POINTER_TO_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_ARROW_OPERATOR,
-             "Expected pointer to struct or union type on the left side of '->' operator", AnnotateExpr<0>);
+CREATE_ERROR(EXPECTED_POINTER_TO_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_THE_ARROW_OPERATOR,
+             "Expected pointer to struct or union type on the left side of the '->' operator", AnnotateExpr<0>);
 
 CREATE_ERROR(STRUCT_N_IS_AN_INCOMPLETE_TYPE, "Struct %0 is an incomplete type", Underline<1>);
 
@@ -581,6 +581,19 @@ CREATE_ERROR(INCOMPLETE_TYPE_N_IN_VA_ARG, "Incomplete type %full0 in 'va_arg'", 
 
 CREATE_ERROR(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_VA_LIST,
              "Cannot pass incompatible type to parameter %0 of type 'va_list'", AnnotateExpr<1>);
+
+// Offset of
+
+CREATE_ERROR(TYPE_IN_OFFSETOF_MUST_BE_A_STRUCT_OR_UNION_TYPE, "Type %0 in 'offsetof' must be a struct or union type",
+             Annotate<1, 0>);
+
+CREATE_ERROR(EXPECTED_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_THE_DOT_OPERATOR_2,
+             "Expected struct or union type on the left side of the '.' operator", Annotate<0, 1>);
+
+CREATE_ERROR(EXPECTED_ARRAY_TYPE_ON_THE_LEFT_SIDE_OF_THE_SUBSCRIPT_OPERATOR,
+             "Expected array type on the left side of the subscript operator", Annotate<0, 1>);
+
+CREATE_ERROR(BITFIELD_NOT_ALLOWED_IN_OFFSET_OF, "Bitfield not allowed in 'offsetof'", Underline<0>);
 
 // Size of
 

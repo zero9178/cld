@@ -556,7 +556,117 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::PrimaryExpressionBuiltinOffsetOf& node)
 {
-    return Expression(node);
+    auto type =
+        declaratorsToType(node.getTypeName().getSpecifierQualifiers(), node.getTypeName().getAbstractDeclarator());
+    if (type.isUndefined() || !isRecord(type))
+    {
+        if (!isRecord(type))
+        {
+            log(Errors::Semantics::TYPE_IN_OFFSETOF_MUST_BE_A_STRUCT_OR_UNION_TYPE.args(
+                node.getTypeName(), m_sourceInterface, type, node.getTypeName()));
+        }
+        return Expression(PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()),
+                          ValueCategory::Rvalue, std::pair{node.begin(), node.end()});
+    }
+    auto& fields = getFields(type);
+    auto result = fields.find(node.getMemberName()->getText());
+    if (result == fields.end())
+    {
+        reportNoMember(type, *node.getMemberName());
+        return Expression(PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()),
+                          ValueCategory::Rvalue, std::pair{node.begin(), node.end()});
+    }
+    if (result->second.bitFieldBounds)
+    {
+        log(Errors::Semantics::BITFIELD_NOT_ALLOWED_IN_OFFSET_OF.args(*node.getMemberName(), m_sourceInterface,
+                                                                      *node.getMemberName()));
+        return Expression(PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()),
+                          ValueCategory::Rvalue, std::pair{node.begin(), node.end()});
+    }
+    llvm::ArrayRef<Lexer::CToken> range(node.getMemberName(), node.getMemberName() + 1);
+    std::uint64_t currentOffset = 0;
+    auto fieldLayout = getFieldLayout(type);
+    for (auto& iter : result->second.indices)
+    {
+        currentOffset += fieldLayout[iter].offset;
+    }
+    const Type* currentType = result->second.type.get();
+    for (auto& iter : node.getMemberSuffix())
+    {
+        if (std::holds_alternative<Lexer::CTokenIterator>(iter))
+        {
+            if (!isRecord(*currentType))
+            {
+                log(Errors::Semantics::EXPECTED_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_THE_DOT_OPERATOR_2.args(
+                    range, m_sourceInterface, range, *currentType));
+                return Expression(PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()),
+                                  ValueCategory::Rvalue, std::pair{node.begin(), node.end()});
+            }
+            auto& subFields = getFields(*currentType);
+            auto subResult = subFields.find(cld::get<Lexer::CTokenIterator>(iter)->getText());
+            if (subResult == subFields.end())
+            {
+                reportNoMember(*currentType, *cld::get<Lexer::CTokenIterator>(iter));
+                return Expression(PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()),
+                                  ValueCategory::Rvalue, std::pair{node.begin(), node.end()});
+            }
+            if (subResult->second.bitFieldBounds)
+            {
+                log(Errors::Semantics::BITFIELD_NOT_ALLOWED_IN_OFFSET_OF.args(
+                    *cld::get<Lexer::CTokenIterator>(iter), m_sourceInterface, *cld::get<Lexer::CTokenIterator>(iter)));
+                return Expression(PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()),
+                                  ValueCategory::Rvalue, std::pair{node.begin(), node.end()});
+            }
+            range = llvm::ArrayRef(node.getMemberName(), cld::get<Lexer::CTokenIterator>(iter) + 1);
+        }
+        else
+        {
+            if (!isArray(*currentType))
+            {
+                log(Errors::Semantics::EXPECTED_ARRAY_TYPE_ON_THE_LEFT_SIDE_OF_THE_SUBSCRIPT_OPERATOR.args(
+                    range, m_sourceInterface, range, *currentType));
+                return Expression(PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()),
+                                  ValueCategory::Rvalue, std::pair{node.begin(), node.end()});
+            }
+            auto& subscript = cld::get<Syntax::PrimaryExpressionBuiltinOffsetOf::Subscript>(iter);
+            auto expression = visit(*subscript.expression);
+            if (expression.isUndefined())
+            {
+                return Expression(PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()),
+                                  ValueCategory::Rvalue, std::pair{node.begin(), node.end()});
+            }
+            auto constant = evaluateConstantExpression(expression);
+            if (!constant)
+            {
+                for (auto& mes : constant.error())
+                {
+                    log(mes);
+                }
+                return Expression(PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()),
+                                  ValueCategory::Rvalue, std::pair{node.begin(), node.end()});
+            }
+            if (!isInteger(expression.getType()))
+            {
+                log(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS.args(
+                    expression, m_sourceInterface, expression));
+                return Expression(PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()),
+                                  ValueCategory::Rvalue, std::pair{node.begin(), node.end()});
+            }
+            auto size = getArrayElementType(*currentType).getSizeOf(*this);
+            if (cld::get<llvm::APSInt>(constant->getValue()).isSigned())
+            {
+                currentOffset += size * constant->toInt();
+            }
+            else
+            {
+                currentOffset += size * constant->toUInt();
+            }
+            range = llvm::ArrayRef(node.getMemberName(), subscript.closeBracket + 1);
+        }
+    }
+    return Expression(
+        PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()), ValueCategory::Rvalue,
+        BuiltinOffsetOf(node.getBuiltinToken(), node.getOpenParentheses(), currentOffset, node.getCloseParentheses()));
 }
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::PostFixExpression& node)
@@ -611,6 +721,30 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                                         std::make_unique<Expression>(std::move(second)), node.getCloseBracket()));
 }
 
+void cld::Semantics::SemanticAnalysis::reportNoMember(const Type& recordType, const Lexer::CToken& identifier)
+{
+    if (std::holds_alternative<AnonymousUnionType>(recordType.getVariant()))
+    {
+        log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_ANONYMOUS_UNION.args(identifier, m_sourceInterface,
+                                                                                identifier));
+    }
+    if (std::holds_alternative<AnonymousStructType>(recordType.getVariant()))
+    {
+        log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_ANONYMOUS_STRUCT.args(identifier, m_sourceInterface,
+                                                                                 identifier));
+    }
+    if (std::holds_alternative<UnionType>(recordType.getVariant()))
+    {
+        log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_UNION_N.args(
+            identifier, m_sourceInterface, identifier, cld::get<UnionType>(recordType.getVariant()).getName()));
+    }
+    if (std::holds_alternative<StructType>(recordType.getVariant()))
+    {
+        log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_STRUCT_N.args(
+            identifier, m_sourceInterface, identifier, cld::get<StructType>(recordType.getVariant()).getName()));
+    }
+}
+
 std::optional<std::pair<cld::Semantics::Type, const cld::Semantics::Field * CLD_NON_NULL>>
     cld::Semantics::SemanticAnalysis::checkMemberAccess(const Type& recordType,
                                                         const Syntax::PostFixExpression& postFixExpr,
@@ -653,26 +787,7 @@ std::optional<std::pair<cld::Semantics::Type, const cld::Semantics::Field * CLD_
     auto result = fields->find(identifier.getText());
     if (result == fields->end())
     {
-        if (std::holds_alternative<AnonymousUnionType>(recordType.getVariant()))
-        {
-            log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_ANONYMOUS_UNION.args(identifier, m_sourceInterface,
-                                                                                    identifier));
-        }
-        if (std::holds_alternative<AnonymousStructType>(recordType.getVariant()))
-        {
-            log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_ANONYMOUS_STRUCT.args(identifier, m_sourceInterface,
-                                                                                     identifier));
-        }
-        if (std::holds_alternative<UnionType>(recordType.getVariant()))
-        {
-            log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_UNION_N.args(
-                identifier, m_sourceInterface, identifier, cld::get<UnionType>(recordType.getVariant()).getName()));
-        }
-        if (std::holds_alternative<StructType>(recordType.getVariant()))
-        {
-            log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_STRUCT_N.args(
-                identifier, m_sourceInterface, identifier, cld::get<StructType>(recordType.getVariant()).getName()));
-        }
+        reportNoMember(recordType, identifier);
         return {};
     }
     Type type;
@@ -697,7 +812,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
     }
     if (!isRecord(structOrUnion.getType()))
     {
-        log(Errors::Semantics::EXPECTED_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_DOT_OPERATOR.args(
+        log(Errors::Semantics::EXPECTED_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_THE_DOT_OPERATOR.args(
             structOrUnion, m_sourceInterface, structOrUnion));
         return Expression(node);
     }
@@ -726,14 +841,14 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
     }
     if (!std::holds_alternative<PointerType>(structOrUnionPtr.getType().getVariant()))
     {
-        log(Errors::Semantics::EXPECTED_POINTER_TO_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_ARROW_OPERATOR.args(
+        log(Errors::Semantics::EXPECTED_POINTER_TO_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_THE_ARROW_OPERATOR.args(
             structOrUnionPtr, m_sourceInterface, structOrUnionPtr));
         return Expression(node);
     }
     auto& structOrUnion = cld::get<PointerType>(structOrUnionPtr.getType().getVariant()).getElementType();
     if (!isRecord(structOrUnion))
     {
-        log(Errors::Semantics::EXPECTED_POINTER_TO_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_ARROW_OPERATOR.args(
+        log(Errors::Semantics::EXPECTED_POINTER_TO_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_THE_ARROW_OPERATOR.args(
             structOrUnionPtr, m_sourceInterface, structOrUnionPtr));
         return Expression(node);
     }

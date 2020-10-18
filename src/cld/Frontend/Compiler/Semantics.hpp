@@ -417,6 +417,7 @@ struct FieldInLayout
     std::shared_ptr<const Type> type;
     std::size_t layoutIndex;
     std::optional<std::pair<std::uint32_t, std::uint32_t>> bitFieldBounds;
+    std::uint64_t offset;
 };
 
 using FieldMap = tsl::ordered_map<std::string_view, Field, std::hash<std::string_view>, std::equal_to<std::string_view>,
@@ -1319,6 +1320,54 @@ public:
     }
 };
 
+class BuiltinOffsetOf final
+{
+    Lexer::CTokenIterator m_builtinToken;
+    Lexer::CTokenIterator m_openParentheses;
+    std::uint64_t m_offset;
+    Lexer::CTokenIterator m_closeParentheses;
+
+public:
+    BuiltinOffsetOf(Lexer::CTokenIterator builtinToken, Lexer::CTokenIterator openParentheses, std::uint64_t offset,
+                    Lexer::CTokenIterator closeParentheses)
+        : m_builtinToken(builtinToken),
+          m_openParentheses(openParentheses),
+          m_offset(offset),
+          m_closeParentheses(closeParentheses)
+    {
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator getBuiltinToken() const
+    {
+        return m_builtinToken;
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator getOpenParentheses() const
+    {
+        return m_openParentheses;
+    }
+
+    [[nodiscard]] std::uint64_t getOffset() const
+    {
+        return m_offset;
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator getCloseParentheses() const
+    {
+        return m_closeParentheses;
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator begin() const
+    {
+        return m_builtinToken;
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator end() const
+    {
+        return m_closeParentheses + 1;
+    }
+};
+
 enum class ValueCategory : std::uint8_t
 {
     Lvalue,
@@ -1334,7 +1383,7 @@ public:
     using Variant =
         std::variant<std::pair<Lexer::CTokenIterator, Lexer::CTokenIterator>, Constant, DeclarationRead, Conversion,
                      MemberAccess, BinaryOperator, Cast, UnaryOperator, SizeofOperator, SubscriptOperator, Conditional,
-                     Assignment, CommaExpression, CallExpression, CompoundLiteral, BuiltinVAArg>;
+                     Assignment, CommaExpression, CallExpression, CompoundLiteral, BuiltinVAArg, BuiltinOffsetOf>;
 
 private:
     Variant m_expression;

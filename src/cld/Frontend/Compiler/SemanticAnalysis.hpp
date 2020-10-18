@@ -193,6 +193,8 @@ class SemanticAnalysis final : public ProgramInterface
 
     bool isConst(const Type& type) const;
 
+    void reportNoMember(const Type& recordType, const Lexer::CToken& identifier);
+
     std::optional<std::pair<Type, const Field * CLD_NON_NULL>>
         checkMemberAccess(const Type& recordType, const Syntax::PostFixExpression& postFixExpr,
                           const Lexer::CToken& identifier);

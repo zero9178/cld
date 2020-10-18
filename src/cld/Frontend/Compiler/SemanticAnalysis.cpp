@@ -1738,6 +1738,11 @@ cld::Semantics::ConstValue
             logger(Errors::Semantics::FUNCTION_CALL_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
                 builtinVaArg, m_sourceInterface, builtinVaArg));
             return {};
+        },
+        [&](const BuiltinOffsetOf& builtinOffsetOf) -> ConstValue {
+            auto type = PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions());
+            return {llvm::APSInt(
+                llvm::APInt(cld::get<PrimitiveType>(type.getVariant()).getBitCount(), builtinOffsetOf.getOffset()))};
         });
 }
 

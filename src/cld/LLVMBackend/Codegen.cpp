@@ -3337,6 +3337,11 @@ public:
         CLD_UNREACHABLE;
     }
 
+    llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::BuiltinOffsetOf& offsetOf)
+    {
+        return llvm::ConstantInt::get(visit(expression.getType()), offsetOf.getOffset());
+    }
+
     llvm::Value* CLD_NULLABLE visit(const cld::Semantics::Initializer& initializer, const cld::Semantics::Type& type,
                                     std::variant<llvm::Value*, llvm::Type*> pointer)
     {

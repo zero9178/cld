@@ -1069,7 +1069,8 @@ std::optional<cld::Syntax::PostFixExpression>
                         return Notes::TO_MATCH_N_HERE.args(*openSquareBracket, context.getSourceInterface(),
                                                            *openSquareBracket);
                     });
-                    suffixes.emplace_back(std::make_unique<Expression>(std::move(expression)));
+                    suffixes.emplace_back(PrimaryExpressionBuiltinOffsetOf::Subscript{
+                        openSquareBracket, std::make_unique<Expression>(std::move(expression)), begin - 1});
                 }
             }
 

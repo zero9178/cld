@@ -1903,7 +1903,7 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
         SEMA_PRODUCES("int foo(void) {\n"
                       " '5'.m;\n"
                       "}",
-                      ProducesError(EXPECTED_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_DOT_OPERATOR));
+                      ProducesError(EXPECTED_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_THE_DOT_OPERATOR));
         SEMA_PRODUCES("int foo(void) {\n"
                       " struct r* i;\n"
                       " (*i).m;\n"
@@ -2020,7 +2020,7 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
         SEMA_PRODUCES("int foo(void) {\n"
                       " 5->m;\n"
                       "}",
-                      ProducesError(EXPECTED_POINTER_TO_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_ARROW_OPERATOR));
+                      ProducesError(EXPECTED_POINTER_TO_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_THE_ARROW_OPERATOR));
         SEMA_PRODUCES("int foo(void) {\n"
                       " struct r* i;\n"
                       " i->m;\n"
