@@ -119,17 +119,16 @@ class SemanticAnalysis final : public ProgramInterface
 
     [[nodiscard]] bool isTypedefInScope(std::string_view name) const;
 
-    [[nodiscard]] const Semantics::Type* CLD_NULLABLE getTypedef(std::string_view name) const;
+    [[nodiscard]] const Semantics::Type* CLD_NULLABLE getTypedef(std::string_view name);
 
-    [[nodiscard]] const DeclarationInScope::Variant* CLD_NULLABLE getBuiltinFuncDecl(std::string_view name) const;
+    [[nodiscard]] const DeclarationInScope::Variant* CLD_NULLABLE getBuiltinFuncDecl(std::string_view name);
 
-    [[nodiscard]] const DeclarationInScope::Variant* CLD_NULLABLE lookupDecl(std::string_view name) const
+    [[nodiscard]] const DeclarationInScope::Variant* CLD_NULLABLE lookupDecl(std::string_view name)
     {
         return lookupDecl(name, m_currentScope);
     }
 
-    [[nodiscard]] const DeclarationInScope::Variant* CLD_NULLABLE lookupDecl(std::string_view name,
-                                                                             std::int64_t scope) const;
+    [[nodiscard]] const DeclarationInScope::Variant* CLD_NULLABLE lookupDecl(std::string_view name, std::int64_t scope);
 
     bool log(const Message& message);
 

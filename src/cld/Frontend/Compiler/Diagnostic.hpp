@@ -1,7 +1,6 @@
 #pragma once
 
 #include <llvm/ADT/ArrayRef.h>
-#include <llvm/Support/Unicode.h>
 
 #include <cld/Support/Constexpr.hpp>
 #include <cld/Support/Text.hpp>
@@ -378,7 +377,7 @@ private:
                     }(values)
                             && ...);
                 },
-                integerSequenceToTuple(std::make_index_sequence<size>{}));
+                Constexpr::integerSequenceToTuple(std::make_index_sequence<size>{}));
         }
         else if constexpr (IsTupleLike<U>{})
         {
@@ -643,7 +642,7 @@ private:
                     std::integral_constant<char32_t,
                                            std::get<i1>(allFormatModifiers)[i2][decltype(stringIndices)::value]>{}...);
             },
-            integerSequenceToTuple(std::make_index_sequence<std::get<i1>(allFormatModifiers)[i2].size()>{}));
+            Constexpr::integerSequenceToTuple(std::make_index_sequence<std::get<i1>(allFormatModifiers)[i2].size()>{}));
         result[i1].customModifiers[std::get<i1>(allFormatModifiers)[i2]] = std::apply(
             [&args](auto... chars) -> std::string {
                 static_assert(
@@ -686,7 +685,7 @@ private:
 
     constexpr static auto allFormatModifiers =
         std::apply([](auto... indices) { return std::make_tuple(customModifiersFor<decltype(indices)::value>()...); },
-                   integerSequenceToTuple(std::make_index_sequence<N>{}));
+                   Constexpr::integerSequenceToTuple(std::make_index_sequence<N>{}));
 };
 
 namespace diag
@@ -717,20 +716,11 @@ Message Diagnostic<N, format, Mods...>::args(const T& location, const SourceInte
                                                                                 // function to improve debug perf a lil
     static_assert(locationConstraintCheck<T>(), "First argument must denote a location");
     constexpr auto u32string = getFormat();
-    const char32_t* start = u32string.data();
-    std::array<char, u32string.size() * 4> result;
-    char* resStart = result.data();
-    auto ret =
-        llvm::ConvertUTF32toUTF8(reinterpret_cast<const llvm::UTF32**>(&start),
-                                 reinterpret_cast<const llvm::UTF32*>(u32string.data() + u32string.size()),
-                                 reinterpret_cast<llvm::UTF8**>(&resStart),
-                                 reinterpret_cast<llvm::UTF8*>(result.data() + result.size()), llvm::strictConversion);
-    (void)ret;
-    CLD_ASSERT(ret == llvm::conversionOK);
+    constexpr auto u8size = Constexpr::utf32ToUtf8<false, u32string.size()>(u32string);
+    constexpr auto u8array = Constexpr::utf32ToUtf8<true, u8size>(u32string);
     auto array = createArgumentArray(&sourceInterface, std::forward_as_tuple(std::forward<Args>(args)...),
                                      std::index_sequence_for<Args...>{});
-    return print(getPointRange(location), {result.data(), static_cast<std::size_t>(resStart - result.data())}, array,
-                 modifiers, sourceInterface);
+    return print(getPointRange(location), {u8array.data(), u8array.size()}, array, modifiers, sourceInterface);
 }
 
 template <std::size_t N, auto& format, class... Mods>
@@ -741,21 +731,13 @@ Message Diagnostic<N, format, Mods...>::argsCLI(Args&&... args) const
     [[maybe_unused]] auto* v = this->checkConstraints<constraints, 0, Args...>; // Instantiate but don't call the
     // function to improve debug perf a lil
     constexpr auto u32string = getFormat();
-    const char32_t* start = u32string.data();
-    std::array<char, u32string.size() * 4> result;
-    char* resStart = result.data();
-    auto ret =
-        llvm::ConvertUTF32toUTF8(reinterpret_cast<const llvm::UTF32**>(&start),
-                                 reinterpret_cast<const llvm::UTF32*>(u32string.data() + u32string.size()),
-                                 reinterpret_cast<llvm::UTF8**>(&resStart),
-                                 reinterpret_cast<llvm::UTF8*>(result.data() + result.size()), llvm::strictConversion);
-    (void)ret;
-    CLD_ASSERT(ret == llvm::conversionOK);
+    constexpr auto u8size = Constexpr::utf32ToUtf8<false, u32string.size()>(u32string);
+    constexpr auto u8array = Constexpr::utf32ToUtf8<true, u8size>(u32string);
     // TODO: Instead of passing nullptr make it so that StringConverter may use const SourceInterface& as a second
     //  argument but make it a compiler error if such a string converter is used when using argsCLI instead of args
     auto array = createArgumentArray(nullptr, std::forward_as_tuple(std::forward<Args>(args)...),
                                      std::index_sequence_for<Args...>{});
-    return print({result.data(), static_cast<std::size_t>(resStart - result.data())}, array);
+    return print({u8array.data(), u8array.size()}, array);
 }
 
 template <std::size_t N, auto& format, class... Mods>
@@ -852,7 +834,7 @@ auto Diagnostic<N, format, Mods...>::createArgumentArray(const SourceInterface* 
                     (convertCustomModifier<IntegerTy::value, decltype(values)::value>(result, args), ...);
                 };
                 std::apply(apply,
-                           integerSequenceToTuple(
+                           Constexpr::integerSequenceToTuple(
                                std::make_index_sequence<std::get<IntegerTy::value>(allFormatModifiers).size()>{}));
             }
         }(std::integral_constant<std::size_t, ints>{}),

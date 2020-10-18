@@ -4321,4 +4321,40 @@ TEST_CASE("LLVM codegen miscellaneous builtins", "[LLVM]")
             CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 1);
         }
     }
+    SECTION("__builtin_inf*")
+    {
+        SECTION("inf")
+        {
+            auto program = generateProgram("double function(void) {\n"
+                                           "return __builtin_inf();\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<double()>(std::move(module), "function")
+                  == std::numeric_limits<double>::infinity());
+        }
+        SECTION("inff")
+        {
+            auto program = generateProgram("float function(void) {\n"
+                                           "return __builtin_inff();\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<float()>(std::move(module), "function")
+                  == std::numeric_limits<float>::infinity());
+        }
+        SECTION("infl")
+        {
+            auto program = generateProgram("long double function(void) {\n"
+                                           "return __builtin_infl();\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<long double()>(std::move(module), "function")
+                  == std::numeric_limits<long double>::infinity());
+        }
+    }
 }

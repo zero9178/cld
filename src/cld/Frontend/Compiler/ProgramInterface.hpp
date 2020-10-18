@@ -59,6 +59,7 @@ protected:
     std::vector<StructDefinition> m_structDefinitions;
     std::vector<UnionDefinition> m_unionDefinitions;
     std::vector<EnumDefinition> m_enumDefinitions;
+    std::unordered_map<std::string_view, BuiltinFunction> m_usedBuiltins;
 
 public:
     ProgramInterface() = default;

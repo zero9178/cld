@@ -2927,6 +2927,16 @@ public:
                     auto* floatingPoint = visit(call.getArgumentExpressions()[0]);
                     return m_builder.CreateUnaryIntrinsic(llvm::Intrinsic::fabs, floatingPoint);
                 }
+                case cld::Semantics::BuiltinFunction::Inf:
+                    return llvm::ConstantFP::getInfinity(m_builder.getDoubleTy());
+                case cld::Semantics::BuiltinFunction::Inff:
+                    return llvm::ConstantFP::getInfinity(m_builder.getFloatTy());
+                case cld::Semantics::BuiltinFunction::Infl:
+                {
+                    auto* type = visit(cld::Semantics::PrimitiveType::createLongDouble(
+                        false, false, m_sourceInterface.getLanguageOptions()));
+                    return llvm::ConstantFP::getInfinity(type);
+                }
             }
             CLD_UNREACHABLE;
         }

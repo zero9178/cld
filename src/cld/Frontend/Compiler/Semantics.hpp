@@ -2175,6 +2175,9 @@ public:
         FAbs,
         FAbsf,
         FAbsl,
+        Inf,
+        Inff,
+        Infl
     };
 
 private:

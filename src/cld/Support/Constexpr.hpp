@@ -6,12 +6,56 @@
 
 namespace cld
 {
+namespace Constexpr
+{
 template <std::size_t... ints>
 constexpr static auto integerSequenceToTuple(std::index_sequence<ints...>)
 {
     return std::make_tuple(std::integral_constant<std::size_t, ints>{}...);
 }
 
+template <bool sizeOrArray, std::size_t maxSize>
+constexpr auto utf32ToUtf8(std::u32string_view stringView)
+{
+    std::size_t resultSize = 0;
+    std::array<char, maxSize> result = {};
+    for (std::size_t i = 0; i < stringView.size(); i++)
+    {
+        char32_t code = stringView[i];
+        if (code <= 0x7F)
+        {
+            result[resultSize++] = code;
+        }
+        else if (code <= 0x7FF)
+        {
+            result[resultSize++] = 0xC0 | (code >> 6);
+            result[resultSize++] = 0x80 | (code & 0x3F);
+        }
+        else if (code <= 0xFFFF)
+        {
+            result[resultSize++] = 0xE0 | (code >> 12);
+            result[resultSize++] = 0x80 | ((code >> 6) & 0x3F);
+            result[resultSize++] = 0x80 | (code & 0x3F);
+        }
+        else if (code <= 0x10FFFF)
+        {
+            result[resultSize++] = 0xF0 | (code >> 18);
+            result[resultSize++] = 0x80 | ((code >> 12) & 0x3F);
+            result[resultSize++] = 0x80 | ((code >> 6) & 0x3F);
+            result[resultSize++] = 0x80 | (code & 0x3F);
+        }
+    }
+    if constexpr (!sizeOrArray)
+    {
+        return resultSize;
+    }
+    else
+    {
+        return result;
+    }
+}
+
+} // namespace Constexpr
 template <class T, typename = void>
 struct IsTupleLike : std::false_type
 {
