@@ -1178,7 +1178,11 @@ std::pair<StateMachine, bool> CharacterLiteral::advance(char c, Context& context
 
 std::pair<StateMachine, bool> StringLiteral::advance(char c, Context& context)
 {
-    if (c == '"' && (characters.empty() || characters.back() != '\\'))
+    if (c == '"'
+        && (std::find_if_not(characters.rbegin(), characters.rend(), [](char c) { return c == '\\'; })
+            - characters.rbegin())
+                   % 2
+               == 0)
     {
         context.push(TokenType::StringLiteral, characters);
         return {Start{}, true};

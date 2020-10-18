@@ -528,13 +528,8 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::PrimaryExpressionBuiltinVAArg& vaArg)
 {
-    auto expression = visit(vaArg.getAssignmentExpression());
+    auto expression = lvalueConversion(visit(vaArg.getAssignmentExpression()));
     auto& vaList = *getTypedef("__builtin_va_list");
-    if (isArray(expression.getType()))
-    {
-        // Do Pointer decay
-        expression = lvalueConversion(std::move(expression));
-    }
     if (!expression.getType().isUndefined() && !typesAreCompatible(expression.getType(), adjustParameterType(vaList)))
     {
         log(Errors::Semantics::CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_VA_LIST.args(
@@ -834,7 +829,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
 
 cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax::PostFixExpressionArrow& node)
 {
-    auto structOrUnionPtr = visit(node.getPostFixExpression());
+    auto structOrUnionPtr = lvalueConversion(visit(node.getPostFixExpression()));
     if (structOrUnionPtr.isUndefined())
     {
         return Expression(node);
@@ -926,7 +921,10 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
             // of Windows x64 it's basically as if &list was written. Since this is a builtin call the backend will
             // have to do special handling either way but we'll insert an lvalueConversion now to force array to pointer
             // decay
-            arguments.back() = lvalueConversion(std::move(arguments.back()));
+            if (isArray(vaList))
+            {
+                arguments.back() = lvalueConversion(std::move(arguments.back()));
+            }
             auto expression = visit(node.getOptionalAssignmentExpressions()[1]);
             if (!getCurrentFunctionScope())
             {

@@ -1431,7 +1431,7 @@ void cld::Semantics::SemanticAnalysis::handleArray(cld::Semantics::Type& type,
     }
     if (cld::get<PrimitiveType>(expr.getType().getVariant()).isSigned())
     {
-        if (result->toInt() <= 0)
+        if (extensionsEnabled(expr.begin()) ? result->toInt() < 0 : result->toInt() <= 0)
         {
             log(Errors::Semantics::ARRAY_SIZE_MUST_BE_GREATER_THAN_ZERO.args(*assignmentExpression, m_sourceInterface,
                                                                              *assignmentExpression, *result));
@@ -1439,7 +1439,7 @@ void cld::Semantics::SemanticAnalysis::handleArray(cld::Semantics::Type& type,
             return;
         }
     }
-    else if (result->toUInt() == 0)
+    else if (result->toUInt() == 0 && !extensionsEnabled(expr.begin()))
     {
         log(Errors::Semantics::ARRAY_SIZE_MUST_BE_GREATER_THAN_ZERO.args(
             *assignmentExpression, m_sourceInterface, *assignmentExpression,

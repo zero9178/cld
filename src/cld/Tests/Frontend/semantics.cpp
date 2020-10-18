@@ -1922,7 +1922,6 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
             CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
             REQUIRE(std::holds_alternative<MemberAccess>(expr.getVariant()));
             auto& mem = cld::get<MemberAccess>(expr.getVariant());
-            CHECK(mem.getRecordExpression().getValueCategory() == ValueCategory::Lvalue);
             REQUIRE(std::holds_alternative<PointerType>(mem.getRecordExpression().getType().getVariant()));
             CHECK(std::holds_alternative<StructType>(
                 cld::get<PointerType>(mem.getRecordExpression().getType().getVariant()).getElementType().getVariant()));
@@ -1942,7 +1941,6 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
             CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
             REQUIRE(std::holds_alternative<MemberAccess>(expr.getVariant()));
             auto& mem = cld::get<MemberAccess>(expr.getVariant());
-            CHECK(mem.getRecordExpression().getValueCategory() == ValueCategory::Lvalue);
             REQUIRE(std::holds_alternative<PointerType>(mem.getRecordExpression().getType().getVariant()));
             CHECK(std::holds_alternative<UnionType>(
                 cld::get<PointerType>(mem.getRecordExpression().getType().getVariant()).getElementType().getVariant()));
@@ -1958,7 +1956,6 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
             CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
             REQUIRE(std::holds_alternative<MemberAccess>(expr.getVariant()));
             auto& mem = cld::get<MemberAccess>(expr.getVariant());
-            CHECK(mem.getRecordExpression().getValueCategory() == ValueCategory::Lvalue);
             REQUIRE(std::holds_alternative<PointerType>(mem.getRecordExpression().getType().getVariant()));
             CHECK(std::holds_alternative<AnonymousStructType>(
                 cld::get<PointerType>(mem.getRecordExpression().getType().getVariant()).getElementType().getVariant()));
@@ -1974,7 +1971,6 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
             CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
             REQUIRE(std::holds_alternative<MemberAccess>(expr.getVariant()));
             auto& mem = cld::get<MemberAccess>(expr.getVariant());
-            CHECK(mem.getRecordExpression().getValueCategory() == ValueCategory::Lvalue);
             REQUIRE(std::holds_alternative<PointerType>(mem.getRecordExpression().getType().getVariant()));
             CHECK(std::holds_alternative<AnonymousUnionType>(
                 cld::get<PointerType>(mem.getRecordExpression().getType().getVariant()).getElementType().getVariant()));
@@ -4564,7 +4560,7 @@ TEST_CASE("Semantics anonymous inline structs and unions", "[semantics]")
                   ProducesError(REDEFINITION_OF_FIELD_N, "'i'"));
 }
 
-TEST_CASE("Semantics flexible array member","[semantics]")
+TEST_CASE("Semantics flexible array member", "[semantics]")
 {
     SECTION("Layout and offset")
     {

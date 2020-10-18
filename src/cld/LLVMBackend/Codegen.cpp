@@ -2121,18 +2121,11 @@ public:
                 cld::get<cld::Semantics::PointerType>(memberAccess.getRecordExpression().getType().getVariant())
                     .getElementType() :
                 memberAccess.getRecordExpression().getType();
-        if (std::holds_alternative<cld::Semantics::PointerType>(
-                memberAccess.getRecordExpression().getType().getVariant()))
+        if (!std::holds_alternative<cld::Semantics::PointerType>(
+                memberAccess.getRecordExpression().getType().getVariant())
+            && memberAccess.getRecordExpression().getValueCategory() != cld::Semantics::ValueCategory::Lvalue)
         {
-            if (!std::holds_alternative<cld::Semantics::CallExpression>(
-                    memberAccess.getRecordExpression().getVariant()))
-            {
-                value = m_builder.CreateLoad(value, memberAccess.getRecordExpression().getType().isVolatile());
-            }
-        }
-        else if (memberAccess.getRecordExpression().getValueCategory() != cld::Semantics::ValueCategory::Lvalue)
-        {
-            // Struct access is only ever allowed on pointers or lvalue except through the return value of a function
+            // Struct access is only ever allowed on pointers or lvalues except through the return value of a function
             // then it's also allowed to be an rvalue
             auto* load = llvm::cast<llvm::LoadInst>(value);
             value = load->getPointerOperand();
@@ -2763,11 +2756,6 @@ public:
                 cld::get<cld::Semantics::PointerType>(memberAccess.getRecordExpression().getType().getVariant())
                     .getElementType() :
                 memberAccess.getRecordExpression().getType();
-        if (std::holds_alternative<cld::Semantics::PointerType>(
-                memberAccess.getRecordExpression().getType().getVariant()))
-        {
-            lhsRecord = m_builder.CreateLoad(lhsRecord, memberAccess.getRecordExpression().getType().isVolatile());
-        }
         auto* rhsValue = visit(assignment.getRightExpression());
 
         auto& cldField = memberAccess.getField();
@@ -3190,13 +3178,13 @@ public:
 
                 llvm::Value* cond = nullptr;
 
-                if (first->isIntegerTy() || (second && second->isIntegerTy()))
+                if (first->isIntOrPtrTy() || (second && second->isIntOrPtrTy()))
                 {
                     gpOffset = m_builder.CreateInBoundsGEP(vaList, {m_builder.getInt64(0), m_builder.getInt32(0)});
                     gpCount = m_builder.CreateAlignedLoad(gpOffset, llvm::Align(align));
                     // if the offset is 48 bytes it is full (8 Bytes * 6 Integer registers). To fit two integers we
                     // need an offset of 32, to fit one we need max 40
-                    auto maxOffset = first->isIntegerTy() && second && second->isIntegerTy() ? 32 : 40;
+                    auto maxOffset = first->isIntOrPtrTy() && second && second->isIntOrPtrTy() ? 32 : 40;
                     cond = m_builder.CreateICmpULE(gpCount, m_builder.getInt32(maxOffset));
                 }
                 if (first->isFPOrFPVectorTy() || (second && second->isFloatingPointTy()))
@@ -3234,7 +3222,7 @@ public:
                 llvm::Value* regValue;
                 if (!second)
                 {
-                    if (first->isIntegerTy())
+                    if (first->isIntOrPtrTy())
                     {
                         regArea = m_builder.CreateGEP(regArea, gpCount);
                         regValue = m_builder.CreateBitCast(regArea, llvm::PointerType::getUnqual(destType));

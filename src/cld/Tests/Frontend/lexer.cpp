@@ -732,6 +732,7 @@ TEST_CASE("Lexing string literals", "[lexer]")
         REQUIRE(std::get<cld::Lexer::NonCharString>(result.data()[0].getValue()) == L"\u3435");
     }
     LEXER_OUTPUTS_WITH("\"as\ndawd\"", ProducesError(NEWLINE_IN_STRING_LITERAL_USE_BACKLASH_N));
+    LEXER_OUTPUTS_WITH("'\\\\'", ProducesNoErrors());
 }
 
 TEST_CASE("Lexing Number Literals", "[lexer]")
