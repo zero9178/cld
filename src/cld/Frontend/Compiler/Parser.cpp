@@ -200,3 +200,8 @@ cld::ValueReset<bool> cld::Parser::Context::enableExtensions(bool extensions)
     m_inExtension = extensions || m_inExtension;
     return cld::ValueReset<bool>(m_inExtension, prevValue);
 }
+
+bool cld::Parser::Context::inSystemHeader(const cld::Lexer::CToken& token) const
+{
+    return m_sourceInterface.getFiles()[token.getFileId()].systemHeader;
+}

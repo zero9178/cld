@@ -626,12 +626,12 @@ std::optional<cld::Syntax::StructOrUnionSpecifier>
     auto extensionReset = context.enableExtensions(hadExtension);
 
     bool isUnion;
-    if (begin < end && begin->getTokenType() == Lexer::TokenType::StructKeyword)
+    if (begin != end && begin->getTokenType() == Lexer::TokenType::StructKeyword)
     {
         begin++;
         isUnion = false;
     }
-    else if (begin < end && begin->getTokenType() == Lexer::TokenType::UnionKeyword)
+    else if (begin != end && begin->getTokenType() == Lexer::TokenType::UnionKeyword)
     {
         begin++;
         isUnion = true;
@@ -671,7 +671,7 @@ std::optional<cld::Syntax::StructOrUnionSpecifier>
             context.skipUntil(begin, end);
             return {};
         }
-        return StructOrUnionSpecifier(start, begin, isUnion, name, {}, context.extensionsEnabled());
+        return StructOrUnionSpecifier(start, begin, isUnion, name, {}, context.extensionsEnabled(start));
     }
     const Lexer::CToken* openBrace = nullptr;
     if (expect(Lexer::TokenType::OpenBrace, begin, end, context))
@@ -790,7 +790,7 @@ std::optional<cld::Syntax::StructOrUnionSpecifier>
     // TODO: Store
     parseGNUAttributes(begin, end, context);
     return StructOrUnionSpecifier(start, begin, isUnion, name, std::move(structDeclarations),
-                                  context.extensionsEnabled());
+                                  context.extensionsEnabled(start));
 }
 
 std::optional<cld::Syntax::SpecifierQualifier>

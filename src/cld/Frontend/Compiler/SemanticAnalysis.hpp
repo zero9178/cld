@@ -4,6 +4,7 @@
 
 #include <cld/Support/Expected.hpp>
 #include <cld/Support/ScopeExit.hpp>
+#include <cld/Support/ValueReset.h>
 #include <cld/Support/function_ref.hpp>
 
 #include <functional>
@@ -31,6 +32,7 @@ class SemanticAnalysis final : public ProgramInterface
     std::vector<FunctionScope> m_functionScopes;
     bool m_inStaticInitializer = false;
     bool m_inFunctionPrototype = false;
+    bool m_extensionsEnabled = false;
     std::vector<std::pair<Lexer::CTokenIterator, GotoStatement * CLD_NON_NULL>> m_scheduledGotos;
     std::vector<LoopStatements> m_loopStatements;
     std::vector<BreakableStatements> m_breakableStatements;
@@ -42,9 +44,9 @@ class SemanticAnalysis final : public ProgramInterface
     };
     std::vector<SwitchStack> m_switchStatements;
 
-    [[nodiscard]] auto changeFunctionPrototypeScope(bool newValue)
+    [[nodiscard]] ValueReset<bool> changeFunctionPrototypeScope(bool newValue)
     {
-        auto result = cld::ScopeExit([this, prev = m_inFunctionPrototype] { m_inFunctionPrototype = prev; });
+        auto result = cld::ValueReset(m_inFunctionPrototype, m_inFunctionPrototype);
         m_inFunctionPrototype = newValue;
         return result;
     }
@@ -75,12 +77,12 @@ class SemanticAnalysis final : public ProgramInterface
         return nullptr;
     }
 
-    [[nodiscard]] auto pushScope()
+    [[nodiscard]] ValueReset<std::int64_t> pushScope()
     {
         m_scopes[m_currentScope].subScopes.push_back(m_scopes.size());
         m_scopes.push_back({m_currentScope, {}, {}, {}});
         m_currentScope = m_scopes.size() - 1;
-        return cld::ScopeExit([this, scope = m_scopes.back().previousScope] { m_currentScope = scope; });
+        return cld::ValueReset(m_currentScope, m_scopes.back().previousScope);
     }
 
     [[nodiscard]] auto pushLoop(LoopStatements loop)
@@ -276,6 +278,10 @@ private:
                                     const SwitchStatement& switchStatement, bool isCaseOrDefault);
 
     void createBuiltins();
+
+    [[nodiscard]] ValueReset<bool> enableExtensions(bool extensions);
+
+    [[nodiscard]] bool extensionsEnabled(const Lexer::CToken* token = nullptr);
 
 public:
     explicit SemanticAnalysis(const SourceInterface& sourceInterface, llvm::raw_ostream* reporter = &llvm::errs(),

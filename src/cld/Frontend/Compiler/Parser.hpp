@@ -129,14 +129,16 @@ public:
 
     [[nodiscard]] ValueReset<bool> enableExtensions(bool extensions);
 
-    [[nodiscard]] bool extensionsEnabled() const
+    [[nodiscard]] bool extensionsEnabled(const Lexer::CToken* token = nullptr) const
     {
-        return m_inExtension;
+        return m_inExtension || (token && inSystemHeader(*token));
     }
 
     [[nodiscard]] std::uint64_t getBracketMax() const;
 
     void setBracketMax(std::uint64_t bracketMax);
+
+    [[nodiscard]] bool inSystemHeader(const Lexer::CToken& token) const;
 };
 
 Syntax::TranslationUnit buildTree(const CSourceObject& sourceObject, llvm::raw_ostream* reporter = &llvm::errs(),

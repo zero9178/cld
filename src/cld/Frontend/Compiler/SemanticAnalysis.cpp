@@ -2062,3 +2062,16 @@ void cld::Semantics::SemanticAnalysis::createBuiltins()
         }
     }
 }
+
+cld::ValueReset<bool> cld::Semantics::SemanticAnalysis::enableExtensions(bool extensions)
+{
+    auto prev = m_extensionsEnabled;
+    m_extensionsEnabled = prev || extensions;
+    return cld::ValueReset<bool>(m_extensionsEnabled, prev);
+}
+
+bool cld::Semantics::SemanticAnalysis::extensionsEnabled(const cld::Lexer::CToken* token)
+{
+    return m_extensionsEnabled || m_sourceInterface.getLanguageOptions().extension == LanguageOptions::Extension::GNU
+           || (token && m_sourceInterface.getFiles()[token->getFileId()].systemHeader);
+}

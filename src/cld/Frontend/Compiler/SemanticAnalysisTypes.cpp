@@ -637,6 +637,7 @@ cld::Semantics::Type
                 }
             }
         }
+
         FieldMap fields;
         std::vector<FieldInLayout> fieldLayout;
         std::unordered_set<std::uint64_t> zeroBitFields;
@@ -644,30 +645,31 @@ cld::Semantics::Type
              iter != structOrUnion->getStructDeclarations().end(); iter++)
         {
             auto& [specifiers, declarators] = *iter;
+            auto fieldStructOrUnion = std::find_if(
+                specifiers.begin(), specifiers.end(), [](const Syntax::SpecifierQualifier& specifierQualifier) {
+                    if (!std::holds_alternative<Syntax::TypeSpecifier>(specifierQualifier))
+                    {
+                        return false;
+                    }
+                    auto& specifier = cld::get<Syntax::TypeSpecifier>(specifierQualifier);
+                    if (!std::holds_alternative<std::unique_ptr<Syntax::StructOrUnionSpecifier>>(
+                            specifier.getVariant()))
+                    {
+                        return false;
+                    }
+                    return true;
+                });
+            bool hadExtension = (fieldStructOrUnion != specifiers.end()
+                                 && cld::get<std::unique_ptr<Syntax::StructOrUnionSpecifier>>(
+                                        cld::get<Syntax::TypeSpecifier>(*fieldStructOrUnion).getVariant())
+                                        ->extensionsEnabled());
+            auto enableReset = enableExtensions(hadExtension);
             if (declarators.empty())
             {
                 auto type = declaratorsToType(specifiers);
-                auto fieldStructOrUnion = std::find_if(
-                    specifiers.begin(), specifiers.end(), [](const Syntax::SpecifierQualifier& specifierQualifier) {
-                        if (!std::holds_alternative<Syntax::TypeSpecifier>(specifierQualifier))
-                        {
-                            return false;
-                        }
-                        auto& specifier = cld::get<Syntax::TypeSpecifier>(specifierQualifier);
-                        if (!std::holds_alternative<std::unique_ptr<Syntax::StructOrUnionSpecifier>>(
-                                specifier.getVariant()))
-                        {
-                            return false;
-                        }
-                        return true;
-                    });
                 auto parentType = std::make_shared<const Type>(std::move(type));
                 fieldLayout.push_back({parentType, static_cast<std::size_t>(-1), {}, {}});
-                if (!((fieldStructOrUnion != specifiers.end()
-                       && cld::get<std::unique_ptr<Syntax::StructOrUnionSpecifier>>(
-                              cld::get<Syntax::TypeSpecifier>(*fieldStructOrUnion).getVariant())
-                              ->extensionsEnabled())
-                      || m_sourceInterface.getLanguageOptions().extension == LanguageOptions::Extension::GNU)
+                if (!extensionsEnabled(structOrUnion->begin())
                     || (!std::holds_alternative<AnonymousStructType>(parentType->getVariant())
                         && !std::holds_alternative<AnonymousUnionType>(parentType->getVariant())))
                 {
