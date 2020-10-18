@@ -884,12 +884,6 @@ cld::Semantics::Type
                     iter++;
                     continue;
                 }
-                if (iter + 1 == fields.end()
-                    && std::holds_alternative<AbstractArrayType>(iter->second.type->getVariant()))
-                {
-                    // TODO: I don't think this should be part of the memoryLayout but I am not sure?
-                    break;
-                }
                 if (iter->second.indices.size() > 1)
                 {
                     auto& parentType = iter->second.parentTypes.front();
@@ -906,6 +900,7 @@ cld::Semantics::Type
                     {
                         iter.value().indices[0] = memoryLayout.size();
                     }
+                    memoryLayout.emplace_back(*parentType);
                     auto alignment = parentType->getAlignOf(*this);
                     currentAlignment = std::max(currentAlignment, alignment);
                     if (alignment != 0)
@@ -918,7 +913,6 @@ cld::Semantics::Type
                     }
                     auto subSize = parentType->getSizeOf(*this);
                     currentSize += subSize;
-                    memoryLayout.emplace_back(*parentType);
                     continue;
                 }
                 if (!iter->second.bitFieldBounds)
@@ -927,6 +921,11 @@ cld::Semantics::Type
                     fieldLayout[fieldLayoutCounter++].layoutIndex = memoryLayout.size();
                     fieldLayout[fieldLayoutCounter - 1].offset = currentSize;
                     memoryLayout.push_back(*iter->second.type);
+                    if (!isCompleteType(*iter->second.type))
+                    {
+                        iter++;
+                        continue;
+                    }
                     auto alignment = iter->second.type->getAlignOf(*this);
                     currentAlignment = std::max(currentAlignment, alignment);
                     auto rest = currentSize % alignment;

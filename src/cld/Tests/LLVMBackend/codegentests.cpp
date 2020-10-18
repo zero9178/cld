@@ -4358,3 +4358,35 @@ TEST_CASE("LLVM codegen miscellaneous builtins", "[LLVM]")
         }
     }
 }
+
+TEST_CASE("LLVM codegen flexible array members", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    auto module = std::make_unique<llvm::Module>("", context);
+    SECTION("Accessing members")
+    {
+        struct S
+        {
+            char c;
+            int f[5];
+        };
+        auto program = generateProgram("struct S {\n"
+                                       "    char c;\n"
+                                       "    int f[];\n"
+                                       "};\n"
+                                       "\n"
+                                       "int function(struct S* s) {\n"
+                                       "    for (int i = 0; i < 5; i++) {\n"
+                                       "        if (s->f[i] != i) {\n"
+                                       "            return 1;\n"
+                                       "        }\n"
+                                       "    }\n"
+                                       "    return 0;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        struct S s = {0, {0, 1, 2, 3, 4}};
+        CHECK(cld::Tests::computeInJIT<int(struct S*)>(std::move(module), "function", &s) == 0);
+    }
+}
