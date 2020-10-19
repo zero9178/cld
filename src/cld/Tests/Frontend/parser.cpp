@@ -841,6 +841,16 @@ TEST_CASE("Parse Expressions", "[parser]")
     }
 }
 
+TEST_CASE("Parse ASM Statement", "[parser]")
+{
+    treeProduces("void foo() {"
+                 "__asm__ __volatile__ (\"rep stos{\" \"q|q\" \"}\"\n"
+                 "      : \"+D\" (Dest), \"+c\" (Count) \n"
+                 "      : [Data] \"a\" (Data) \n"
+                 "      : \"memory\");\n"
+                 "}",ProducesNoErrors());
+}
+
 #if defined(NDEBUG) || !defined(_WIN32)
     #ifndef __has_feature
         #define UNRESTRICTED_STACK

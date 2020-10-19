@@ -2951,6 +2951,7 @@ std::optional<cld::Syntax::GNUASMStatement>
             parseASMOperand(second);
             if (begin != end && begin->getTokenType() == Lexer::TokenType::Colon)
             {
+                begin++;
                 clobber.push_back(parseGNUASMString(begin, end, context));
                 while (begin != end && begin->getTokenType() == Lexer::TokenType::Comma)
                 {
