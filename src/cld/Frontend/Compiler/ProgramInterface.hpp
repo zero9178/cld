@@ -67,8 +67,18 @@ public:
     virtual ~ProgramInterface() = default;
     ProgramInterface(const ProgramInterface&) = delete;
     ProgramInterface& operator=(const ProgramInterface&) = delete;
-    ProgramInterface(ProgramInterface&&) noexcept = default;
-    ProgramInterface& operator=(ProgramInterface&&) noexcept = default;
+
+    ProgramInterface(ProgramInterface&&)
+#if !defined(_MSC_VER) || defined(__clang__)
+        noexcept
+#endif
+        = default;
+
+    ProgramInterface& operator=(ProgramInterface&&)
+#if !defined(_MSC_VER) || defined(__clang__)
+        noexcept
+#endif
+        = default;
 
     [[nodiscard]] bool isCompleteType(const Type& type) const;
 

@@ -3115,9 +3115,9 @@ public:
             case cld::LanguageOptions::BuiltInVaList::CharPtr:
             case cld::LanguageOptions::BuiltInVaList::VoidPtr:
             {
-                llvm::Value* loadedVaList = m_builder.CreateAlignedLoad(vaList, llvm::Align(align));
-                auto* increment = m_builder.CreateInBoundsGEP(loadedVaList, {m_builder.getInt64(sizeOf)});
-                m_builder.CreateAlignedStore(increment, vaList, llvm::Align(align));
+                auto* increment = m_builder.CreateInBoundsGEP(vaList, {m_builder.getInt64(sizeOf)});
+                m_builder.CreateAlignedStore(increment, llvm::cast<llvm::LoadInst>(vaList)->getPointerOperand(),
+                                             llvm::Align(align));
 
                 auto* destType = visit(expression.getType());
 
@@ -3127,14 +3127,14 @@ public:
                 {
                     if (!destType->isStructTy() && !destType->isX86_FP80Ty())
                     {
-                        loadedVaList = m_builder.CreateBitCast(loadedVaList, llvm::PointerType::getUnqual(destType));
-                        return m_builder.CreateAlignedLoad(loadedVaList, llvm::Align(align));
+                        vaList = m_builder.CreateBitCast(vaList, llvm::PointerType::getUnqual(destType));
+                        return m_builder.CreateAlignedLoad(vaList, llvm::Align(align));
                     }
                     if (!m_module.getDataLayout().isLegalInteger(sizeOf * 8))
                     {
-                        loadedVaList = m_builder.CreateBitCast(
-                            loadedVaList, llvm::PointerType::getUnqual(llvm::PointerType::getUnqual(destType)));
-                        loadedVaList = m_builder.CreateAlignedLoad(loadedVaList, llvm::Align(align));
+                        vaList = m_builder.CreateBitCast(
+                            vaList, llvm::PointerType::getUnqual(llvm::PointerType::getUnqual(destType)));
+                        vaList = m_builder.CreateAlignedLoad(vaList, llvm::Align(align));
                         align = exprAlign;
                     }
                 }
@@ -3143,7 +3143,7 @@ public:
                 auto* allocaInst = temp.CreateAlloca(destType, nullptr, "va_arg.ret");
                 allocaInst->setAlignment(llvm::Align(exprAlign));
                 m_builder.CreateLifetimeStart(allocaInst, m_builder.getInt64(sizeOf));
-                m_builder.CreateMemCpy(allocaInst, allocaInst->getAlign(), loadedVaList, llvm::Align(align), sizeOf);
+                m_builder.CreateMemCpy(allocaInst, allocaInst->getAlign(), vaList, llvm::Align(align), sizeOf);
                 return m_builder.CreateLoad(allocaInst);
             }
             case cld::LanguageOptions::BuiltInVaList::x86_64ABI:
