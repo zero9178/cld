@@ -521,68 +521,6 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                     errors = true;
                 }
             }
-            auto typeVisitor = RecursiveVisitor(result, ARRAY_TYPE_NEXT_FN);
-            if (std::any_of(typeVisitor.begin(), typeVisitor.end(), [](const Type& type) {
-                    return cld::match(
-                        type.getVariant(), [](const ArrayType& arrayType) { return arrayType.isStatic(); },
-                        [](const ValArrayType& arrayType) { return arrayType.isStatic(); },
-                        [](auto&&) { return false; });
-                }))
-            {
-                errors = true;
-                auto ddVisitor = RecursiveVisitor(declarator->getDirectDeclarator(), DIRECT_DECL_NEXT_FN);
-                auto ddStatic =
-                    std::find_if(ddVisitor.begin(), ddVisitor.end(), [](const Syntax::DirectDeclarator& dd) {
-                        return std::holds_alternative<Syntax::DirectDeclaratorStatic>(dd);
-                    });
-                CLD_ASSERT(ddStatic != ddVisitor.end());
-                const auto* staticLoc = cld::get<Syntax::DirectDeclaratorStatic>(*ddStatic).getStaticLoc();
-                log(Errors::Semantics::ARRAY_OUTSIDE_OF_FUNCTION_PARAMETER_MAY_NOT_BE_STATIC.args(
-                    *staticLoc, m_sourceInterface, *staticLoc));
-            }
-            if (std::any_of(typeVisitor.begin(), typeVisitor.end(), [](const Type& type) {
-                    return cld::match(
-                        type.getVariant(),
-                        [&](const ArrayType& arrayType) {
-                            return type.isConst() || type.isVolatile() || arrayType.isRestricted();
-                        },
-                        [&](const ValArrayType& arrayType) {
-                            return type.isConst() || type.isVolatile() || arrayType.isRestricted();
-                        },
-                        [](auto&&) { return false; });
-                }))
-            {
-                errors = true;
-                auto ddVisitor = RecursiveVisitor(declarator->getDirectDeclarator(), DIRECT_DECL_NEXT_FN);
-                const auto* ddQual = std::accumulate(
-                    ddVisitor.begin(), ddVisitor.end(), (const Syntax::Node*)nullptr,
-                    [](const Syntax::Node* curr, const Syntax::DirectDeclarator& dd) {
-                        if (curr)
-                        {
-                            return curr;
-                        }
-                        return cld::match(
-                            dd,
-                            [](const Syntax::DirectDeclaratorNoStaticOrAsterisk& array) -> const Syntax::Node* {
-                                if (!array.getTypeQualifiers().empty())
-                                {
-                                    return &array.getTypeQualifiers()[0];
-                                }
-                                return nullptr;
-                            },
-                            [](const Syntax::DirectDeclaratorStatic& array) -> const Syntax::Node* {
-                                if (!array.getTypeQualifiers().empty())
-                                {
-                                    return &array.getTypeQualifiers()[0];
-                                }
-                                return nullptr;
-                            },
-                            [](auto&&) -> const Syntax::Node* { return nullptr; });
-                    });
-                CLD_ASSERT(ddQual);
-                log(Errors::Semantics::ARRAY_OUTSIDE_OF_FUNCTION_PARAMETER_MAY_NOT_BE_QUALIFIED.args(
-                    *ddQual, m_sourceInterface, *ddQual));
-            }
             if (errors)
             {
                 result = Type{};
@@ -607,7 +545,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                     log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
                                                              *prev->second.identifier));
                 }
-                for (auto& iter : typeVisitor)
+                for (auto& iter : RecursiveVisitor(result, TYPE_NEXT_FN))
                 {
                     if (std::holds_alternative<ValArrayType>(iter.getVariant()))
                     {
@@ -1958,11 +1896,7 @@ constexpr auto createBuiltin(cld::Semantics::BuiltinFunction::Kind kind)
                                                              std::move(parameters), value##Builtin.vararg, false),     \
                                         value##Builtin.kind}})                                                         \
                               .first;                                                                                  \
-            auto iter = m_scopes[0]                                                                                    \
-                            .declarations                                                                              \
-                            .insert_at_position(m_scopes[0].declarations.begin(),                                      \
-                                                {str, DeclarationInScope{nullptr, &result->second}})                   \
-                            .first;                                                                                    \
+            auto iter = m_scopes[0].declarations.insert({str, DeclarationInScope{nullptr, &result->second}}).first;    \
             return &iter->second.declared;                                                                             \
         }                                                                                                              \
     } while (0)
@@ -2060,6 +1994,7 @@ void cld::Semantics::SemanticAnalysis::createBuiltins()
                                                    DeclarationInScope{nullptr, std::move(elementType)});
             break;
         }
+        default: CLD_UNREACHABLE;
     }
 }
 

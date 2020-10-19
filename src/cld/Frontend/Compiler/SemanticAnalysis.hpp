@@ -105,6 +105,8 @@ class SemanticAnalysis final : public ProgramInterface
         });
     }
 
+    bool m_inParameter = false;
+
     template <class T>
     void handleParameterList(Type& type, const Syntax::ParameterTypeList* CLD_NULLABLE parameterTypeList,
                              T&& returnTypeLoc,
@@ -114,7 +116,7 @@ class SemanticAnalysis final : public ProgramInterface
 
     template <class T>
     void handleArray(Type& type, const std::vector<Syntax::TypeQualifier>& typeQualifiers,
-                     const Syntax::AssignmentExpression* CLD_NULLABLE assignmentExpression, bool isStatic,
+                     const Syntax::AssignmentExpression* CLD_NULLABLE assignmentExpression, const Lexer::CToken* isStatic,
                      bool valArray, T&& returnTypeLoc);
 
     [[nodiscard]] bool isTypedef(std::string_view name) const;

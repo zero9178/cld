@@ -775,7 +775,11 @@ TEST_CASE("Semantics function prototypes", "[semantics]")
         SEMA_PRODUCES("int f(int a,float a);", ProducesNoErrors());
         SEMA_PRODUCES("int f(register int a);", ProducesNoErrors());
         SEMA_PRODUCES("int f(int a[static 6]);", ProducesNoErrors());
+        SEMA_PRODUCES("int f(int a[const 6]);", ProducesNoErrors());
+        SEMA_PRODUCES("int f(int (*a)[static 6]);", ProducesError(ONLY_PARAMETER_OF_ARRAY_TYPE_MAY_BE_STATIC));
+        SEMA_PRODUCES("int f(int (*a)[const 6]);", ProducesError(ONLY_PARAMETER_OF_ARRAY_TYPE_MAY_BE_QUALIFIED));
         SEMA_PRODUCES("int f(int a[6][static 5]);", ProducesError(STATIC_ONLY_ALLOWED_IN_OUTERMOST_ARRAY));
+        SEMA_PRODUCES("int f(int a[6][const 5]);", ProducesError(ARRAY_QUALIFIERS_ONLY_ALLOWED_IN_OUTERMOST_ARRAY));
     }
     SECTION("With calling convention")
     {

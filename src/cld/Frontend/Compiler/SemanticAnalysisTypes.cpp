@@ -60,6 +60,8 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
                     *storageSpec, m_sourceInterface, *storageSpec));
             }
         }
+        ValueReset<bool> reset(m_inParameter, m_inParameter);
+        m_inParameter = true;
         auto paramType = cld::match(
             iter.declarator,
             [&](const std::unique_ptr<cld::Syntax::Declarator>& ptr) {
@@ -82,24 +84,85 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
                 iter.declarationSpecifiers, m_sourceInterface, iter.declarationSpecifiers));
             paramType = Type{};
         }
-        auto visitor = RecursiveVisitor(paramType, ARRAY_TYPE_NEXT_FN);
-        auto begin = visitor.begin();
-        begin++;
-        auto result = std::find_if(begin, visitor.end(), [](const Type& type) {
-            if (std::holds_alternative<ValArrayType>(type.getVariant()))
-            {
-                return cld::get<ValArrayType>(type.getVariant()).isStatic();
-            }
-            if (std::holds_alternative<ArrayType>(type.getVariant()))
-            {
-                return cld::get<ArrayType>(type.getVariant()).isStatic();
-            }
-            return false;
-        });
-        if (result != visitor.end())
+        // C99 6.7.5.2§1:
+        // The optional type qualifiers and the keyword static shall appear only in a
+        // declaration of a function parameter with an array type, and then only in the outermost
+        // array type derivation.
+        if (isArray(paramType))
         {
-            log(Errors::Semantics::STATIC_ONLY_ALLOWED_IN_OUTERMOST_ARRAY.args(iter.declarator, m_sourceInterface,
-                                                                               iter.declarator));
+            auto visitor = RecursiveVisitor(paramType, ARRAY_TYPE_NEXT_FN);
+            auto begin = visitor.begin();
+            begin++;
+            auto hasStatic = std::any_of(begin, visitor.end(), [](const Type& type) {
+                if (std::holds_alternative<ValArrayType>(type.getVariant()))
+                {
+                    return cld::get<ValArrayType>(type.getVariant()).isStatic();
+                }
+                if (std::holds_alternative<ArrayType>(type.getVariant()))
+                {
+                    return cld::get<ArrayType>(type.getVariant()).isStatic();
+                }
+                return false;
+            });
+            if (hasStatic)
+            {
+                log(Errors::Semantics::STATIC_ONLY_ALLOWED_IN_OUTERMOST_ARRAY.args(iter.declarator, m_sourceInterface,
+                                                                                   iter.declarator));
+            }
+            auto hasQualifiers = std::any_of(begin, visitor.end(), [](const Type& type) {
+                if (std::holds_alternative<ValArrayType>(type.getVariant()))
+                {
+                    return cld::get<ValArrayType>(type.getVariant()).isRestricted() || type.isConst()
+                           || type.isVolatile();
+                }
+                if (std::holds_alternative<ArrayType>(type.getVariant()))
+                {
+                    return cld::get<ArrayType>(type.getVariant()).isRestricted() || type.isConst() || type.isVolatile();
+                }
+                return false;
+            });
+            if (hasQualifiers)
+            {
+                log(Errors::Semantics::ARRAY_QUALIFIERS_ONLY_ALLOWED_IN_OUTERMOST_ARRAY.args(
+                    iter.declarator, m_sourceInterface, iter.declarator));
+            }
+        }
+        else
+        {
+            auto visitor = RecursiveVisitor(paramType, TYPE_NEXT_FN);
+            auto hasStatic = std::any_of(visitor.begin(), visitor.end(), [](const Type& type) {
+                if (std::holds_alternative<ValArrayType>(type.getVariant()))
+                {
+                    return cld::get<ValArrayType>(type.getVariant()).isStatic();
+                }
+                if (std::holds_alternative<ArrayType>(type.getVariant()))
+                {
+                    return cld::get<ArrayType>(type.getVariant()).isStatic();
+                }
+                return false;
+            });
+            if (hasStatic)
+            {
+                log(Errors::Semantics::ONLY_PARAMETER_OF_ARRAY_TYPE_MAY_BE_STATIC.args(
+                    iter.declarator, m_sourceInterface, iter.declarator, paramType));
+            }
+            auto hasQualifiers = std::any_of(visitor.begin(), visitor.end(), [](const Type& type) {
+                if (std::holds_alternative<ValArrayType>(type.getVariant()))
+                {
+                    return cld::get<ValArrayType>(type.getVariant()).isRestricted() || type.isConst()
+                           || type.isVolatile();
+                }
+                if (std::holds_alternative<ArrayType>(type.getVariant()))
+                {
+                    return cld::get<ArrayType>(type.getVariant()).isRestricted() || type.isConst() || type.isVolatile();
+                }
+                return false;
+            });
+            if (hasQualifiers)
+            {
+                log(Errors::Semantics::ONLY_PARAMETER_OF_ARRAY_TYPE_MAY_BE_QUALIFIED.args(
+                    iter.declarator, m_sourceInterface, iter.declarator, paramType));
+            }
         }
         std::string_view name;
         const Lexer::CToken* loc = nullptr;
@@ -220,13 +283,13 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
             [&](auto&& self, const Syntax::DirectDeclaratorNoStaticOrAsterisk& noStaticOrAsterisk) {
                 auto scope = cld::ScopeExit([&] { cld::match(noStaticOrAsterisk.getDirectDeclarator(), self); });
                 handleArray(type, noStaticOrAsterisk.getTypeQualifiers(),
-                            noStaticOrAsterisk.getAssignmentExpression().get(), false, false,
+                            noStaticOrAsterisk.getAssignmentExpression().get(), nullptr, false,
                             noStaticOrAsterisk.getDirectDeclarator());
             },
             [&](auto&& self, const Syntax::DirectDeclaratorStatic& declaratorStatic) {
                 auto scope = cld::ScopeExit([&] { cld::match(declaratorStatic.getDirectDeclarator(), self); });
                 handleArray(type, declaratorStatic.getTypeQualifiers(), &declaratorStatic.getAssignmentExpression(),
-                            true, false, declaratorStatic.getDirectDeclarator());
+                            declaratorStatic.getStaticLoc(), false, declaratorStatic.getDirectDeclarator());
             },
             [&](auto&& self, const Syntax::DirectDeclaratorAsterisk& asterisk) {
                 auto scope = cld::ScopeExit([&] { cld::match(asterisk.getDirectDeclarator(), self); });
@@ -236,7 +299,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                     log(Errors::Semantics::STAR_IN_ARRAY_DECLARATOR_ONLY_ALLOWED_IN_FUNCTION_PROTOTYPES.args(
                         *asterisk.getAsterisk(), m_sourceInterface, *asterisk.getAsterisk()));
                 }
-                handleArray(type, asterisk.getTypeQualifiers(), nullptr, false, true, asterisk.getDirectDeclarator());
+                handleArray(type, asterisk.getTypeQualifiers(), nullptr, nullptr, true, asterisk.getDirectDeclarator());
             },
             [&](auto&& self, const Syntax::DirectDeclaratorParenthesesIdentifiers& identifiers) {
                 auto scope = cld::ScopeExit([&] { cld::match(identifiers.getDirectDeclarator(), self); });
@@ -448,11 +511,11 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                 }
                 if (asterisk.getDirectAbstractDeclarator())
                 {
-                    handleArray(type, {}, nullptr, false, true, *asterisk.getDirectAbstractDeclarator());
+                    handleArray(type, {}, nullptr, nullptr, true, *asterisk.getDirectAbstractDeclarator());
                 }
                 else
                 {
-                    handleArray(type, {}, nullptr, false, true, declarationOrSpecifierQualifiers);
+                    handleArray(type, {}, nullptr, nullptr, true, declarationOrSpecifierQualifiers);
                 }
             },
             [&](auto&& self, const Syntax::DirectAbstractDeclaratorAssignmentExpression& expression) {
@@ -464,12 +527,12 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                 });
                 if (expression.getDirectAbstractDeclarator())
                 {
-                    handleArray(type, expression.getTypeQualifiers(), expression.getAssignmentExpression(), false,
+                    handleArray(type, expression.getTypeQualifiers(), expression.getAssignmentExpression(), nullptr,
                                 false, *expression.getDirectAbstractDeclarator());
                 }
                 else
                 {
-                    handleArray(type, expression.getTypeQualifiers(), expression.getAssignmentExpression(), false,
+                    handleArray(type, expression.getTypeQualifiers(), expression.getAssignmentExpression(), nullptr,
                                 false, declarationOrSpecifierQualifiers);
                 }
             },
@@ -491,7 +554,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                     }
                 });
                 handleArray(type, declaratorStatic.getTypeQualifiers(), &declaratorStatic.getAssignmentExpression(),
-                            true, false, declaratorStatic.getAssignmentExpression());
+                            declaratorStatic.getStaticLoc(), false, declaratorStatic.getAssignmentExpression());
             });
     }
     return type;
@@ -1372,7 +1435,7 @@ template <class T>
 void cld::Semantics::SemanticAnalysis::handleArray(cld::Semantics::Type& type,
                                                    const std::vector<Syntax::TypeQualifier>& typeQualifiers,
                                                    const cld::Syntax::AssignmentExpression* assignmentExpression,
-                                                   bool isStatic, bool valArray, T&& returnTypeLoc)
+                                                   const Lexer::CToken* isStatic, bool valArray, T&& returnTypeLoc)
 {
     if (std::holds_alternative<FunctionType>(type.getVariant()))
     {
@@ -1394,6 +1457,18 @@ void cld::Semantics::SemanticAnalysis::handleArray(cld::Semantics::Type& type,
     }
 
     auto [isConst, isVolatile, restricted] = getQualifiers(typeQualifiers);
+    if ((isConst || isVolatile || restricted) && !m_inParameter)
+    {
+        log(Errors::Semantics::ARRAY_OUTSIDE_OF_FUNCTION_PARAMETER_MAY_NOT_BE_QUALIFIED.args(
+            typeQualifiers, m_sourceInterface, typeQualifiers));
+        isConst = isVolatile = restricted = false;
+    }
+    if (isStatic && !m_inParameter)
+    {
+        log(Errors::Semantics::ARRAY_OUTSIDE_OF_FUNCTION_PARAMETER_MAY_NOT_BE_STATIC.args(*isStatic, m_sourceInterface,
+                                                                                          *isStatic));
+        isStatic = nullptr;
+    }
     if (valArray)
     {
         type = ValArrayType::create(isConst, isVolatile, restricted, isStatic, std::move(type), {});

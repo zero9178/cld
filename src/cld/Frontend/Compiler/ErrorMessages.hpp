@@ -236,6 +236,10 @@ CREATE_ERROR(ARRAY_OUTSIDE_OF_FUNCTION_PARAMETER_MAY_NOT_BE_STATIC,
 CREATE_ERROR(ARRAY_OUTSIDE_OF_FUNCTION_PARAMETER_MAY_NOT_BE_QUALIFIED,
              "Array outside of function parameter may not be qualified", PointAt<0>);
 
+CREATE_ERROR(ONLY_PARAMETER_OF_ARRAY_TYPE_MAY_BE_QUALIFIED,"Only parameter of array type may be qualified",Annotate<0,1>);
+
+CREATE_ERROR(ONLY_PARAMETER_OF_ARRAY_TYPE_MAY_BE_STATIC,"Only parameter of array type may be static",Annotate<0,1>);
+
 // VLA
 
 CREATE_ERROR(VARIABLY_MODIFIED_TYPE_NOT_ALLOWED_AT_FILE_SCOPE, "Variably modified type not allowed at file scope",
@@ -265,6 +269,8 @@ CREATE_ERROR(FUNCTION_PROTOTYPE_MUST_NOT_HAVE_AN_INITIALIZER, "Function prototyp
              Underline<0>);
 
 CREATE_ERROR(STATIC_ONLY_ALLOWED_IN_OUTERMOST_ARRAY, "'static' only allowed in outermost array", Underline<0>);
+
+CREATE_ERROR(ARRAY_QUALIFIERS_ONLY_ALLOWED_IN_OUTERMOST_ARRAY, "Array qualifiers only allowed in outermost array", Underline<0>);
 
 CREATE_ERROR(VOID_TYPE_NOT_ALLOWED_AS_FUNCTION_PARAMETER, "Void type not allowed as function parameter", Underline<0>);
 
