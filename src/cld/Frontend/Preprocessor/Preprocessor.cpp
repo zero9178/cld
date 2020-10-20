@@ -52,6 +52,15 @@ class Preprocessor final : private cld::PPSourceInterface
     bool m_errorsOccurred = false;
     bool m_visitingScratchPad = true;
 
+    struct IncludeGuardOpt
+    {
+        cld::fs::path path;
+        std::string_view macroName;
+        bool macroNeedsToBeDefined;
+    };
+
+    std::vector<IncludeGuardOpt> m_includeGuardOptCache;
+
     void pushLine(llvm::ArrayRef<cld::Lexer::PPToken> tokens)
     {
         if (m_visitingScratchPad)
@@ -1142,11 +1151,50 @@ public:
         return m_intervalMaps;
     }
 
+    static const cld::PP::IfSection* isOneBigIfSection(const cld::PP::File& file)
+    {
+        // TODO: Maybe support includes if the includes themselves are one big if section as well?
+        const cld::PP::IfSection* result = nullptr;
+        if (file.groups.size() > 1)
+        {
+            return result;
+        }
+        for (auto& iter : file.groups[0].groupPart)
+        {
+            if (std::holds_alternative<cld::PP::NonDirective>(iter))
+            {
+                continue;
+            }
+            if (std::holds_alternative<cld::PP::IfSection>(iter))
+            {
+                if (result)
+                {
+                    return nullptr;
+                }
+                result = &cld::get<cld::PP::IfSection>(iter);
+                continue;
+            }
+            if (!std::holds_alternative<cld::PP::TextBlock>(iter))
+            {
+                return nullptr;
+            }
+            if (std::any_of(cld::get<cld::PP::TextBlock>(iter).tokens.begin(),
+                            cld::get<cld::PP::TextBlock>(iter).tokens.end(), [](const cld::Lexer::PPToken& ppToken) {
+                                return ppToken.getTokenType() != cld::Lexer::TokenType::Newline;
+                            }))
+            {
+                return nullptr;
+            }
+        }
+        return result;
+    }
+
     void include(cld::PPSourceObject&& sourceObject,
                  std::optional<std::pair<std::uint32_t, std::uint64_t>> includePos = {})
     {
         auto scope = cld::ScopeExit([prev = m_currentFile, this] { m_currentFile = prev; });
         CLD_ASSERT(sourceObject.getFiles().size() == 1);
+        auto path = cld::fs::u8path(sourceObject.getFiles()[0].path);
         for (auto& iter : sourceObject.getFiles())
         {
             for (auto& iter2 : iter.ppTokens)
@@ -1172,6 +1220,24 @@ public:
         {
             m_errorsOccurred = true;
             return;
+        }
+        if (auto* ifSection = isOneBigIfSection(tree))
+        {
+            if (ifSection->elifGroups.empty() && !ifSection->optionalElseGroup
+                && (std::holds_alternative<cld::PP::IfGroup::IfDefTag>(ifSection->ifGroup.ifs)
+                    || std::holds_alternative<cld::PP::IfGroup::IfnDefTag>(ifSection->ifGroup.ifs))
+                && cld::fs::exists(path)
+                && std::none_of(m_includeGuardOptCache.begin(), m_includeGuardOptCache.end(),
+                                [&](const IncludeGuardOpt& opt) { return cld::fs::equivalent(opt.path, path); }))
+            {
+                m_includeGuardOptCache.push_back(
+                    {path,
+                     cld::match(
+                         ifSection->ifGroup.ifs,
+                         [](const llvm::ArrayRef<cld::Lexer::PPToken>&) -> std::string_view { CLD_UNREACHABLE; },
+                         [](const auto& value) { return value.identifier; }),
+                     std::holds_alternative<cld::PP::IfGroup::IfDefTag>(ifSection->ifGroup.ifs)});
+            }
         }
         visit(tree);
     }
@@ -1403,13 +1469,22 @@ public:
                 std::forward_as_tuple(includeTag.tokens.front(), includeTag.tokens.back())));
             return;
         }
+        resultPath = cld::fs::absolute(resultPath);
+        resultPath = resultPath.lexically_normal();
+        auto cachedResult =
+            std::find_if(m_includeGuardOptCache.begin(), m_includeGuardOptCache.end(),
+                         [&](const IncludeGuardOpt& opt) { return cld::fs::equivalent(opt.path, resultPath); });
+        if (cachedResult != m_includeGuardOptCache.end()
+            && static_cast<bool>(m_defines.count(cachedResult->macroName)) != cachedResult->macroNeedsToBeDefined)
+        {
+            return;
+        }
 
         std::size_t end = result.tellg();
         result.seekg(0);
         std::string text(end, '\0');
         result.read(text.data(), text.size());
         result.close();
-        resultPath = cld::fs::canonical(resultPath);
 
         bool errors = false;
         auto newFile = cld::Lexer::tokenize(std::move(text), m_options, m_reporter, &errors, resultPath.u8string());
