@@ -1155,7 +1155,7 @@ public:
     {
         // TODO: Maybe support includes if the includes themselves are one big if section as well?
         const cld::PP::IfSection* result = nullptr;
-        if (file.groups.size() > 1)
+        if (file.groups.size() != 1)
         {
             return result;
         }
