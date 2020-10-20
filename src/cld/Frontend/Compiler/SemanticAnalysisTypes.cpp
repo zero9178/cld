@@ -578,12 +578,43 @@ cld::Semantics::Type
         }
         const auto* type = getTypedef(*name);
         CLD_ASSERT(type);
-        auto ret = Type(isConst, isVolatile, type->getVariant());
-        if (std::tuple(type->isConst(), type->isVolatile()) == std::tuple(isConst, isVolatile))
+        // C99 6.7.3§8:
+        // If the specification of an array type includes any type qualifiers, the element type is soqualified, not the
+        // array type. If the specification of a function type includes any type qualifiers, the behavior is undefined
+        if (isArray(*type))
         {
-            ret.setName(type->getName());
+            if (!isConst && !isVolatile)
+            {
+                return *type;
+            }
+            auto& elementType = getArrayElementType(*type);
+            if ((!isConst || elementType.isConst()) && (!isVolatile || elementType.isVolatile()))
+            {
+                return *type;
+            }
+            auto newElementType = Type(elementType.isConst() || isConst, elementType.isVolatile() || isVolatile,
+                                       elementType.getVariant());
+            return cld::match(
+                type->getVariant(), [](const auto&) -> Type { CLD_UNREACHABLE; },
+                [&](const ArrayType& arrayType) -> Type {
+                    return ArrayType::create(type->isConst(), type->isVolatile(), arrayType.isRestricted(),
+                                             arrayType.isStatic(), std::move(newElementType), arrayType.getSize());
+                },
+                [&](const AbstractArrayType& arrayType) -> Type {
+                    return AbstractArrayType::create(type->isConst(), type->isVolatile(), arrayType.isRestricted(),
+                                                     std::move(newElementType));
+                },
+                [&](const ValArrayType& arrayType) -> Type {
+                    return ValArrayType::create(type->isConst(), type->isVolatile(), arrayType.isRestricted(),
+                                                arrayType.isStatic(), std::move(newElementType),
+                                                arrayType.getExpression());
+                });
         }
-        return ret;
+        if ((isConst && !type->isConst()) || (isVolatile && !type->isVolatile()))
+        {
+            return Type(isConst || type->isConst(), isVolatile || type->isVolatile(), type->getVariant());
+        }
+        return *type;
     }
     if (auto* structOrUnionPtr =
             std::get_if<std::unique_ptr<Syntax::StructOrUnionSpecifier>>(&typeSpec[0]->getVariant()))

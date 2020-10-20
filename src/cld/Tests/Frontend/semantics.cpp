@@ -391,6 +391,47 @@ TEST_CASE("Semantics declarations", "[semantics]")
             CHECK(decl->getType()
                   == cld::Semantics::PrimitiveType::createLongDouble(true, true, cld::LanguageOptions::native()));
         }
+        SECTION("Can't remove const volatile")
+        {
+            auto [translationUnit, errors] = generateSemantics("typedef const volatile long double ld;\n"
+                                                               "ld d;");
+            REQUIRE_THAT(errors, ProducesNoErrors());
+            REQUIRE(translationUnit->getGlobals().size() == 1);
+            REQUIRE(
+                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
+            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
+            CHECK(decl->getNameToken()->getText() == "d");
+            CHECK(decl->getType()
+                  == cld::Semantics::PrimitiveType::createLongDouble(true, true, cld::LanguageOptions::native()));
+        }
+        SECTION("Combine qualifiers")
+        {
+            auto [translationUnit, errors] = generateSemantics("typedef const long double ld;\n"
+                                                               "volatile ld d;");
+            REQUIRE_THAT(errors, ProducesNoErrors());
+            REQUIRE(translationUnit->getGlobals().size() == 1);
+            REQUIRE(
+                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
+            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
+            CHECK(decl->getNameToken()->getText() == "d");
+            CHECK(decl->getType()
+                  == cld::Semantics::PrimitiveType::createLongDouble(true, true, cld::LanguageOptions::native()));
+        }
+        SECTION("Qualifiers on array types")
+        {
+            auto [translationUnit, errors] = generateSemantics("typedef long double ld[5];\n"
+                                                               "volatile ld d;");
+            REQUIRE_THAT(errors, ProducesNoErrors());
+            REQUIRE(translationUnit->getGlobals().size() == 1);
+            REQUIRE(
+                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
+            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
+            CHECK(decl->getNameToken()->getText() == "d");
+            CHECK(decl->getType()
+                  == cld::Semantics::ArrayType::create(
+                      false, false, false, false,
+                      cld::Semantics::PrimitiveType::createLongDouble(false, true, cld::LanguageOptions::native()), 5));
+        }
         SECTION("Variable length array")
         {
             auto [translationUnit, errors] = generateSemantics("void foo(int n) {\n"
