@@ -79,7 +79,8 @@ enum class Action
 {
     Compile,
     Preprocess,
-    AssemblyOutput
+    AssemblyOutput,
+    Link
 };
 
 template <class CL>
@@ -663,6 +664,9 @@ int cld::main(llvm::MutableArrayRef<std::string_view> elements, llvm::raw_ostrea
         }
         return doActionOnAllFiles(Action::AssemblyOutput, options, triple, cli.getUnrecognized(), cli, reporter);
     }
-
-    return doActionOnAllFiles(Action::Preprocess, options, triple, cli.getUnrecognized(), cli, reporter);
+    if (cli.get<PREPROCESS_ONLY>())
+    {
+        return doActionOnAllFiles(Action::Preprocess, options, triple, cli.getUnrecognized(), cli, reporter);
+    }
+    return doActionOnAllFiles(Action::Compile, options, triple, cli.getUnrecognized(), cli, reporter);
 }
