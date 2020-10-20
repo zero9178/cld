@@ -1115,6 +1115,7 @@ public:
 class Assignment final
 {
     std::unique_ptr<Expression> m_leftOperand;
+    Type m_leftCalcType;
 
 public:
     enum Kind
@@ -1138,9 +1139,10 @@ private:
     std::unique_ptr<Expression> m_rightOperand;
 
 public:
-    Assignment(std::unique_ptr<Expression> leftOperand, Kind kind, Lexer::CTokenIterator operatorToken,
-               std::unique_ptr<Expression> rightOperand)
+    Assignment(std::unique_ptr<Expression> leftOperand, Type leftCalcType, Kind kind,
+               Lexer::CTokenIterator operatorToken, std::unique_ptr<Expression> rightOperand)
         : m_leftOperand(std::move(leftOperand)),
+          m_leftCalcType(std::move(leftCalcType)),
           m_kind(kind),
           m_operatorToken(operatorToken),
           m_rightOperand(std::move(rightOperand))
@@ -1150,6 +1152,11 @@ public:
     [[nodiscard]] const Expression& getLeftExpression() const
     {
         return *m_leftOperand;
+    }
+
+    [[nodiscard]] const Type& getLeftCalcType() const
+    {
+        return m_leftCalcType;
     }
 
     [[nodiscard]] Kind getKind() const

@@ -131,6 +131,13 @@ class CodeGenerator final
     {
         if (value->getType()->isIntegerTy())
         {
+            if (auto* cast = llvm::dyn_cast<llvm::CastInst>(value);
+                cast && cast->getSrcTy() == m_builder.getInt1Ty() && cast->getNumUses() == 0)
+            {
+                auto* result = cast->getOperand(0);
+                cast->eraseFromParent();
+                return result;
+            }
             return m_builder.CreateICmpNE(value, llvm::ConstantInt::get(value->getType(), 0));
         }
         if (value->getType()->isPointerTy())
@@ -1696,7 +1703,7 @@ public:
         if (forStatement.getControlling())
         {
             auto* value = visit(*forStatement.getControlling());
-            value = m_builder.CreateTrunc(value, m_builder.getInt1Ty());
+            value = boolToi1(value);
             m_builder.CreateCondBr(value, body, contBlock);
         }
         else
@@ -2720,39 +2727,31 @@ public:
                                                          assignment.getLeftExpression().getType().isVolatile());
                 if (cld::Semantics::isArithmetic(assignment.getLeftExpression().getType()))
                 {
-                    load =
-                        cast(load, assignment.getLeftExpression().getType(), assignment.getRightExpression().getType());
+                    load = cast(load, assignment.getLeftExpression().getType(), assignment.getLeftCalcType());
                 }
                 switch (assignment.getKind())
                 {
                     case cld::Semantics::Assignment::Simple: CLD_UNREACHABLE;
                     case cld::Semantics::Assignment::Plus:
-                        rhs = add(load, assignment.getLeftExpression().getType(), rhs,
-                                  assignment.getRightExpression().getType());
+                        rhs = add(load, assignment.getLeftCalcType(), rhs, assignment.getRightExpression().getType());
                         break;
                     case cld::Semantics::Assignment::Minus:
-                        rhs = sub(load, assignment.getLeftExpression().getType(), rhs,
-                                  assignment.getRightExpression().getType());
+                        rhs = sub(load, assignment.getLeftCalcType(), rhs, assignment.getRightExpression().getType());
                         break;
                     case cld::Semantics::Assignment::Divide:
-                        rhs = div(load, assignment.getLeftExpression().getType(), rhs,
-                                  assignment.getRightExpression().getType());
+                        rhs = div(load, assignment.getLeftCalcType(), rhs, assignment.getRightExpression().getType());
                         break;
                     case cld::Semantics::Assignment::Multiply:
-                        rhs = mul(load, assignment.getLeftExpression().getType(), rhs,
-                                  assignment.getRightExpression().getType());
+                        rhs = mul(load, assignment.getLeftCalcType(), rhs, assignment.getRightExpression().getType());
                         break;
                     case cld::Semantics::Assignment::Modulo:
-                        rhs = mod(load, assignment.getLeftExpression().getType(), rhs,
-                                  assignment.getRightExpression().getType());
+                        rhs = mod(load, assignment.getLeftCalcType(), rhs, assignment.getRightExpression().getType());
                         break;
                     case cld::Semantics::Assignment::LeftShift:
-                        rhs = shl(load, assignment.getLeftExpression().getType(), rhs,
-                                  assignment.getRightExpression().getType());
+                        rhs = shl(load, assignment.getLeftCalcType(), rhs, assignment.getRightExpression().getType());
                         break;
                     case cld::Semantics::Assignment::RightShift:
-                        rhs = shr(load, assignment.getLeftExpression().getType(), rhs,
-                                  assignment.getRightExpression().getType());
+                        rhs = shr(load, assignment.getLeftCalcType(), rhs, assignment.getRightExpression().getType());
                         break;
                     case cld::Semantics::Assignment::BitAnd: rhs = m_builder.CreateAnd(load, rhs); break;
                     case cld::Semantics::Assignment::BitOr: rhs = m_builder.CreateOr(load, rhs); break;

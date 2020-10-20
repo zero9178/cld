@@ -2056,6 +2056,17 @@ TEST_CASE("LLVM codegen binary expressions", "[LLVM]")
             CHECK_THAT(*module, ContainsIR("urem"));
             CHECK(cld::Tests::computeInJIT<unsigned(unsigned, unsigned)>(std::move(module), "mod", 30, 8) == 6);
         }
+        SECTION("With arithmetic conversion")
+        {
+            auto program = generateProgramWithOptions("unsigned int foo(long i) {\n"
+                                                      "return i % 5u;\n"
+                                                      "}",
+                                                      x64windowsGnu);
+            cld::CGLLVM::generateLLVM(*module, program, x64windowsGnu);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK_THAT(*module, ContainsIR("urem"));
+        }
     }
     SECTION("Left shift")
     {

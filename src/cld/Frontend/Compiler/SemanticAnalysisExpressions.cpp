@@ -196,6 +196,8 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
             log(Errors::Semantics::LEFT_OPERAND_OF_OPERATOR_N_MUST_NOT_BE_A_TEMPORARY_OR_CONST.args(
                 lhsValue, m_sourceInterface, *token, lhsValue));
         }
+        auto resultType = removeQualifiers(lhsValue.getType());
+        auto lhsType = lhsValue.getType();
         switch (kind)
         {
             case Syntax::AssignmentExpression::NoOperator:
@@ -285,7 +287,6 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                     }
                     else if (isArithmetic(rhsValue.getType()))
                     {
-                        auto lhsType = lhsValue.getType();
                         arithmeticConversion(lhsType, rhsValue);
                     }
                 }
@@ -297,7 +298,6 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
             case Syntax::AssignmentExpression::DivideAssign:
             case Syntax::AssignmentExpression::MultiplyAssign:
             {
-                auto lhsType = lhsValue.getType();
                 if (isArithmetic(lhsType) && isArithmetic(rhsValue.getType()))
                 {
                     arithmeticConversion(lhsType, rhsValue);
@@ -315,6 +315,25 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                 break;
             }
             case Syntax::AssignmentExpression::ModuloAssign:
+            {
+                lhsType = integerPromotion(std::move(lhsType));
+                if (!lhsType.isUndefined() && !isInteger(lhsType))
+                {
+                    log(Errors::Semantics::LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE.args(
+                        lhsValue, m_sourceInterface, *token, lhsValue));
+                }
+                rhsValue = integerPromotion(std::move(rhsValue));
+                if (!rhsValue.isUndefined() && !isInteger(rhsValue.getType()))
+                {
+                    log(Errors::Semantics::RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE.args(
+                        rhsValue, m_sourceInterface, *token, rhsValue));
+                }
+                if (isInteger(lhsType) && isInteger(rhsValue.getType()))
+                {
+                    arithmeticConversion(lhsType, rhsValue);
+                }
+                break;
+            }
             case Syntax::AssignmentExpression::LeftShiftAssign:
             case Syntax::AssignmentExpression::RightShiftAssign:
             case Syntax::AssignmentExpression::BitAndAssign:
@@ -325,7 +344,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                 // the arithmetic conversion is to figure out the right result type of the expression. This is redundant
                 // here as the resulting type of the assignment is always the left operand and only integer types are
                 // allowed. If floating point types were allowed we'd have to do the conversion for that
-                auto lhsType = integerPromotion(lhsValue.getType());
+                lhsType = integerPromotion(std::move(lhsType));
                 if (!lhsType.isUndefined() && !isInteger(lhsType))
                 {
                     log(Errors::Semantics::LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE.args(
@@ -340,10 +359,9 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                 break;
             }
         }
-        auto type = removeQualifiers(lhsValue.getType());
-        rhsValue = Expression(std::move(type), ValueCategory::Rvalue,
+        rhsValue = Expression(resultType, ValueCategory::Rvalue,
                               Assignment(
-                                  std::make_unique<Expression>(std::move(lhsValue)),
+                                  std::make_unique<Expression>(std::move(lhsValue)), std::move(lhsType),
                                   [kind = kind] {
                                       switch (kind)
                                       {

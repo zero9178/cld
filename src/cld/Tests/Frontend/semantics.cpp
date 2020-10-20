@@ -2440,14 +2440,30 @@ TEST_CASE("Semantics term expression", "[semantics]")
     }
     SECTION("Modulo")
     {
-        auto& exp = generateExpression("void foo(void) {\n"
-                                       "5 % 5;\n"
-                                       "}");
-        CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-        REQUIRE(std::holds_alternative<BinaryOperator>(exp.getVariant()));
-        auto& binOp = cld::get<BinaryOperator>(exp.getVariant());
-        CHECK(binOp.getKind() == BinaryOperator::Modulo);
+        SECTION("Simple")
+        {
+            auto& exp = generateExpression("void foo(void) {\n"
+                                           "5 % 5;\n"
+                                           "}");
+            CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
+            CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            REQUIRE(std::holds_alternative<BinaryOperator>(exp.getVariant()));
+            auto& binOp = cld::get<BinaryOperator>(exp.getVariant());
+            CHECK(binOp.getKind() == BinaryOperator::Modulo);
+        }
+        SECTION("Signed with unsigned")
+        {
+            auto option = cld::LanguageOptions::fromTriple(x64windowsGnu);
+            auto& exp = generateExpression("void foo(void) {\n"
+                                           "5l % 5u;\n"
+                                           "}",
+                                           option);
+            CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
+            CHECK(exp.getType() == PrimitiveType::createUnsignedInt(false, false, option));
+            REQUIRE(std::holds_alternative<BinaryOperator>(exp.getVariant()));
+            auto& binOp = cld::get<BinaryOperator>(exp.getVariant());
+            CHECK(binOp.getKind() == BinaryOperator::Modulo);
+        }
         SEMA_PRODUCES("void foo(void) {\n"
                       "5uLL % 5;\n"
                       "}",
