@@ -459,12 +459,14 @@ class CodeGenerator final
                 i++;
                 if (change == ABITransformations::Unchanged)
                 {
-                    auto* var = m_builder.CreateAlloca(operand);
+                    auto* var =
+                        m_builder.CreateAlloca(operand, nullptr, llvm::StringRef{paramDecl->getNameToken()->getText()});
                     var->setAlignment(llvm::Align(paramDecl->getType().getAlignOf(m_programInterface)));
                     m_lvalues.emplace(paramDecl.get(), var);
                     continue;
                 }
-                auto* var = m_builder.CreateAlloca(visit(paramDecl->getType()));
+                auto* var = m_builder.CreateAlloca(visit(paramDecl->getType()), nullptr,
+                                                   llvm::StringRef{paramDecl->getNameToken()->getText()});
                 var->setAlignment(llvm::Align(paramDecl->getType().getAlignOf(m_programInterface)));
                 m_lvalues.emplace(paramDecl.get(), var);
             }
@@ -477,7 +479,8 @@ class CodeGenerator final
                     continue;
                 }
                 auto& paramDecl = (*paramDecls)[origArgI];
-                auto* var = m_builder.CreateAlloca(visit(paramDecl->getType()));
+                auto* var = m_builder.CreateAlloca(visit(paramDecl->getType()), nullptr,
+                                                   llvm::StringRef{paramDecl->getNameToken()->getText()});
                 var->setAlignment(llvm::Align(paramDecl->getType().getAlignOf(m_programInterface)));
                 m_lvalues.emplace(paramDecl.get(), var);
             }
