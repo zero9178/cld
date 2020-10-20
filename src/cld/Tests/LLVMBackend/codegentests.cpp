@@ -457,6 +457,25 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                 CHECK(function->getArg(6)->getType()->isFloatTy());
                 CHECK(function->getArg(7)->getType()->isIntegerTy(64));
             }
+            SECTION("Large struct")
+            {
+                auto program = generateProgramWithOptions("struct R {\n"
+                                                          "float f;\n"
+                                                          "int r[2];\n"
+                                                          "};\n"
+                                                          "\n"
+                                                          "void foo(struct R);",
+                                                          x64linux);
+                cld::CGLLVM::generateLLVM(*module, program, x64linux);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                auto* function = module->getFunction("foo");
+                REQUIRE(function);
+                CHECK(function->getReturnType()->isVoidTy());
+                REQUIRE(function->arg_size() == 2);
+                CHECK(function->getArg(0)->getType()->isIntegerTy(64));
+                CHECK(function->getArg(1)->getType()->isIntegerTy(32));
+            }
         }
         SECTION("Return type")
         {
@@ -1114,14 +1133,39 @@ TEST_CASE("LLVM codegen unary expressions", "[LLVM]")
     auto module = std::make_unique<llvm::Module>("", context);
     SECTION("Address of")
     {
-        auto program = generateProgram("int* foo(void) {\n"
-                                       "int i;\n"
-                                       "return &i;\n"
-                                       "}");
-        cld::CGLLVM::generateLLVM(*module, program);
-        CAPTURE(*module);
-        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
-        CHECK(cld::Tests::computeInJIT<int*(void)>(std::move(module), "foo") != nullptr);
+        SECTION("Simple")
+        {
+            auto program = generateProgram("int* foo(void) {\n"
+                                           "int i;\n"
+                                           "return &i;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int*(void)>(std::move(module), "foo") != nullptr);
+        }
+        SECTION("Address of dereference")
+        {
+            auto program = generateProgram("int* foo(void) {\n"
+                                           "int* i = 0;\n"
+                                           "return &*i;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int*(void)>(std::move(module), "foo") == nullptr);
+        }
+        SECTION("Address of subscript")
+        {
+            auto program = generateProgram("int* foo(void) {\n"
+                                           "int* i = 0;\n"
+                                           "return &i[0];\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int*(void)>(std::move(module), "foo") == nullptr);
+        }
     }
     SECTION("Dereference")
     {
@@ -1806,7 +1850,19 @@ TEST_CASE("LLVM codegen binary expressions", "[LLVM]")
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
             REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK_THAT(*module, ContainsIR("add nsw"));
             CHECK(cld::Tests::computeInJIT<int(int, int)>(std::move(module), "add", 5, 10) == 15);
+        }
+        SECTION("Unsigned integers")
+        {
+            auto program = generateProgram("unsigned int add(unsigned int r,unsigned int f) {\n"
+                                           "return r + f;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK_THAT(*module, !ContainsIR("add nsw") && ContainsIR("add"));
+            CHECK(cld::Tests::computeInJIT<unsigned(unsigned, unsigned)>(std::move(module), "add", 5, 10) == 15);
         }
         SECTION("Floating point type")
         {
@@ -1820,14 +1876,28 @@ TEST_CASE("LLVM codegen binary expressions", "[LLVM]")
         }
         SECTION("Pointer types")
         {
-            auto program = generateProgram("float add(float* r,int f) {\n"
-                                           "return *(r + f);\n"
-                                           "}");
-            cld::CGLLVM::generateLLVM(*module, program);
-            CAPTURE(*module);
-            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
-            std::array<float, 2> a = {1, 2};
-            CHECK(cld::Tests::computeInJIT<float(float*, int)>(std::move(module), "add", a.data(), 1) == 2);
+            SECTION("Pointer left")
+            {
+                auto program = generateProgram("float add(float* r,int f) {\n"
+                                               "return *(r + f);\n"
+                                               "}");
+                cld::CGLLVM::generateLLVM(*module, program);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                std::array<float, 2> a = {1, 2};
+                CHECK(cld::Tests::computeInJIT<float(float*, int)>(std::move(module), "add", a.data(), 1) == 2);
+            }
+            SECTION("Pointer right")
+            {
+                auto program = generateProgram("float add(float* r,int f) {\n"
+                                               "return *(f + r);\n"
+                                               "}");
+                cld::CGLLVM::generateLLVM(*module, program);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                std::array<float, 2> a = {1, 2};
+                CHECK(cld::Tests::computeInJIT<float(float*, int)>(std::move(module), "add", a.data(), 1) == 2);
+            }
         }
     }
     SECTION("Subtraction")
@@ -1840,7 +1910,19 @@ TEST_CASE("LLVM codegen binary expressions", "[LLVM]")
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
             REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK_THAT(*module, ContainsIR("sub nsw"));
             CHECK(cld::Tests::computeInJIT<int(int, int)>(std::move(module), "sub", 10, 5) == 5);
+        }
+        SECTION("Unsigned Integers")
+        {
+            auto program = generateProgram("unsigned sub(unsigned r,unsigned f) {\n"
+                                           "return r - f;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK_THAT(*module, !ContainsIR("sub nsw") && ContainsIR("sub"));
+            CHECK(cld::Tests::computeInJIT<unsigned(unsigned, unsigned)>(std::move(module), "sub", 10, 5) == 5);
         }
         SECTION("Floating point type")
         {
@@ -1854,14 +1936,30 @@ TEST_CASE("LLVM codegen binary expressions", "[LLVM]")
         }
         SECTION("Pointer types")
         {
-            auto program = generateProgram("float sub(float* r,int f) {\n"
-                                           "return *(r - f);\n"
-                                           "}");
-            cld::CGLLVM::generateLLVM(*module, program);
-            CAPTURE(*module);
-            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
-            std::array<float, 2> a = {1, 2};
-            CHECK(cld::Tests::computeInJIT<float(float*, int)>(std::move(module), "sub", a.data() + 2, 1) == 2);
+            SECTION("With integer")
+            {
+                auto program = generateProgram("float sub(float* r,int f) {\n"
+                                               "return *(r - f);\n"
+                                               "}");
+                cld::CGLLVM::generateLLVM(*module, program);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                std::array<float, 2> a = {1, 2};
+                CHECK(cld::Tests::computeInJIT<float(float*, int)>(std::move(module), "sub", a.data() + 2, 1) == 2);
+            }
+            SECTION("With pointer")
+            {
+                auto program = generateProgram("long long sub(float* r,float* f) {\n"
+                                               "return r - f;\n"
+                                               "}");
+                cld::CGLLVM::generateLLVM(*module, program);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                std::array<float, 2> a = {1, 2};
+                CHECK(cld::Tests::computeInJIT<long long(float*, float*)>(std::move(module), "sub", a.data() + 2,
+                                                                          a.data())
+                      == 2);
+            }
         }
     }
     SECTION("Multiply")
@@ -1874,7 +1972,19 @@ TEST_CASE("LLVM codegen binary expressions", "[LLVM]")
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
             REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK_THAT(*module, ContainsIR("mul nsw"));
             CHECK(cld::Tests::computeInJIT<int(int, int)>(std::move(module), "mul", 3, 5) == 15);
+        }
+        SECTION("Unsigned Integers")
+        {
+            auto program = generateProgram("unsigned mul(unsigned r,unsigned f) {\n"
+                                           "return r * f;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK_THAT(*module, !ContainsIR("mul nsw") && ContainsIR("mul"));
+            CHECK(cld::Tests::computeInJIT<unsigned(unsigned, unsigned)>(std::move(module), "mul", 3, 5) == 15);
         }
         SECTION("Floats")
         {
@@ -1897,7 +2007,19 @@ TEST_CASE("LLVM codegen binary expressions", "[LLVM]")
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
             REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK_THAT(*module, ContainsIR("sdiv"));
             CHECK(cld::Tests::computeInJIT<int(int, int)>(std::move(module), "div", 30, 5) == 6);
+        }
+        SECTION("Unsigned Integers")
+        {
+            auto program = generateProgram("unsigned div(unsigned r,unsigned f) {\n"
+                                           "return r / f;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK_THAT(*module, ContainsIR("udiv"));
+            CHECK(cld::Tests::computeInJIT<unsigned(unsigned, unsigned)>(std::move(module), "div", 30, 5) == 6);
         }
         SECTION("Floats")
         {
@@ -1912,13 +2034,28 @@ TEST_CASE("LLVM codegen binary expressions", "[LLVM]")
     }
     SECTION("Modulo")
     {
-        auto program = generateProgram("int mod(int r,int f) {\n"
-                                       "return r % f;\n"
-                                       "}");
-        cld::CGLLVM::generateLLVM(*module, program);
-        CAPTURE(*module);
-        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
-        CHECK(cld::Tests::computeInJIT<int(int, int)>(std::move(module), "mod", 30, 8) == 6);
+        SECTION("Integers")
+        {
+            auto program = generateProgram("int mod(int r,int f) {\n"
+                                           "return r % f;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK_THAT(*module, ContainsIR("srem"));
+            CHECK(cld::Tests::computeInJIT<int(int, int)>(std::move(module), "mod", 30, 8) == 6);
+        }
+        SECTION("Unsigned Integers")
+        {
+            auto program = generateProgram("unsigned mod(unsigned r,unsigned f) {\n"
+                                           "return r % f;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK_THAT(*module, ContainsIR("urem"));
+            CHECK(cld::Tests::computeInJIT<unsigned(unsigned, unsigned)>(std::move(module), "mod", 30, 8) == 6);
+        }
     }
     SECTION("Left shift")
     {
@@ -3646,6 +3783,20 @@ TEST_CASE("LLVM Codegen variably modified types", "[LLVM]")
         CAPTURE(*module);
         REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
         CHECK(cld::Tests::computeInJIT<int(int)>(std::move(module), "function", 5) == 5);
+    }
+    SECTION("Typedef evaluation")
+    {
+        auto program = generateProgram("int function(void) {\n"
+                                       "    int count = 0;\n"
+                                       "    for (int i = 0; i < 10; i++,count++) {\n"
+                                       "        typedef int (*f)[i++];\n"
+                                       "    }\n"
+                                       "    return count;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 5);
     }
 }
 

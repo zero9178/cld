@@ -494,7 +494,7 @@ class CodeGenerator final
         {
             if (cld::Semantics::isInteger(lhsType))
             {
-                if (!cld::get<cld::Semantics::PrimitiveType>(lhsType.getVariant()).isSigned())
+                if (cld::get<cld::Semantics::PrimitiveType>(lhsType.getVariant()).isSigned())
                 {
                     return m_builder.CreateNSWAdd(lhs, rhs);
                 }
@@ -541,7 +541,7 @@ class CodeGenerator final
         {
             if (cld::Semantics::isInteger(lhsType))
             {
-                if (!cld::get<cld::Semantics::PrimitiveType>(lhsType.getVariant()).isSigned())
+                if (cld::get<cld::Semantics::PrimitiveType>(lhsType.getVariant()).isSigned())
                 {
                     return m_builder.CreateNSWSub(lhs, rhs);
                 }
@@ -552,25 +552,13 @@ class CodeGenerator final
             return m_builder.CreateFSub(lhs, rhs);
         }
 
-        if (lhs->getType()->isPointerTy())
-        {
-            if (rhs->getType()->isIntegerTy())
-            {
-                rhs = m_builder.CreateNeg(rhs);
-                rhs = m_builder.CreateIntCast(rhs, m_builder.getInt64Ty(),
-                                              cld::get<cld::Semantics::PrimitiveType>(rhsType.getVariant()).isSigned());
-                return m_builder.CreateGEP(lhs, rhs);
-            }
-
-            return m_builder.CreatePtrDiff(lhs, rhs);
-        }
-
+        CLD_ASSERT(lhs->getType()->isPointerTy());
         if (rhs->getType()->isIntegerTy())
         {
-            lhs = m_builder.CreateNeg(lhs);
-            lhs = m_builder.CreateIntCast(lhs, m_builder.getInt64Ty(),
-                                          cld::get<cld::Semantics::PrimitiveType>(lhsType.getVariant()).isSigned());
-            return m_builder.CreateGEP(rhs, lhs);
+            rhs = m_builder.CreateNeg(rhs);
+            rhs = m_builder.CreateIntCast(rhs, m_builder.getInt64Ty(),
+                                          cld::get<cld::Semantics::PrimitiveType>(rhsType.getVariant()).isSigned());
+            return m_builder.CreateGEP(lhs, rhs);
         }
 
         return m_builder.CreatePtrDiff(lhs, rhs);
@@ -581,7 +569,12 @@ class CodeGenerator final
     {
         if (cld::Semantics::isInteger(lhsType))
         {
-            return m_builder.CreateNSWMul(lhs, rhs);
+            if (cld::get<cld::Semantics::PrimitiveType>(lhsType.getVariant()).isSigned())
+            {
+                return m_builder.CreateNSWMul(lhs, rhs);
+            }
+
+            return m_builder.CreateMul(lhs, rhs);
         }
 
         return m_builder.CreateFMul(lhs, rhs);
@@ -1048,6 +1041,32 @@ class CodeGenerator final
         CLD_ASSERT(std::holds_alternative<cld::Semantics::DeclarationRead>(conversion.getExpression().getVariant()));
         auto& decl = cld::get<cld::Semantics::DeclarationRead>(conversion.getExpression().getVariant());
         return *cld::get<const cld::Semantics::BuiltinFunction*>(decl.getDeclRead());
+    }
+
+    void visitVoidExpression(const cld::Semantics::Expression& expression)
+    {
+        if (!m_builder.GetInsertBlock())
+        {
+            return;
+        }
+        auto* instr = visit(expression);
+        if (llvm::isa_and_nonnull<llvm::Instruction>(instr) && instr->getNumUses() == 0
+            && !llvm::cast<llvm::Instruction>(instr)->mayHaveSideEffects())
+        {
+            llvm::cast<llvm::Instruction>(instr)->eraseFromParent();
+        }
+    }
+
+    llvm::Value* boolToi1(llvm::Value* value)
+    {
+        if (auto* cast = llvm::dyn_cast<llvm::CastInst>(value);
+            cast && cast->getSrcTy() == m_builder.getInt1Ty() && cast->getNumUses() == 0)
+        {
+            auto* result = cast->getOperand(0);
+            cast->eraseFromParent();
+            return result;
+        }
+        return m_builder.CreateTrunc(value, m_builder.getInt1Ty());
     }
 
 public:
@@ -1663,13 +1682,7 @@ public:
                     visit(*iter);
                 }
             },
-            [&](const cld::Semantics::Expression& expression) {
-                if (!m_builder.GetInsertBlock())
-                {
-                    return;
-                }
-                visit(expression);
-            });
+            [&](const cld::Semantics::Expression& expression) { visitVoidExpression(expression); });
         auto* controlling = llvm::BasicBlock::Create(m_module.getContext(), "for.controlling", m_currentFunction);
         if (m_builder.GetInsertBlock())
         {
@@ -1703,7 +1716,7 @@ public:
         if (forStatement.getIteration())
         {
             m_builder.SetInsertPoint(iteration);
-            visit(*forStatement.getIteration());
+            visitVoidExpression(*forStatement.getIteration());
             m_builder.CreateBr(controlling);
         }
         m_builder.SetInsertPoint(contBlock);
@@ -1723,7 +1736,7 @@ public:
         if (m_builder.GetInsertBlock())
         {
             expression = visit(ifStatement.getExpression());
-            expression = m_builder.CreateTrunc(expression, m_builder.getInt1Ty());
+            expression = boolToi1(expression);
             trueBranch = llvm::BasicBlock::Create(m_module.getContext(), "if.true", m_currentFunction);
         }
         if (!ifStatement.getFalseBranch())
@@ -1790,7 +1803,7 @@ public:
         m_continueTargets[&headWhileStatement] = controlling;
         m_builder.SetInsertPoint(controlling);
         auto* expression = visit(headWhileStatement.getExpression());
-        expression = m_builder.CreateTrunc(expression, m_builder.getInt1Ty());
+        expression = boolToi1(expression);
         auto* contBlock = llvm::BasicBlock::Create(m_module.getContext(), "while.continue", m_currentFunction);
         auto* body = llvm::BasicBlock::Create(m_module.getContext(), "while.body", m_currentFunction);
         m_builder.CreateCondBr(expression, body, contBlock);
@@ -1823,7 +1836,7 @@ public:
         }
         m_builder.SetInsertPoint(controlling);
         auto* expression = visit(footWhileStatement.getExpression());
-        expression = m_builder.CreateTrunc(expression, m_builder.getInt1Ty());
+        expression = boolToi1(expression);
         m_builder.CreateCondBr(expression, body, contBlock);
         m_builder.SetInsertPoint(contBlock);
     }
@@ -2347,7 +2360,7 @@ public:
             }
             case cld::Semantics::BinaryOperator::LogicAnd:
             {
-                lhs = m_builder.CreateTrunc(lhs, m_builder.getInt1Ty());
+                lhs = boolToi1(lhs);
                 auto* falseBranch =
                     llvm::BasicBlock::Create(m_module.getContext(), "logicAnd.false", m_currentFunction);
                 auto* trueBranch = llvm::BasicBlock::Create(m_module.getContext(), "logicAnd.true", m_currentFunction);
@@ -2356,7 +2369,7 @@ public:
                 m_builder.CreateCondBr(lhs, trueBranch, falseBranch);
                 m_builder.SetInsertPoint(trueBranch);
                 auto* rhs = visit(binaryExpression.getRightExpression());
-                rhs = m_builder.CreateTrunc(rhs, m_builder.getInt1Ty());
+                rhs = boolToi1(rhs);
                 m_builder.CreateBr(continueBranch);
                 trueBranch = m_builder.GetInsertBlock();
                 m_builder.SetInsertPoint(falseBranch);
@@ -2369,7 +2382,7 @@ public:
             }
             case cld::Semantics::BinaryOperator::LogicOr:
             {
-                lhs = m_builder.CreateTrunc(lhs, m_builder.getInt1Ty());
+                lhs = boolToi1(lhs);
                 auto* falseBranch = llvm::BasicBlock::Create(m_module.getContext(), "logicOr.false", m_currentFunction);
                 auto* trueBranch = llvm::BasicBlock::Create(m_module.getContext(), "logicOr.true", m_currentFunction);
                 auto* continueBranch =
@@ -2377,7 +2390,7 @@ public:
                 m_builder.CreateCondBr(lhs, trueBranch, falseBranch);
                 m_builder.SetInsertPoint(falseBranch);
                 auto* rhs = visit(binaryExpression.getRightExpression());
-                rhs = m_builder.CreateTrunc(rhs, m_builder.getInt1Ty());
+                rhs = boolToi1(rhs);
                 m_builder.CreateBr(continueBranch);
                 falseBranch = m_builder.GetInsertBlock();
                 m_builder.SetInsertPoint(trueBranch);
@@ -2675,7 +2688,7 @@ public:
     llvm::Value* visit(const cld::Semantics::Expression&, const cld::Semantics::Conditional& conditional)
     {
         auto* boolean = visit(conditional.getBoolExpression());
-        boolean = m_builder.CreateTrunc(boolean, m_builder.getInt1Ty());
+        boolean = boolToi1(boolean);
         auto* trueBranch = llvm::BasicBlock::Create(m_builder.getContext(), "cond.true", m_currentFunction);
         auto* falseBranch = llvm::BasicBlock::Create(m_builder.getContext(), "cond.false", m_currentFunction);
         auto* contBr = llvm::BasicBlock::Create(m_builder.getContext(), "cond.continue", m_currentFunction);
@@ -2840,12 +2853,7 @@ public:
     {
         for (auto& iter : commaExpression.getCommaExpressions())
         {
-            auto* instr = visit(iter.first);
-            if (llvm::isa<llvm::Instruction>(instr) && instr->getNumUses() == 0
-                && !llvm::cast<llvm::Instruction>(instr)->mayHaveSideEffects())
-            {
-                llvm::cast<llvm::Instruction>(instr)->eraseFromParent();
-            }
+            visitVoidExpression(iter.first);
         }
         return visit(commaExpression.getLastExpression());
     }

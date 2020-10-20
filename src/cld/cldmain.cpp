@@ -37,10 +37,11 @@ CLD_CLI_OPT(EMIT_LLVM, ("-emit-llvm"))("Use LLVM IR instead of machine code and 
 
 CLD_CLI_OPT(OPT, ("-O<level>", "-O", "--optimize", "--optimize=<level>"), (std::uint8_t, level))("Optimization level");
 
-CLD_CLI_OPT(INCLUDES, ("-I<dir>", "--include-directory <dir>", "--include-directory=<dir>"), (std::string_view, dir))
+CLD_CLI_OPT(INCLUDES, ("-I<dir>", "-I <dir>", "--include-directory <dir>", "--include-directory=<dir>"),
+            (std::string_view, dir))
 ("Additional include directories", cld::CLIMultiArg::List);
 
-CLD_CLI_OPT(ISYSTEM, ("-isystem<dir>"), (std::string, dir))
+CLD_CLI_OPT(ISYSTEM, ("-isystem<dir>", "-isystem <dir>"), (std::string, dir))
 ("Append to system include directories", cld::CLIMultiArg::List);
 
 CLD_CLI_OPT(PIE, ("-f[no-]PIE"))("Build a position independent executable");
