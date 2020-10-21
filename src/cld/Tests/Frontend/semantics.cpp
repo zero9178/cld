@@ -878,7 +878,7 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
         CHECK(decl->getNameToken()->getText() == "a");
         REQUIRE(std::holds_alternative<cld::Semantics::UnionType>(decl->getType().getVariant()));
         CHECK(cld::get<cld::Semantics::UnionType>(decl->getType().getVariant()).getName() == "A");
-        CHECK(cld::get<cld::Semantics::UnionType>(decl->getType().getVariant()).getScopeOrId() == 0);
+        CHECK(cld::get<cld::Semantics::UnionType>(decl->getType().getVariant()).getId() == 0);
     }
     SECTION("Anonymous struct")
     {
@@ -1001,7 +1001,9 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
             REQUIRE_FALSE(errors);
             auto program = cld::Semantics::analyse(tree, std::move(ctokens), &llvm::errs(), &errors);
             REQUIRE_FALSE(errors);
-            auto* structDef = program.getStructDefinition("A", 0);
+            auto* structTag = program.lookupType<cld::Semantics::ProgramInterface::StructTag>("A", 0);
+            REQUIRE(structTag);
+            auto* structDef = program.getStructDefinition(static_cast<std::size_t>(*structTag));
             REQUIRE(structDef);
             REQUIRE(structDef->getFields().size() == 6);
             CHECK(structDef->getMemLayout().size() == 2);
@@ -4649,7 +4651,9 @@ TEST_CASE("Semantics flexible array member", "[semantics]")
         REQUIRE_FALSE(errors);
         auto program = cld::Semantics::analyse(tree, std::move(ctokens), &llvm::errs(), &errors);
         REQUIRE_FALSE(errors);
-        auto* structDef = program.getStructDefinition("A", 0);
+        auto* structTag = program.lookupType<cld::Semantics::ProgramInterface::StructTag>("A", 0);
+        REQUIRE(structTag);
+        auto* structDef = program.getStructDefinition(static_cast<std::size_t>(*structTag));
         REQUIRE(structDef);
         REQUIRE(structDef->getFields().size() == 2);
         REQUIRE(structDef->getFieldLayout().size() == 2);

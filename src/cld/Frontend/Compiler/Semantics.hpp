@@ -331,30 +331,30 @@ public:
 class StructType final
 {
     std::string_view m_name;
-    std::uint64_t m_scopeOrId;
+    std::uint64_t m_id;
 
-    StructType(std::string_view name, std::int64_t scopeOrID);
+    StructType(std::string_view name, std::int64_t id);
 
 public:
-    [[nodiscard]] static Type create(bool isConst, bool isVolatile, std::string_view name, std::int64_t scopeOrID);
+    [[nodiscard]] static Type create(bool isConst, bool isVolatile, std::string_view name, std::int64_t id);
 
     [[nodiscard]] std::string_view getName() const
     {
         return m_name;
     }
 
-    [[nodiscard]] std::uint64_t getScopeOrId() const
+    [[nodiscard]] std::uint64_t getId() const
     {
-        return m_scopeOrId;
+        return m_id;
     }
 
     [[nodiscard]] std::size_t getSizeOf(const ProgramInterface& program) const;
 
     [[nodiscard]] std::size_t getAlignOf(const ProgramInterface& program) const;
 
-    [[nodiscard]] bool operator==(const StructType&) const
+    [[nodiscard]] bool operator==(const StructType& rhs) const
     {
-        return false;
+        return m_id == rhs.m_id;
     }
 
     [[nodiscard]] bool operator!=(const StructType& rhs) const
@@ -366,30 +366,30 @@ public:
 class UnionType final
 {
     std::string_view m_name;
-    std::uint64_t m_scopeOrId;
+    std::uint64_t m_id;
 
-    UnionType(std::string_view name, std::uint64_t scopeOrId);
+    UnionType(std::string_view name, std::uint64_t id);
 
 public:
-    static Type create(bool isConst, bool isVolatile, std::string_view name, std::uint64_t scopeOrId);
+    static Type create(bool isConst, bool isVolatile, std::string_view name, std::uint64_t id);
 
     [[nodiscard]] std::string_view getName() const
     {
         return m_name;
     }
 
-    [[nodiscard]] std::uint64_t getScopeOrId() const
+    [[nodiscard]] std::uint64_t getId() const
     {
-        return m_scopeOrId;
+        return m_id;
     }
 
     [[nodiscard]] std::size_t getSizeOf(const ProgramInterface& program) const;
 
     [[nodiscard]] std::size_t getAlignOf(const ProgramInterface& program) const;
 
-    [[nodiscard]] bool operator==(const UnionType&) const
+    [[nodiscard]] bool operator==(const UnionType& rhs) const
     {
-        return false;
+        return m_id == rhs.m_id;
     }
 
     [[nodiscard]] bool operator!=(const UnionType& rhs) const
@@ -406,10 +406,6 @@ struct Field
     std::vector<std::size_t> indices;
     std::optional<std::pair<std::uint32_t, std::uint32_t>> bitFieldBounds;
     std::vector<std::shared_ptr<const Type>> parentTypes;
-
-    [[nodiscard]] bool operator==(const Field& rhs) const;
-
-    [[nodiscard]] bool operator!=(const Field& rhs) const;
 };
 
 struct FieldInLayout
@@ -469,13 +465,25 @@ public:
         return m_memLayout;
     }
 
-    [[nodiscard]] std::size_t getSizeOf(const ProgramInterface& program) const;
+    [[nodiscard]] std::size_t getSizeOf(const ProgramInterface&) const
+    {
+        return m_sizeOf;
+    }
 
-    [[nodiscard]] std::size_t getAlignOf(const ProgramInterface& program) const;
+    [[nodiscard]] std::size_t getAlignOf(const ProgramInterface&) const
+    {
+        return m_alignOf;
+    }
 
-    [[nodiscard]] bool operator==(const AnonymousStructType& rhs) const;
+    [[nodiscard]] bool operator==(const AnonymousStructType& rhs) const
+    {
+        return m_id == rhs.m_id;
+    }
 
-    [[nodiscard]] bool operator!=(const AnonymousStructType& rhs) const;
+    [[nodiscard]] bool operator!=(const AnonymousStructType& rhs) const
+    {
+        return !(*this == rhs);
+    }
 };
 
 class AnonymousUnionType final
@@ -515,42 +523,54 @@ public:
         return m_fieldLayout;
     }
 
-    [[nodiscard]] std::size_t getSizeOf(const ProgramInterface& program) const;
+    [[nodiscard]] std::size_t getSizeOf(const ProgramInterface&) const
+    {
+        return m_sizeOf;
+    }
 
-    [[nodiscard]] std::size_t getAlignOf(const ProgramInterface& program) const;
+    [[nodiscard]] std::size_t getAlignOf(const ProgramInterface&) const
+    {
+        return m_alignOf;
+    }
 
-    [[nodiscard]] bool operator==(const AnonymousUnionType& rhs) const;
+    [[nodiscard]] bool operator==(const AnonymousUnionType& rhs) const
+    {
+        return m_id == rhs.m_id;
+    }
 
-    [[nodiscard]] bool operator!=(const AnonymousUnionType& rhs) const;
+    [[nodiscard]] bool operator!=(const AnonymousUnionType& rhs) const
+    {
+        return !(*this == rhs);
+    }
 };
 
 class EnumType final
 {
     std::string_view m_name;
-    std::uint64_t m_scopeOrId;
+    std::uint64_t m_id;
 
-    EnumType(std::string_view name, std::uint64_t scopeOrId);
+    EnumType(std::string_view name, std::uint64_t id);
 
 public:
-    static Type create(bool isConst, bool isVolatile, std::string_view name, std::uint64_t scopeOrId);
+    static Type create(bool isConst, bool isVolatile, std::string_view name, std::uint64_t id);
 
     [[nodiscard]] std::string_view getName() const
     {
         return m_name;
     }
 
-    [[nodiscard]] std::uint64_t getScopeOrId() const
+    [[nodiscard]] std::uint64_t getId() const
     {
-        return m_scopeOrId;
+        return m_id;
     }
 
     [[nodiscard]] std::size_t getSizeOf(const ProgramInterface& program) const;
 
     [[nodiscard]] std::size_t getAlignOf(const ProgramInterface& program) const;
 
-    [[nodiscard]] bool operator==(const EnumType&) const
+    [[nodiscard]] bool operator==(const EnumType& rhs) const
     {
-        return false;
+        return m_id == rhs.m_id;
     }
 
     [[nodiscard]] bool operator!=(const EnumType& rhs) const
@@ -574,13 +594,19 @@ public:
         return m_id;
     }
 
-    [[nodiscard]] bool operator==(const AnonymousEnumType& rhs) const;
-
-    [[nodiscard]] bool operator!=(const AnonymousEnumType& rhs) const;
-
     [[nodiscard]] const Type& getType() const
     {
         return *m_type;
+    }
+
+    [[nodiscard]] bool operator==(const AnonymousEnumType& rhs) const
+    {
+        return m_id == rhs.m_id;
+    }
+
+    [[nodiscard]] bool operator!=(const AnonymousEnumType& rhs) const
+    {
+        return !(*this == rhs);
     }
 
     [[nodiscard]] std::size_t getSizeOf(const ProgramInterface& program) const;
@@ -1948,10 +1974,6 @@ public:
     {
         return m_alignOf;
     }
-
-    bool operator==(const StructDefinition& rhs) const;
-
-    bool operator!=(const StructDefinition& rhs) const;
 };
 
 class UnionDefinition
@@ -1997,10 +2019,6 @@ public:
     {
         return m_alignOf;
     }
-
-    bool operator==(const UnionDefinition& rhs) const;
-
-    bool operator!=(const UnionDefinition& rhs) const;
 };
 
 class EnumDefinition
@@ -2352,3 +2370,126 @@ struct CustomFormat<U'f', U'u', U'l', U'l', U'T', U'y', U'p', U'e'>
 };
 
 } // namespace cld::diag
+
+namespace std
+{
+template <>
+struct std::hash<cld::Semantics::Type>
+{
+    std::size_t operator()(const cld::Semantics::Type& type) const noexcept;
+};
+
+template <>
+struct std::hash<cld::Semantics::PrimitiveType>
+{
+    std::size_t operator()(const cld::Semantics::PrimitiveType& type) const noexcept
+    {
+        return cld::hashCombine(type.getBitCount(), type.isFloatingPoint(), type.isSigned(), type.getKind());
+    }
+};
+
+template <>
+struct std::hash<cld::Semantics::ArrayType>
+{
+    std::size_t operator()(const cld::Semantics::ArrayType& type) const noexcept
+    {
+        return cld::hashCombine(type.isRestricted(), type.isStatic(), type.getSize(), type.getType());
+    }
+};
+
+template <>
+struct std::hash<cld::Semantics::AbstractArrayType>
+{
+    std::size_t operator()(const cld::Semantics::AbstractArrayType& type) const noexcept
+    {
+        return cld::hashCombine(type.isRestricted(), type.getType());
+    }
+};
+
+template <>
+struct std::hash<cld::Semantics::ValArrayType>
+{
+    std::size_t operator()(const cld::Semantics::ValArrayType& type) const noexcept
+    {
+        return cld::hashCombine(type.isRestricted(), type.isStatic(), type.getExpression(), type.getType());
+    }
+};
+
+template <>
+struct std::hash<cld::Semantics::FunctionType>
+{
+    std::size_t operator()(const cld::Semantics::FunctionType& type) const noexcept
+    {
+        std::size_t hash = 0;
+        for (auto& [type, name] : type.getArguments())
+        {
+            hash = cld::rawHashCombine(hash, std::hash<cld::Semantics::Type>{}(type));
+        }
+        return cld::rawHashCombine(cld::hashCombine(type.isLastVararg(), type.isKandR(), type.getReturnType()), hash);
+    }
+};
+
+template <>
+struct std::hash<cld::Semantics::StructType>
+{
+    std::size_t operator()(const cld::Semantics::StructType& type) const noexcept
+    {
+        return std::hash<std::size_t>{}(type.getId());
+    }
+};
+
+template <>
+struct std::hash<cld::Semantics::UnionType>
+{
+    std::size_t operator()(const cld::Semantics::UnionType& type) const noexcept
+    {
+        return std::hash<std::size_t>{}(type.getId());
+    }
+};
+
+template <>
+struct std::hash<cld::Semantics::EnumType>
+{
+    std::size_t operator()(const cld::Semantics::EnumType& type) const noexcept
+    {
+        return std::hash<std::size_t>{}(type.getId());
+    }
+};
+
+template <>
+struct std::hash<cld::Semantics::AnonymousStructType>
+{
+    std::size_t operator()(const cld::Semantics::AnonymousStructType& type) const noexcept
+    {
+        return std::hash<std::size_t>{}(type.getId());
+    }
+};
+
+template <>
+struct std::hash<cld::Semantics::AnonymousUnionType>
+{
+    std::size_t operator()(const cld::Semantics::AnonymousUnionType& type) const noexcept
+    {
+        return std::hash<std::size_t>{}(type.getId());
+    }
+};
+
+template <>
+struct std::hash<cld::Semantics::AnonymousEnumType>
+{
+    std::size_t operator()(const cld::Semantics::AnonymousEnumType& type) const noexcept
+    {
+        return std::hash<std::size_t>{}(type.getId());
+    }
+};
+
+template <>
+struct std::hash<cld::Semantics::PointerType>
+{
+    std::size_t operator()(const cld::Semantics::PointerType& type) const noexcept
+    {
+        return cld::hashCombine(type.isRestricted(), type.getElementType());
+    }
+};
+
+} // namespace std

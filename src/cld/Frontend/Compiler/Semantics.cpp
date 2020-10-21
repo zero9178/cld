@@ -65,7 +65,8 @@ cld::Semantics::Type cld::Semantics::ArrayType::create(bool isConst, bool isVola
 
 bool cld::Semantics::ArrayType::operator==(const cld::Semantics::ArrayType& rhs) const
 {
-    return std::tie(m_restricted, *m_type, m_size) == std::tie(rhs.m_restricted, *rhs.m_type, rhs.m_size);
+    return std::tie(m_restricted, m_static, m_size, *m_type)
+           == std::tie(rhs.m_restricted, rhs.m_static, rhs.m_size, *rhs.m_type);
 }
 
 bool cld::Semantics::ArrayType::operator!=(const cld::Semantics::ArrayType& rhs) const
@@ -174,27 +175,24 @@ std::size_t cld::Semantics::PointerType::getAlignOf(const ProgramInterface& prog
     return program.getLanguageOptions().sizeOfVoidStar;
 }
 
-cld::Semantics::EnumType::EnumType(std::string_view name, std::uint64_t scopeOrId)
-    : m_name(name), m_scopeOrId(scopeOrId)
-{
-}
+cld::Semantics::EnumType::EnumType(std::string_view name, std::uint64_t id) : m_name(name), m_id(id) {}
 
 cld::Semantics::Type cld::Semantics::EnumType::create(bool isConst, bool isVolatile, std::string_view name,
-                                                      std::uint64_t scopeOrId)
+                                                      std::uint64_t id)
 {
-    return cld::Semantics::Type(isConst, isVolatile, EnumType(name, scopeOrId));
+    return cld::Semantics::Type(isConst, isVolatile, EnumType(name, id));
 }
 
 std::size_t cld::Semantics::EnumType::getSizeOf(const ProgramInterface& program) const
 {
-    auto* def = program.getEnumDefinition(m_name, m_scopeOrId);
+    auto* def = program.getEnumDefinition(m_id);
     CLD_ASSERT(def);
     return def->getType().getSizeOf(program);
 }
 
 std::size_t cld::Semantics::EnumType::getAlignOf(const ProgramInterface& program) const
 {
-    auto* def = program.getEnumDefinition(m_name, m_scopeOrId);
+    auto* def = program.getEnumDefinition(m_id);
     CLD_ASSERT(def);
     return def->getType().getAlignOf(program);
 }
@@ -346,7 +344,8 @@ cld::Semantics::Type cld::Semantics::ValArrayType::create(bool isConst, bool isV
 
 bool cld::Semantics::ValArrayType::operator==(const cld::Semantics::ValArrayType& rhs) const
 {
-    return std::tie(m_restricted, *m_type) == std::tie(rhs.m_restricted, *rhs.m_type);
+    return std::tie(m_restricted, m_static, m_expression, *m_type)
+           == std::tie(rhs.m_restricted, rhs.m_static, rhs.m_expression, *rhs.m_type);
 }
 
 bool cld::Semantics::ValArrayType::operator!=(const cld::Semantics::ValArrayType& rhs) const
@@ -365,16 +364,16 @@ cld::Semantics::Type cld::Semantics::FunctionType::create(cld::Semantics::Type r
 
 bool cld::Semantics::FunctionType::operator==(const cld::Semantics::FunctionType& rhs) const
 {
+    if (m_lastIsVararg != rhs.m_lastIsVararg || m_isKandR != rhs.m_isKandR)
+    {
+        return false;
+    }
     if (*m_returnType != *rhs.m_returnType)
     {
         return false;
     }
-    if (!std::equal(m_arguments.begin(), m_arguments.end(), rhs.m_arguments.begin(), rhs.m_arguments.end(),
-                    [](const auto& lhs, const auto& rhs) { return lhs.first == rhs.first; }))
-    {
-        return false;
-    }
-    return m_lastIsVararg == rhs.m_lastIsVararg;
+    return std::equal(m_arguments.begin(), m_arguments.end(), rhs.m_arguments.begin(), rhs.m_arguments.end(),
+                      [](const auto& lhs, const auto& rhs) { return lhs.first == rhs.first; });
 }
 
 bool cld::Semantics::FunctionType::operator!=(const cld::Semantics::FunctionType& rhs) const
@@ -421,51 +420,46 @@ cld::Lexer::CTokenIterator cld::Semantics::declaratorToLoc(const cld::Syntax::De
         });
 }
 
-cld::Semantics::StructType::StructType(std::string_view name, int64_t scopeOrID) : m_name(name), m_scopeOrId(scopeOrID)
-{
-}
+cld::Semantics::StructType::StructType(std::string_view name, int64_t id) : m_name(name), m_id(id) {}
 
 cld::Semantics::Type cld::Semantics::StructType::create(bool isConst, bool isVolatile, std::string_view name,
-                                                        int64_t scopeOrID)
+                                                        int64_t id)
 {
-    return cld::Semantics::Type(isConst, isVolatile, StructType(name, scopeOrID));
+    return cld::Semantics::Type(isConst, isVolatile, StructType(name, id));
 }
 
 std::size_t cld::Semantics::StructType::getSizeOf(const ProgramInterface& program) const
 {
-    auto* def = program.getStructDefinition(m_name, m_scopeOrId);
+    auto* def = program.getStructDefinition(m_id);
     CLD_ASSERT(def);
     return def->getSizeOf();
 }
 
 std::size_t cld::Semantics::StructType::getAlignOf(const ProgramInterface& program) const
 {
-    auto* def = program.getStructDefinition(m_name, m_scopeOrId);
+    auto* def = program.getStructDefinition(m_id);
     CLD_ASSERT(def);
     return def->getAlignOf();
 }
 
-cld::Semantics::UnionType::UnionType(std::string_view name, std::uint64_t scopeOrId)
-    : m_name(name), m_scopeOrId(scopeOrId)
-{
-}
+cld::Semantics::UnionType::UnionType(std::string_view name, std::uint64_t id) : m_name(name), m_id(id) {}
 
 cld::Semantics::Type cld::Semantics::UnionType::create(bool isConst, bool isVolatile, std::string_view name,
-                                                       std::uint64_t scopeOrId)
+                                                       std::uint64_t id)
 {
-    return cld::Semantics::Type(isConst, isVolatile, UnionType(name, scopeOrId));
+    return cld::Semantics::Type(isConst, isVolatile, UnionType(name, id));
 }
 
 std::size_t cld::Semantics::UnionType::getSizeOf(const ProgramInterface& program) const
 {
-    auto* def = program.getUnionDefinition(m_name, m_scopeOrId);
+    auto* def = program.getUnionDefinition(m_id);
     CLD_ASSERT(def);
     return def->getSizeOf();
 }
 
 std::size_t cld::Semantics::UnionType::getAlignOf(const ProgramInterface& program) const
 {
-    auto* def = program.getUnionDefinition(m_name, m_scopeOrId);
+    auto* def = program.getUnionDefinition(m_id);
     CLD_ASSERT(def);
     return def->getAlignOf();
 }
@@ -631,36 +625,6 @@ cld::Semantics::TranslationUnit::TranslationUnit(std::vector<TranslationUnit::Va
 {
 }
 
-bool cld::Semantics::StructDefinition::operator==(const cld::Semantics::StructDefinition& rhs) const
-{
-    return std::tie(m_name, m_fields) == std::tie(rhs.m_name, rhs.m_fields);
-}
-
-bool cld::Semantics::StructDefinition::operator!=(const cld::Semantics::StructDefinition& rhs) const
-{
-    return !(rhs == *this);
-}
-
-bool cld::Semantics::UnionDefinition::operator==(const cld::Semantics::UnionDefinition& rhs) const
-{
-    return std::tie(m_name, m_fields) == std::tie(rhs.m_name, rhs.m_fields);
-}
-
-bool cld::Semantics::UnionDefinition::operator!=(const cld::Semantics::UnionDefinition& rhs) const
-{
-    return !(rhs == *this);
-}
-
-bool cld::Semantics::AnonymousStructType::operator==(const cld::Semantics::AnonymousStructType& rhs) const
-{
-    return m_id == rhs.m_id;
-}
-
-bool cld::Semantics::AnonymousStructType::operator!=(const cld::Semantics::AnonymousStructType& rhs) const
-{
-    return !(rhs == *this);
-}
-
 cld::Semantics::Type cld::Semantics::AnonymousStructType::create(bool isConst, bool isVolatile, std::uint64_t id,
                                                                  FieldMap fields,
                                                                  std::vector<FieldInLayout> fieldLayout,
@@ -672,26 +636,6 @@ cld::Semantics::Type cld::Semantics::AnonymousStructType::create(bool isConst, b
         AnonymousStructType(id, std::move(fields), std::move(fieldLayout), std::move(memLayout), sizeOf, alignOf));
 }
 
-std::size_t cld::Semantics::AnonymousStructType::getSizeOf(const ProgramInterface&) const
-{
-    return m_sizeOf;
-}
-
-std::size_t cld::Semantics::AnonymousStructType::getAlignOf(const ProgramInterface&) const
-{
-    return m_alignOf;
-}
-
-bool cld::Semantics::AnonymousUnionType::operator==(const cld::Semantics::AnonymousUnionType& rhs) const
-{
-    return m_id == rhs.m_id;
-}
-
-bool cld::Semantics::AnonymousUnionType::operator!=(const cld::Semantics::AnonymousUnionType& rhs) const
-{
-    return !(rhs == *this);
-}
-
 cld::Semantics::Type cld::Semantics::AnonymousUnionType::create(bool isConst, bool isVolatile, std::uint64_t id,
                                                                 FieldMap fields, std::vector<FieldInLayout> fieldLayout,
                                                                 std::uint64_t sizeOf, std::uint64_t alignOf)
@@ -700,29 +644,9 @@ cld::Semantics::Type cld::Semantics::AnonymousUnionType::create(bool isConst, bo
                                 AnonymousUnionType(id, std::move(fields), std::move(fieldLayout), sizeOf, alignOf));
 }
 
-std::size_t cld::Semantics::AnonymousUnionType::getSizeOf(const ProgramInterface&) const
-{
-    return m_sizeOf;
-}
-
-std::size_t cld::Semantics::AnonymousUnionType::getAlignOf(const ProgramInterface&) const
-{
-    return m_alignOf;
-}
-
 cld::Semantics::AnonymousEnumType::AnonymousEnumType(std::uint64_t id, std::shared_ptr<const Type> type)
     : m_type(std::move(type)), m_id(id)
 {
-}
-
-bool cld::Semantics::AnonymousEnumType::operator==(const cld::Semantics::AnonymousEnumType& rhs) const
-{
-    return m_id == rhs.m_id;
-}
-
-bool cld::Semantics::AnonymousEnumType::operator!=(const cld::Semantics::AnonymousEnumType& rhs) const
-{
-    return !(rhs == *this);
 }
 
 cld::Semantics::Type cld::Semantics::AnonymousEnumType::create(bool isConst, bool isVolatile, std::uint64_t id,
@@ -739,16 +663,6 @@ std::size_t cld::Semantics::AnonymousEnumType::getSizeOf(const ProgramInterface&
 std::size_t cld::Semantics::AnonymousEnumType::getAlignOf(const ProgramInterface& program) const
 {
     return m_type->getAlignOf(program);
-}
-
-bool cld::Semantics::Field::operator==(const cld::Semantics::Field& rhs) const
-{
-    return std::tie(type, name, bitFieldBounds) == std::tie(rhs.type, rhs.name, rhs.bitFieldBounds);
-}
-
-bool cld::Semantics::Field::operator!=(const cld::Semantics::Field& rhs) const
-{
-    return !(rhs == *this);
 }
 
 namespace
@@ -1263,4 +1177,9 @@ cld::Semantics::Program cld::Semantics::analyse(const Syntax::TranslationUnit& p
 const cld::Semantics::Expression& cld::Semantics::BuiltinVAArg::getExpression() const
 {
     return *m_expression;
+}
+
+std::size_t std::hash<cld::Semantics::Type>::operator()(const cld::Semantics::Type& type) const noexcept
+{
+    return cld::hashCombine(type.isConst(), type.isVolatile(), type.getVariant());
 }

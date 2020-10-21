@@ -15,13 +15,13 @@ namespace cld::Semantics
 class ProgramInterface
 {
 public:
-    enum class StructDefTag : std::size_t
+    enum class StructTag : std::size_t
     {
     };
-    enum class UnionDefTag : std::size_t
+    enum class UnionTag : std::size_t
     {
     };
-    enum class EnumDefTag : std::size_t
+    enum class EnumTag : std::size_t
     {
     };
 
@@ -36,13 +36,7 @@ public:
     struct TagTypeInScope
     {
         const Lexer::CToken* CLD_NULLABLE identifier; // Guaranteed to be non null if the scope isn't global
-        struct StructDecl
-        {
-        };
-        struct UnionDecl
-        {
-        };
-        using Variant = std::variant<StructDecl, UnionDecl, StructDefTag, UnionDefTag, EnumDefTag>;
+        using Variant = std::variant<StructTag, UnionTag, EnumTag>;
         Variant tagType;
     };
 
@@ -54,10 +48,18 @@ public:
         std::unordered_map<std::string_view, TagTypeInScope> types;
     };
 
+    struct StructDecl
+    {
+    };
+
+    struct UnionDecl
+    {
+    };
+
 protected:
     std::vector<Scope> m_scopes = {Scope{-1, {}, {}, {}}};
-    std::vector<StructDefinition> m_structDefinitions;
-    std::vector<UnionDefinition> m_unionDefinitions;
+    std::vector<std::variant<StructDefinition, StructDecl>> m_structDefinitions;
+    std::vector<std::variant<UnionDefinition, UnionDecl>> m_unionDefinitions;
     std::vector<EnumDefinition> m_enumDefinitions;
     std::unordered_map<std::string_view, BuiltinFunction> m_usedBuiltins;
 
@@ -84,9 +86,6 @@ public:
 
     [[nodiscard]] virtual const LanguageOptions& getLanguageOptions() const = 0;
 
-    constexpr static std::uint64_t IS_SCOPE = 1ull << 63;
-    constexpr static std::uint64_t SCOPE_OR_ID_MASK = ~(1ull << 63);
-
     template <class T>
     [[nodiscard]] const T* CLD_NULLABLE lookupType(std::string_view name, std::int64_t scope) const
     {
@@ -106,23 +105,35 @@ public:
         return nullptr;
     }
 
-    StructDefinition* CLD_NULLABLE getStructDefinition(std::string_view name, std::uint64_t scopeOrId,
-                                                       std::uint64_t* idOut = nullptr);
+    StructDefinition* CLD_NULLABLE getStructDefinition(std::uint64_t id)
+    {
+        return std::get_if<StructDefinition>(&m_structDefinitions[id]);
+    }
 
-    const StructDefinition* CLD_NULLABLE getStructDefinition(std::string_view name, std::uint64_t scopeOrId,
-                                                             std::uint64_t* idOut = nullptr) const;
+    const StructDefinition* CLD_NULLABLE getStructDefinition(std::uint64_t id) const
+    {
+        return std::get_if<StructDefinition>(&m_structDefinitions[id]);
+    }
 
-    EnumDefinition* CLD_NULLABLE getEnumDefinition(std::string_view name, std::uint64_t scopeOrId,
-                                                   std::uint64_t* idOut = nullptr);
+    EnumDefinition* CLD_NULLABLE getEnumDefinition(std::uint64_t id)
+    {
+        return &m_enumDefinitions[id];
+    }
 
-    const EnumDefinition* CLD_NULLABLE getEnumDefinition(std::string_view name, std::uint64_t scopeOrId,
-                                                         std::uint64_t* idOut = nullptr) const;
+    const EnumDefinition* CLD_NULLABLE getEnumDefinition(std::uint64_t id) const
+    {
+        return &m_enumDefinitions[id];
+    }
 
-    UnionDefinition* CLD_NULLABLE getUnionDefinition(std::string_view name, std::uint64_t scopeOrId,
-                                                     std::uint64_t* idOut = nullptr);
+    UnionDefinition* CLD_NULLABLE getUnionDefinition(std::uint64_t id)
+    {
+        return std::get_if<UnionDefinition>(&m_unionDefinitions[id]);
+    }
 
-    const UnionDefinition* CLD_NULLABLE getUnionDefinition(std::string_view name, std::uint64_t scopeOrId,
-                                                           std::uint64_t* idOut = nullptr) const;
+    const UnionDefinition* CLD_NULLABLE getUnionDefinition(std::uint64_t id) const
+    {
+        return std::get_if<UnionDefinition>(&m_unionDefinitions[id]);
+    }
 
     const FieldMap& getFields(const Type& recordType) const;
 

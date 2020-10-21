@@ -1005,42 +1005,6 @@ bool cld::Semantics::SemanticAnalysis::typesAreCompatible(const cld::Semantics::
         }
         return true;
     }
-    if (std::holds_alternative<StructType>(lhs.getVariant()) && std::holds_alternative<StructType>(rhs.getVariant()))
-    {
-        auto* lhsDef = getStructDefinition(cld::get<StructType>(lhs.getVariant()).getName(),
-                                           cld::get<StructType>(lhs.getVariant()).getScopeOrId());
-        auto* rhsDef = getStructDefinition(cld::get<StructType>(rhs.getVariant()).getName(),
-                                           cld::get<StructType>(rhs.getVariant()).getScopeOrId());
-        if (!lhsDef && !rhsDef)
-        {
-            return cld::get<StructType>(lhs.getVariant()).getName() == cld::get<StructType>(rhs.getVariant()).getName();
-        }
-        return lhsDef == rhsDef;
-    }
-    if (std::holds_alternative<UnionType>(lhs.getVariant()) && std::holds_alternative<UnionType>(rhs.getVariant()))
-    {
-        auto* lhsDef = getUnionDefinition(cld::get<UnionType>(lhs.getVariant()).getName(),
-                                          cld::get<UnionType>(lhs.getVariant()).getScopeOrId());
-        auto* rhsDef = getUnionDefinition(cld::get<UnionType>(rhs.getVariant()).getName(),
-                                          cld::get<UnionType>(rhs.getVariant()).getScopeOrId());
-        if (!lhsDef && !rhsDef)
-        {
-            return cld::get<UnionType>(lhs.getVariant()).getName() == cld::get<UnionType>(rhs.getVariant()).getName();
-        }
-        return lhsDef == rhsDef;
-    }
-    if (std::holds_alternative<EnumType>(lhs.getVariant()) && std::holds_alternative<EnumType>(rhs.getVariant()))
-    {
-        auto* lhsDef = getEnumDefinition(cld::get<EnumType>(lhs.getVariant()).getName(),
-                                         cld::get<EnumType>(lhs.getVariant()).getScopeOrId());
-        auto* rhsDef = getEnumDefinition(cld::get<EnumType>(rhs.getVariant()).getName(),
-                                         cld::get<EnumType>(rhs.getVariant()).getScopeOrId());
-        if (!lhsDef && !rhsDef)
-        {
-            return cld::get<EnumType>(lhs.getVariant()).getName() == cld::get<EnumType>(rhs.getVariant()).getName();
-        }
-        return lhsDef == rhsDef;
-    }
     return lhs == rhs;
 }
 
@@ -1071,7 +1035,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::integerPromotion(const Ty
             return cld::get<AnonymousEnumType>(type.getVariant()).getType();
         }
         auto& enumType = cld::get<EnumType>(type.getVariant());
-        auto* enumDef = getEnumDefinition(enumType.getName(), enumType.getScopeOrId());
+        auto* enumDef = getEnumDefinition(enumType.getId());
         CLD_ASSERT(enumDef);
         return enumDef->getType();
     }
@@ -1182,8 +1146,7 @@ bool cld::Semantics::SemanticAnalysis::hasFlexibleArrayMember(const Type& type) 
 {
     if (std::holds_alternative<StructType>(type.getVariant()))
     {
-        auto* maybeStructDef = getStructDefinition(cld::get<StructType>(type.getVariant()).getName(),
-                                                   cld::get<StructType>(type.getVariant()).getScopeOrId());
+        auto* maybeStructDef = getStructDefinition(cld::get<StructType>(type.getVariant()).getId());
         if (maybeStructDef)
         {
             return !maybeStructDef->getFields().empty()
@@ -1193,8 +1156,7 @@ bool cld::Semantics::SemanticAnalysis::hasFlexibleArrayMember(const Type& type) 
     }
     else if (std::holds_alternative<UnionType>(type.getVariant()))
     {
-        auto* maybeUnionDef = getUnionDefinition(cld::get<UnionType>(type.getVariant()).getName(),
-                                                 cld::get<UnionType>(type.getVariant()).getScopeOrId());
+        auto* maybeUnionDef = getUnionDefinition(cld::get<UnionType>(type.getVariant()).getId());
         if (maybeUnionDef)
         {
             for (auto& [name, field] : maybeUnionDef->getFields())
@@ -1985,9 +1947,11 @@ void cld::Semantics::SemanticAnalysis::createBuiltins()
             auto fieldLayout = std::vector<FieldInLayout>{
                 {unsignedInt, 0, {}, 0}, {unsignedInt, 1, {}, 4}, {voidStar, 2, {}, 8}, {voidStar, 3, {}, 16}};
             auto memLayout = std::vector<Type>{*unsignedInt, *unsignedInt, *voidStar, *voidStar};
-            m_structDefinitions.emplace_back("__va_list_tag", std::move(fields), std::move(fieldLayout),
-                                             std::move(memLayout), 24, 16);
+            m_structDefinitions.emplace_back(StructDefinition("__va_list_tag", std::move(fields),
+                                                              std::move(fieldLayout), std::move(memLayout), 24, 16));
             auto elementType = StructType::create(false, false, "__va_list_tag", m_structDefinitions.size() - 1);
+            getCurrentScope().types.emplace("__va_list_tag",
+                                            TagTypeInScope{nullptr, StructTag{m_structDefinitions.size() - 1}});
             elementType = ArrayType::create(false, false, false, false, std::move(elementType), 1);
             elementType.setName("__builtin_va_list");
             getCurrentScope().declarations.emplace("__builtin_va_list",

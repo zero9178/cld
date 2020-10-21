@@ -29,65 +29,7 @@ class CodeGenerator final
     using TypeVariantKey = std::variant<cld::Semantics::StructType, cld::Semantics::UnionType,
                                         cld::Semantics::AnonymousUnionType, cld::Semantics::AnonymousStructType>;
 
-    struct TypeHasher
-    {
-        const cld::Semantics::ProgramInterface& programInterface;
-
-        std::size_t operator()(const TypeVariantKey& variant) const noexcept
-        {
-            return cld::rawHashCombine(std::hash<std::size_t>{}(variant.index()),
-                                       cld::match(
-                                           variant,
-                                           [&](const cld::Semantics::StructType& structType) -> std::size_t {
-                                               return std::hash<std::string_view>{}(structType.getName());
-                                           },
-                                           [&](const cld::Semantics::UnionType& unionType) -> std::size_t {
-                                               return std::hash<std::string_view>{}(unionType.getName());
-                                           },
-                                           [](const cld::Semantics::AnonymousStructType& structType) -> std::size_t {
-                                               return std::hash<std::uint64_t>{}(structType.getId());
-                                           },
-                                           [](const cld::Semantics::AnonymousUnionType& unionType) -> std::size_t {
-                                               return std::hash<std::uint64_t>{}(unionType.getId());
-                                           }));
-        }
-    };
-
-    struct TypeEqual
-    {
-        const cld::Semantics::ProgramInterface& programInterface;
-
-        bool operator()(const TypeVariantKey& lhs, const TypeVariantKey& rhs) const noexcept
-        {
-            if (lhs.index() != rhs.index())
-            {
-                return false;
-            }
-            return cld::match(lhs, [this, &rhs](const auto& value) -> bool {
-                using T = std::decay_t<decltype(value)>;
-                if constexpr (std::is_same_v<cld::Semantics::StructType, T>)
-                {
-                    auto& other = cld::get<T>(rhs);
-                    return programInterface.getStructDefinition(value.getName(), value.getScopeOrId())
-                           == programInterface.getStructDefinition(other.getName(), other.getScopeOrId());
-                }
-                else if constexpr (std::is_same_v<cld::Semantics::UnionType, T>)
-                {
-                    auto& other = cld::get<T>(rhs);
-                    return programInterface.getUnionDefinition(value.getName(), value.getScopeOrId())
-                           == programInterface.getUnionDefinition(other.getName(), other.getScopeOrId());
-                }
-                else
-                {
-                    return value == cld::get<T>(rhs);
-                }
-            });
-        }
-    };
-
-    std::unordered_map<TypeVariantKey, llvm::Type*, TypeHasher, TypeEqual> m_types{0,
-                                                                                   {m_programInterface},
-                                                                                   {m_programInterface}};
+    std::unordered_map<TypeVariantKey, llvm::Type*> m_types;
 
     struct ABITransformations
     {
@@ -108,7 +50,7 @@ class CodeGenerator final
         std::vector<Variant> arguments; // Never Flattened
     };
 
-    std::unordered_map<const llvm::FunctionType*, ABITransformations> m_functionABITransformations;
+    std::unordered_map<cld::Semantics::FunctionType, ABITransformations> m_functionABITransformations;
     std::unordered_map<cld::Semantics::LoopStatements, llvm::BasicBlock*> m_continueTargets;
     std::unordered_map<cld::Semantics::BreakableStatements, llvm::BasicBlock*> m_breakTargets;
     std::unordered_map<const cld::Semantics::LabelStatement*, llvm::BasicBlock*> m_labels;
@@ -121,6 +63,7 @@ class CodeGenerator final
 
     llvm::IRBuilder<> m_builder{m_module.getContext()};
     llvm::Function* m_currentFunction = nullptr;
+    const ABITransformations* m_currentFunctionABI = nullptr;
     llvm::Value* m_returnSlot = nullptr;
     llvm::DIBuilder m_debugInfo{m_module};
     std::unordered_map<std::shared_ptr<const cld::Semantics::Expression>, llvm::Value*> m_valSizes;
@@ -413,7 +356,7 @@ class CodeGenerator final
                                  const cld::Semantics::FunctionType& ft,
                                  const std::vector<std::unique_ptr<cld::Semantics::Declaration>>* paramDecls = nullptr)
     {
-        auto transformations = m_functionABITransformations.find(functionType);
+        auto transformations = m_functionABITransformations.find(ft);
         CLD_ASSERT(transformations != m_functionABITransformations.end());
         std::size_t argStart = 0;
         if (transformations->second.returnType == ABITransformations::PointerToTemporary)
@@ -1153,9 +1096,8 @@ public:
                     args.push_back(visit(cld::Semantics::adjustParameterType(type)));
                 }
                 auto transformation = applyPlatformABI(returnType, args);
-                auto* ft = llvm::FunctionType::get(returnType, args, functionType.isLastVararg());
-                m_functionABITransformations.emplace(ft, transformation);
-                return ft;
+                m_functionABITransformations.emplace(functionType, transformation);
+                return llvm::FunctionType::get(returnType, args, functionType.isLastVararg());
             },
             [&](const cld::Semantics::PointerType& pointerType) -> llvm::Type* {
                 if (cld::Semantics::isVoid(pointerType.getElementType()))
@@ -1171,8 +1113,7 @@ public:
                 {
                     return result->second;
                 }
-                auto* structDef =
-                    m_programInterface.getStructDefinition(structType.getName(), structType.getScopeOrId());
+                auto* structDef = m_programInterface.getStructDefinition(structType.getId());
                 auto* type = llvm::StructType::create(m_module.getContext(), structType.getName());
                 m_types.insert({structType, type});
                 if (!structDef)
@@ -1194,7 +1135,7 @@ public:
                 {
                     return result->second;
                 }
-                auto* unionDef = m_programInterface.getUnionDefinition(unionType.getName(), unionType.getScopeOrId());
+                auto* unionDef = m_programInterface.getUnionDefinition(unionType.getId());
                 if (!unionDef)
                 {
                     auto* type = llvm::StructType::create(m_module.getContext(), unionType.getName());
@@ -1281,7 +1222,7 @@ public:
             },
             [&](const std::monostate&) -> llvm::Type* { CLD_UNREACHABLE; },
             [&](const cld::Semantics::EnumType& enumType) -> llvm::Type* {
-                auto* enumDef = m_programInterface.getEnumDefinition(enumType.getName(), enumType.getScopeOrId());
+                auto* enumDef = m_programInterface.getEnumDefinition(enumType.getId());
                 CLD_ASSERT(enumDef);
                 return visit(enumDef->getType());
             },
@@ -1506,8 +1447,9 @@ public:
         m_currentFunction = function;
         applyFunctionAttributes(*function, function->getFunctionType(), ft,
                                 &functionDefinition.getParameterDeclarations());
-        auto transformations = m_functionABITransformations.find(function->getFunctionType());
+        auto transformations = m_functionABITransformations.find(ft);
         CLD_ASSERT(transformations != m_functionABITransformations.end());
+        m_currentFunctionABI = &transformations->second;
         if (transformations->second.returnType == ABITransformations::Flattened
             || transformations->second.returnType == ABITransformations::IntegerRegister)
         {
@@ -1603,6 +1545,7 @@ public:
         }
         m_builder.ClearInsertionPoint();
         m_currentFunction = nullptr;
+        m_currentFunctionABI = nullptr;
     }
 
     void visit(const cld::Semantics::CompoundStatement& compoundStatement)
@@ -1667,17 +1610,15 @@ public:
         }
 
         auto* function = m_currentFunction;
-        auto transformation = m_functionABITransformations.find(function->getFunctionType());
-        CLD_ASSERT(transformation != m_functionABITransformations.end());
         auto* value = visit(*returnStatement.getExpression());
-        if (transformation->second.returnType == ABITransformations::PointerToTemporary)
+        if (m_currentFunctionABI->returnType == ABITransformations::PointerToTemporary)
         {
             m_builder.CreateStore(value, function->getArg(0));
             runDestructors(returnStatement.getScope(), 0);
             m_builder.CreateRetVoid();
         }
-        else if (transformation->second.returnType == ABITransformations::Flattened
-                 || transformation->second.returnType == ABITransformations::IntegerRegister)
+        else if (m_currentFunctionABI->returnType == ABITransformations::Flattened
+                 || m_currentFunctionABI->returnType == ABITransformations::IntegerRegister)
         {
             auto* bitCast = m_builder.CreateBitCast(m_returnSlot, llvm::PointerType::getUnqual(value->getType()));
             m_builder.CreateStore(value, bitCast);
@@ -2961,7 +2902,7 @@ public:
                 .getElementType()
                 .getVariant());
         auto* ft = llvm::cast<llvm::FunctionType>(function->getType()->getPointerElementType());
-        auto transformation = m_functionABITransformations.find(ft);
+        auto transformation = m_functionABITransformations.find(cldFt);
         CLD_ASSERT(transformation != m_functionABITransformations.end());
         bool isKandR = cldFt.isKandR();
         if (isKandR || cldFt.isLastVararg())
@@ -2974,9 +2915,9 @@ public:
             auto callerFt =
                 cld::Semantics::FunctionType::create(cldFt.getReturnType(), std::move(arguments), false, false);
             ft = llvm::cast<llvm::FunctionType>(visit(callerFt));
-            transformation = m_functionABITransformations.find(ft);
-            CLD_ASSERT(transformation != m_functionABITransformations.end());
             cldFt = cld::get<cld::Semantics::FunctionType>(callerFt.getVariant());
+            transformation = m_functionABITransformations.find(cldFt);
+            CLD_ASSERT(transformation != m_functionABITransformations.end());
         }
 
         std::size_t llvmFnI = 0;

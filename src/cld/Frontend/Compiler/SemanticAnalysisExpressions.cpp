@@ -793,7 +793,7 @@ std::optional<std::pair<cld::Semantics::Type, const cld::Semantics::Field * CLD_
     if (std::holds_alternative<StructType>(recordType.getVariant()))
     {
         auto& structType = cld::get<StructType>(recordType.getVariant());
-        auto* structDef = getStructDefinition(structType.getName(), structType.getScopeOrId());
+        auto* structDef = getStructDefinition(structType.getId());
         if (!structDef)
         {
             log(Errors::Semantics::STRUCT_N_IS_AN_INCOMPLETE_TYPE.args(postFixExpr, m_sourceInterface,
@@ -805,7 +805,7 @@ std::optional<std::pair<cld::Semantics::Type, const cld::Semantics::Field * CLD_
     if (std::holds_alternative<UnionType>(recordType.getVariant()))
     {
         auto& unionType = cld::get<UnionType>(recordType.getVariant());
-        auto* unionDef = getUnionDefinition(unionType.getName(), unionType.getScopeOrId());
+        auto* unionDef = getUnionDefinition(unionType.getId());
         if (!unionDef)
         {
             log(Errors::Semantics::UNION_N_IS_AN_INCOMPLETE_TYPE.args(postFixExpr, m_sourceInterface,
@@ -2372,7 +2372,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::integerPromotion(Ex
                 Conversion(Conversion::IntegerPromotion, std::make_unique<Expression>(std::move(expression))));
         }
         auto& enumType = cld::get<EnumType>(expression.getType().getVariant());
-        auto* enumDef = getEnumDefinition(enumType.getName(), enumType.getScopeOrId());
+        auto* enumDef = getEnumDefinition(enumType.getId());
         CLD_ASSERT(enumDef);
         return Expression(
             enumDef->getType(), ValueCategory::Rvalue,
