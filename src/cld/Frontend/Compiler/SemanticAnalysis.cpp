@@ -102,7 +102,7 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
     auto scope = pushScope();
     std::vector<std::unique_ptr<Declaration>> parameterDeclarations;
     auto type = declaratorsToType(
-        node.getDeclarationSpecifiers(), node.getDeclarator(), node.getDeclarations(), true,
+        node.getDeclarationSpecifiers(), node.getDeclarator(), node.getDeclarations(),
         [&](Type paramType, Lexer::CTokenIterator loc,
             const std::vector<Syntax::DeclarationSpecifier>& declarationSpecifiers, bool) {
             if (loc->getText() == "__func__")

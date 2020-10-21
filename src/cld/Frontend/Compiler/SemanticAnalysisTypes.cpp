@@ -189,7 +189,6 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
 cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
     const std::vector<DeclarationOrSpecifierQualifier>& declarationOrSpecifierQualifiers,
     const PossiblyAbstractQualifierRef& declarator, const std::vector<Syntax::Declaration>& declarations,
-    bool inFunctionDefinition,
     cld::function_ref<void(const Type&, Lexer::CTokenIterator, const std::vector<Syntax::DeclarationSpecifier>&, bool)>
         paramCallback)
 {
@@ -230,7 +229,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
     if (std::holds_alternative<const Syntax::Declarator * CLD_NON_NULL>(declarator))
     {
         bool isFunctionPrototype = false;
-        const Syntax::DirectDeclaratorParenthesesIdentifiers* declarationsOwner = nullptr;
+        const Syntax::Node* declarationsOwner{};
         auto& realDecl = *cld::get<const Syntax::Declarator*>(declarator);
         for (auto& iter : realDecl.getPointers())
         {
@@ -245,7 +244,10 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                     declarationsOwner = &dd;
                     isFunctionPrototype = true;
                 },
-                [&](const Syntax::DirectDeclaratorParenthesesParameters&) { isFunctionPrototype = true; },
+                [&](const Syntax::DirectDeclaratorParenthesesParameters& dd) {
+                    declarationsOwner = &dd;
+                    isFunctionPrototype = true;
+                },
                 [&](const Syntax::DirectDeclaratorParentheses& parentheses) {
                     if (!parentheses.getDeclarator().getPointers().empty())
                     {
@@ -254,7 +256,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                 },
                 [](const Syntax::DirectDeclaratorIdentifier&) {}, [&](const auto&) { isFunctionPrototype = false; });
         }
-        isFunctionPrototype = isFunctionPrototype && !inFunctionDefinition;
+        isFunctionPrototype = isFunctionPrototype && !paramCallback;
         auto changedValue = changeFunctionPrototypeScope(m_inFunctionPrototype || isFunctionPrototype);
         cld::matchWithSelf<void>(
             realDecl.getDirectDeclarator(), [](auto&&, const Syntax::DirectDeclaratorIdentifier&) {},
@@ -328,12 +330,12 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                     type = Type{};
                     return;
                 }
-                if (identifiers.getIdentifiers().empty() && !inFunctionDefinition)
+                if (identifiers.getIdentifiers().empty() && !paramCallback)
                 {
                     type = FunctionType::create(std::move(type), {}, false, true);
                     return;
                 }
-                if (!inFunctionDefinition || declarationsOwner != &identifiers)
+                if (!paramCallback || declarationsOwner != &identifiers)
                 {
                     log(Errors::Semantics::IDENTIFIER_LIST_ONLY_ALLOWED_AS_PART_OF_A_FUNCTION_DEFINITION.args(
                         identifiers.getIdentifiers(), m_sourceInterface, identifiers.getIdentifiers()));
@@ -451,10 +453,19 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                 {
                     scope2.emplace(pushScope());
                 }
-                handleParameterList(
-                    type, &parameterList.getParameterTypeList(),
-                    std::forward_as_tuple(declarationOrSpecifierQualifiers, parameterList.getDirectDeclarator()),
-                    inFunctionDefinition ? paramCallback : std::decay_t<decltype(paramCallback)>{});
+                if (&parameterList == declarationsOwner)
+                {
+                    handleParameterList(
+                        type, &parameterList.getParameterTypeList(),
+                        std::forward_as_tuple(declarationOrSpecifierQualifiers, parameterList.getDirectDeclarator()),
+                        paramCallback);
+                }
+                else
+                {
+                    handleParameterList(
+                        type, &parameterList.getParameterTypeList(),
+                        std::forward_as_tuple(declarationOrSpecifierQualifiers, parameterList.getDirectDeclarator()));
+                }
             });
     }
     else

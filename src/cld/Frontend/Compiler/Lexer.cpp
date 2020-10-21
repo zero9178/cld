@@ -2252,7 +2252,7 @@ std::pair<CToken::ValueType, CToken::Type> castInteger(std::uint64_t integer,
     if constexpr (sizeof...(Args) != 0)
     {
         std::array<CToken::Type, sizeof...(Args)> second;
-        std::copy(types.begin(), types.end() - 1, second.begin());
+        std::copy(types.begin() + 1, types.end(), second.begin());
         return castInteger<Args...>(integer, second);
     }
     else

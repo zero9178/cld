@@ -4026,6 +4026,32 @@ TEST_CASE("LLVM codegen c-testsuite", "[LLVM]")
         REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
         CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 0);
     }
+    SECTION("00104.c")
+    {
+        auto program = generateProgram("int\n"
+                                       "function()\n"
+                                       "{\n"
+                                       "    int x;\n"
+                                       "    long long l;\n"
+                                       "    \n"
+                                       "    x = 0;\n"
+                                       "    l = 0;\n"
+                                       "    \n"
+                                       "    x = ~x;\n"
+                                       "    if (x != 0xffffffff) \n"
+                                       "        return 1;\n"
+                                       "    \n"
+                                       "    l = ~l;\n"
+                                       "    if (x != 0xffffffffffffffff) \n"
+                                       "        return 2;\n"
+                                       "    \n"
+                                       "    return 0;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 0);
+    }
     SECTION("00115.c")
     {
         auto program = generateProgram("#define B \"b\"\n"
@@ -4062,6 +4088,30 @@ TEST_CASE("LLVM codegen c-testsuite", "[LLVM]")
                                        "\n"
                                        "int f(int a) { return a; }\n"
                                        "int g(int a) { return a; }\n");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 0);
+    }
+    SECTION("00124.c")
+    {
+        auto program = generateProgram("int f2(int c, int b) {\n"
+                                       "   return c - b;\n"
+                                       "}\n"
+                                       "\n"
+                                       "int (*f1(int a,int b))(int c,int b) \n"
+                                       "{\n"
+                                       "   if (a != b) return f2;\n"
+                                       "   return 0;\n"
+                                       "}\n"
+                                       "\n"
+                                       "int\n"
+                                       "function()\n"
+                                       "{\n"
+                                       "   int (* (*p)(int a, int b))(int c, int d) = f1;\n"
+                                       "   \n"
+                                       "   return (*(*p)(0,2))(2,2);\n"
+                                       "}");
         cld::CGLLVM::generateLLVM(*module, program);
         CAPTURE(*module);
         REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));

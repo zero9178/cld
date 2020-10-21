@@ -615,7 +615,9 @@ int cld::main(llvm::MutableArrayRef<std::string_view> elements, llvm::raw_ostrea
     for (auto& iter : cli.get<INCLUDES>())
     {
         if (std::none_of(cli.get<ISYSTEM>().begin(), cli.get<ISYSTEM>().end(), [&iter](const cld::fs::path& path) {
-                return cld::fs::equivalent(path, cld::fs::u8path(iter));
+                std::error_code ec;
+                auto res = cld::fs::equivalent(path, cld::fs::u8path(iter), ec);
+                return res && !ec;
             }))
         {
             options.includeDirectories.emplace_back(iter);
