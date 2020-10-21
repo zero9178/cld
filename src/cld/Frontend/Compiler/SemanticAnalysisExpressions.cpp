@@ -336,14 +336,7 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
             }
             case Syntax::AssignmentExpression::LeftShiftAssign:
             case Syntax::AssignmentExpression::RightShiftAssign:
-            case Syntax::AssignmentExpression::BitAndAssign:
-            case Syntax::AssignmentExpression::BitOrAssign:
-            case Syntax::AssignmentExpression::BitXorAssign:
             {
-                // Originally this would be an arithmetic conversion for the bit operators and modulo. The main point of
-                // the arithmetic conversion is to figure out the right result type of the expression. This is redundant
-                // here as the resulting type of the assignment is always the left operand and only integer types are
-                // allowed. If floating point types were allowed we'd have to do the conversion for that
                 lhsType = integerPromotion(std::move(lhsType));
                 if (!lhsType.isUndefined() && !isInteger(lhsType))
                 {
@@ -355,6 +348,28 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
                 {
                     log(Errors::Semantics::RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE.args(
                         rhsValue, m_sourceInterface, *token, rhsValue));
+                }
+                break;
+            }
+            case Syntax::AssignmentExpression::BitAndAssign:
+            case Syntax::AssignmentExpression::BitOrAssign:
+            case Syntax::AssignmentExpression::BitXorAssign:
+            {
+                lhsType = integerPromotion(std::move(lhsType));
+                if (!lhsType.isUndefined() && !isInteger(lhsType))
+                {
+                    log(Errors::Semantics::LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE.args(
+                        lhsValue, m_sourceInterface, *token, lhsValue));
+                }
+                rhsValue = integerPromotion(std::move(rhsValue));
+                if (!rhsValue.isUndefined() && !isInteger(rhsValue.getType()))
+                {
+                    log(Errors::Semantics::RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE.args(
+                        rhsValue, m_sourceInterface, *token, rhsValue));
+                }
+                if (isInteger(lhsType) && isInteger(rhsValue.getType()))
+                {
+                    arithmeticConversion(lhsType, rhsValue);
                 }
                 break;
             }

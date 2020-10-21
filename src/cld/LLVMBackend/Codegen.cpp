@@ -424,9 +424,16 @@ class CodeGenerator final
         }
         else if (transformations->second.returnType == ABITransformations::Unchanged
                  && cld::Semantics::isInteger(ft.getReturnType())
-                 && cld::get<cld::Semantics::PrimitiveType>(ft.getReturnType().getVariant()).isSigned())
+                 && cld::get<cld::Semantics::PrimitiveType>(ft.getReturnType().getVariant()).getBitCount() < 32)
         {
-            attributeApply.addAttribute(0, llvm::Attribute::SExt);
+            if (cld::get<cld::Semantics::PrimitiveType>(ft.getReturnType().getVariant()).isSigned())
+            {
+                attributeApply.addAttribute(0, llvm::Attribute::SExt);
+            }
+            else
+            {
+                attributeApply.addAttribute(0, llvm::Attribute::ZExt);
+            }
         }
         std::size_t origArgI = 0;
         for (std::size_t i = argStart; i < functionType->getNumParams(); origArgI++)
@@ -439,9 +446,16 @@ class CodeGenerator final
                 {
                     auto& arg = ft.getArguments()[origArgI].first;
                     if (cld::Semantics::isInteger(arg)
-                        && cld::get<cld::Semantics::PrimitiveType>(arg.getVariant()).isSigned())
+                        && cld::get<cld::Semantics::PrimitiveType>(arg.getVariant()).getBitCount() < 32)
                     {
-                        attributeApply.addParamAttr(i, llvm::Attribute::SExt);
+                        if (cld::get<cld::Semantics::PrimitiveType>(arg.getVariant()).isSigned())
+                        {
+                            attributeApply.addParamAttr(i, llvm::Attribute::SExt);
+                        }
+                        else
+                        {
+                            attributeApply.addParamAttr(i, llvm::Attribute::ZExt);
+                        }
                     }
                 }
                 else if (change == ABITransformations::OnStack)
@@ -2568,7 +2582,7 @@ public:
             }
             case cld::Semantics::UnaryOperator::BooleanNegate:
             {
-                value = m_builder.CreateNot(m_builder.CreateTrunc(value, m_builder.getInt1Ty()));
+                value = m_builder.CreateNot(boolToi1(value));
                 return m_builder.CreateZExt(value, visit(cld::Semantics::PrimitiveType::createInt(
                                                        false, false, m_sourceInterface.getLanguageOptions())));
             }
@@ -2800,37 +2814,37 @@ public:
             llvm::Value* load =
                 m_builder.CreateAShr(loaded, llvm::ConstantInt::get(mask->getType(), cldField.bitFieldBounds->first));
             load = m_builder.CreateAnd(load, mask);
-            load = cast(load, assignment.getLeftExpression().getType(), assignment.getRightExpression().getType());
+            load = cast(load, assignment.getLeftCalcType(), assignment.getRightExpression().getType());
             switch (assignment.getKind())
             {
                 case cld::Semantics::Assignment::Simple: CLD_UNREACHABLE;
                 case cld::Semantics::Assignment::Plus:
-                    rhsValue = add(load, assignment.getLeftExpression().getType(), rhsValue,
-                                   assignment.getRightExpression().getType());
+                    rhsValue =
+                        add(load, assignment.getLeftCalcType(), rhsValue, assignment.getRightExpression().getType());
                     break;
                 case cld::Semantics::Assignment::Minus:
-                    rhsValue = sub(load, assignment.getLeftExpression().getType(), rhsValue,
-                                   assignment.getRightExpression().getType());
+                    rhsValue =
+                        sub(load, assignment.getLeftCalcType(), rhsValue, assignment.getRightExpression().getType());
                     break;
                 case cld::Semantics::Assignment::Divide:
-                    rhsValue = div(load, assignment.getLeftExpression().getType(), rhsValue,
-                                   assignment.getRightExpression().getType());
+                    rhsValue =
+                        div(load, assignment.getLeftCalcType(), rhsValue, assignment.getRightExpression().getType());
                     break;
                 case cld::Semantics::Assignment::Multiply:
-                    rhsValue = mul(load, assignment.getLeftExpression().getType(), rhsValue,
-                                   assignment.getRightExpression().getType());
+                    rhsValue =
+                        mul(load, assignment.getLeftCalcType(), rhsValue, assignment.getRightExpression().getType());
                     break;
                 case cld::Semantics::Assignment::Modulo:
-                    rhsValue = mod(load, assignment.getLeftExpression().getType(), rhsValue,
-                                   assignment.getRightExpression().getType());
+                    rhsValue =
+                        mod(load, assignment.getLeftCalcType(), rhsValue, assignment.getRightExpression().getType());
                     break;
                 case cld::Semantics::Assignment::LeftShift:
-                    rhsValue = shl(load, assignment.getLeftExpression().getType(), rhsValue,
-                                   assignment.getRightExpression().getType());
+                    rhsValue =
+                        shl(load, assignment.getLeftCalcType(), rhsValue, assignment.getRightExpression().getType());
                     break;
                 case cld::Semantics::Assignment::RightShift:
-                    rhsValue = shr(load, assignment.getLeftExpression().getType(), rhsValue,
-                                   assignment.getRightExpression().getType());
+                    rhsValue =
+                        shr(load, assignment.getLeftCalcType(), rhsValue, assignment.getRightExpression().getType());
                     break;
                 case cld::Semantics::Assignment::BitAnd: rhsValue = m_builder.CreateAnd(load, rhsValue); break;
                 case cld::Semantics::Assignment::BitOr: rhsValue = m_builder.CreateOr(load, rhsValue); break;
@@ -2842,6 +2856,7 @@ public:
             m_builder.CreateShl(rhsValue, llvm::ConstantInt::get(rhsValue->getType(), cldField.bitFieldBounds->first));
         mask = m_builder.CreateShl(mask, llvm::ConstantInt::get(mask->getType(), cldField.bitFieldBounds->first));
         mask = m_builder.CreateNot(mask);
+        // TODO: Types could mismatch
         loaded = m_builder.CreateAnd(loaded, mask);
         auto* result = m_builder.CreateOr(loaded, rhsValue);
         m_builder.CreateStore(result, field, type.isVolatile());

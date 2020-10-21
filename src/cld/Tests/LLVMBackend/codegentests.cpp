@@ -48,7 +48,6 @@ TEST_CASE("LLVM codegen functions", "[LLVM]")
         function = module.getFunction("f2");
         REQUIRE(function);
         CHECK(function->getReturnType()->isIntegerTy());
-        CHECK(function->hasAttribute(0, llvm::Attribute::SExt));
     }
 }
 
