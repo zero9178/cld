@@ -131,6 +131,9 @@ struct IsEqualComparable<T, U, std::void_t<decltype(std::declval<T>() == std::de
 {
 };
 
+template <class T>
+constexpr bool always_false = false;
+
 template <typename, typename = void>
 constexpr bool IsTypeCompleteV = false;
 

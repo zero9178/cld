@@ -11,13 +11,13 @@
 #include "TestConfig.hpp"
 
 static std::pair<const cld::Semantics::TranslationUnit * CLD_NON_NULL, std::string>
-    generateSemantics(std::string source, const cld::LanguageOptions& options)
+    generateSemantics(std::string_view source, const cld::LanguageOptions& options)
 {
     std::string storage;
     llvm::raw_string_ostream ss(storage);
     cld::PPSourceObject tokens;
     bool errors = false;
-    tokens = cld::Lexer::tokenize(std::move(source), options, &ss, &errors);
+    tokens = cld::Lexer::tokenize(cld::to_string(source), options, &ss, &errors);
     UNSCOPED_INFO(storage);
     REQUIRE_FALSE(errors);
     tokens = cld::PP::preprocess(std::move(tokens), &ss, &errors);
@@ -35,9 +35,30 @@ static std::pair<const cld::Semantics::TranslationUnit * CLD_NON_NULL, std::stri
 }
 
 static std::pair<const cld::Semantics::TranslationUnit * CLD_NON_NULL, std::string>
-    generateSemantics(std::string source, cld::Triple triple = cld::Triple::native())
+    generateSemantics(std::string_view source, cld::Triple triple = cld::Triple::native())
 {
-    return generateSemantics(std::move(source), cld::LanguageOptions::fromTriple(triple));
+    return generateSemantics(source, cld::LanguageOptions::fromTriple(triple));
+}
+
+static cld::Semantics::Program generateProgram(std::string_view source, cld::Triple triple = cld::Triple::native())
+{
+    std::string storage;
+    llvm::raw_string_ostream ss(storage);
+    cld::PPSourceObject tokens;
+    bool errors = false;
+    tokens = cld::Lexer::tokenize(cld::to_string(source), cld::LanguageOptions::fromTriple(triple), &ss, &errors);
+    UNSCOPED_INFO(storage);
+    REQUIRE_FALSE(errors);
+    tokens = cld::PP::preprocess(std::move(tokens), &ss, &errors);
+    UNSCOPED_INFO(storage);
+    REQUIRE_FALSE(errors);
+    auto ctokens = cld::Lexer::toCTokens(tokens, &ss, &errors);
+    UNSCOPED_INFO(storage);
+    REQUIRE_FALSE(errors);
+    auto parsing = cld::Parser::buildTree(ctokens, &ss, &errors);
+    UNSCOPED_INFO(storage);
+    REQUIRE_FALSE(errors);
+    return cld::Semantics::analyse(parsing, std::move(ctokens), &ss);
 }
 
 #define SEMA_PRODUCES(source, matcher)               \
@@ -882,51 +903,51 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
     }
     SECTION("Anonymous struct")
     {
-        auto [translationUnit, errors] = generateSemantics("struct { int i; float f, r; } a;");
-        REQUIRE_THAT(errors, ProducesNoErrors());
-        REQUIRE(translationUnit->getGlobals().size() == 1);
-        REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
-        auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
+        auto program = generateProgram("struct { int i; float f, r; } a;");
+        REQUIRE(program.getTranslationUnit().getGlobals().size() == 1);
+        REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
+            program.getTranslationUnit().getGlobals()[0]));
+        auto& decl =
+            cld::get<std::unique_ptr<cld::Semantics::Declaration>>(program.getTranslationUnit().getGlobals()[0]);
         CHECK(decl->getNameToken()->getText() == "a");
-        REQUIRE(std::holds_alternative<cld::Semantics::AnonymousStructType>(decl->getType().getVariant()));
-        auto& anon = cld::get<cld::Semantics::AnonymousStructType>(decl->getType().getVariant());
-        CHECK(anon.getFields().size() == 3);
-        CHECK(anon.getFields().values_container()[0].second.name == "i");
-        CHECK(*anon.getFields().values_container()[0].second.type
+        REQUIRE(std::holds_alternative<cld::Semantics::StructType>(decl->getType().getVariant()));
+        CHECK(cld::get<cld::Semantics::StructType>(decl->getType().getVariant()).isAnonymous());
+        auto& fields = program.getFields(decl->getType());
+        CHECK(fields.size() == 3);
+        CHECK(fields.values_container()[0].second.name == "i");
+        CHECK(*fields.values_container()[0].second.type
               == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-        CHECK_FALSE(anon.getFields().values_container()[0].second.bitFieldBounds);
-        CHECK(anon.getFields().values_container()[1].second.name == "f");
-        CHECK(*anon.getFields().values_container()[1].second.type
-              == cld::Semantics::PrimitiveType::createFloat(false, false));
-        CHECK_FALSE(anon.getFields().values_container()[1].second.bitFieldBounds);
-        CHECK(anon.getFields().values_container()[2].second.name == "r");
-        CHECK(*anon.getFields().values_container()[2].second.type
-              == cld::Semantics::PrimitiveType::createFloat(false, false));
-        CHECK_FALSE(anon.getFields().values_container()[2].second.bitFieldBounds);
+        CHECK_FALSE(fields.values_container()[0].second.bitFieldBounds);
+        CHECK(fields.values_container()[1].second.name == "f");
+        CHECK(*fields.values_container()[1].second.type == cld::Semantics::PrimitiveType::createFloat(false, false));
+        CHECK_FALSE(fields.values_container()[1].second.bitFieldBounds);
+        CHECK(fields.values_container()[2].second.name == "r");
+        CHECK(*fields.values_container()[2].second.type == cld::Semantics::PrimitiveType::createFloat(false, false));
+        CHECK_FALSE(fields.values_container()[2].second.bitFieldBounds);
     }
     SECTION("Anonymous union")
     {
-        auto [translationUnit, errors] = generateSemantics("union { int i; float f, r; } a;");
-        REQUIRE_THAT(errors, ProducesNoErrors());
-        REQUIRE(translationUnit->getGlobals().size() == 1);
-        REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
-        auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
+        auto program = generateProgram("union { int i; float f, r; } a;");
+        REQUIRE(program.getTranslationUnit().getGlobals().size() == 1);
+        REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
+            program.getTranslationUnit().getGlobals()[0]));
+        auto& decl =
+            cld::get<std::unique_ptr<cld::Semantics::Declaration>>(program.getTranslationUnit().getGlobals()[0]);
         CHECK(decl->getNameToken()->getText() == "a");
-        REQUIRE(std::holds_alternative<cld::Semantics::AnonymousUnionType>(decl->getType().getVariant()));
-        auto& anon = cld::get<cld::Semantics::AnonymousUnionType>(decl->getType().getVariant());
-        CHECK(anon.getFields().size() == 3);
-        CHECK(anon.getFields().values_container()[0].second.name == "i");
-        CHECK(*anon.getFields().values_container()[0].second.type
+        REQUIRE(std::holds_alternative<cld::Semantics::UnionType>(decl->getType().getVariant()));
+        CHECK(cld::get<cld::Semantics::UnionType>(decl->getType().getVariant()).isAnonymous());
+        auto& fields = program.getFields(decl->getType());
+        CHECK(fields.size() == 3);
+        CHECK(fields.values_container()[0].second.name == "i");
+        CHECK(*fields.values_container()[0].second.type
               == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
-        CHECK_FALSE(anon.getFields().values_container()[0].second.bitFieldBounds);
-        CHECK(anon.getFields().values_container()[1].second.name == "f");
-        CHECK(*anon.getFields().values_container()[1].second.type
-              == cld::Semantics::PrimitiveType::createFloat(false, false));
-        CHECK_FALSE(anon.getFields().values_container()[1].second.bitFieldBounds);
-        CHECK(anon.getFields().values_container()[2].second.name == "r");
-        CHECK(*anon.getFields().values_container()[2].second.type
-              == cld::Semantics::PrimitiveType::createFloat(false, false));
-        CHECK_FALSE(anon.getFields().values_container()[2].second.bitFieldBounds);
+        CHECK_FALSE(fields.values_container()[0].second.bitFieldBounds);
+        CHECK(fields.values_container()[1].second.name == "f");
+        CHECK(*fields.values_container()[1].second.type == cld::Semantics::PrimitiveType::createFloat(false, false));
+        CHECK_FALSE(fields.values_container()[1].second.bitFieldBounds);
+        CHECK(fields.values_container()[2].second.name == "r");
+        CHECK(*fields.values_container()[2].second.type == cld::Semantics::PrimitiveType::createFloat(false, false));
+        CHECK_FALSE(fields.values_container()[2].second.bitFieldBounds);
     }
     SECTION("Bitfields")
     {
@@ -991,16 +1012,7 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
                                       "    int e : 1;\n"
                                       "    _Bool f : 1;\n"
                                       "};";
-            bool errors = false;
-            auto tokens = cld::Lexer::tokenize(cld::to_string(source), cld::LanguageOptions::fromTriple(x64windowsMsvc),
-                                               &llvm::errs(), &errors);
-            REQUIRE_FALSE(errors);
-            auto ctokens = cld::Lexer::toCTokens(tokens, &llvm::errs(), &errors);
-            REQUIRE_FALSE(errors);
-            auto tree = cld::Parser::buildTree(ctokens, &llvm::errs(), &errors);
-            REQUIRE_FALSE(errors);
-            auto program = cld::Semantics::analyse(tree, std::move(ctokens), &llvm::errs(), &errors);
-            REQUIRE_FALSE(errors);
+            auto program = generateProgram(source, cld::Tests::x64windowsMsvc);
             auto* structTag = program.lookupType<cld::Semantics::ProgramInterface::StructTag>("A", 0);
             REQUIRE(structTag);
             auto* structDef = program.getStructDefinition(static_cast<std::size_t>(*structTag));
@@ -1895,7 +1907,7 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
             REQUIRE(std::holds_alternative<MemberAccess>(expr.getVariant()));
             CHECK(cld::get<MemberAccess>(expr.getVariant()).getRecordExpression().getValueCategory()
                   == ValueCategory::Lvalue);
-            CHECK(std::holds_alternative<AnonymousStructType>(
+            CHECK(std::holds_alternative<StructType>(
                 cld::get<MemberAccess>(expr.getVariant()).getRecordExpression().getType().getVariant()));
             CHECK_THAT(cld::get<MemberAccess>(expr.getVariant()).getField().indices,
                        Catch::Equals(std::vector<std::uint64_t>{0}));
@@ -1911,7 +1923,7 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
             REQUIRE(std::holds_alternative<MemberAccess>(expr.getVariant()));
             CHECK(cld::get<MemberAccess>(expr.getVariant()).getRecordExpression().getValueCategory()
                   == ValueCategory::Lvalue);
-            CHECK(std::holds_alternative<AnonymousUnionType>(
+            CHECK(std::holds_alternative<UnionType>(
                 cld::get<MemberAccess>(expr.getVariant()).getRecordExpression().getType().getVariant()));
             CHECK_THAT(cld::get<MemberAccess>(expr.getVariant()).getField().indices,
                        Catch::Equals(std::vector<std::uint64_t>{0}));
@@ -2010,7 +2022,7 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
             REQUIRE(std::holds_alternative<MemberAccess>(expr.getVariant()));
             auto& mem = cld::get<MemberAccess>(expr.getVariant());
             REQUIRE(std::holds_alternative<PointerType>(mem.getRecordExpression().getType().getVariant()));
-            CHECK(std::holds_alternative<AnonymousStructType>(
+            CHECK(std::holds_alternative<StructType>(
                 cld::get<PointerType>(mem.getRecordExpression().getType().getVariant()).getElementType().getVariant()));
             CHECK_THAT(mem.getField().indices, Catch::Equals(std::vector<std::uint64_t>{0}));
         }
@@ -2025,7 +2037,7 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
             REQUIRE(std::holds_alternative<MemberAccess>(expr.getVariant()));
             auto& mem = cld::get<MemberAccess>(expr.getVariant());
             REQUIRE(std::holds_alternative<PointerType>(mem.getRecordExpression().getType().getVariant()));
-            CHECK(std::holds_alternative<AnonymousUnionType>(
+            CHECK(std::holds_alternative<UnionType>(
                 cld::get<PointerType>(mem.getRecordExpression().getType().getVariant()).getElementType().getVariant()));
             CHECK_THAT(mem.getField().indices, Catch::Equals(std::vector<std::uint64_t>{0}));
         }
@@ -3997,7 +4009,7 @@ TEST_CASE("Semantics compound literal", "[semantics]")
                                        "}");
         CHECK(exp.getValueCategory() == ValueCategory::Lvalue);
         CHECK(std::holds_alternative<CompoundLiteral>(exp.getVariant()));
-        CHECK(std::holds_alternative<AnonymousStructType>(exp.getType().getVariant()));
+        CHECK(std::holds_alternative<StructType>(exp.getType().getVariant()));
     }
     SECTION("Size deduction")
     {

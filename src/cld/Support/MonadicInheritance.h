@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <variant>
 
 #include "Util.hpp"
@@ -25,22 +26,6 @@ template <class T, std::uint8_t i, class First, class... Rest>
     }
 }
 
-template <class T, std::uint8_t i, class Ret, class Curr, class... Rest>
-[[nodiscard]] constexpr Ret cast(T* pointer, std::uint8_t index) noexcept
-{
-    if (index == i)
-    {
-        return static_cast<std::conditional_t<std::is_const_v<T>, const Curr*, Curr*>>(pointer);
-    }
-    else if constexpr (sizeof...(Rest) == 0)
-    {
-        CLD_UNREACHABLE;
-    }
-    else
-    {
-        return cast<T, i + 1, Ret, Rest...>(pointer, index);
-    }
-}
 } // namespace detail
 
 template <class... Args>
@@ -59,14 +44,18 @@ public:
 
     [[nodiscard]] constexpr std::variant<const Args * CLD_NON_NULL...> getVariant() const&
     {
-        return detail::cast<std::remove_reference_t<decltype(*this)>, 0, std::variant<const Args*...>, Args...>(
-            this, m_index);
+        constexpr std::array<std::variant<const Args * CLD_NON_NULL...> (*)(decltype(this)), sizeof...(Args)>
+            getterFuncs = {{+[](decltype(this) ptr) -> std::variant<const Args * CLD_NON_NULL...> {
+                return static_cast<const Args*>(ptr);
+            }...}};
+        return getterFuncs[index()](this);
     }
 
     [[nodiscard]] constexpr std::variant<Args * CLD_NON_NULL...> getVariant() &&
     {
-        return detail::cast<std::remove_reference_t<decltype(*this)>, 0, std::variant<Args*...>, Args...>(this,
-                                                                                                          m_index);
+        constexpr std::array<std::variant<Args * CLD_NON_NULL...> (*)(decltype(this)), sizeof...(Args)> getterFuncs = {
+            {+[](decltype(this) ptr) -> std::variant<Args * CLD_NON_NULL...> { return static_cast<Args*>(ptr); }...}};
+        return getterFuncs[index()](this);
     }
 
     [[nodiscard]] constexpr std::size_t index() const noexcept

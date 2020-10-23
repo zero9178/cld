@@ -26,8 +26,7 @@ class CodeGenerator final
     // but hashing the variant seems overkill? I am not sure
     std::unordered_map<const void*, llvm::Value * CLD_NON_NULL> m_lvalues;
 
-    using TypeVariantKey = std::variant<cld::Semantics::StructType, cld::Semantics::UnionType,
-                                        cld::Semantics::AnonymousUnionType, cld::Semantics::AnonymousStructType>;
+    using TypeVariantKey = std::variant<cld::Semantics::StructType, cld::Semantics::UnionType>;
 
     std::unordered_map<TypeVariantKey, llvm::Type*> m_types;
 
@@ -1119,7 +1118,9 @@ public:
                     return result->second;
                 }
                 auto* structDef = m_programInterface.getStructDefinition(structType.getId());
-                auto* type = llvm::StructType::create(m_module.getContext(), structType.getName());
+                auto* type = structType.isAnonymous() ?
+                                 llvm::StructType::create(m_module.getContext()) :
+                                 llvm::StructType::create(m_module.getContext(), structType.getName());
                 m_types.insert({structType, type});
                 if (!structDef)
                 {
@@ -1143,7 +1144,9 @@ public:
                 auto* unionDef = m_programInterface.getUnionDefinition(unionType.getId());
                 if (!unionDef)
                 {
-                    auto* type = llvm::StructType::create(m_module.getContext(), unionType.getName());
+                    auto* type = unionType.isAnonymous() ?
+                                     llvm::StructType::create(m_module.getContext()) :
+                                     llvm::StructType::create(m_module.getContext(), unionType.getName());
                     m_types.insert({unionType, type});
                     return type;
                 }
@@ -1167,53 +1170,10 @@ public:
                                          const std::shared_ptr<const cld::Semantics::Type>& rhs) {
                                          return lhs->getSizeOf(m_programInterface) < rhs->getSizeOf(m_programInterface);
                                      });
-                auto* type = llvm::StructType::create(m_module.getContext(), unionType.getName());
+                auto* type = unionType.isAnonymous() ?
+                                 llvm::StructType::create(m_module.getContext()) :
+                                 llvm::StructType::create(m_module.getContext(), unionType.getName());
                 type->setBody(llvm::ArrayRef(visit(**largestField)));
-                m_types.insert({unionType, type});
-                return type;
-            },
-            [&](const cld::Semantics::AnonymousStructType& structType) -> llvm::Type* {
-                auto result = m_types.find(structType);
-                if (result != m_types.end())
-                {
-                    return result->second;
-                }
-                std::vector<llvm::Type*> fields;
-                for (auto& iter : structType.getMemLayout())
-                {
-                    fields.push_back(visit(iter));
-                }
-                auto* type = llvm::StructType::get(m_module.getContext(), fields);
-                m_types.insert({structType, type});
-                return type;
-            },
-            [&](const cld::Semantics::AnonymousUnionType& unionType) -> llvm::Type* {
-                auto result = m_types.find(unionType);
-                if (result != m_types.end())
-                {
-                    return result->second;
-                }
-                std::vector<std::shared_ptr<const cld::Semantics::Type>> layout;
-                for (auto iter = unionType.getFields().begin(); iter != unionType.getFields().end();)
-                {
-                    if (iter->second.indices.size() == 1)
-                    {
-                        layout.push_back(iter->second.type);
-                        iter++;
-                        continue;
-                    }
-                    layout.push_back(iter->second.parentTypes.front());
-                    iter = std::find_if_not(iter, unionType.getFields().end(), [&](auto& pair) {
-                        return pair.second.parentTypes.front().get() == layout.back().get();
-                    });
-                }
-                auto largestField =
-                    std::max_element(layout.begin(), layout.end(),
-                                     [&](const std::shared_ptr<const cld::Semantics::Type>& lhs,
-                                         const std::shared_ptr<const cld::Semantics::Type>& rhs) {
-                                         return lhs->getSizeOf(m_programInterface) < rhs->getSizeOf(m_programInterface);
-                                     });
-                auto* type = llvm::StructType::get(m_module.getContext(), llvm::ArrayRef(visit(**largestField)));
                 m_types.insert({unionType, type});
                 return type;
             },
@@ -1231,7 +1191,6 @@ public:
                 CLD_ASSERT(enumDef);
                 return visit(enumDef->getType());
             },
-            [&](const cld::Semantics::AnonymousEnumType& enumType) -> llvm::Type* { return visit(enumType.getType()); },
             [&](const cld::Semantics::ValArrayType& valArrayType) -> llvm::Type* {
                 auto expression = m_valSizes.find(valArrayType.getExpression());
                 if (expression == m_valSizes.end() && m_currentFunction && m_builder.GetInsertBlock())

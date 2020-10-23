@@ -43,6 +43,7 @@ class SemanticAnalysis final : public ProgramInterface
         const DefaultStatement* CLD_NULLABLE defaultStmt;
     };
     std::vector<SwitchStack> m_switchStatements;
+    std::unordered_map<Lexer::CTokenIterator, std::size_t> m_anonymousTagToID;
 
     [[nodiscard]] ValueReset<bool> changeFunctionPrototypeScope(bool newValue)
     {

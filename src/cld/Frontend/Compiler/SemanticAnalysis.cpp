@@ -1030,10 +1030,6 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::integerPromotion(const Ty
 {
     if (isEnum(type))
     {
-        if (std::holds_alternative<AnonymousEnumType>(type.getVariant()))
-        {
-            return cld::get<AnonymousEnumType>(type.getVariant()).getType();
-        }
         auto& enumType = cld::get<EnumType>(type.getVariant());
         auto* enumDef = getEnumDefinition(enumType.getId());
         CLD_ASSERT(enumDef);
@@ -1171,27 +1167,6 @@ bool cld::Semantics::SemanticAnalysis::hasFlexibleArrayMember(const Type& type) 
                 }
             }
             return false;
-        }
-    }
-    else if (std::holds_alternative<AnonymousStructType>(type.getVariant()))
-    {
-        auto& structDef = cld::get<AnonymousStructType>(type.getVariant());
-        return !structDef.getFields().empty()
-               && std::holds_alternative<AbstractArrayType>(structDef.getFields().back().second.type->getVariant());
-    }
-    else if (std::holds_alternative<AnonymousUnionType>(type.getVariant()))
-    {
-        auto& unionDef = cld::get<AnonymousUnionType>(type.getVariant());
-        for (auto& [name, field] : unionDef.getFields())
-        {
-            if (std::holds_alternative<AbstractArrayType>(field.type->getVariant()))
-            {
-                return true;
-            }
-            if (hasFlexibleArrayMember(*field.type))
-            {
-                return true;
-            }
         }
     }
     return false;

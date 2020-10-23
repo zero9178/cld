@@ -343,6 +343,11 @@ public:
         return m_name;
     }
 
+    [[nodiscard]] bool isAnonymous() const
+    {
+        return m_name.empty();
+    }
+
     [[nodiscard]] std::uint64_t getId() const
     {
         return m_id;
@@ -378,6 +383,11 @@ public:
         return m_name;
     }
 
+    [[nodiscard]] bool isAnonymous() const
+    {
+        return m_name.empty();
+    }
+
     [[nodiscard]] std::uint64_t getId() const
     {
         return m_id;
@@ -398,152 +408,6 @@ public:
     }
 };
 
-struct Field
-{
-    std::shared_ptr<const Type> type; // NOT NULL
-    std::string_view name;
-    const Lexer::CToken* nameToken;
-    std::vector<std::size_t> indices;
-    std::optional<std::pair<std::uint32_t, std::uint32_t>> bitFieldBounds;
-    std::vector<std::shared_ptr<const Type>> parentTypes;
-};
-
-struct FieldInLayout
-{
-    std::shared_ptr<const Type> type;
-    std::size_t layoutIndex;
-    std::optional<std::pair<std::uint32_t, std::uint32_t>> bitFieldBounds;
-    std::uint64_t offset;
-};
-
-using FieldMap = tsl::ordered_map<std::string_view, Field, std::hash<std::string_view>, std::equal_to<std::string_view>,
-                                  std::allocator<std::pair<std::string_view, Field>>,
-                                  std::vector<std::pair<std::string_view, Field>>>;
-
-class AnonymousStructType final
-{
-    std::uint64_t m_id;
-    FieldMap m_fields;
-    std::vector<FieldInLayout> m_fieldLayout;
-    std::vector<Type> m_memLayout;
-    std::uint32_t m_sizeOf;
-    std::uint32_t m_alignOf;
-
-    AnonymousStructType(std::uint64_t id, FieldMap&& fields, std::vector<FieldInLayout>&& fieldLayout,
-                        std::vector<Type>&& memLayout, std::uint32_t sizeOf, std::uint32_t alignOf)
-        : m_id(id),
-          m_fields(std::move(fields)),
-          m_fieldLayout(std::move(fieldLayout)),
-          m_memLayout(std::move(memLayout)),
-          m_sizeOf(sizeOf),
-          m_alignOf(alignOf)
-    {
-    }
-
-public:
-    static Type create(bool isConst, bool isVolatile, std::uint64_t id, FieldMap fields,
-                       std::vector<FieldInLayout> fieldLayout, std::vector<Type> memLayout, std::uint32_t sizeOf,
-                       std::uint32_t alignOf);
-
-    [[nodiscard]] std::uint64_t getId() const
-    {
-        return m_id;
-    }
-
-    [[nodiscard]] const FieldMap& getFields() const
-    {
-        return m_fields;
-    }
-
-    [[nodiscard]] const std::vector<FieldInLayout>& getFieldLayout() const
-    {
-        return m_fieldLayout;
-    }
-
-    [[nodiscard]] const std::vector<Type>& getMemLayout() const
-    {
-        return m_memLayout;
-    }
-
-    [[nodiscard]] std::size_t getSizeOf(const ProgramInterface&) const
-    {
-        return m_sizeOf;
-    }
-
-    [[nodiscard]] std::size_t getAlignOf(const ProgramInterface&) const
-    {
-        return m_alignOf;
-    }
-
-    [[nodiscard]] bool operator==(const AnonymousStructType& rhs) const
-    {
-        return m_id == rhs.m_id;
-    }
-
-    [[nodiscard]] bool operator!=(const AnonymousStructType& rhs) const
-    {
-        return !(*this == rhs);
-    }
-};
-
-class AnonymousUnionType final
-{
-    std::uint64_t m_id;
-    FieldMap m_fields;
-    std::vector<FieldInLayout> m_fieldLayout;
-    std::uint64_t m_sizeOf;
-    std::uint64_t m_alignOf;
-
-    AnonymousUnionType(std::uint64_t id, FieldMap&& fields, std::vector<FieldInLayout> fieldLayout,
-                       std::uint64_t sizeOf, std::uint64_t alignOf)
-        : m_id(id),
-          m_fields(std::move(fields)),
-          m_fieldLayout(std::move(fieldLayout)),
-          m_sizeOf(sizeOf),
-          m_alignOf(alignOf)
-    {
-    }
-
-public:
-    static Type create(bool isConst, bool isVolatile, std::uint64_t id, FieldMap fields,
-                       std::vector<FieldInLayout> fieldLayout, std::uint64_t sizeOf, std::uint64_t alignOf);
-
-    [[nodiscard]] std::uint64_t getId() const
-    {
-        return m_id;
-    }
-
-    [[nodiscard]] const FieldMap& getFields() const
-    {
-        return m_fields;
-    }
-
-    [[nodiscard]] const std::vector<FieldInLayout>& getFieldLayout() const
-    {
-        return m_fieldLayout;
-    }
-
-    [[nodiscard]] std::size_t getSizeOf(const ProgramInterface&) const
-    {
-        return m_sizeOf;
-    }
-
-    [[nodiscard]] std::size_t getAlignOf(const ProgramInterface&) const
-    {
-        return m_alignOf;
-    }
-
-    [[nodiscard]] bool operator==(const AnonymousUnionType& rhs) const
-    {
-        return m_id == rhs.m_id;
-    }
-
-    [[nodiscard]] bool operator!=(const AnonymousUnionType& rhs) const
-    {
-        return !(*this == rhs);
-    }
-};
-
 class EnumType final
 {
     std::string_view m_name;
@@ -557,6 +421,11 @@ public:
     [[nodiscard]] std::string_view getName() const
     {
         return m_name;
+    }
+
+    [[nodiscard]] bool isAnonymous() const
+    {
+        return m_name.empty();
     }
 
     [[nodiscard]] std::uint64_t getId() const
@@ -577,41 +446,6 @@ public:
     {
         return !(rhs == *this);
     }
-};
-
-class AnonymousEnumType
-{
-    std::shared_ptr<const Type> m_type;
-    std::uint64_t m_id;
-
-    AnonymousEnumType(std::uint64_t id, std::shared_ptr<const Type> type);
-
-public:
-    static Type create(bool isConst, bool isVolatile, std::uint64_t id, Type type);
-
-    [[nodiscard]] std::uint64_t getId() const
-    {
-        return m_id;
-    }
-
-    [[nodiscard]] const Type& getType() const
-    {
-        return *m_type;
-    }
-
-    [[nodiscard]] bool operator==(const AnonymousEnumType& rhs) const
-    {
-        return m_id == rhs.m_id;
-    }
-
-    [[nodiscard]] bool operator!=(const AnonymousEnumType& rhs) const
-    {
-        return !(*this == rhs);
-    }
-
-    [[nodiscard]] std::size_t getSizeOf(const ProgramInterface& program) const;
-
-    [[nodiscard]] std::size_t getAlignOf(const ProgramInterface& program) const;
 };
 
 class PointerType final
@@ -647,8 +481,7 @@ class Type final
 {
 public:
     using Variant = std::variant<std::monostate, PrimitiveType, ArrayType, AbstractArrayType, ValArrayType,
-                                 FunctionType, StructType, UnionType, EnumType, PointerType, AnonymousEnumType,
-                                 AnonymousStructType, AnonymousUnionType>;
+                                 FunctionType, StructType, UnionType, EnumType, PointerType>;
 
 private:
     Variant m_type;
@@ -855,6 +688,16 @@ public:
     }
 
     [[nodiscard]] Lexer::CTokenIterator end() const;
+};
+
+struct Field
+{
+    std::shared_ptr<const Type> type; // NOT NULL
+    std::string_view name;
+    const Lexer::CToken* nameToken;
+    std::vector<std::size_t> indices;
+    std::optional<std::pair<std::uint32_t, std::uint32_t>> bitFieldBounds;
+    std::vector<std::shared_ptr<const Type>> parentTypes;
 };
 
 class MemberAccess final
@@ -1924,6 +1767,18 @@ public:
     GNUASMStatement(std::int64_t scope) : Statement(scope, std::in_place_type<GNUASMStatement>) {}
 };
 
+struct FieldInLayout
+{
+    std::shared_ptr<const Type> type;
+    std::size_t layoutIndex;
+    std::optional<std::pair<std::uint32_t, std::uint32_t>> bitFieldBounds;
+    std::uint64_t offset;
+};
+
+using FieldMap = tsl::ordered_map<std::string_view, Field, std::hash<std::string_view>, std::equal_to<std::string_view>,
+                                  std::allocator<std::pair<std::string_view, Field>>,
+                                  std::vector<std::pair<std::string_view, Field>>>;
+
 class StructDefinition
 {
     std::string_view m_name;
@@ -1948,6 +1803,11 @@ public:
     [[nodiscard]] std::string_view getName() const
     {
         return m_name;
+    }
+
+    [[nodiscard]] bool isAnonymous() const
+    {
+        return m_name.empty();
     }
 
     [[nodiscard]] const FieldMap& getFields() const
@@ -1998,6 +1858,11 @@ public:
     [[nodiscard]] std::string_view getName() const
     {
         return m_name;
+    }
+
+    [[nodiscard]] bool isAnonymous() const
+    {
+        return m_name.empty();
     }
 
     [[nodiscard]] const FieldMap& getFields() const
@@ -2320,6 +2185,8 @@ Program analyse(const Syntax::TranslationUnit& parseTree, CSourceObject&& cToken
 
 [[nodiscard]] bool isUnion(const Type& type);
 
+[[nodiscard]] bool isAnonymous(const Type& type);
+
 [[nodiscard]] bool isEnum(const Type& type);
 
 [[nodiscard]] bool isBool(const Type& type);
@@ -2451,33 +2318,6 @@ template <>
 struct hash<cld::Semantics::EnumType>
 {
     std::size_t operator()(const cld::Semantics::EnumType& type) const noexcept
-    {
-        return std::hash<std::size_t>{}(type.getId());
-    }
-};
-
-template <>
-struct hash<cld::Semantics::AnonymousStructType>
-{
-    std::size_t operator()(const cld::Semantics::AnonymousStructType& type) const noexcept
-    {
-        return std::hash<std::size_t>{}(type.getId());
-    }
-};
-
-template <>
-struct hash<cld::Semantics::AnonymousUnionType>
-{
-    std::size_t operator()(const cld::Semantics::AnonymousUnionType& type) const noexcept
-    {
-        return std::hash<std::size_t>{}(type.getId());
-    }
-};
-
-template <>
-struct hash<cld::Semantics::AnonymousEnumType>
-{
-    std::size_t operator()(const cld::Semantics::AnonymousEnumType& type) const noexcept
     {
         return std::hash<std::size_t>{}(type.getId());
     }

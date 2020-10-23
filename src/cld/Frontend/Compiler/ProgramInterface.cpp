@@ -32,14 +32,6 @@ bool cld::Semantics::ProgramInterface::isCompleteType(const Type& type) const
 const cld::Semantics::FieldMap&
     cld::Semantics::ProgramInterface::getFields(const cld::Semantics::Type& recordType) const
 {
-    if (std::holds_alternative<AnonymousUnionType>(recordType.getVariant()))
-    {
-        return cld::get<AnonymousUnionType>(recordType.getVariant()).getFields();
-    }
-    if (std::holds_alternative<AnonymousStructType>(recordType.getVariant()))
-    {
-        return cld::get<AnonymousStructType>(recordType.getVariant()).getFields();
-    }
     if (std::holds_alternative<StructType>(recordType.getVariant()))
     {
         auto& structType = cld::get<StructType>(recordType.getVariant());
@@ -60,10 +52,6 @@ const cld::Semantics::FieldMap&
 llvm::ArrayRef<cld::Semantics::Type>
     cld::Semantics::ProgramInterface::getMemoryLayout(const cld::Semantics::Type& structType) const
 {
-    if (std::holds_alternative<AnonymousStructType>(structType.getVariant()))
-    {
-        return cld::get<AnonymousStructType>(structType.getVariant()).getMemLayout();
-    }
     if (std::holds_alternative<StructType>(structType.getVariant()))
     {
         auto& structTy = cld::get<StructType>(structType.getVariant());
@@ -87,14 +75,6 @@ bool cld::Semantics::ProgramInterface::isBitfieldAccess(const Expression& expres
 llvm::ArrayRef<cld::Semantics::FieldInLayout>
     cld::Semantics::ProgramInterface::getFieldLayout(const cld::Semantics::Type& recordType) const
 {
-    if (std::holds_alternative<AnonymousUnionType>(recordType.getVariant()))
-    {
-        return cld::get<AnonymousUnionType>(recordType.getVariant()).getFieldLayout();
-    }
-    if (std::holds_alternative<AnonymousStructType>(recordType.getVariant()))
-    {
-        return cld::get<AnonymousStructType>(recordType.getVariant()).getFieldLayout();
-    }
     if (std::holds_alternative<StructType>(recordType.getVariant()))
     {
         auto& structType = cld::get<StructType>(recordType.getVariant());

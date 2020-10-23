@@ -754,25 +754,31 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::visit(const Syntax:
 
 void cld::Semantics::SemanticAnalysis::reportNoMember(const Type& recordType, const Lexer::CToken& identifier)
 {
-    if (std::holds_alternative<AnonymousUnionType>(recordType.getVariant()))
-    {
-        log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_ANONYMOUS_UNION.args(identifier, m_sourceInterface,
-                                                                                identifier));
-    }
-    if (std::holds_alternative<AnonymousStructType>(recordType.getVariant()))
-    {
-        log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_ANONYMOUS_STRUCT.args(identifier, m_sourceInterface,
-                                                                                 identifier));
-    }
     if (std::holds_alternative<UnionType>(recordType.getVariant()))
     {
-        log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_UNION_N.args(
-            identifier, m_sourceInterface, identifier, cld::get<UnionType>(recordType.getVariant()).getName()));
+        if (cld::get<UnionType>(recordType.getVariant()).isAnonymous())
+        {
+            log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_ANONYMOUS_UNION.args(identifier, m_sourceInterface,
+                                                                                    identifier));
+        }
+        else
+        {
+            log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_UNION_N.args(
+                identifier, m_sourceInterface, identifier, cld::get<UnionType>(recordType.getVariant()).getName()));
+        }
     }
     if (std::holds_alternative<StructType>(recordType.getVariant()))
     {
-        log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_STRUCT_N.args(
-            identifier, m_sourceInterface, identifier, cld::get<StructType>(recordType.getVariant()).getName()));
+        if (cld::get<StructType>(recordType.getVariant()).isAnonymous())
+        {
+            log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_ANONYMOUS_STRUCT.args(identifier, m_sourceInterface,
+                                                                                     identifier));
+        }
+        else
+        {
+            log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_STRUCT_N.args(
+                identifier, m_sourceInterface, identifier, cld::get<StructType>(recordType.getVariant()).getName()));
+        }
     }
 }
 
@@ -782,14 +788,6 @@ std::optional<std::pair<cld::Semantics::Type, const cld::Semantics::Field * CLD_
                                                         const Lexer::CToken& identifier)
 {
     const FieldMap* fields = nullptr;
-    if (std::holds_alternative<AnonymousUnionType>(recordType.getVariant()))
-    {
-        fields = &cld::get<AnonymousUnionType>(recordType.getVariant()).getFields();
-    }
-    if (std::holds_alternative<AnonymousStructType>(recordType.getVariant()))
-    {
-        fields = &cld::get<AnonymousStructType>(recordType.getVariant()).getFields();
-    }
     if (std::holds_alternative<StructType>(recordType.getVariant()))
     {
         auto& structType = cld::get<StructType>(recordType.getVariant());
@@ -2364,13 +2362,6 @@ cld::Semantics::Expression cld::Semantics::SemanticAnalysis::integerPromotion(Ex
     expression = lvalueConversion(std::move(expression));
     if (isEnum(expression.getType()))
     {
-        if (std::holds_alternative<AnonymousEnumType>(expression.getType().getVariant()))
-        {
-            auto type = cld::get<AnonymousEnumType>(expression.getType().getVariant()).getType();
-            return Expression(
-                std::move(type), ValueCategory::Rvalue,
-                Conversion(Conversion::IntegerPromotion, std::make_unique<Expression>(std::move(expression))));
-        }
         auto& enumType = cld::get<EnumType>(expression.getType().getVariant());
         auto* enumDef = getEnumDefinition(enumType.getId());
         CLD_ASSERT(enumDef);
@@ -2942,8 +2933,7 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
                 {
                     if (!std::holds_alternative<Lexer::CTokenIterator>(desig))
                     {
-                        if (std::holds_alternative<StructType>(current->type->getVariant())
-                            || std::holds_alternative<AnonymousStructType>(current->type->getVariant()))
+                        if (isStruct(*current->type))
                         {
                             log(Errors::Semantics::EXPECTED_MEMBER_DESIGNATOR_FOR_STRUCT_TYPE.args(
                                 desig, m_sourceInterface, desig));
@@ -2966,20 +2956,28 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
                         cld::match(
                             current->type->getVariant(),
                             [&](const StructType& structType) {
-                                log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_STRUCT_N.args(
-                                    *token, m_sourceInterface, *token, structType.getName()));
-                            },
-                            [&](const AnonymousStructType&) {
-                                log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_ANONYMOUS_STRUCT.args(
-                                    *token, m_sourceInterface, *token));
+                                if (structType.isAnonymous())
+                                {
+                                    log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_ANONYMOUS_STRUCT.args(
+                                        *token, m_sourceInterface, *token));
+                                }
+                                else
+                                {
+                                    log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_STRUCT_N.args(
+                                        *token, m_sourceInterface, *token, structType.getName()));
+                                }
                             },
                             [&](const UnionType& unionType) {
-                                log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_UNION_N.args(
-                                    *token, m_sourceInterface, *token, unionType.getName()));
-                            },
-                            [&](const AnonymousUnionType&) {
-                                log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_ANONYMOUS_UNION.args(
-                                    *token, m_sourceInterface, *token));
+                                if (unionType.isAnonymous())
+                                {
+                                    log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_ANONYMOUS_UNION.args(
+                                        *token, m_sourceInterface, *token));
+                                }
+                                else
+                                {
+                                    log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_UNION_N.args(
+                                        *token, m_sourceInterface, *token, unionType.getName()));
+                                }
                             },
                             [&](const auto&) { CLD_UNREACHABLE; });
                         finishRest(iter + 1, node.getNonCommaExpressionsAndBlocks().end());
@@ -3124,8 +3122,7 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
                                                        std::move(expression), staticLifetime, nullptr);
             initializations.push_back({{path.rbegin(), path.rend()}, std::move(expression)});
         }
-        if (std::holds_alternative<UnionType>(current->type->getVariant())
-            || std::holds_alternative<AnonymousUnionType>(current->type->getVariant()))
+        if (isUnion(*current->type))
         {
             currentIndex = current->index + 1;
             current = current->parent;

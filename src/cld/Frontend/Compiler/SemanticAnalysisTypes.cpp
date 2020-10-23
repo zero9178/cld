@@ -685,7 +685,28 @@ cld::Semantics::Type
         }
 
         std::optional<std::size_t> structOrUnionID;
-        if (structOrUnion->getIdentifierLoc())
+        if (!structOrUnion->getIdentifierLoc())
+        {
+            if (structOrUnion->isUnion())
+            {
+                if (auto result = m_anonymousTagToID.find(structOrUnion->begin()); result != m_anonymousTagToID.end())
+                {
+                    return UnionType::create(isConst, isVolatile, "", result->second);
+                }
+                structOrUnionID = m_unionDefinitions.size();
+                m_unionDefinitions.emplace_back(UnionDecl{});
+            }
+            else
+            {
+                if (auto result = m_anonymousTagToID.find(structOrUnion->begin()); result != m_anonymousTagToID.end())
+                {
+                    return StructType::create(isConst, isVolatile, "", result->second);
+                }
+                structOrUnionID = m_structDefinitions.size();
+                m_structDefinitions.emplace_back(StructDecl{});
+            }
+        }
+        else
         {
             auto name = structOrUnion->getIdentifierLoc()->getText();
             if (structOrUnion->isUnion())
@@ -789,9 +810,7 @@ cld::Semantics::Type
                 auto type = declaratorsToType(specifiers);
                 auto parentType = std::make_shared<const Type>(std::move(type));
                 fieldLayout.push_back({parentType, static_cast<std::size_t>(-1), {}, {}});
-                if (!extensionsEnabled(structOrUnion->begin())
-                    || (!std::holds_alternative<AnonymousStructType>(parentType->getVariant())
-                        && !std::holds_alternative<AnonymousUnionType>(parentType->getVariant())))
+                if (!extensionsEnabled(structOrUnion->begin()) || !isAnonymous(*parentType))
                 {
                     log(Errors::Semantics::FIELD_WITHOUT_A_NAME_IS_NOT_ALLOWED.args(specifiers, m_sourceInterface,
                                                                                     specifiers));
@@ -1134,41 +1153,30 @@ cld::Semantics::Type
             }
         }
         currentSize = roundUpTo(currentSize, currentAlignment);
-        if (structOrUnion->getIdentifierLoc())
+
+        std::string_view name = structOrUnion->getIdentifierLoc() ? structOrUnion->getIdentifierLoc()->getText() : "";
+        if (name.empty() && structOrUnionID)
         {
-            auto name = structOrUnion->getIdentifierLoc()->getText();
-            if (structOrUnion->isUnion())
-            {
-                if (structOrUnionID)
-                {
-                    m_unionDefinitions[*structOrUnionID].emplace<UnionDefinition>(
-                        name, std::move(fields), std::move(fieldLayout), currentSize, currentAlignment);
-                    return UnionType::create(isConst, isVolatile, structOrUnion->getIdentifierLoc()->getText(),
-                                             *structOrUnionID);
-                }
-                return Type{};
-            }
+            m_anonymousTagToID.emplace(structOrUnion->begin(), *structOrUnionID);
+        }
+        if (structOrUnion->isUnion())
+        {
             if (structOrUnionID)
             {
-                m_structDefinitions[*structOrUnionID].emplace<StructDefinition>(
-                    name, std::move(fields), std::move(fieldLayout), std::move(memoryLayout), currentSize,
-                    currentAlignment);
-                return StructType::create(isConst, isVolatile, structOrUnion->getIdentifierLoc()->getText(),
-                                          *structOrUnionID);
+                m_unionDefinitions[*structOrUnionID].emplace<UnionDefinition>(
+                    name, std::move(fields), std::move(fieldLayout), currentSize, currentAlignment);
+                return UnionType::create(isConst, isVolatile, name, *structOrUnionID);
             }
             return Type{};
         }
-
-        if (structOrUnion->isUnion())
+        if (structOrUnionID)
         {
-            return AnonymousUnionType::create(isConst, isVolatile,
-                                              reinterpret_cast<std::uintptr_t>(structOrUnion->begin()),
-                                              std::move(fields), std::move(fieldLayout), currentSize, currentAlignment);
+            m_structDefinitions[*structOrUnionID].emplace<StructDefinition>(
+                name, std::move(fields), std::move(fieldLayout), std::move(memoryLayout), currentSize,
+                currentAlignment);
+            return StructType::create(isConst, isVolatile, name, *structOrUnionID);
         }
-
-        return AnonymousStructType::create(
-            isConst, isVolatile, reinterpret_cast<std::uintptr_t>(structOrUnion->begin()), std::move(fields),
-            std::move(fieldLayout), std::move(memoryLayout), currentSize, currentAlignment);
+        return Type{};
     }
     CLD_ASSERT(std::holds_alternative<std::unique_ptr<Syntax::EnumSpecifier>>(typeSpec[0]->getVariant()));
     if (typeSpec.size() != 1)
@@ -1255,9 +1263,9 @@ cld::Semantics::Type
             }
         }
     }
+    std::string_view name = enumDef.getName() ? enumDef.getName()->getText() : "";
     if (enumDef.getName())
     {
-        auto name = enumDef.getName()->getText();
         auto [prev, notRedefined] = getCurrentScope().types.insert(
             {name, TagTypeInScope{enumDef.getName(), EnumTag{m_enumDefinitions.size()}}});
         if (!notRedefined)
@@ -1274,12 +1282,14 @@ cld::Semantics::Type
                                                          *prev->second.identifier));
             }
         }
-        m_enumDefinitions.emplace_back(name,
-                                       PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions()));
-        return EnumType::create(isConst, isVolatile, name, m_enumDefinitions.size() - 1);
     }
-    return AnonymousEnumType::create(isConst, isVolatile, reinterpret_cast<std::uintptr_t>(enumDecl->begin()),
-                                     PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions()));
+    else
+    {
+        m_anonymousTagToID.emplace(enumDecl->begin(), m_enumDefinitions.size());
+    }
+    m_enumDefinitions.emplace_back(name,
+                                   PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions()));
+    return EnumType::create(isConst, isVolatile, name, m_enumDefinitions.size() - 1);
 }
 
 cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitiveTypeSpecifiersToType(

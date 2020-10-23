@@ -516,8 +516,7 @@ bool cld::Semantics::isArithmetic(const Type& type)
 {
     return (std::holds_alternative<PrimitiveType>(type.getVariant())
             && cld::get<PrimitiveType>(type.getVariant()).getBitCount() != 0)
-           || std::holds_alternative<EnumType>(type.getVariant())
-           || std::holds_alternative<AnonymousEnumType>(type.getVariant());
+           || std::holds_alternative<EnumType>(type.getVariant());
 }
 
 bool cld::Semantics::isScalar(const Type& type)
@@ -532,20 +531,26 @@ bool cld::Semantics::isRecord(const cld::Semantics::Type& type)
 
 bool cld::Semantics::isStruct(const cld::Semantics::Type& type)
 {
-    return std::holds_alternative<StructType>(type.getVariant())
-           || std::holds_alternative<AnonymousStructType>(type.getVariant());
+    return std::holds_alternative<StructType>(type.getVariant());
 }
 
 bool cld::Semantics::isUnion(const cld::Semantics::Type& type)
 {
-    return std::holds_alternative<UnionType>(type.getVariant())
-           || std::holds_alternative<AnonymousUnionType>(type.getVariant());
+    return std::holds_alternative<UnionType>(type.getVariant());
+}
+
+bool cld::Semantics::isAnonymous(const Type& type)
+{
+    return (std::holds_alternative<EnumType>(type.getVariant()) && cld::get<EnumType>(type.getVariant()).isAnonymous())
+           || (std::holds_alternative<StructType>(type.getVariant())
+               && cld::get<StructType>(type.getVariant()).isAnonymous())
+           || (std::holds_alternative<UnionType>(type.getVariant())
+               && cld::get<UnionType>(type.getVariant()).isAnonymous());
 }
 
 bool cld::Semantics::isEnum(const Type& type)
 {
-    return std::holds_alternative<EnumType>(type.getVariant())
-           || std::holds_alternative<AnonymousEnumType>(type.getVariant());
+    return std::holds_alternative<EnumType>(type.getVariant());
 }
 
 bool cld::Semantics::isBool(const cld::Semantics::Type& type)
@@ -618,46 +623,6 @@ bool cld::Semantics::isVariableLengthArray(const Type& type)
 cld::Semantics::TranslationUnit::TranslationUnit(std::vector<TranslationUnit::Variant> globals)
     : m_globals(std::move(globals))
 {
-}
-
-cld::Semantics::Type cld::Semantics::AnonymousStructType::create(bool isConst, bool isVolatile, std::uint64_t id,
-                                                                 FieldMap fields,
-                                                                 std::vector<FieldInLayout> fieldLayout,
-                                                                 std::vector<Type> memLayout, std::uint32_t sizeOf,
-                                                                 std::uint32_t alignOf)
-{
-    return cld::Semantics::Type(
-        isConst, isVolatile,
-        AnonymousStructType(id, std::move(fields), std::move(fieldLayout), std::move(memLayout), sizeOf, alignOf));
-}
-
-cld::Semantics::Type cld::Semantics::AnonymousUnionType::create(bool isConst, bool isVolatile, std::uint64_t id,
-                                                                FieldMap fields, std::vector<FieldInLayout> fieldLayout,
-                                                                std::uint64_t sizeOf, std::uint64_t alignOf)
-{
-    return cld::Semantics::Type(isConst, isVolatile,
-                                AnonymousUnionType(id, std::move(fields), std::move(fieldLayout), sizeOf, alignOf));
-}
-
-cld::Semantics::AnonymousEnumType::AnonymousEnumType(std::uint64_t id, std::shared_ptr<const Type> type)
-    : m_type(std::move(type)), m_id(id)
-{
-}
-
-cld::Semantics::Type cld::Semantics::AnonymousEnumType::create(bool isConst, bool isVolatile, std::uint64_t id,
-                                                               Type type)
-{
-    return Type(isConst, isVolatile, AnonymousEnumType(id, std::make_shared<Type>(std::move(type))));
-}
-
-std::size_t cld::Semantics::AnonymousEnumType::getSizeOf(const ProgramInterface& program) const
-{
-    return m_type->getSizeOf(program);
-}
-
-std::size_t cld::Semantics::AnonymousEnumType::getAlignOf(const ProgramInterface& program) const
-{
-    return m_type->getAlignOf(program);
 }
 
 namespace
@@ -846,7 +811,14 @@ std::string typeToString(const cld::Semantics::Type& arg)
                 {
                     qualifiersAndSpecifiers += "volatile ";
                 }
-                qualifiersAndSpecifiers += "struct " + cld::to_string(structType.getName());
+                if (structType.isAnonymous())
+                {
+                    qualifiersAndSpecifiers += "struct <anonymous 0x" + llvm::utohexstr(structType.getId()) + ">";
+                }
+                else
+                {
+                    qualifiersAndSpecifiers += "struct " + cld::to_string(structType.getName());
+                }
                 return {};
             },
             [&](const UnionType& unionType) -> std::optional<Type> {
@@ -858,7 +830,14 @@ std::string typeToString(const cld::Semantics::Type& arg)
                 {
                     qualifiersAndSpecifiers += "volatile ";
                 }
-                qualifiersAndSpecifiers += "union " + cld::to_string(unionType.getName());
+                if (unionType.isAnonymous())
+                {
+                    qualifiersAndSpecifiers += "union <anonymous 0x" + llvm::utohexstr(unionType.getId()) + ">";
+                }
+                else
+                {
+                    qualifiersAndSpecifiers += "union " + cld::to_string(unionType.getName());
+                }
                 return {};
             },
             [&](const EnumType& enumType) -> std::optional<Type> {
@@ -870,43 +849,14 @@ std::string typeToString(const cld::Semantics::Type& arg)
                 {
                     qualifiersAndSpecifiers += "volatile ";
                 }
-                qualifiersAndSpecifiers += "struct " + cld::to_string(enumType.getName());
-                return {};
-            },
-            [&](const AnonymousStructType& structType) -> std::optional<Type> {
-                if (maybeCurr->isConst())
+                if (enumType.isAnonymous())
                 {
-                    qualifiersAndSpecifiers += "const ";
+                    qualifiersAndSpecifiers += "enum <anonymous 0x" + llvm::utohexstr(enumType.getId()) + ">";
                 }
-                if (maybeCurr->isVolatile())
+                else
                 {
-                    qualifiersAndSpecifiers += "volatile ";
+                    qualifiersAndSpecifiers += "enum " + cld::to_string(enumType.getName());
                 }
-                qualifiersAndSpecifiers += "struct <anonymous 0x" + llvm::utohexstr(structType.getId()) + ">";
-                return {};
-            },
-            [&](const AnonymousUnionType& unionType) -> std::optional<Type> {
-                if (maybeCurr->isConst())
-                {
-                    qualifiersAndSpecifiers += "const ";
-                }
-                if (maybeCurr->isVolatile())
-                {
-                    qualifiersAndSpecifiers += "volatile ";
-                }
-                qualifiersAndSpecifiers += "union <anonymous 0x" + llvm::utohexstr(unionType.getId()) + ">";
-                return {};
-            },
-            [&](const AnonymousEnumType& enumType) -> std::optional<Type> {
-                if (maybeCurr->isConst())
-                {
-                    qualifiersAndSpecifiers += "const ";
-                }
-                if (maybeCurr->isVolatile())
-                {
-                    qualifiersAndSpecifiers += "volatile ";
-                }
-                qualifiersAndSpecifiers += "enum <anonymous 0x" + llvm::utohexstr(enumType.getId()) + ">";
                 return {};
             },
             [&](std::monostate) -> std::optional<Type> {
