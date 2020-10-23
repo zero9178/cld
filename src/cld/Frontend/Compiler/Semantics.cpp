@@ -204,12 +204,7 @@ cld::Semantics::PrimitiveType::PrimitiveType(bool isFloatingPoint, bool isSigned
 
 std::uint8_t cld::Semantics::PrimitiveType::getByteCount() const
 {
-    auto value = m_bitCount;
-    auto remainder = value % 8;
-    if (remainder)
-    {
-        value += 8 - remainder;
-    }
+    auto value = roundUpTo(m_bitCount, 8);
     std::uint8_t temp = (value / 8) - 1;
     temp |= temp >> 1;
     temp |= temp >> 2;

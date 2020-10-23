@@ -1025,14 +1025,7 @@ cld::Semantics::Type
                     memoryLayout.emplace_back(*parentType);
                     auto alignment = parentType->getAlignOf(*this);
                     currentAlignment = std::max(currentAlignment, alignment);
-                    if (alignment != 0)
-                    {
-                        auto rest = currentSize % alignment;
-                        if (rest != 0)
-                        {
-                            currentSize += alignment - rest;
-                        }
-                    }
+                    currentSize = roundUpTo(currentSize, alignment);
                     auto subSize = parentType->getSizeOf(*this);
                     currentSize += subSize;
                     continue;
@@ -1050,11 +1043,7 @@ cld::Semantics::Type
                     }
                     auto alignment = iter->second.type->getAlignOf(*this);
                     currentAlignment = std::max(currentAlignment, alignment);
-                    auto rest = currentSize % alignment;
-                    if (rest != 0)
-                    {
-                        currentSize += alignment - rest;
-                    }
+                    currentSize = roundUpTo(currentSize, alignment);
                     auto subSize = iter->second.type->getSizeOf(*this);
                     currentSize += subSize;
                     iter++;
@@ -1088,11 +1077,7 @@ cld::Semantics::Type
                     currentSize += prevSize;
                     auto alignment = iter->second.type->getAlignOf(*this);
                     currentAlignment = std::max(currentAlignment, alignment);
-                    auto rest = currentSize % alignment;
-                    if (rest != 0)
-                    {
-                        currentSize += alignment - rest;
-                    }
+                    currentSize = roundUpTo(currentSize, alignment);
                     prevSize = size;
                     storageLeft = cld::get<PrimitiveType>(iter->second.type->getVariant()).getBitCount()
                                   - iter->second.bitFieldBounds->second;
@@ -1148,14 +1133,7 @@ cld::Semantics::Type
                 }
             }
         }
-        if (currentAlignment != 0)
-        {
-            auto rest = currentSize % currentAlignment;
-            if (rest != 0)
-            {
-                currentSize += currentAlignment - rest;
-            }
-        }
+        currentSize = roundUpTo(currentSize, currentAlignment);
         if (structOrUnion->getIdentifierLoc())
         {
             auto name = structOrUnion->getIdentifierLoc()->getText();

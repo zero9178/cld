@@ -13,14 +13,7 @@ void cld::detail::CommandLine::printHelp(llvm::raw_ostream& os,
                             return lhs.first.size() < rhs.first.size();
                         })->first.size();
     constexpr auto indentStep = 4;
-    auto width = maxLen;
-    {
-        const auto remainder = width % indentStep;
-        if (remainder)
-        {
-            width += indentStep - remainder;
-        }
-    }
+    auto width = roundUpTo(maxLen, indentStep);
 
     for (auto [cli, description] : options)
     {

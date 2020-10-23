@@ -2374,13 +2374,13 @@ struct CustomFormat<U'f', U'u', U'l', U'l', U'T', U'y', U'p', U'e'>
 namespace std
 {
 template <>
-struct std::hash<cld::Semantics::Type>
+struct hash<cld::Semantics::Type>
 {
     std::size_t operator()(const cld::Semantics::Type& type) const noexcept;
 };
 
 template <>
-struct std::hash<cld::Semantics::PrimitiveType>
+struct hash<cld::Semantics::PrimitiveType>
 {
     std::size_t operator()(const cld::Semantics::PrimitiveType& type) const noexcept
     {
@@ -2389,7 +2389,7 @@ struct std::hash<cld::Semantics::PrimitiveType>
 };
 
 template <>
-struct std::hash<cld::Semantics::ArrayType>
+struct hash<cld::Semantics::ArrayType>
 {
     std::size_t operator()(const cld::Semantics::ArrayType& type) const noexcept
     {
@@ -2398,7 +2398,7 @@ struct std::hash<cld::Semantics::ArrayType>
 };
 
 template <>
-struct std::hash<cld::Semantics::AbstractArrayType>
+struct hash<cld::Semantics::AbstractArrayType>
 {
     std::size_t operator()(const cld::Semantics::AbstractArrayType& type) const noexcept
     {
@@ -2407,7 +2407,7 @@ struct std::hash<cld::Semantics::AbstractArrayType>
 };
 
 template <>
-struct std::hash<cld::Semantics::ValArrayType>
+struct hash<cld::Semantics::ValArrayType>
 {
     std::size_t operator()(const cld::Semantics::ValArrayType& type) const noexcept
     {
@@ -2416,7 +2416,7 @@ struct std::hash<cld::Semantics::ValArrayType>
 };
 
 template <>
-struct std::hash<cld::Semantics::FunctionType>
+struct hash<cld::Semantics::FunctionType>
 {
     std::size_t operator()(const cld::Semantics::FunctionType& type) const noexcept
     {
@@ -2430,7 +2430,7 @@ struct std::hash<cld::Semantics::FunctionType>
 };
 
 template <>
-struct std::hash<cld::Semantics::StructType>
+struct hash<cld::Semantics::StructType>
 {
     std::size_t operator()(const cld::Semantics::StructType& type) const noexcept
     {
@@ -2439,7 +2439,7 @@ struct std::hash<cld::Semantics::StructType>
 };
 
 template <>
-struct std::hash<cld::Semantics::UnionType>
+struct hash<cld::Semantics::UnionType>
 {
     std::size_t operator()(const cld::Semantics::UnionType& type) const noexcept
     {
@@ -2448,7 +2448,7 @@ struct std::hash<cld::Semantics::UnionType>
 };
 
 template <>
-struct std::hash<cld::Semantics::EnumType>
+struct hash<cld::Semantics::EnumType>
 {
     std::size_t operator()(const cld::Semantics::EnumType& type) const noexcept
     {
@@ -2457,7 +2457,7 @@ struct std::hash<cld::Semantics::EnumType>
 };
 
 template <>
-struct std::hash<cld::Semantics::AnonymousStructType>
+struct hash<cld::Semantics::AnonymousStructType>
 {
     std::size_t operator()(const cld::Semantics::AnonymousStructType& type) const noexcept
     {
@@ -2466,7 +2466,7 @@ struct std::hash<cld::Semantics::AnonymousStructType>
 };
 
 template <>
-struct std::hash<cld::Semantics::AnonymousUnionType>
+struct hash<cld::Semantics::AnonymousUnionType>
 {
     std::size_t operator()(const cld::Semantics::AnonymousUnionType& type) const noexcept
     {
@@ -2475,7 +2475,7 @@ struct std::hash<cld::Semantics::AnonymousUnionType>
 };
 
 template <>
-struct std::hash<cld::Semantics::AnonymousEnumType>
+struct hash<cld::Semantics::AnonymousEnumType>
 {
     std::size_t operator()(const cld::Semantics::AnonymousEnumType& type) const noexcept
     {
@@ -2484,7 +2484,7 @@ struct std::hash<cld::Semantics::AnonymousEnumType>
 };
 
 template <>
-struct std::hash<cld::Semantics::PointerType>
+struct hash<cld::Semantics::PointerType>
 {
     std::size_t operator()(const cld::Semantics::PointerType& type) const noexcept
     {

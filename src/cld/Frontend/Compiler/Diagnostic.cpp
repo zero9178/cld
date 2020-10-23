@@ -411,14 +411,7 @@ cld::Message cld::detail::Diagnostic::DiagnosticBase::print(std::pair<PointLocat
     auto width = std::max_element(fileToMaxMinLine.begin(), fileToMaxMinLine.end(), [](auto&& lhs, auto&& rhs) {
                      return lhs.second.second < rhs.second.second;
                  })->second.second;
-    width = 1 + (std::size_t)std::floor(log10f(width));
-    {
-        const auto remainder = width % 4;
-        if (remainder)
-        {
-            width += 4 - remainder;
-        }
-    }
+    width = roundUpTo(1 + (std::size_t)std::floor(log10f(width)), 4);
 
     for (auto [fileId, lineBounds] : fileToMaxMinLine)
     {
