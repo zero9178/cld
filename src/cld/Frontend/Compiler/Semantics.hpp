@@ -485,7 +485,7 @@ public:
 
 private:
     Variant m_type;
-    std::string m_name;
+    std::string_view m_name;
     bool m_isConst : 1;
     bool m_isVolatile : 1;
 
