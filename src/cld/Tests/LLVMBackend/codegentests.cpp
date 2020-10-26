@@ -377,6 +377,39 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                     CHECK(function->getArg(1)->getType()->isIntegerTy(64));
                 }
             }
+            SECTION("fp80")
+            {
+                auto program = generateProgramWithOptions("void foo(long double r);",
+                                                          x64linux);
+                cld::CGLLVM::generateLLVM(*module, program, x64linux);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                auto* function = module->getFunction("foo");
+                REQUIRE(function);
+                CHECK(function->getReturnType()->isVoidTy());
+                REQUIRE(function->arg_size() == 1);
+                REQUIRE(function->getArg(0)->getType()->isX86_FP80Ty());
+            }
+            SECTION("struct of fp80")
+            {
+                auto program = generateProgramWithOptions("struct R {\n"
+                                                          "long double r;\n"
+                                                          "};\n"
+                                                          "void foo(struct R);",
+                                                          x64linux);
+                cld::CGLLVM::generateLLVM(*module, program, x64linux);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                auto* function = module->getFunction("foo");
+                REQUIRE(function);
+                CHECK(function->getReturnType()->isVoidTy());
+                REQUIRE(function->arg_size() == 1);
+                REQUIRE(function->getArg(0)->getType()->isPointerTy());
+                CHECK(function->getArg(0)->getType()->getPointerElementType()->isStructTy());
+                CHECK(function->hasAttribute(1, llvm::Attribute::ByVal));
+                CHECK(function->hasAttribute(1, llvm::Attribute::Alignment));
+                CHECK(function->getAttribute(1, llvm::Attribute::Alignment).getValueAsInt() == 16);
+            }
             SECTION("Integer mixed with floats")
             {
                 auto program = generateProgramWithOptions("struct R {\n"
@@ -4176,8 +4209,6 @@ TEST_CASE("LLVM codegen c-testsuite", "[LLVM]")
     }
     SECTION("00204.c")
     {
-        SUCCEED();
-        return;
         auto program =
             generateProgram("\n"
                             "int (*print)(const char*,...);\n"
@@ -4892,6 +4923,50 @@ TEST_CASE("LLVM codegen miscellaneous programs", "[LLVM]")
 {
     llvm::LLVMContext context;
     auto module = std::make_unique<llvm::Module>("", context);
+    SECTION("vararg issue")
+    {
+        auto program = generateProgram("int (*print)(const char*,...);\n"
+                                       "\n"
+                                       "struct hfa31 { long double a; } s2 = { 31.1 };\n"
+                                       "\n"
+                                       "void fa_s2(void*p,...) {\n"
+                                       "    __builtin_va_list list;\n"
+                                       "    __builtin_va_start(list,p);\n"
+                                       "    struct hfa31 a = __builtin_va_arg(list,struct hfa31);\n"
+                                       "    __builtin_va_end(list);\n"
+                                       "    print(\"%.1Lf,%.1Lf\",a.a,a.a);\n"
+                                       "}\n"
+                                       "\n"
+                                       "void function(int (*printF)(const char*,...)) {\n"
+                                       "print = printF;\n"
+                                       "fa_s2(0,s2);\n"
+                                       "}\n");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        text.clear();
+        cld::Tests::computeInJIT<void(int (*)(const char*, ...))>(std::move(module), "function", printfCallback);
+        CHECK(text == "31.1,31.1");
+    }
+    SECTION("vararg issue 2")
+    {
+        auto program = generateProgram("int (*print)(const char*,...);\n"
+                                       "\n"
+                                       "struct s2 { char x[2]; } s2 = { \"12\" };\n\n"
+                                       "\n"
+                                       "void fa_s2(struct s2 a) { print(\"%.2s\\n\",a.x); }\n"
+                                       "\n"
+                                       "void function(int (*printF)(const char*,...)) {\n"
+                                       "print = printF;\n"
+                                       "fa_s2(s2);\n"
+                                       "}\n");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        text.clear();
+        cld::Tests::computeInJIT<void(int (*)(const char*, ...))>(std::move(module), "function", printfCallback);
+        CHECK(text == "12\n");
+    }
     SECTION("Member access shenanigans")
     {
         auto program = generateProgram("struct T {\n"
@@ -5049,6 +5124,34 @@ TEST_CASE("LLVM codegen var arg", "[LLVM]")
             {
                 CHECK(cld::Tests::computeInJIT<int(void*, ...)>(std::move(module), "function", nullptr, T{3.0, {3, 2}})
                       == 5);
+            }
+        }
+        SECTION("less than 128 bytes struct all in integers")
+        {
+            struct T
+            {
+                char c[9];
+            };
+            auto program = generateProgram(
+                "struct T {\n"
+                "char r[9];\n"
+                "};\n"
+                "\n"
+                "int function(void*p,...) {\n"
+                "__builtin_va_list list;\n"
+                "__builtin_va_start(list,p);\n"
+                "struct T i = __builtin_va_arg(list,struct T);\n"
+                "__builtin_va_end(list);\n"
+                "return i.r[0] + i.r[1] + i.r[2] + i.r[3] + i.r[4] + i.r[5] + i.r[6] + i.r[7] + i.r[8];\n"
+                "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            if (triple == cld::Triple::native())
+            {
+                CHECK(cld::Tests::computeInJIT<int(void*, ...)>(std::move(module), "function", nullptr,
+                                                                T{1, 2, 3, 4, 5, 6, 7, 8, 9})
+                      == 45);
             }
         }
         SECTION("less than 128 bytes struct")

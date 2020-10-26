@@ -11,6 +11,7 @@
 #include <cld/Frontend/Compiler/Program.hpp>
 #include <cld/Frontend/Compiler/SemanticUtil.hpp>
 #include <cld/Support/Filesystem.hpp>
+#include <cld/Support/ScopeExit.hpp>
 
 #include <numeric>
 
@@ -22,9 +23,87 @@ class CodeGenerator final
     const cld::Semantics::ProgramInterface& m_programInterface;
     const cld::SourceInterface& m_sourceInterface;
     cld::Triple m_triple;
+
+    template <class T, class = void>
+    struct hasGetAlign : std::false_type
+    {
+    };
+
+    template <class T>
+    struct hasGetAlign<T, std::void_t<decltype(std::declval<T>().getAlign())>> : std::true_type
+    {
+    };
+
+    struct Value
+    {
+        llvm::Value* value;
+        llvm::MaybeAlign alignment;
+
+        template <class T>
+        Value(T* value,
+              std::enable_if_t<!hasGetAlign<T>{} || std::is_same_v<llvm::LoadInst, T>, llvm::MaybeAlign> alignment = {})
+            : value(value), alignment(alignment)
+        {
+            CLD_ASSERT(!this->value || !this->value->getType()->isPointerTy()
+                       || this->value->getType()->getPointerElementType()->isFunctionTy()
+                       || this->alignment.hasValue());
+        }
+
+        Value(std::nullptr_t) : value(nullptr) {}
+
+        template <class T, std::enable_if_t<hasGetAlign<T>{} && !std::is_same_v<llvm::LoadInst, T>>* = nullptr>
+        Value(T* value) : Value(static_cast<llvm::Value*>(value), value->getAlign())
+        {
+        }
+
+        Value(llvm::GetElementPtrInst*) = delete;
+
+        Value(llvm::Function*) = delete;
+
+        Value(llvm::IntToPtrInst*) = delete;
+
+        // Remove eventually
+        operator llvm::Value*() const
+        {
+            return value;
+        }
+    };
+
+    template <class T>
+    std::enable_if_t<std::is_base_of_v<llvm::Value, T>, Value> valueOf(T* value, llvm::MaybeAlign alignment = {})
+    {
+        if constexpr (std::is_same_v<T, llvm::Function>)
+        {
+            return Value(static_cast<llvm::Value*>(value), m_module.getDataLayout().getFunctionPtrAlign().getValueOr(
+                                                               m_module.getDataLayout().getPointerABIAlignment(0)));
+        }
+        else if constexpr (hasGetAlign<T>{} && !std::is_same_v<llvm::LoadInst, T>)
+        {
+            return Value(value);
+        }
+        else
+        {
+            if (alignment)
+            {
+                CLD_ASSERT(value->getType()->isPointerTy());
+                return Value(value, alignment);
+            }
+            if (!value->getType()->isPointerTy())
+            {
+                return Value(value, {});
+            }
+            if (value->getType()->getPointerElementType()->isFunctionTy())
+            {
+                return Value(value, m_module.getDataLayout().getFunctionPtrAlign().getValueOr(
+                                        m_module.getDataLayout().getPointerABIAlignment(0)));
+            }
+            return Value(value, m_module.getDataLayout().getABITypeAlign(value->getType()->getPointerElementType()));
+        }
+    }
+
     // void* for now although strictly speaking the pointers can only be const Declaration* or const FunctionDefinition*
     // but hashing the variant seems overkill? I am not sure
-    std::unordered_map<const void*, llvm::Value * CLD_NON_NULL> m_lvalues;
+    std::unordered_map<const void*, Value> m_lvalues;
 
     using TypeVariantKey = std::variant<cld::Semantics::StructType, cld::Semantics::UnionType>;
 
@@ -149,6 +228,17 @@ class CodeGenerator final
                 if ((*iter)->isIntOrPtrTy())
                 {
                     encounteredInteger = true;
+                }
+                // If we have a single fp80 then it is passed normally if it wasn't part of the struct but passed
+                // on the stack if it was in the struct. Very weird I know. Only need to handle this case of a
+                // single fp80 as it is 128 bytes on x64 (due to padding) and we wouldn't be here if the struct
+                // was any larger
+                if ((*iter)->isX86_FP80Ty())
+                {
+                    if (*iter != type)
+                    {
+                        return {ABITransformations::OnStack, type, nullptr};
+                    }
                 }
                 currentAlignment = std::max(currentAlignment, alignment);
                 const auto typeSize = m_module.getDataLayout().getTypeAllocSize(*iter).getKnownMinSize();
@@ -395,13 +485,14 @@ class CodeGenerator final
                 }
                 else if (change == ABITransformations::OnStack)
                 {
+                    auto& arg = ft.getArguments()[origArgI].first;
                     attributeApply.addParamAttr(
                         i, llvm::Attribute::getWithByValType(m_builder.getContext(),
                                                              functionType->getParamType(i)->getPointerElementType()));
                     attributeApply.addParamAttr(
-                        i,
-                        llvm::Attribute::getWithAlignment(
-                            m_builder.getContext(), llvm::Align(m_module.getDataLayout().getPointerABIAlignment(0))));
+                        i, llvm::Attribute::getWithAlignment(
+                               m_builder.getContext(), std::max(llvm::Align(arg.getAlignOf(m_programInterface)),
+                                                                m_module.getDataLayout().getPointerABIAlignment(0))));
                     i++;
                     continue;
                 }
@@ -443,8 +534,7 @@ class CodeGenerator final
         }
     }
 
-    llvm::Value* add(llvm::Value* lhs, const cld::Semantics::Type& lhsType, llvm::Value* rhs,
-                     const cld::Semantics::Type& rhsType)
+    Value add(Value lhs, const cld::Semantics::Type& lhsType, Value rhs, const cld::Semantics::Type& rhsType)
     {
         if (cld::Semantics::isArithmetic(lhsType) && cld::Semantics::isArithmetic(rhsType))
         {
@@ -461,19 +551,20 @@ class CodeGenerator final
             return m_builder.CreateFAdd(lhs, rhs);
         }
 
-        auto* pointer = lhs->getType()->isPointerTy() ? lhs : rhs;
-        auto* integer = pointer == lhs ? rhs : lhs;
-        auto& pointerType = pointer == lhs ? lhsType : rhsType;
+        auto pointer = lhs.value->getType()->isPointerTy() ? lhs : rhs;
+        auto integer = pointer.value == lhs.value ? rhs : lhs;
+        auto& pointerType = pointer.value == lhs.value ? lhsType : rhsType;
         integer = m_builder.CreateIntCast(
-            integer, m_builder.getInt64Ty(),
-            cld::get<cld::Semantics::PrimitiveType>((pointer == lhs ? rhsType : lhsType).getVariant()).isSigned());
+            integer.value, m_builder.getInt64Ty(),
+            cld::get<cld::Semantics::PrimitiveType>((pointer.value == lhs.value ? rhsType : lhsType).getVariant())
+                .isSigned());
         if (!cld::Semantics::isVariableLengthArray(
                 cld::get<cld::Semantics::PointerType>(pointerType.getVariant()).getElementType()))
         {
-            return m_builder.CreateGEP(pointer, integer);
+            return createGEP(pointer, integer.value);
         }
         auto& array = cld::get<cld::Semantics::PointerType>(pointerType.getVariant()).getElementType();
-        llvm::Value* product = integer;
+        Value product = integer;
         for (auto& iter : cld::Semantics::RecursiveVisitor(array, cld::Semantics::ARRAY_TYPE_NEXT_FN))
         {
             llvm::Value* value;
@@ -485,13 +576,12 @@ class CodeGenerator final
             {
                 value = m_valSizes[cld::get<cld::Semantics::ValArrayType>(iter.getVariant()).getExpression()];
             }
-            product = m_builder.CreateMul(product, value);
+            product = m_builder.CreateMul(product.value, value);
         }
-        return m_builder.CreateGEP(pointer, product);
+        return createGEP(pointer, product.value);
     }
 
-    llvm::Value* sub(llvm::Value* lhs, const cld::Semantics::Type& lhsType, llvm::Value* rhs,
-                     const cld::Semantics::Type& rhsType)
+    Value sub(Value lhs, const cld::Semantics::Type& lhsType, Value rhs, const cld::Semantics::Type& rhsType)
     {
         if (cld::Semantics::isArithmetic(lhsType) && cld::Semantics::isArithmetic(rhsType))
         {
@@ -508,20 +598,20 @@ class CodeGenerator final
             return m_builder.CreateFSub(lhs, rhs);
         }
 
-        CLD_ASSERT(lhs->getType()->isPointerTy());
-        if (rhs->getType()->isIntegerTy())
+        CLD_ASSERT(lhs.value->getType()->isPointerTy());
+        if (rhs.value->getType()->isIntegerTy())
         {
-            rhs = m_builder.CreateNeg(rhs);
-            rhs = m_builder.CreateIntCast(rhs, m_builder.getInt64Ty(),
-                                          cld::get<cld::Semantics::PrimitiveType>(rhsType.getVariant()).isSigned());
-            return m_builder.CreateGEP(lhs, rhs);
+            rhs = valueOf(m_builder.CreateNeg(rhs.value));
+            rhs = valueOf(
+                m_builder.CreateIntCast(rhs.value, m_builder.getInt64Ty(),
+                                        cld::get<cld::Semantics::PrimitiveType>(rhsType.getVariant()).isSigned()));
+            return createGEP(lhs, rhs.value);
         }
 
         return m_builder.CreatePtrDiff(lhs, rhs);
     }
 
-    llvm::Value* mul(llvm::Value* lhs, const cld::Semantics::Type& lhsType, llvm::Value* rhs,
-                     const cld::Semantics::Type&)
+    Value mul(Value lhs, const cld::Semantics::Type& lhsType, Value rhs, const cld::Semantics::Type&)
     {
         if (cld::Semantics::isInteger(lhsType))
         {
@@ -536,8 +626,7 @@ class CodeGenerator final
         return m_builder.CreateFMul(lhs, rhs);
     }
 
-    llvm::Value* div(llvm::Value* lhs, const cld::Semantics::Type& lhsType, llvm::Value* rhs,
-                     const cld::Semantics::Type&)
+    Value div(Value lhs, const cld::Semantics::Type& lhsType, Value rhs, const cld::Semantics::Type&)
     {
         if (cld::Semantics::isInteger(lhsType))
         {
@@ -552,8 +641,7 @@ class CodeGenerator final
         return m_builder.CreateFDiv(lhs, rhs);
     }
 
-    llvm::Value* mod(llvm::Value* lhs, const cld::Semantics::Type& lhsType, llvm::Value* rhs,
-                     const cld::Semantics::Type&)
+    Value mod(Value lhs, const cld::Semantics::Type& lhsType, Value rhs, const cld::Semantics::Type&)
     {
         if (cld::get<cld::Semantics::PrimitiveType>(lhsType.getVariant()).isSigned())
         {
@@ -563,23 +651,21 @@ class CodeGenerator final
         return m_builder.CreateURem(lhs, rhs);
     }
 
-    llvm::Value* shl(llvm::Value* lhs, const cld::Semantics::Type&, llvm::Value* rhs,
-                     const cld::Semantics::Type& rhsType)
+    Value shl(Value lhs, const cld::Semantics::Type&, Value rhs, const cld::Semantics::Type& rhsType)
     {
-        if (lhs->getType() != rhs->getType())
+        if (lhs.value->getType() != rhs.value->getType())
         {
-            rhs = m_builder.CreateIntCast(rhs, lhs->getType(),
+            rhs = m_builder.CreateIntCast(rhs, lhs.value->getType(),
                                           cld::get<cld::Semantics::PrimitiveType>(rhsType.getVariant()).isSigned());
         }
         return m_builder.CreateShl(lhs, rhs);
     }
 
-    llvm::Value* shr(llvm::Value* lhs, const cld::Semantics::Type& lhsType, llvm::Value* rhs,
-                     const cld::Semantics::Type& rhsType)
+    Value shr(Value lhs, const cld::Semantics::Type& lhsType, Value rhs, const cld::Semantics::Type& rhsType)
     {
-        if (lhs->getType() != rhs->getType())
+        if (lhs.value->getType() != rhs.value->getType())
         {
-            rhs = m_builder.CreateIntCast(rhs, lhs->getType(),
+            rhs = m_builder.CreateIntCast(rhs, lhs.value->getType(),
                                           cld::get<cld::Semantics::PrimitiveType>(rhsType.getVariant()).isSigned());
         }
         if (!cld::get<cld::Semantics::PrimitiveType>(lhsType.getVariant()).isSigned())
@@ -589,15 +675,16 @@ class CodeGenerator final
         return m_builder.CreateAShr(lhs, rhs);
     }
 
-    llvm::Value* cast(llvm::Value* value, const cld::Semantics::Type& from, const cld::Semantics::Type& to)
+    Value cast(Value value, const cld::Semantics::Type& from, const cld::Semantics::Type& to)
     {
         if (std::holds_alternative<cld::Semantics::PointerType>(to.getVariant()))
         {
             if (cld::Semantics::isInteger(from))
             {
-                return m_builder.CreateIntToPtr(value, visit(to));
+                return valueOf(m_builder.CreateIntToPtr(value, visit(to)));
             }
-            return m_builder.CreatePointerCast(value, visit(to));
+            // User requested and apparently does not care about alignment if this were to go wrong
+            return createPointerCast(value, visit(to));
         }
         if (cld::Semantics::isBool(to))
         {
@@ -633,16 +720,102 @@ class CodeGenerator final
         return m_builder.CreateFPCast(value, visit(to));
     }
 
-    llvm::Value* createLoad(llvm::Value* ptr, bool isVolatile)
+    template <class T>
+    Value createLoad(T*, std::enable_if_t<!hasGetAlign<T>{}, bool>) = delete;
+
+    Value createLoad(Value ptr, bool isVolatile)
     {
-        // TODO: Alignment
-        return m_builder.CreateLoad(ptr, isVolatile);
+        return valueOf(m_builder.CreateAlignedLoad(ptr.value, ptr.alignment, isVolatile));
     }
 
-    llvm::Value* createStore(llvm::Value* value, llvm::Value* ptr, bool isVolatile)
+    template <class T>
+    void createStore(T*, std::enable_if_t<!hasGetAlign<T>{}, bool>) = delete;
+
+    void createStore(llvm::Value* value, Value ptr, bool isVolatile)
     {
-        // TODO: Alignment
-        return m_builder.CreateStore(value, ptr, isVolatile);
+        m_builder.CreateAlignedStore(value, ptr.value, ptr.alignment, isVolatile);
+    }
+
+    llvm::Align calcAlign(llvm::Value* gep, llvm::Align alignment)
+    {
+        bool deleteInst = false;
+        cld::ScopeExit exit([&] {
+            if (deleteInst)
+            {
+                gep->deleteValue();
+            }
+        });
+        auto* constExpr = llvm::dyn_cast<llvm::ConstantExpr>(gep);
+        if (constExpr)
+        {
+            deleteInst = true;
+            gep = constExpr->getAsInstruction();
+        }
+        auto* gepInst = llvm::dyn_cast<llvm::GetElementPtrInst>(gep);
+        if (!gepInst)
+        {
+            return m_module.getDataLayout().getABITypeAlign(gep->getType()->getPointerElementType());
+        }
+        llvm::APInt integer(m_module.getDataLayout().getPointerSizeInBits(0), 0);
+        if (gepInst->accumulateConstantOffset(m_module.getDataLayout(), integer))
+        {
+            for (std::uint64_t value = alignment.value(); value > 0; value >>= 1)
+            {
+                if (integer.getZExtValue() % value == 0)
+                {
+                    return llvm::Align(value);
+                }
+            }
+            CLD_UNREACHABLE;
+        }
+        return m_module.getDataLayout().getABITypeAlign(gep->getType()->getPointerElementType());
+    }
+
+    Value createGEP(Value ptr, llvm::ArrayRef<llvm::Value*> indices)
+    {
+        auto* result = m_builder.CreateGEP(ptr.value, indices);
+        return valueOf(result, calcAlign(result, *ptr.alignment));
+    }
+
+    Value createInBoundsGEP(Value ptr, llvm::ArrayRef<llvm::Value*> indices)
+    {
+        auto* result = m_builder.CreateInBoundsGEP(ptr.value, indices);
+        return valueOf(result, calcAlign(result, *ptr.alignment));
+    }
+
+    Value createPointerCast(Value ptr, llvm::Type* pointerType)
+    {
+        return valueOf(m_builder.CreateBitCast(ptr, pointerType),
+                       m_module.getDataLayout().getABITypeAlign(pointerType->getPointerElementType()));
+    }
+
+    Value createBitCast(Value ptr, llvm::Type* pointerType, bool checked = true)
+    {
+        CLD_ASSERT(!checked
+                   || (ptr.alignment && pointerType->isPointerTy()
+                       && (pointerType->getPointerElementType()->isFunctionTy()
+                           || *ptr.alignment
+                                  >= m_module.getDataLayout().getABITypeAlign(pointerType->getPointerElementType()))));
+        return valueOf(m_builder.CreateBitCast(ptr, pointerType), ptr.alignment);
+    }
+
+    Value createSafeBitCast(Value ptr, llvm::Type* pointerType)
+    {
+        CLD_ASSERT(ptr.alignment);
+        if (*ptr.alignment >= m_module.getDataLayout().getABITypeAlign(pointerType->getPointerElementType()))
+        {
+            // Only if the destination element type is allowed to have the alignment of the source pointer is this cast
+            // valid
+            return valueOf(m_builder.CreateBitCast(ptr, pointerType), ptr.alignment);
+        }
+        llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(), m_currentFunction->getEntryBlock().begin());
+        auto* alloca = temp.CreateAlloca(pointerType->getPointerElementType());
+        alloca->setAlignment(m_module.getDataLayout().getABITypeAlign(pointerType->getPointerElementType()));
+        m_builder.CreateLifetimeStart(alloca, m_builder.getInt64(m_module.getDataLayout().getTypeAllocSize(
+                                                  pointerType->getPointerElementType())));
+        m_builder.CreateMemCpy(alloca, alloca->getAlign(), ptr, *ptr.alignment,
+                               m_module.getDataLayout().getTypeAllocSize(pointerType->getPointerElementType()));
+        return alloca;
     }
 
     llvm::Constant* getStringLiteralData(llvm::Type* elementType, const cld::Semantics::Constant::Variant& value)
@@ -727,7 +900,7 @@ class CodeGenerator final
 
         for (auto& [path, expression] : initializerList.getFields())
         {
-            auto* replacement = visit(expression);
+            auto replacement = visit(expression);
             llvm::Constant** value = [&, &path = path, &expression = expression]() -> llvm::Constant** {
                 Aggregate* current = &constants;
                 const cld::Semantics::Type* currentType = &type;
@@ -823,7 +996,7 @@ class CodeGenerator final
             }();
             if (value)
             {
-                *value = llvm::cast<llvm::Constant>(replacement);
+                *value = llvm::cast<llvm::Constant>(replacement.value);
             }
         }
 
@@ -965,7 +1138,7 @@ class CodeGenerator final
                     auto* alloca = m_stackSaves[decl];
                     if (alloca)
                     {
-                        auto* loaded = createLoad(alloca, false);
+                        auto loaded = createLoad(alloca, false);
                         m_builder.CreateIntrinsic(llvm::Intrinsic::stackrestore, {}, {loaded});
                     }
                     continue;
@@ -1017,24 +1190,24 @@ class CodeGenerator final
         {
             return;
         }
-        auto* instr = visit(expression);
-        if (llvm::isa_and_nonnull<llvm::Instruction>(instr) && instr->getNumUses() == 0
-            && !llvm::cast<llvm::Instruction>(instr)->mayHaveSideEffects())
+        auto instr = visit(expression);
+        if (llvm::isa_and_nonnull<llvm::Instruction>(instr.value) && instr.value->getNumUses() == 0
+            && !llvm::cast<llvm::Instruction>(instr.value)->mayHaveSideEffects())
         {
-            llvm::cast<llvm::Instruction>(instr)->eraseFromParent();
+            llvm::cast<llvm::Instruction>(instr.value)->eraseFromParent();
         }
     }
 
-    llvm::Value* boolToi1(llvm::Value* value)
+    Value boolToi1(Value value)
     {
-        if (auto* cast = llvm::dyn_cast<llvm::CastInst>(value);
+        if (auto* cast = llvm::dyn_cast<llvm::CastInst>(value.value);
             cast && cast->getSrcTy() == m_builder.getInt1Ty() && cast->getNumUses() == 0)
         {
             auto* result = cast->getOperand(0);
             cast->eraseFromParent();
             return result;
         }
-        return m_builder.CreateTrunc(value, m_builder.getInt1Ty());
+        return m_builder.CreateTrunc(value.value, m_builder.getInt1Ty());
     }
 
 public:
@@ -1216,17 +1389,17 @@ public:
                     visit(*functionDefinition);
                 },
                 [&](const std::unique_ptr<cld::Semantics::Declaration>& declaration) {
-                    auto* global = visit(*declaration);
-                    if (llvm::isa_and_nonnull<llvm::GlobalVariable>(global))
+                    auto global = visit(*declaration);
+                    if (llvm::isa_and_nonnull<llvm::GlobalVariable>(global.value))
                     {
                         m_cGlobalVariables.emplace(declaration->getNameToken()->getText(),
-                                                   llvm::cast<llvm::GlobalVariable>(global));
+                                                   llvm::cast<llvm::GlobalVariable>(global.value));
                     }
                 });
         }
     }
 
-    llvm::Value* visit(const cld::Semantics::Declaration& declaration)
+    Value visit(const cld::Semantics::Declaration& declaration)
     {
         llvm::Function::LinkageTypes linkageType = llvm::GlobalValue::ExternalLinkage;
         switch (declaration.getLinkage())
@@ -1240,16 +1413,16 @@ public:
             auto* function = m_module.getFunction(declaration.getNameToken()->getText());
             if (function)
             {
-                m_lvalues.emplace(&declaration, function);
-                return function;
+                m_lvalues.emplace(&declaration, valueOf(function));
+                return valueOf(function);
             }
             auto* ft = llvm::cast<llvm::FunctionType>(visit(declaration.getType()));
             function = llvm::Function::Create(ft, linkageType, -1,
                                               llvm::StringRef{declaration.getNameToken()->getText()}, &m_module);
             applyFunctionAttributes(*function, ft,
                                     cld::get<cld::Semantics::FunctionType>(declaration.getType().getVariant()));
-            m_lvalues.emplace(&declaration, function);
-            return function;
+            m_lvalues.emplace(&declaration, valueOf(function));
+            return valueOf(function);
         }
         if (declaration.getLifetime() == cld::Semantics::Lifetime::Static)
         {
@@ -1269,7 +1442,7 @@ public:
             llvm::Constant* constant = nullptr;
             if (declaration.getInitializer() && declaration.getKind() != cld::Semantics::Declaration::DeclarationOnly)
             {
-                constant = llvm::cast<llvm::Constant>(visit(*declaration.getInitializer(), declType, type));
+                constant = llvm::cast<llvm::Constant>(visit(*declaration.getInitializer(), declType, type).value);
                 type = constant->getType();
             }
             else if (declaration.getKind() != cld::Semantics::Declaration::DeclarationOnly)
@@ -1294,7 +1467,7 @@ public:
                     constant, llvm::StringRef{declaration.getNameToken()->getText()});
                 if (m_programInterface.isCompleteType(declType))
                 {
-                    if (m_triple.getArchitecture() == cld::Architecture::x86_64
+                    if (m_triple.getArchitecture() == cld::Architecture::x86_64 && cld::Semantics::isArray(declType)
                         && declType.getSizeOf(m_programInterface) >= 16)
                     {
                         global->setAlignment(llvm::Align(16));
@@ -1313,7 +1486,7 @@ public:
                 global->setInitializer(constant);
             }
 
-            m_lvalues.emplace(&declaration, m_builder.CreateBitCast(global, llvm::PointerType::getUnqual(prevType)));
+            m_lvalues.emplace(&declaration, createBitCast(global, llvm::PointerType::getUnqual(prevType)));
             return global;
         }
         auto* type = visit(declaration.getType());
@@ -1371,6 +1544,7 @@ public:
             llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(), m_currentFunction->getEntryBlock().begin());
             var = temp.CreateAlloca(type, nullptr, llvm::StringRef{declaration.getNameToken()->getText()});
             if (m_triple.getArchitecture() == cld::Architecture::x86_64
+                && cld::Semantics::isArray(declaration.getType())
                 && declaration.getType().getSizeOf(m_programInterface) >= 16)
             {
                 var->setAlignment(llvm::Align(16));
@@ -1413,7 +1587,7 @@ public:
             function = llvm::Function::Create(ft, linkageType, -1,
                                               llvm::StringRef{functionDefinition.getNameToken()->getText()}, &m_module);
         }
-        m_lvalues.emplace(&functionDefinition, function);
+        m_lvalues.emplace(&functionDefinition, valueOf(function));
         auto& ft = cld::get<cld::Semantics::FunctionType>(functionDefinition.getType().getVariant());
         if (functionDefinition.getInlineKind() == cld::Semantics::InlineKind::InlineDefinition
             && functionDefinition.getLinkage() == cld::Semantics::Linkage::External)
@@ -1457,16 +1631,25 @@ public:
                 auto change = cld::get<ABITransformations::Change>(transformations->second.arguments[origArgI]);
                 if (change == ABITransformations::PointerToTemporary || change == ABITransformations::OnStack)
                 {
-                    m_lvalues[paramDecl.get()] = operand;
+                    if (operand->getType()->isPointerTy())
+                    {
+                        m_lvalues.emplace(paramDecl.get(),
+                                          Value(operand, operand->getPointerAlignment(m_module.getDataLayout())));
+                    }
+                    else
+                    {
+                        m_lvalues.emplace(paramDecl.get(), valueOf(operand, operand->getParamAlign()));
+                    }
                     continue;
                 }
-                auto* alloc = m_lvalues[paramDecl.get()];
+                auto alloc = m_lvalues.at(paramDecl.get());
                 if (change == ABITransformations::Unchanged)
                 {
                     createStore(operand, alloc, paramDecl->getType().isVolatile());
                     continue;
                 }
-                auto* cast = m_builder.CreateBitCast(alloc, llvm::PointerType::getUnqual(operand->getType()));
+
+                auto cast = createBitCast(alloc, llvm::PointerType::getUnqual(operand->getType()), false);
                 createStore(operand, cast, paramDecl->getType().isVolatile());
             }
             else
@@ -1474,22 +1657,21 @@ public:
                 auto& multiArg =
                     cld::get<ABITransformations::MultipleArgs>(transformations->second.arguments[origArgI]);
                 CLD_ASSERT(multiArg.size <= 2 && multiArg.size > 0);
-                auto* alloc = m_lvalues[paramDecl.get()];
+                auto alloc = m_lvalues.at(paramDecl.get());
                 std::vector<llvm::Type*> elements;
                 elements.push_back(function->getArg(i)->getType());
                 if (multiArg.size == 2)
                 {
                     elements.push_back(function->getArg(i + 1)->getType());
                 }
-                auto* structType = m_builder.CreateBitCast(
-                    alloc, llvm::PointerType::getUnqual(llvm::StructType::get(m_builder.getContext(), elements)));
-                auto* firstElement =
-                    m_builder.CreateInBoundsGEP(structType, {m_builder.getInt32(0), m_builder.getInt32(0)});
+                auto structType = createBitCast(
+                    alloc, llvm::PointerType::getUnqual(llvm::StructType::get(m_builder.getContext(), elements)),
+                    false);
+                auto firstElement = createInBoundsGEP(structType, {m_builder.getInt32(0), m_builder.getInt32(0)});
                 createStore(function->getArg(i), firstElement, paramDecl->getType().isVolatile());
                 if (multiArg.size == 2)
                 {
-                    auto* secondElement =
-                        m_builder.CreateInBoundsGEP(structType, {m_builder.getInt32(0), m_builder.getInt32(1)});
+                    auto secondElement = createInBoundsGEP(structType, {m_builder.getInt32(0), m_builder.getInt32(1)});
                     createStore(function->getArg(i + 1), secondElement, paramDecl->getType().isVolatile());
                 }
                 i += multiArg.size;
@@ -1537,7 +1719,7 @@ public:
                 auto& expr = cld::get<std::shared_ptr<const cld::Semantics::Expression>>(iter);
                 auto result = m_valSizes.emplace(
                     expr, m_builder.CreateIntCast(
-                              visit(*expr), m_builder.getInt64Ty(),
+                              visit(*expr).value, m_builder.getInt64Ty(),
                               cld::get<cld::Semantics::PrimitiveType>(expr->getType().getVariant()).isSigned()));
                 (void)result;
                 CLD_ASSERT(result.second);
@@ -1566,11 +1748,11 @@ public:
                 {
                     return;
                 }
-                auto* instr = visit(*expressionStatement->getExpression());
-                if (llvm::isa_and_nonnull<llvm::Instruction>(instr) && instr->getNumUses() == 0
-                    && !llvm::cast<llvm::Instruction>(instr)->mayHaveSideEffects())
+                auto instr = visit(*expressionStatement->getExpression());
+                if (llvm::isa_and_nonnull<llvm::Instruction>(instr.value) && instr.value->getNumUses() == 0
+                    && !llvm::cast<llvm::Instruction>(instr.value)->mayHaveSideEffects())
                 {
-                    llvm::cast<llvm::Instruction>(instr)->eraseFromParent();
+                    llvm::cast<llvm::Instruction>(instr.value)->eraseFromParent();
                 }
             });
     }
@@ -1590,39 +1772,38 @@ public:
         }
 
         auto* function = m_currentFunction;
-        auto* value = visit(*returnStatement.getExpression());
+        auto value = visit(*returnStatement.getExpression());
         if (m_currentFunctionABI->returnType == ABITransformations::PointerToTemporary)
         {
-            createStore(value, function->getArg(0), false);
+            createStore(value.value, valueOf(function->getArg(0), function->getParamAlign(0)), false);
             runDestructors(returnStatement.getScope(), 0);
             m_builder.CreateRetVoid();
         }
         else if (m_currentFunctionABI->returnType == ABITransformations::Flattened
                  || m_currentFunctionABI->returnType == ABITransformations::IntegerRegister)
         {
-            // TODO: Get actual alignment of return expression
-            auto retValueAlign = returnStatement.getExpression()->getType().getAlignOf(m_programInterface);
-            if (m_returnSlot->getAlign() == retValueAlign)
+            // TODO: Check this again
+            if (m_returnSlot->getAlign() == value.alignment)
             {
                 m_builder.CreateAlignedStore(
-                    value, m_builder.CreateBitCast(m_returnSlot, llvm::PointerType::getUnqual(value->getType())),
+                    value.value, createBitCast(m_returnSlot, llvm::PointerType::getUnqual(value.value->getType())),
                     m_returnSlot->getAlign());
             }
             else
             {
-                auto* ptr = llvm::cast<llvm::LoadInst>(value)->getPointerOperand();
-                llvm::cast<llvm::LoadInst>(value)->eraseFromParent();
-                m_builder.CreateMemCpy(m_returnSlot, m_returnSlot->getAlign(), ptr, llvm::Align(retValueAlign),
+                auto* ptr = llvm::cast<llvm::LoadInst>(value.value)->getPointerOperand();
+                llvm::cast<llvm::LoadInst>(value.value)->eraseFromParent();
+                m_builder.CreateMemCpy(m_returnSlot, m_returnSlot->getAlign(), ptr, value.alignment,
                                        returnStatement.getExpression()->getType().getSizeOf(m_programInterface));
             }
-            auto* ret = m_builder.CreateAlignedLoad(m_returnSlot, m_returnSlot->getAlign());
+            auto ret = createLoad(m_returnSlot, false);
             runDestructors(returnStatement.getScope(), 0);
             m_builder.CreateRet(ret);
         }
         else
         {
             runDestructors(returnStatement.getScope(), 0);
-            m_builder.CreateRet(value);
+            m_builder.CreateRet(value.value);
         }
         m_builder.ClearInsertionPoint();
     }
@@ -1650,9 +1831,9 @@ public:
         m_breakTargets[&forStatement] = contBlock;
         if (forStatement.getControlling())
         {
-            auto* value = visit(*forStatement.getControlling());
+            auto value = visit(*forStatement.getControlling());
             value = boolToi1(value);
-            m_builder.CreateCondBr(value, body, contBlock);
+            m_builder.CreateCondBr(value.value, body, contBlock);
         }
         else
         {
@@ -1686,7 +1867,7 @@ public:
 
     void visit(const cld::Semantics::IfStatement& ifStatement)
     {
-        llvm::Value* expression = nullptr;
+        Value expression = nullptr;
         llvm::BasicBlock* trueBranch = nullptr;
         if (m_builder.GetInsertBlock())
         {
@@ -1699,7 +1880,7 @@ public:
             auto* contBranch = llvm::BasicBlock::Create(m_module.getContext(), "if.continue", m_currentFunction);
             if (m_builder.GetInsertBlock())
             {
-                m_builder.CreateCondBr(expression, trueBranch, contBranch);
+                m_builder.CreateCondBr(expression.value, trueBranch, contBranch);
                 m_builder.SetInsertPoint(trueBranch);
             }
             visit(ifStatement.getTrueBranch());
@@ -1714,7 +1895,7 @@ public:
         if (m_builder.GetInsertBlock())
         {
             falseBranch = llvm::BasicBlock::Create(m_module.getContext(), "if.false", m_currentFunction);
-            m_builder.CreateCondBr(expression, trueBranch, falseBranch);
+            m_builder.CreateCondBr(expression.value, trueBranch, falseBranch);
             m_builder.SetInsertPoint(trueBranch);
         }
         visit(ifStatement.getTrueBranch());
@@ -1757,11 +1938,11 @@ public:
         }
         m_continueTargets[&headWhileStatement] = controlling;
         m_builder.SetInsertPoint(controlling);
-        auto* expression = visit(headWhileStatement.getExpression());
+        auto expression = visit(headWhileStatement.getExpression());
         expression = boolToi1(expression);
         auto* contBlock = llvm::BasicBlock::Create(m_module.getContext(), "while.continue", m_currentFunction);
         auto* body = llvm::BasicBlock::Create(m_module.getContext(), "while.body", m_currentFunction);
-        m_builder.CreateCondBr(expression, body, contBlock);
+        m_builder.CreateCondBr(expression.value, body, contBlock);
         m_builder.SetInsertPoint(body);
         m_breakTargets[&headWhileStatement] = contBlock;
         visit(headWhileStatement.getStatement());
@@ -1790,9 +1971,9 @@ public:
             m_builder.CreateBr(controlling);
         }
         m_builder.SetInsertPoint(controlling);
-        auto* expression = visit(footWhileStatement.getExpression());
+        auto expression = visit(footWhileStatement.getExpression());
         expression = boolToi1(expression);
-        m_builder.CreateCondBr(expression, body, contBlock);
+        m_builder.CreateCondBr(expression.value, body, contBlock);
         m_builder.SetInsertPoint(contBlock);
     }
 
@@ -1822,7 +2003,7 @@ public:
 
     void visit(const cld::Semantics::SwitchStatement& switchStatement)
     {
-        auto* expression = m_builder.GetInsertBlock() ? visit(switchStatement.getExpression()) : nullptr;
+        auto expression = m_builder.GetInsertBlock() ? visit(switchStatement.getExpression()) : nullptr;
         auto& switchData = m_switches[&switchStatement];
         auto* contBlock = llvm::BasicBlock::Create(m_module.getContext(), "switch.continue", m_currentFunction);
         if (switchStatement.getDefaultStatement())
@@ -1831,18 +2012,20 @@ public:
                 llvm::BasicBlock::Create(m_module.getContext(), "switch.default", m_currentFunction);
         }
         auto* switchStmt =
-            expression ? m_builder.CreateSwitch(
-                expression, switchData.defaultBlock ? switchData.defaultBlock : contBlock, switchData.cases.size()) :
-                         nullptr;
+            expression.value ?
+                m_builder.CreateSwitch(expression.value, switchData.defaultBlock ? switchData.defaultBlock : contBlock,
+                                       switchData.cases.size()) :
+                nullptr;
         m_builder.ClearInsertionPoint();
         for (auto& [value, theCase] : switchStatement.getCases())
         {
             auto iter = switchData.cases.emplace(
                 theCase, llvm::BasicBlock::Create(m_module.getContext(), "switch.case", m_currentFunction));
-            if (switchStmt && expression)
+            if (switchStmt && expression.value)
             {
-                switchStmt->addCase(llvm::cast<llvm::ConstantInt>(llvm::ConstantInt::get(expression->getType(), value)),
-                                    iter.first->second);
+                switchStmt->addCase(
+                    llvm::cast<llvm::ConstantInt>(llvm::ConstantInt::get(expression.value->getType(), value)),
+                    iter.first->second);
             }
         }
         m_breakTargets[&switchStatement] = contBlock;
@@ -1935,37 +2118,35 @@ public:
         // TODO:
     }
 
-    llvm::Value* visit(const cld::Semantics::Expression& expression)
+    Value visit(const cld::Semantics::Expression& expression)
     {
         return cld::match(
             expression.getVariant(),
-            [](const std::pair<cld::Lexer::CTokenIterator, cld::Lexer::CTokenIterator>&) -> llvm::Value* {
-                CLD_UNREACHABLE;
-            },
-            [&](const auto& value) -> llvm::Value* { return visit(expression, value); });
+            [](const std::pair<cld::Lexer::CTokenIterator, cld::Lexer::CTokenIterator>&) -> Value { CLD_UNREACHABLE; },
+            [&](const auto& value) -> Value { return visit(expression, value); });
     }
 
-    llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::Constant& constant)
+    Value visit(const cld::Semantics::Expression& expression, const cld::Semantics::Constant& constant)
     {
         auto* type = visit(expression.getType());
         if (std::holds_alternative<llvm::APSInt>(constant.getValue()))
         {
-            return llvm::Constant::getIntegerValue(type, cld::get<llvm::APSInt>(constant.getValue()));
+            return valueOf(llvm::Constant::getIntegerValue(type, cld::get<llvm::APSInt>(constant.getValue())));
         }
         if (std::holds_alternative<llvm::APFloat>(constant.getValue()))
         {
-            return llvm::ConstantFP::get(type, cld::get<llvm::APFloat>(constant.getValue()));
+            return valueOf(llvm::ConstantFP::get(type, cld::get<llvm::APFloat>(constant.getValue())));
         }
 
         auto* array = getStringLiteralData(type->getArrayElementType(), constant.getValue());
         auto* global =
             new llvm::GlobalVariable(m_module, array->getType(), true, llvm::GlobalValue::PrivateLinkage, array);
-        global->setAlignment(llvm::MaybeAlign(1));
+        global->setAlignment(llvm::Align(1));
         global->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
         return global;
     }
 
-    llvm::Value* visit(const cld::Semantics::Expression&, const cld::Semantics::DeclarationRead& declarationRead)
+    Value visit(const cld::Semantics::Expression&, const cld::Semantics::DeclarationRead& declarationRead)
     {
         auto result = cld::match(
             declarationRead.getDeclRead(),
@@ -1978,9 +2159,9 @@ public:
         return result->second;
     }
 
-    llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::Conversion& conversion)
+    Value visit(const cld::Semantics::Expression& expression, const cld::Semantics::Conversion& conversion)
     {
-        auto* value = visit(conversion.getExpression());
+        auto value = visit(conversion.getExpression());
         switch (conversion.getKind())
         {
             case cld::Semantics::Conversion::LValue:
@@ -1988,7 +2169,7 @@ public:
                 if (cld::Semantics::isArray(conversion.getExpression().getType())
                     && !cld::Semantics::isVariableLengthArray(conversion.getExpression().getType()))
                 {
-                    return m_builder.CreateInBoundsGEP(value, {m_builder.getInt64(0), m_builder.getInt64(0)});
+                    return createInBoundsGEP(value, {m_builder.getInt64(0), m_builder.getInt64(0)});
                 }
                 if (std::holds_alternative<cld::Semantics::FunctionType>(
                         conversion.getExpression().getType().getVariant())
@@ -2008,9 +2189,9 @@ public:
                     // This should be a noop for enums
                     return value;
                 }
-                return m_builder.CreateIntCast(
-                    value, visit(expression.getType()),
-                    cld::get<cld::Semantics::PrimitiveType>(prevType.getVariant()).isSigned());
+                return valueOf(
+                    m_builder.CreateIntCast(value.value, visit(expression.getType()),
+                                            cld::get<cld::Semantics::PrimitiveType>(prevType.getVariant()).isSigned()));
             }
             case cld::Semantics::Conversion::Implicit:
             {
@@ -2018,19 +2199,19 @@ public:
                 auto& newType = expression.getType();
                 if (cld::Semantics::isBool(newType))
                 {
-                    return m_builder.CreateIntCast(toBool(value), visit(newType), false);
+                    return valueOf(m_builder.CreateIntCast(toBool(value.value), visit(newType), false));
                 }
                 if (std::holds_alternative<cld::Semantics::PointerType>(newType.getVariant()))
                 {
                     if (cld::Semantics::isInteger(prevType))
                     {
-                        return m_builder.CreateIntToPtr(value, visit(newType));
+                        return valueOf(m_builder.CreateIntToPtr(value.value, visit(newType)));
                     }
                     if (cld::Semantics::isArray(prevType))
                     {
-                        return m_builder.CreateInBoundsGEP(value, {m_builder.getInt64(0), m_builder.getInt64(0)});
+                        return createInBoundsGEP(value, {m_builder.getInt64(0), m_builder.getInt64(0)});
                     }
-                    return m_builder.CreatePointerCast(value, visit(newType));
+                    return createPointerCast(value, visit(newType));
                 }
                 [[fallthrough]];
             }
@@ -2040,52 +2221,52 @@ public:
                 auto& newType = expression.getType();
                 if (cld::Semantics::isInteger(prevType) && cld::Semantics::isInteger(newType))
                 {
-                    return m_builder.CreateIntCast(
-                        value, visit(newType),
-                        cld::get<cld::Semantics::PrimitiveType>(prevType.getVariant()).isSigned());
+                    return valueOf(m_builder.CreateIntCast(
+                        value.value, visit(newType),
+                        cld::get<cld::Semantics::PrimitiveType>(prevType.getVariant()).isSigned()));
                 }
                 if (cld::Semantics::isInteger(prevType))
                 {
                     if (cld::get<cld::Semantics::PrimitiveType>(prevType.getVariant()).isSigned())
                     {
-                        return m_builder.CreateSIToFP(value, visit(newType));
+                        return valueOf(m_builder.CreateSIToFP(value.value, visit(newType)));
                     }
 
-                    return m_builder.CreateUIToFP(value, visit(newType));
+                    return valueOf(m_builder.CreateUIToFP(value.value, visit(newType)));
                 }
                 if (cld::Semantics::isInteger(newType))
                 {
                     if (std::holds_alternative<cld::Semantics::PointerType>(prevType.getVariant()))
                     {
-                        return m_builder.CreatePtrToInt(value, visit(newType));
+                        return valueOf(m_builder.CreatePtrToInt(value.value, visit(newType)));
                     }
                     if (cld::get<cld::Semantics::PrimitiveType>(newType.getVariant()).isSigned())
                     {
-                        return m_builder.CreateFPToSI(value, visit(newType));
+                        return valueOf(m_builder.CreateFPToSI(value.value, visit(newType)));
                     }
 
-                    return m_builder.CreateFPToUI(value, visit(newType));
+                    return valueOf(m_builder.CreateFPToUI(value.value, visit(newType)));
                 }
-                return m_builder.CreateFPCast(value, visit(newType));
+                return valueOf(m_builder.CreateFPCast(value.value, visit(newType)));
             }
             case cld::Semantics::Conversion::DefaultArgumentPromotion:
             {
                 auto& prevType = conversion.getExpression().getType();
                 if (cld::Semantics::isInteger(prevType))
                 {
-                    return m_builder.CreateIntCast(
-                        value, visit(expression.getType()),
-                        cld::get<cld::Semantics::PrimitiveType>(prevType.getVariant()).isSigned());
+                    return valueOf(m_builder.CreateIntCast(
+                        value.value, visit(expression.getType()),
+                        cld::get<cld::Semantics::PrimitiveType>(prevType.getVariant()).isSigned()));
                 }
-                return m_builder.CreateFPCast(value, visit(expression.getType()));
+                return valueOf(m_builder.CreateFPCast(value.value, visit(expression.getType())));
             }
         }
         CLD_UNREACHABLE;
     }
 
-    llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::MemberAccess& memberAccess)
+    Value visit(const cld::Semantics::Expression& expression, const cld::Semantics::MemberAccess& memberAccess)
     {
-        auto* value = visit(memberAccess.getRecordExpression());
+        auto value = visit(memberAccess.getRecordExpression());
         auto& type =
             std::holds_alternative<cld::Semantics::PointerType>(
                 memberAccess.getRecordExpression().getType().getVariant()) ?
@@ -2098,26 +2279,26 @@ public:
         {
             // Struct access is only ever allowed on pointers or lvalues except through the return value of a function
             // then it's also allowed to be an rvalue
-            auto* load = llvm::cast<llvm::LoadInst>(value);
-            value = load->getPointerOperand();
+            auto* load = llvm::cast<llvm::LoadInst>(value.value);
+            value = Value(load->getPointerOperand(), load->getAlign());
             load->eraseFromParent();
         }
         auto& cldField = memberAccess.getField();
         auto indices = llvm::ArrayRef(cldField.indices);
         auto parentTypes = cldField.parentTypes;
         parentTypes.insert(parentTypes.begin(), std::make_shared<const cld::Semantics::Type>(type));
-        llvm::Value* field = value;
+        Value field = value;
         for (auto iter = parentTypes.begin(); iter != parentTypes.end(); iter++)
         {
             auto index = iter - parentTypes.begin();
             if (cld::Semantics::isStruct(**iter))
             {
-                field = m_builder.CreateInBoundsGEP(field, {m_builder.getInt64(0), m_builder.getInt32(indices[index])});
+                field = createInBoundsGEP(field, {m_builder.getInt64(0), m_builder.getInt32(indices[index])});
             }
             else
             {
                 auto* destTy = visit(iter + 1 == parentTypes.end() ? *cldField.type : **(iter + 1));
-                field = m_builder.CreateBitCast(field, llvm::PointerType::getUnqual(destTy));
+                field = createBitCast(field, llvm::PointerType::getUnqual(destTy));
             }
         }
 
@@ -2140,62 +2321,62 @@ public:
             return field;
         }
 
-        auto* loaded = createLoad(field, expression.getType().isVolatile());
-        auto upLeft = loaded->getType()->getPrimitiveSizeInBits() - cldField.bitFieldBounds->second;
-        auto* shl = m_builder.CreateShl(loaded, llvm::ConstantInt::get(loaded->getType(), upLeft));
-        auto* shrConstant = llvm::ConstantInt::get(loaded->getType(), upLeft + cldField.bitFieldBounds->first);
+        auto loaded = createLoad(field, expression.getType().isVolatile());
+        auto upLeft = loaded.value->getType()->getPrimitiveSizeInBits() - cldField.bitFieldBounds->second;
+        auto* shl = m_builder.CreateShl(loaded.value, llvm::ConstantInt::get(loaded.value->getType(), upLeft));
+        auto* shrConstant = llvm::ConstantInt::get(loaded.value->getType(), upLeft + cldField.bitFieldBounds->first);
         if (cld::get<cld::Semantics::PrimitiveType>(expression.getType().getVariant()).isSigned())
         {
-            return m_builder.CreateAShr(shl, shrConstant);
+            return valueOf(m_builder.CreateAShr(shl, shrConstant));
         }
 
-        return m_builder.CreateLShr(shl, shrConstant);
+        return valueOf(m_builder.CreateLShr(shl, shrConstant));
     }
 
-    llvm::Value* visit(const cld::Semantics::Expression&, const cld::Semantics::BinaryOperator& binaryExpression)
+    Value visit(const cld::Semantics::Expression&, const cld::Semantics::BinaryOperator& binaryExpression)
     {
-        auto* lhs = visit(binaryExpression.getLeftExpression());
+        auto lhs = visit(binaryExpression.getLeftExpression());
         switch (binaryExpression.getKind())
         {
             case cld::Semantics::BinaryOperator::Addition:
             {
-                auto* rhs = visit(binaryExpression.getRightExpression());
+                auto rhs = visit(binaryExpression.getRightExpression());
                 return add(lhs, binaryExpression.getLeftExpression().getType(), rhs,
                            binaryExpression.getRightExpression().getType());
             }
             case cld::Semantics::BinaryOperator::Subtraction:
             {
-                auto* rhs = visit(binaryExpression.getRightExpression());
+                auto rhs = visit(binaryExpression.getRightExpression());
                 return sub(lhs, binaryExpression.getLeftExpression().getType(), rhs,
                            binaryExpression.getRightExpression().getType());
             }
             case cld::Semantics::BinaryOperator::Multiply:
             {
-                auto* rhs = visit(binaryExpression.getRightExpression());
+                auto rhs = visit(binaryExpression.getRightExpression());
                 return mul(lhs, binaryExpression.getLeftExpression().getType(), rhs,
                            binaryExpression.getRightExpression().getType());
             }
             case cld::Semantics::BinaryOperator::Divide:
             {
-                auto* rhs = visit(binaryExpression.getRightExpression());
+                auto rhs = visit(binaryExpression.getRightExpression());
                 return div(lhs, binaryExpression.getLeftExpression().getType(), rhs,
                            binaryExpression.getRightExpression().getType());
             }
             case cld::Semantics::BinaryOperator::Modulo:
             {
-                auto* rhs = visit(binaryExpression.getRightExpression());
+                auto rhs = visit(binaryExpression.getRightExpression());
                 return mod(lhs, binaryExpression.getLeftExpression().getType(), rhs,
                            binaryExpression.getRightExpression().getType());
             }
             case cld::Semantics::BinaryOperator::LeftShift:
             {
-                auto* rhs = visit(binaryExpression.getRightExpression());
+                auto rhs = visit(binaryExpression.getRightExpression());
                 return shl(lhs, binaryExpression.getLeftExpression().getType(), rhs,
                            binaryExpression.getRightExpression().getType());
             }
             case cld::Semantics::BinaryOperator::RightShift:
             {
-                auto* rhs = visit(binaryExpression.getRightExpression());
+                auto rhs = visit(binaryExpression.getRightExpression());
                 return shr(lhs, binaryExpression.getLeftExpression().getType(), rhs,
                            binaryExpression.getRightExpression().getType());
             }
@@ -2206,7 +2387,7 @@ public:
             case cld::Semantics::BinaryOperator::NotEqual:
             case cld::Semantics::BinaryOperator::LessThan:
             {
-                auto* rhs = visit(binaryExpression.getRightExpression());
+                auto rhs = visit(binaryExpression.getRightExpression());
                 llvm::CmpInst::Predicate predicate;
                 bool fp = cld::Semantics::isArithmetic(binaryExpression.getLeftExpression().getType())
                           && !cld::Semantics::isInteger(binaryExpression.getLeftExpression().getType());
@@ -2300,17 +2481,17 @@ public:
             }
             case cld::Semantics::BinaryOperator::BitOr:
             {
-                auto* rhs = visit(binaryExpression.getRightExpression());
+                auto rhs = visit(binaryExpression.getRightExpression());
                 return m_builder.CreateOr(lhs, rhs);
             }
             case cld::Semantics::BinaryOperator::BitAnd:
             {
-                auto* rhs = visit(binaryExpression.getRightExpression());
+                auto rhs = visit(binaryExpression.getRightExpression());
                 return m_builder.CreateAnd(lhs, rhs);
             }
             case cld::Semantics::BinaryOperator::BitXor:
             {
-                auto* rhs = visit(binaryExpression.getRightExpression());
+                auto rhs = visit(binaryExpression.getRightExpression());
                 return m_builder.CreateXor(lhs, rhs);
             }
             case cld::Semantics::BinaryOperator::LogicAnd:
@@ -2323,7 +2504,7 @@ public:
                     llvm::BasicBlock::Create(m_module.getContext(), "logicAnd.continue", m_currentFunction);
                 m_builder.CreateCondBr(lhs, trueBranch, falseBranch);
                 m_builder.SetInsertPoint(trueBranch);
-                auto* rhs = visit(binaryExpression.getRightExpression());
+                auto rhs = visit(binaryExpression.getRightExpression());
                 rhs = boolToi1(rhs);
                 m_builder.CreateBr(continueBranch);
                 trueBranch = m_builder.GetInsertBlock();
@@ -2344,7 +2525,7 @@ public:
                     llvm::BasicBlock::Create(m_module.getContext(), "logicOr.continue", m_currentFunction);
                 m_builder.CreateCondBr(lhs, trueBranch, falseBranch);
                 m_builder.SetInsertPoint(falseBranch);
-                auto* rhs = visit(binaryExpression.getRightExpression());
+                auto rhs = visit(binaryExpression.getRightExpression());
                 rhs = boolToi1(rhs);
                 m_builder.CreateBr(continueBranch);
                 falseBranch = m_builder.GetInsertBlock();
@@ -2360,17 +2541,17 @@ public:
         CLD_UNREACHABLE;
     }
 
-    llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::Cast& cast)
+    Value visit(const cld::Semantics::Expression& expression, const cld::Semantics::Cast& cast)
     {
-        auto* value = visit(cast.getExpression());
+        auto value = visit(cast.getExpression());
         auto& prevType = cast.getExpression().getType();
         auto& newType = expression.getType();
         return this->cast(value, prevType, newType);
     }
 
-    llvm::Value* visit(const cld::Semantics::Expression&, const cld::Semantics::UnaryOperator& unaryOperator)
+    Value visit(const cld::Semantics::Expression&, const cld::Semantics::UnaryOperator& unaryOperator)
     {
-        auto* value = visit(unaryOperator.getOperand());
+        auto value = visit(unaryOperator.getOperand());
         bool isVolatile = unaryOperator.getOperand().getType().isVolatile();
         switch (unaryOperator.getKind())
         {
@@ -2380,122 +2561,122 @@ public:
                 return value;
             case cld::Semantics::UnaryOperator::PostIncrement:
             {
-                auto* prev = createLoad(value, isVolatile);
+                auto prev = createLoad(value, isVolatile);
                 if (cld::Semantics::isInteger(unaryOperator.getOperand().getType()))
                 {
                     if (cld::get<cld::Semantics::PrimitiveType>(unaryOperator.getOperand().getType().getVariant())
                             .isSigned())
                     {
-                        auto* result = m_builder.CreateNSWAdd(prev, llvm::ConstantInt::get(prev->getType(), 1));
+                        auto* result = m_builder.CreateNSWAdd(prev, llvm::ConstantInt::get(prev.value->getType(), 1));
                         createStore(result, value, isVolatile);
                     }
                     else
                     {
-                        auto* result = m_builder.CreateAdd(prev, llvm::ConstantInt::get(prev->getType(), 1));
+                        auto* result = m_builder.CreateAdd(prev, llvm::ConstantInt::get(prev.value->getType(), 1));
                         createStore(result, value, isVolatile);
                     }
                 }
                 else if (!std::holds_alternative<cld::Semantics::PointerType>(
                              unaryOperator.getOperand().getType().getVariant()))
                 {
-                    auto* result = m_builder.CreateFAdd(prev, llvm::ConstantFP::get(prev->getType(), 1));
+                    auto* result = m_builder.CreateFAdd(prev, llvm::ConstantFP::get(prev.value->getType(), 1));
                     createStore(result, value, isVolatile);
                 }
                 else
                 {
-                    auto* result = m_builder.CreateGEP(prev, m_builder.getInt32(1));
+                    auto result = createGEP(prev, {m_builder.getInt32(1)});
                     createStore(result, value, isVolatile);
                 }
                 return prev;
             }
             case cld::Semantics::UnaryOperator::PostDecrement:
             {
-                auto* prev = createLoad(value, isVolatile);
+                auto prev = createLoad(value, isVolatile);
                 if (cld::Semantics::isInteger(unaryOperator.getOperand().getType()))
                 {
                     if (cld::get<cld::Semantics::PrimitiveType>(unaryOperator.getOperand().getType().getVariant())
                             .isSigned())
                     {
-                        auto* result = m_builder.CreateNSWSub(prev, llvm::ConstantInt::get(prev->getType(), 1));
+                        auto* result = m_builder.CreateNSWSub(prev, llvm::ConstantInt::get(prev.value->getType(), 1));
                         createStore(result, value, isVolatile);
                     }
                     else
                     {
-                        auto* result = m_builder.CreateSub(prev, llvm::ConstantInt::get(prev->getType(), 1));
+                        auto* result = m_builder.CreateSub(prev, llvm::ConstantInt::get(prev.value->getType(), 1));
                         createStore(result, value, isVolatile);
                     }
                 }
                 else if (!std::holds_alternative<cld::Semantics::PointerType>(
                              unaryOperator.getOperand().getType().getVariant()))
                 {
-                    auto* result = m_builder.CreateFSub(prev, llvm::ConstantFP::get(prev->getType(), 1));
+                    auto* result = m_builder.CreateFSub(prev, llvm::ConstantFP::get(prev.value->getType(), 1));
                     createStore(result, value, isVolatile);
                 }
                 else
                 {
-                    auto* result = m_builder.CreateGEP(prev, m_builder.getInt32(-1));
+                    auto result = createGEP(prev, {m_builder.getInt32(-1)});
                     createStore(result, value, isVolatile);
                 }
                 return prev;
             }
             case cld::Semantics::UnaryOperator::PreIncrement:
             {
-                llvm::Value* result = nullptr;
-                auto* prev = createLoad(value, isVolatile);
+                Value result = nullptr;
+                auto prev = createLoad(value, isVolatile);
                 if (cld::Semantics::isInteger(unaryOperator.getOperand().getType()))
                 {
                     if (cld::get<cld::Semantics::PrimitiveType>(unaryOperator.getOperand().getType().getVariant())
                             .isSigned())
                     {
-                        result = m_builder.CreateNSWAdd(prev, llvm::ConstantInt::get(prev->getType(), 1));
+                        result = m_builder.CreateNSWAdd(prev, llvm::ConstantInt::get(prev.value->getType(), 1));
                         createStore(result, value, isVolatile);
                     }
                     else
                     {
-                        result = m_builder.CreateAdd(prev, llvm::ConstantInt::get(prev->getType(), 1));
+                        result = m_builder.CreateAdd(prev, llvm::ConstantInt::get(prev.value->getType(), 1));
                         createStore(result, value, isVolatile);
                     }
                 }
                 else if (!std::holds_alternative<cld::Semantics::PointerType>(
                              unaryOperator.getOperand().getType().getVariant()))
                 {
-                    result = m_builder.CreateFAdd(prev, llvm::ConstantFP::get(prev->getType(), 1));
+                    result = m_builder.CreateFAdd(prev, llvm::ConstantFP::get(prev.value->getType(), 1));
                     createStore(result, value, isVolatile);
                 }
                 else
                 {
-                    result = m_builder.CreateGEP(prev, m_builder.getInt32(1));
+                    result = createGEP(prev, {m_builder.getInt32(1)});
                     createStore(result, value, isVolatile);
                 }
                 return result;
             }
             case cld::Semantics::UnaryOperator::PreDecrement:
             {
-                llvm::Value* result = nullptr;
-                auto* prev = createLoad(value, isVolatile);
+                Value result = nullptr;
+                auto prev = createLoad(value, isVolatile);
                 if (cld::Semantics::isInteger(unaryOperator.getOperand().getType()))
                 {
                     if (cld::get<cld::Semantics::PrimitiveType>(unaryOperator.getOperand().getType().getVariant())
                             .isSigned())
                     {
-                        result = m_builder.CreateNSWSub(prev, llvm::ConstantInt::get(prev->getType(), 1));
+                        result = m_builder.CreateNSWSub(prev, llvm::ConstantInt::get(prev.value->getType(), 1));
                         createStore(result, value, isVolatile);
                     }
                     else
                     {
-                        result = m_builder.CreateSub(prev, llvm::ConstantInt::get(prev->getType(), 1));
+                        result = m_builder.CreateSub(prev, llvm::ConstantInt::get(prev.value->getType(), 1));
                         createStore(result, value, isVolatile);
                     }
                 }
                 else if (!std::holds_alternative<cld::Semantics::PointerType>(
                              unaryOperator.getOperand().getType().getVariant()))
                 {
-                    result = m_builder.CreateFSub(prev, llvm::ConstantFP::get(prev->getType(), 1));
+                    result = m_builder.CreateFSub(prev, llvm::ConstantFP::get(prev.value->getType(), 1));
                     createStore(result, value, isVolatile);
                 }
                 else
                 {
-                    result = m_builder.CreateGEP(prev, m_builder.getInt32(-1));
+                    result = createGEP(prev, {m_builder.getInt32(-1)});
                     createStore(result, value, isVolatile);
                 }
                 return result;
@@ -2526,7 +2707,7 @@ public:
         CLD_UNREACHABLE;
     }
 
-    llvm::Value* visit(const cld::Semantics::Expression&, const cld::Semantics::SizeofOperator& sizeofOperator)
+    Value visit(const cld::Semantics::Expression&, const cld::Semantics::SizeofOperator& sizeofOperator)
     {
         if (sizeofOperator.getSize())
         {
@@ -2567,7 +2748,7 @@ public:
         return value;
     }
 
-    llvm::Value* visit(const cld::Semantics::Expression&, const cld::Semantics::SubscriptOperator& subscriptOperator)
+    Value visit(const cld::Semantics::Expression&, const cld::Semantics::SubscriptOperator& subscriptOperator)
     {
         auto& integer = cld::Semantics::isInteger(subscriptOperator.getLeftExpression().getType()) ?
                             subscriptOperator.getLeftExpression() :
@@ -2581,13 +2762,13 @@ public:
             || !std::holds_alternative<cld::Semantics::ValArrayType>(
                 cld::get<cld::Semantics::Conversion>(pointer->getVariant()).getExpression().getType().getVariant()))
         {
-            auto* llvmInteger = visit(integer);
-            auto* llvmPointer = visit(*pointer);
+            auto llvmInteger = visit(integer);
+            auto llvmPointer = visit(*pointer);
 
             llvmInteger = m_builder.CreateIntCast(
                 llvmInteger, m_builder.getInt64Ty(),
                 cld::get<cld::Semantics::PrimitiveType>(integer.getType().getVariant()).isSigned());
-            return m_builder.CreateGEP(llvmPointer, llvmInteger);
+            return createGEP(llvmPointer, {llvmInteger});
         }
 
         std::vector<llvm::Value*> products = {m_builder.CreateIntCast(
@@ -2635,44 +2816,48 @@ public:
             products.push_back(m_builder.CreateMul(newInt, dimensionProduct));
             pointer = &subPointer;
         }
-        auto* basePointer = visit(*pointer);
+        auto basePointer = visit(*pointer);
         auto* sum = std::accumulate(products.begin() + 1, products.end(), products.front(),
                                     [&](llvm::Value* lhs, llvm::Value* rhs) { return m_builder.CreateAdd(lhs, rhs); });
-        return m_builder.CreateGEP(basePointer, sum);
+        return createGEP(basePointer, {sum});
     }
 
-    llvm::Value* visit(const cld::Semantics::Expression&, const cld::Semantics::Conditional& conditional)
+    Value visit(const cld::Semantics::Expression&, const cld::Semantics::Conditional& conditional)
     {
-        auto* boolean = visit(conditional.getBoolExpression());
+        auto boolean = visit(conditional.getBoolExpression());
         boolean = boolToi1(boolean);
         auto* trueBranch = llvm::BasicBlock::Create(m_builder.getContext(), "cond.true", m_currentFunction);
         auto* falseBranch = llvm::BasicBlock::Create(m_builder.getContext(), "cond.false", m_currentFunction);
         auto* contBr = llvm::BasicBlock::Create(m_builder.getContext(), "cond.continue", m_currentFunction);
         m_builder.CreateCondBr(boolean, trueBranch, falseBranch);
         m_builder.SetInsertPoint(trueBranch);
-        auto* trueValue = visit(conditional.getTrueExpression());
+        auto trueValue = visit(conditional.getTrueExpression());
         m_builder.CreateBr(contBr);
         trueBranch = m_builder.GetInsertBlock();
         m_builder.SetInsertPoint(falseBranch);
-        auto* falseValue = visit(conditional.getFalseExpression());
+        auto falseValue = visit(conditional.getFalseExpression());
         m_builder.CreateBr(contBr);
         falseBranch = m_builder.GetInsertBlock();
         m_builder.SetInsertPoint(contBr);
-        auto* phi = m_builder.CreatePHI(trueValue->getType(), 2);
+        auto* phi = m_builder.CreatePHI(trueValue.value->getType(), 2);
         phi->addIncoming(trueValue, trueBranch);
         phi->addIncoming(falseValue, falseBranch);
+        if (trueValue.value->getType()->isPointerTy())
+        {
+            return valueOf(phi, std::min(*trueValue.alignment, *falseValue.alignment));
+        }
         return phi;
     }
 
-    llvm::Value* visit(const cld::Semantics::Expression&, const cld::Semantics::Assignment& assignment)
+    Value visit(const cld::Semantics::Expression&, const cld::Semantics::Assignment& assignment)
     {
         if (!m_programInterface.isBitfieldAccess(assignment.getLeftExpression()))
         {
-            auto* lhs = visit(assignment.getLeftExpression());
-            auto* rhs = visit(assignment.getRightExpression());
+            auto lhs = visit(assignment.getLeftExpression());
+            auto rhs = visit(assignment.getRightExpression());
             if (assignment.getKind() != cld::Semantics::Assignment::Simple)
             {
-                llvm::Value* load = createLoad(lhs, assignment.getLeftExpression().getType().isVolatile());
+                auto load = createLoad(lhs, assignment.getLeftExpression().getType().isVolatile());
                 if (cld::Semantics::isArithmetic(assignment.getLeftExpression().getType()))
                 {
                     load = cast(load, assignment.getLeftExpression().getType(), assignment.getLeftCalcType());
@@ -2711,17 +2896,17 @@ public:
             return createLoad(lhs, assignment.getLeftExpression().getType().isVolatile());
         }
         auto& memberAccess = cld::get<cld::Semantics::MemberAccess>(assignment.getLeftExpression().getVariant());
-        auto* lhsRecord = visit(memberAccess.getRecordExpression());
+        auto lhsRecord = visit(memberAccess.getRecordExpression());
         auto& type =
             std::holds_alternative<cld::Semantics::PointerType>(
                 memberAccess.getRecordExpression().getType().getVariant()) ?
                 cld::get<cld::Semantics::PointerType>(memberAccess.getRecordExpression().getType().getVariant())
                     .getElementType() :
                 memberAccess.getRecordExpression().getType();
-        auto* rhsValue = visit(assignment.getRightExpression());
+        auto rhsValue = visit(assignment.getRightExpression());
 
         auto& cldField = memberAccess.getField();
-        llvm::Value* field = lhsRecord;
+        auto field = lhsRecord;
         auto indices = llvm::ArrayRef(cldField.indices);
         auto parentTypes = cldField.parentTypes;
         parentTypes.insert(parentTypes.begin(), std::make_shared<const cld::Semantics::Type>(type));
@@ -2730,18 +2915,18 @@ public:
             auto index = iter - parentTypes.begin();
             if (cld::Semantics::isStruct(type))
             {
-                field = m_builder.CreateInBoundsGEP(field, {m_builder.getInt64(0), m_builder.getInt32(indices[index])});
+                field = createInBoundsGEP(field, {m_builder.getInt64(0), m_builder.getInt32(indices[index])});
             }
             else
             {
                 auto* destTy = visit(iter + 1 == parentTypes.end() ? *cldField.type : **(iter + 1));
-                field = m_builder.CreateBitCast(field, llvm::PointerType::getUnqual(destTy));
+                field = createBitCast(field, llvm::PointerType::getUnqual(destTy));
             }
         }
 
-        llvm::Value* loaded = createLoad(field, type.isVolatile());
+        auto loaded = createLoad(field, type.isVolatile());
         auto size = cldField.bitFieldBounds->second - cldField.bitFieldBounds->first;
-        llvm::Value* mask = llvm::ConstantInt::get(rhsValue->getType(), (1u << size) - 1);
+        llvm::Value* mask = llvm::ConstantInt::get(rhsValue.value->getType(), (1u << size) - 1);
         if (assignment.getKind() != cld::Semantics::Assignment::Simple)
         {
             llvm::Value* load =
@@ -2785,8 +2970,8 @@ public:
             }
         }
         rhsValue = m_builder.CreateAnd(rhsValue, mask);
-        rhsValue =
-            m_builder.CreateShl(rhsValue, llvm::ConstantInt::get(rhsValue->getType(), cldField.bitFieldBounds->first));
+        rhsValue = m_builder.CreateShl(
+            rhsValue, llvm::ConstantInt::get(rhsValue.value->getType(), cldField.bitFieldBounds->first));
         mask = m_builder.CreateShl(mask, llvm::ConstantInt::get(mask->getType(), cldField.bitFieldBounds->first));
         mask = m_builder.CreateNot(mask);
         // TODO: Types could mismatch
@@ -2796,7 +2981,7 @@ public:
         return result;
     }
 
-    llvm::Value* visit(const cld::Semantics::Expression&, const cld::Semantics::CommaExpression& commaExpression)
+    Value visit(const cld::Semantics::Expression&, const cld::Semantics::CommaExpression& commaExpression)
     {
         for (auto& iter : commaExpression.getCommaExpressions())
         {
@@ -2805,7 +2990,7 @@ public:
         return visit(commaExpression.getLastExpression());
     }
 
-    llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::CallExpression& call)
+    Value visit(const cld::Semantics::Expression& expression, const cld::Semantics::CallExpression& call)
     {
         if (isBuiltinFunctionCall(call.getFunctionExpression()))
         {
@@ -2814,63 +2999,63 @@ public:
             {
                 case cld::Semantics::BuiltinFunction::VAStart:
                 {
-                    auto* list = visit(call.getArgumentExpressions()[0]);
-                    if (llvm::isa<llvm::LoadInst>(list))
+                    auto list = visit(call.getArgumentExpressions()[0]);
+                    if (llvm::isa<llvm::LoadInst>(list.value))
                     {
-                        auto* prev = llvm::cast<llvm::LoadInst>(list);
-                        list = prev->getPointerOperand();
+                        auto* prev = llvm::cast<llvm::LoadInst>(list.value);
+                        list = Value(prev->getPointerOperand(), prev->getAlign());
                         prev->eraseFromParent();
                     }
-                    list = m_builder.CreateBitCast(list, m_builder.getInt8PtrTy());
+                    list = createBitCast(list, m_builder.getInt8PtrTy());
                     return m_builder.CreateIntrinsic(llvm::Intrinsic::vastart, {}, {list});
                 }
                 case cld::Semantics::BuiltinFunction::VAEnd:
                 {
-                    auto* list = visit(call.getArgumentExpressions()[0]);
-                    if (llvm::isa<llvm::LoadInst>(list))
+                    auto list = visit(call.getArgumentExpressions()[0]);
+                    if (llvm::isa<llvm::LoadInst>(list.value))
                     {
-                        auto* prev = llvm::cast<llvm::LoadInst>(list);
-                        list = prev->getPointerOperand();
+                        auto* prev = llvm::cast<llvm::LoadInst>(list.value);
+                        list = Value(prev->getPointerOperand(), prev->getAlign());
                         prev->eraseFromParent();
                     }
-                    list = m_builder.CreateBitCast(list, m_builder.getInt8PtrTy());
+                    list = createBitCast(list, m_builder.getInt8PtrTy());
                     return m_builder.CreateIntrinsic(llvm::Intrinsic::vaend, {}, {list});
                 }
                 case cld::Semantics::BuiltinFunction::VACopy:
                 {
-                    auto* list1 = visit(call.getArgumentExpressions()[0]);
-                    if (llvm::isa<llvm::LoadInst>(list1))
+                    auto list1 = visit(call.getArgumentExpressions()[0]);
+                    if (llvm::isa<llvm::LoadInst>(list1.value))
                     {
-                        auto* prev = llvm::cast<llvm::LoadInst>(list1);
-                        list1 = prev->getPointerOperand();
+                        auto* prev = llvm::cast<llvm::LoadInst>(list1.value);
+                        list1 = Value(prev->getPointerOperand(), prev->getAlign());
                         prev->eraseFromParent();
                     }
-                    list1 = m_builder.CreateBitCast(list1, m_builder.getInt8PtrTy());
-                    auto* list2 = visit(call.getArgumentExpressions()[1]);
-                    if (llvm::isa<llvm::LoadInst>(list2))
+                    list1 = createBitCast(list1, m_builder.getInt8PtrTy());
+                    auto list2 = visit(call.getArgumentExpressions()[1]);
+                    if (llvm::isa<llvm::LoadInst>(list2.value))
                     {
-                        auto* prev = llvm::cast<llvm::LoadInst>(list2);
-                        list2 = prev->getPointerOperand();
+                        auto* prev = llvm::cast<llvm::LoadInst>(list2.value);
+                        list2 = Value(prev->getPointerOperand(), prev->getAlign());
                         prev->eraseFromParent();
                     }
-                    list2 = m_builder.CreateBitCast(list2, m_builder.getInt8PtrTy());
+                    list2 = createBitCast(list2, m_builder.getInt8PtrTy());
                     return m_builder.CreateIntrinsic(llvm::Intrinsic::vacopy, {}, {list1, list2});
                 }
                 case cld::Semantics::BuiltinFunction::LLAbs:
                 case cld::Semantics::BuiltinFunction::LAbs:
                 case cld::Semantics::BuiltinFunction::Abs:
                 {
-                    auto* longLong = visit(call.getArgumentExpressions()[0]);
+                    auto longLong = visit(call.getArgumentExpressions()[0]);
                     auto* neg = m_builder.CreateNSWNeg(longLong);
                     auto* isNegative =
-                        m_builder.CreateICmpSLT(longLong, llvm::ConstantInt::get(longLong->getType(), 0));
+                        m_builder.CreateICmpSLT(longLong, llvm::ConstantInt::get(longLong.value->getType(), 0));
                     return m_builder.CreateSelect(isNegative, neg, longLong);
                 }
                 case cld::Semantics::BuiltinFunction::FAbs:
                 case cld::Semantics::BuiltinFunction::FAbsf:
                 case cld::Semantics::BuiltinFunction::FAbsl:
                 {
-                    auto* floatingPoint = visit(call.getArgumentExpressions()[0]);
+                    auto floatingPoint = visit(call.getArgumentExpressions()[0]);
                     return m_builder.CreateUnaryIntrinsic(llvm::Intrinsic::fabs, floatingPoint);
                 }
                 case cld::Semantics::BuiltinFunction::Inf:
@@ -2888,12 +3073,12 @@ public:
             }
             CLD_UNREACHABLE;
         }
-        auto* function = visit(call.getFunctionExpression());
+        auto function = visit(call.getFunctionExpression());
         auto cldFt = cld::get<cld::Semantics::FunctionType>(
             cld::get<cld::Semantics::PointerType>(call.getFunctionExpression().getType().getVariant())
                 .getElementType()
                 .getVariant());
-        auto* ft = llvm::cast<llvm::FunctionType>(function->getType()->getPointerElementType());
+        auto* ft = llvm::cast<llvm::FunctionType>(function.value->getType()->getPointerElementType());
         auto transformation = m_functionABITransformations.find(cldFt);
         CLD_ASSERT(transformation != m_functionABITransformations.end());
         bool isKandR = cldFt.isKandR();
@@ -2925,20 +3110,11 @@ public:
                                           m_builder.getInt64(expression.getType().getSizeOf(m_programInterface)));
             arguments.emplace_back(returnSlot);
         }
-        else if (transformation->second.returnType == ABITransformations::Flattened
-                 || transformation->second.returnType == ABITransformations::IntegerRegister)
-        {
-            llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(), m_currentFunction->getEntryBlock().begin());
-            returnSlot = temp.CreateAlloca(visit(expression.getType()), nullptr, "ret");
-            returnSlot->setAlignment(llvm::Align(expression.getType().getAlignOf(m_programInterface)));
-            m_builder.CreateLifetimeStart(returnSlot,
-                                          m_builder.getInt64(expression.getType().getSizeOf(m_programInterface)));
-        }
 
         for (auto iter = call.getArgumentExpressions().begin(); iter != call.getArgumentExpressions().end(); iter++)
         {
             const std::size_t currentIndex = iter - call.getArgumentExpressions().begin();
-            auto* value = visit(*iter);
+            auto value = visit(*iter);
             if (std::holds_alternative<ABITransformations::Change>(transformation->second.arguments[currentIndex]))
             {
                 llvmFnI++;
@@ -2951,7 +3127,7 @@ public:
                 if (change == ABITransformations::OnStack)
                 {
                     // structs rvalues don't exist in LLVM IR so this should be sound?
-                    auto* load = llvm::cast<llvm::LoadInst>(value);
+                    auto* load = llvm::cast<llvm::LoadInst>(value.value);
                     arguments.emplace_back(load->getPointerOperand());
                     load->eraseFromParent();
                     continue;
@@ -2960,18 +3136,18 @@ public:
                 {
                     llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(),
                                            m_currentFunction->getEntryBlock().begin());
-                    auto* ret = temp.CreateAlloca(value->getType());
+                    auto* ret = temp.CreateAlloca(value.value->getType());
                     ret->setAlignment(llvm::Align(iter->getType().getAlignOf(m_programInterface)));
                     m_builder.CreateLifetimeStart(ret,
                                                   m_builder.getInt64(iter->getType().getSizeOf(m_programInterface)));
-                    if (value->getType()->isX86_FP80Ty())
+                    if (value.value->getType()->isX86_FP80Ty())
                     {
                         createStore(value, ret, false);
                     }
                     else
                     {
-                        auto* load = llvm::cast<llvm::LoadInst>(value);
-                        m_builder.CreateMemCpy(ret, llvm::MaybeAlign(), load->getPointerOperand(), llvm::MaybeAlign(),
+                        auto* load = llvm::cast<llvm::LoadInst>(value.value);
+                        m_builder.CreateMemCpy(ret, ret->getAlign(), load->getPointerOperand(), load->getAlign(),
                                                iter->getType().getSizeOf(m_programInterface));
                         load->eraseFromParent();
                     }
@@ -2979,22 +3155,23 @@ public:
                     continue;
                 }
                 // Integer register
-                auto* load = llvm::cast<llvm::LoadInst>(value);
-                auto* integer = m_builder.CreateBitCast(
-                    load->getPointerOperand(), llvm::PointerType::getUnqual(m_builder.getIntNTy(
-                                                   m_module.getDataLayout().getTypeAllocSizeInBits(load->getType()))));
+                // TODO: Check if this is Kosher due to alignment
+                auto* load = llvm::cast<llvm::LoadInst>(value.value);
+                auto integer = createBitCast(valueOf(load->getPointerOperand(), load->getAlign()),
+                                             llvm::PointerType::getUnqual(m_builder.getIntNTy(
+                                                 m_module.getDataLayout().getTypeAllocSizeInBits(load->getType()))));
                 arguments.emplace_back(createLoad(integer, load->isVolatile()));
                 load->eraseFromParent();
                 continue;
             }
-            auto* load = llvm::cast<llvm::LoadInst>(value);
+            auto* load = llvm::cast<llvm::LoadInst>(value.value);
             auto& multiIndex =
                 cld::get<ABITransformations::MultipleArgs>(transformation->second.arguments[currentIndex]);
             if (multiIndex.size == 1)
             {
                 auto* paramType = ft->getParamType(llvmFnI);
-                auto* cast =
-                    m_builder.CreateBitCast(load->getPointerOperand(), llvm::PointerType::getUnqual(paramType));
+                auto cast = createSafeBitCast(valueOf(load->getPointerOperand(), load->getAlign()),
+                                              llvm::PointerType::getUnqual(paramType));
                 arguments.emplace_back(createLoad(cast, load->isVolatile()));
             }
             else
@@ -3002,11 +3179,11 @@ public:
                 CLD_ASSERT(multiIndex.size == 2);
                 auto* firstType = ft->getParamType(llvmFnI);
                 auto* secondType = ft->getParamType(llvmFnI + 1);
-                auto* cast =
-                    m_builder.CreateBitCast(load->getPointerOperand(),
-                                            llvm::PointerType::getUnqual(llvm::StructType::get(firstType, secondType)));
-                auto* firstValue = m_builder.CreateInBoundsGEP(cast, {m_builder.getInt64(0), m_builder.getInt32(0)});
-                auto* secondValue = m_builder.CreateInBoundsGEP(cast, {m_builder.getInt64(0), m_builder.getInt32(1)});
+                auto cast =
+                    createSafeBitCast(valueOf(load->getPointerOperand(), load->getAlign()),
+                                      llvm::PointerType::getUnqual(llvm::StructType::get(firstType, secondType)));
+                auto firstValue = createInBoundsGEP(cast, {m_builder.getInt64(0), m_builder.getInt32(0)});
+                auto secondValue = createInBoundsGEP(cast, {m_builder.getInt64(0), m_builder.getInt32(1)});
                 arguments.emplace_back(createLoad(firstValue, load->isVolatile()));
                 arguments.emplace_back(createLoad(secondValue, load->isVolatile()));
             }
@@ -3015,15 +3192,15 @@ public:
         }
         if (isKandR)
         {
-            function = m_builder.CreateBitCast(function, llvm::PointerType::getUnqual(ft));
+            function = createBitCast(function, llvm::PointerType::getUnqual(ft));
         }
         auto* result = m_builder.CreateCall(
-            isKandR ? ft : llvm::cast<llvm::FunctionType>(function->getType()->getPointerElementType()), function,
+            isKandR ? ft : llvm::cast<llvm::FunctionType>(function.value->getType()->getPointerElementType()), function,
             arguments);
         applyFunctionAttributes(*result, ft, cldFt);
         switch (transformation->second.returnType)
         {
-            case ABITransformations::Unchanged: return result;
+            case ABITransformations::Unchanged: return valueOf(result);
             case ABITransformations::PointerToTemporary:
             {
                 return createLoad(returnSlot, false);
@@ -3031,22 +3208,28 @@ public:
             case ABITransformations::IntegerRegister:
             case ABITransformations::Flattened:
             {
-                auto* cast = m_builder.CreateBitCast(returnSlot, llvm::PointerType::getUnqual(ft->getReturnType()));
-                createStore(result, cast, false);
-                return createLoad(returnSlot, false);
+                llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(), m_currentFunction->getEntryBlock().begin());
+                auto* intValue = temp.CreateAlloca(result->getType());
+                intValue->setAlignment(llvm::Align(m_module.getDataLayout().getABITypeAlign(result->getType())));
+                m_builder.CreateLifetimeStart(
+                    intValue, m_builder.getInt64(m_module.getDataLayout().getTypeAllocSize(result->getType())));
+                createStore(result, intValue, false);
+
+                auto cast = createSafeBitCast(intValue, llvm::PointerType::getUnqual(visit(expression.getType())));
+                return createLoad(cast, false);
             }
             default: CLD_UNREACHABLE;
         }
     }
 
-    llvm::Value* visit(const cld::Semantics::Expression& expression,
-                       const cld::Semantics::CompoundLiteral& compoundLiteral)
+    Value visit(const cld::Semantics::Expression& expression, const cld::Semantics::CompoundLiteral& compoundLiteral)
     {
         auto* type = visit(expression.getType());
         if (compoundLiteral.hasStaticLifetime())
         {
             llvm::Constant* constant = nullptr;
-            constant = llvm::cast<llvm::Constant>(visit(compoundLiteral.getInitializer(), expression.getType(), type));
+            constant =
+                llvm::cast<llvm::Constant>(visit(compoundLiteral.getInitializer(), expression.getType(), type).value);
             type = constant->getType();
             auto* global = new llvm::GlobalVariable(m_module, type, true, llvm::GlobalValue::PrivateLinkage, constant);
             global->setAlignment(llvm::MaybeAlign(expression.getType().getAlignOf(m_programInterface)));
@@ -3062,20 +3245,49 @@ public:
         return var;
     }
 
-    llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::BuiltinVAArg& vaArg)
+    Value x64LoadFromStack(Value vaList, llvm::Type* destType)
     {
-        auto* vaList = visit(vaArg.getExpression());
+        auto overflowArea = createInBoundsGEP(vaList, {m_builder.getInt64(0), m_builder.getInt32(2)});
+        auto loadedStackPointer = createLoad(overflowArea, false);
+        loadedStackPointer.alignment = llvm::Align(8);
+        if (m_module.getDataLayout().getABITypeAlign(destType) >= 16)
+        {
+            // Align to 16 bytes
+            llvm::IntegerType* intPtrType = m_module.getDataLayout().getIntPtrType(m_module.getContext(), 0);
+            auto* temp = m_builder.CreatePtrToInt(loadedStackPointer, intPtrType);
+            temp = m_builder.CreateAdd(temp, llvm::ConstantInt::get(intPtrType, 15));
+            auto mask = llvm::APInt::getAllOnesValue(intPtrType->getBitWidth());
+            mask.clearLowBits(4);
+            temp = m_builder.CreateAnd(temp, llvm::ConstantInt::get(intPtrType, mask));
+            loadedStackPointer =
+                valueOf(m_builder.CreateIntToPtr(temp, loadedStackPointer.value->getType()), llvm::Align(16));
+        }
+
+        auto incremented = createGEP(loadedStackPointer,
+                                     m_builder.getInt64(cld::roundUpTo(
+                                         m_module.getDataLayout().getTypeAllocSize(destType).getKnownMinSize(), 8)));
+        loadedStackPointer = createBitCast(loadedStackPointer, llvm::PointerType::getUnqual(destType));
+        createStore(incremented, overflowArea, false);
+        return loadedStackPointer;
+    }
+
+    Value visit(const cld::Semantics::Expression& expression, const cld::Semantics::BuiltinVAArg& vaArg)
+    {
+        auto vaList = visit(vaArg.getExpression());
         std::size_t sizeOf = expression.getType().getSizeOf(m_programInterface);
-        auto align = vaArg.getExpression().getType().getAlignOf(m_programInterface);
 
         switch (m_programInterface.getLanguageOptions().vaListKind)
         {
             case cld::LanguageOptions::BuiltInVaList::CharPtr:
             case cld::LanguageOptions::BuiltInVaList::VoidPtr:
             {
-                auto* increment = m_builder.CreateInBoundsGEP(
-                    vaList, {m_builder.getInt64(m_module.getDataLayout().getPointerSize(0))});
-                createStore(increment, llvm::cast<llvm::LoadInst>(vaList)->getPointerOperand(), false);
+                auto increment =
+                    createInBoundsGEP(vaList, {m_builder.getInt64(m_module.getDataLayout().getPointerSize(0))});
+                vaList.alignment = llvm::Align(8);
+                createStore(increment,
+                            Value(llvm::cast<llvm::LoadInst>(vaList.value)->getPointerOperand(),
+                                  llvm::cast<llvm::LoadInst>(vaList.value)->getAlign()),
+                            false);
                 auto* destType = visit(expression.getType());
 
                 auto exprAlign = expression.getType().getAlignOf(m_programInterface);
@@ -3084,15 +3296,14 @@ public:
                 {
                     if (!destType->isStructTy() && !destType->isX86_FP80Ty())
                     {
-                        vaList = m_builder.CreateBitCast(vaList, llvm::PointerType::getUnqual(destType));
+                        vaList = createBitCast(vaList, llvm::PointerType::getUnqual(destType));
                         return createLoad(vaList, false);
                     }
                     if (!m_module.getDataLayout().isLegalInteger(sizeOf * 8))
                     {
-                        vaList = m_builder.CreateBitCast(
-                            vaList, llvm::PointerType::getUnqual(llvm::PointerType::getUnqual(destType)));
+                        vaList =
+                            createBitCast(vaList, llvm::PointerType::getUnqual(llvm::PointerType::getUnqual(destType)));
                         vaList = createLoad(vaList, false);
-                        align = exprAlign;
                     }
                 }
 
@@ -3100,7 +3311,7 @@ public:
                 auto* allocaInst = temp.CreateAlloca(destType, nullptr, "va_arg.ret");
                 allocaInst->setAlignment(llvm::Align(exprAlign));
                 m_builder.CreateLifetimeStart(allocaInst, m_builder.getInt64(sizeOf));
-                m_builder.CreateMemCpy(allocaInst, allocaInst->getAlign(), vaList, llvm::Align(align), sizeOf);
+                m_builder.CreateMemCpy(allocaInst, allocaInst->getAlign(), vaList, *vaList.alignment, sizeOf);
                 return createLoad(allocaInst, false);
             }
             case cld::LanguageOptions::BuiltInVaList::x86_64ABI:
@@ -3108,38 +3319,36 @@ public:
                 auto* destType = visit(expression.getType());
                 if (m_module.getDataLayout().getTypeAllocSizeInBits(destType) > 128)
                 {
-                    auto* overflowArea =
-                        m_builder.CreateInBoundsGEP(vaList, {m_builder.getInt64(0), m_builder.getInt32(2)});
-                    llvm::Value* loadedStackPointer = createLoad(overflowArea, false);
-                    // TODO: Handle case of a type being aligned to higher than 8 bytes
-                    auto* incremented =
-                        m_builder.CreateGEP(loadedStackPointer, m_builder.getInt64(cld::roundUpTo(sizeOf, 8)));
-                    loadedStackPointer =
-                        m_builder.CreateBitCast(loadedStackPointer, llvm::PointerType::getUnqual(destType));
-                    createStore(incremented, overflowArea, false);
+                OnStack:
+                    auto loadedStackPointer = x64LoadFromStack(vaList, destType);
 
                     llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(),
                                            m_currentFunction->getEntryBlock().begin());
                     auto* allocaInst = temp.CreateAlloca(destType, nullptr, "va_arg.ret");
                     allocaInst->setAlignment(llvm::Align(expression.getType().getAlignOf(m_programInterface)));
                     m_builder.CreateLifetimeStart(allocaInst, m_builder.getInt64(sizeOf));
-                    m_builder.CreateMemCpy(allocaInst, allocaInst->getAlign(), loadedStackPointer, llvm::Align(8),
-                                           sizeOf);
-                    return m_builder.CreateAlignedLoad(allocaInst, allocaInst->getAlign());
+                    m_builder.CreateMemCpy(allocaInst, allocaInst->getAlign(), loadedStackPointer,
+                                           *loadedStackPointer.alignment, sizeOf);
+                    return createLoad(allocaInst, false);
                 }
                 auto [transform, first, second] = flattenSingleArg(destType);
-                (void)transform;
+                if (auto* change = std::get_if<ABITransformations::Change>(&transform);
+                    change && *change == ABITransformations::OnStack)
+                {
+                    // I have yet to decide what is the lesser evil. Not repeating myself, or using goto...
+                    goto OnStack;
+                }
 
-                llvm::Value* gpOffset = nullptr;
+                Value gpOffset = nullptr;
                 llvm::Value* gpCount = nullptr;
-                llvm::Value* fpOffset = nullptr;
+                Value fpOffset = nullptr;
                 llvm::Value* fpCount = nullptr;
 
                 llvm::Value* cond = nullptr;
 
                 if (first->isIntOrPtrTy() || (second && second->isIntOrPtrTy()))
                 {
-                    gpOffset = m_builder.CreateInBoundsGEP(vaList, {m_builder.getInt64(0), m_builder.getInt32(0)});
+                    gpOffset = createInBoundsGEP(vaList, {m_builder.getInt64(0), m_builder.getInt32(0)});
                     gpCount = createLoad(gpOffset, false);
                     // if the offset is 48 bytes it is full (8 Bytes * 6 Integer registers). To fit two integers we
                     // need an offset of 32, to fit one we need max 40
@@ -3148,7 +3357,7 @@ public:
                 }
                 if (first->isFPOrFPVectorTy() || (second && second->isFloatingPointTy()))
                 {
-                    fpOffset = m_builder.CreateInBoundsGEP(vaList, {m_builder.getInt64(0), m_builder.getInt32(1)});
+                    fpOffset = createInBoundsGEP(vaList, {m_builder.getInt64(0), m_builder.getInt32(1)});
                     fpCount = createLoad(fpOffset, false);
                     // fpOffset comes after gpOffset therefore all fp registers are used when fpOffset
                     // is 8 Bytes * 6 Integer registers + 16 Bytes * 8 Floating point registers
@@ -3175,17 +3384,17 @@ public:
                 m_builder.CreateCondBr(cond, inRegister, onStack);
 
                 m_builder.SetInsertPoint(inRegister);
-                llvm::Value* regArea =
-                    m_builder.CreateInBoundsGEP(vaList, {m_builder.getInt64(0), m_builder.getInt32(3)});
+                auto regArea = createInBoundsGEP(vaList, {m_builder.getInt64(0), m_builder.getInt32(3)});
                 regArea = createLoad(regArea, false);
-                llvm::Value* regValue;
+                Value regValue = nullptr;
                 if (!second)
                 {
                     if (first->isIntOrPtrTy())
                     {
-                        // TODO: Handle case where types is aligned higher than 8 bytes
-                        regArea = m_builder.CreateGEP(regArea, gpCount);
-                        regValue = m_builder.CreateBitCast(regArea, llvm::PointerType::getUnqual(destType));
+                        // TODO: Handle case where types is aligned higher than 8 bytes;
+                        regArea = createGEP(regArea, gpCount);
+                        regArea.alignment = llvm::Align(8);
+                        regValue = createBitCast(regArea, llvm::PointerType::getUnqual(destType));
                         auto* incremented = m_builder.CreateAdd(gpCount, m_builder.getInt32(8));
                         createStore(incremented, gpOffset, false);
                         m_builder.CreateBr(contBlock);
@@ -3193,8 +3402,10 @@ public:
                     else
                     {
                         // TODO: Handle case where types is aligned higher than 16 bytes
-                        regArea = m_builder.CreateGEP(regArea, fpCount);
-                        regValue = m_builder.CreateBitCast(regArea, llvm::PointerType::getUnqual(destType));
+                        regArea = createGEP(regArea, fpCount);
+                        regArea.alignment = llvm::Align(16);
+                        regValue = createBitCast(regArea, llvm::PointerType::getUnqual(destType));
+
                         auto* incremented =
                             m_builder.CreateAdd(fpCount, m_builder.getInt32(first->isVectorTy() ? 32 : 16));
                         createStore(incremented, fpOffset, false);
@@ -3208,31 +3419,34 @@ public:
                     auto* allocaInst = temp.CreateAlloca(destType, nullptr, "va_arg.temp");
                     allocaInst->setAlignment(llvm::Align(expression.getType().getAlignOf(m_programInterface)));
                     m_builder.CreateLifetimeStart(allocaInst, m_builder.getInt64(sizeOf));
-                    auto* dest = m_builder.CreateBitCast(
-                        allocaInst, llvm::PointerType::getUnqual(llvm::StructType::get(first, second)));
+                    auto dest = createBitCast(
+                        allocaInst, llvm::PointerType::getUnqual(llvm::StructType::get(first, second)), false);
 
-                    llvm::Value* regAreaOfFirst =
-                        m_builder.CreateGEP(regArea, first->isFPOrFPVectorTy() ? fpCount : gpCount);
-                    regAreaOfFirst = m_builder.CreateBitCast(regAreaOfFirst, llvm::PointerType::getUnqual(first));
+                    auto regAreaOfFirst = createGEP(regArea, first->isFPOrFPVectorTy() ? fpCount : gpCount);
+                    regAreaOfFirst.alignment = llvm::Align(first->isFPOrFPVectorTy() ? 16 : 8);
+                    regAreaOfFirst = createBitCast(regAreaOfFirst, llvm::PointerType::getUnqual(first));
+
                     regAreaOfFirst = createLoad(regAreaOfFirst, false);
-                    auto* destFirst = m_builder.CreateInBoundsGEP(dest, {m_builder.getInt64(0), m_builder.getInt32(0)});
-                    m_builder.CreateAlignedStore(regAreaOfFirst, destFirst, allocaInst->getAlign());
+                    auto destFirst = createInBoundsGEP(dest, {m_builder.getInt64(0), m_builder.getInt32(0)});
+                    createStore(regAreaOfFirst, destFirst, false);
 
                     llvm::Value* offsetOfSecond = second->isFPOrFPVectorTy() ? fpCount : gpCount;
                     // If both are initialized then we are loading from one floating point and one integer register.
                     // Otherwise we are loading from two registers. In that case we need to apply an extra offset
-                    // as we already loaded previously
+                    // as we have already loaded previously
                     if (static_cast<bool>(fpOffset) != static_cast<bool>(gpOffset))
                     {
                         offsetOfSecond = m_builder.CreateAdd(
                             offsetOfSecond, llvm::ConstantInt::get(offsetOfSecond->getType(), fpOffset ? 16 : 8));
                     }
-                    llvm::Value* regAreaOfSecond = m_builder.CreateGEP(regArea, offsetOfSecond);
-                    regAreaOfSecond = m_builder.CreateBitCast(regAreaOfSecond, llvm::PointerType::getUnqual(second));
+
+                    auto regAreaOfSecond = createGEP(regArea, offsetOfSecond);
+                    regAreaOfSecond.alignment = llvm::Align(second->isFPOrFPVectorTy() ? 16 : 8);
+                    regAreaOfSecond = createBitCast(regAreaOfSecond, llvm::PointerType::getUnqual(second));
+
                     regAreaOfSecond = createLoad(regAreaOfSecond, false);
-                    auto* destSecond =
-                        m_builder.CreateInBoundsGEP(dest, {m_builder.getInt64(0), m_builder.getInt32(1)});
-                    m_builder.CreateAlignedStore(regAreaOfSecond, destSecond, allocaInst->getAlign());
+                    auto destSecond = createInBoundsGEP(dest, {m_builder.getInt64(0), m_builder.getInt32(1)});
+                    createStore(regAreaOfSecond, destSecond, false);
 
                     if (static_cast<bool>(fpOffset) != static_cast<bool>(gpOffset))
                     {
@@ -3259,13 +3473,7 @@ public:
                 }
 
                 m_builder.SetInsertPoint(onStack);
-                llvm::Value* stackAreaPtr =
-                    m_builder.CreateInBoundsGEP(vaList, {m_builder.getInt64(0), m_builder.getInt32(2)});
-                llvm::Value* stackArea = createLoad(stackAreaPtr, false);
-                // TODO: Handle case of a type being aligned to higher than 8 bytes
-                auto* stackValue = m_builder.CreateBitCast(stackArea, llvm::PointerType::getUnqual(destType));
-                stackArea = m_builder.CreateGEP(stackArea, m_builder.getInt64(cld::roundUpTo(sizeOf, 8)));
-                createStore(stackArea, stackAreaPtr, false);
+                auto stackValue = x64LoadFromStack(vaList, destType);
                 m_builder.CreateBr(contBlock);
 
                 m_builder.SetInsertPoint(contBlock);
@@ -3275,42 +3483,42 @@ public:
 
                 if (!cld::Semantics::isRecord(expression.getType()))
                 {
-                    return createLoad(phi, false);
+                    return createLoad(valueOf(phi, std::min(*regValue.alignment, *stackValue.alignment)), false);
                 }
 
-                // TODO: Only use memcpy if alignment doesn't match
                 llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(), m_currentFunction->getEntryBlock().begin());
                 auto* allocaInst = temp.CreateAlloca(destType, nullptr, "va_arg.ret");
                 allocaInst->setAlignment(llvm::Align(expression.getType().getAlignOf(m_programInterface)));
                 m_builder.CreateLifetimeStart(allocaInst, m_builder.getInt64(sizeOf));
-                m_builder.CreateMemCpy(allocaInst, allocaInst->getAlign(), phi, allocaInst->getAlign(), sizeOf);
+                m_builder.CreateMemCpy(allocaInst, allocaInst->getAlign(), phi,
+                                       std::min(*regValue.alignment, *stackValue.alignment), sizeOf);
                 return createLoad(allocaInst, false);
             }
         }
         CLD_UNREACHABLE;
     }
 
-    llvm::Value* visit(const cld::Semantics::Expression& expression, const cld::Semantics::BuiltinOffsetOf& offsetOf)
+    Value visit(const cld::Semantics::Expression& expression, const cld::Semantics::BuiltinOffsetOf& offsetOf)
     {
         return llvm::ConstantInt::get(visit(expression.getType()), offsetOf.getOffset());
     }
 
-    llvm::Value* CLD_NULLABLE visit(const cld::Semantics::Initializer& initializer, const cld::Semantics::Type& type,
-                                    std::variant<llvm::Value*, llvm::Type*> pointer)
+    Value visit(const cld::Semantics::Initializer& initializer, const cld::Semantics::Type& type,
+                std::variant<Value, llvm::Type*> pointer)
     {
         return cld::match(
             initializer,
             [&](const cld::Semantics::Expression& expression) -> llvm::Value* {
-                if (std::holds_alternative<llvm::Value*>(pointer))
+                if (std::holds_alternative<Value>(pointer))
                 {
-                    auto* value = visit(expression);
+                    auto value = visit(expression);
                     if (cld::Semantics::isStringLiteralExpr(expression))
                     {
-                        m_builder.CreateMemCpy(cld::get<llvm::Value*>(pointer), llvm::MaybeAlign(), value,
-                                               llvm::MaybeAlign(), expression.getType().getSizeOf(m_programInterface));
+                        m_builder.CreateMemCpy(cld::get<Value>(pointer), cld::get<Value>(pointer).alignment, value,
+                                               value.alignment, expression.getType().getSizeOf(m_programInterface));
                         return nullptr;
                     }
-                    createStore(value, cld::get<llvm::Value*>(pointer), type.isVolatile());
+                    createStore(value, cld::get<Value>(pointer), type.isVolatile());
                     return nullptr;
                 }
                 if (cld::Semantics::isStringLiteralExpr(expression))
@@ -3326,13 +3534,13 @@ public:
                 {
                     return visitStaticInitializerList(initializerList, type, cld::get<llvm::Type*>(pointer));
                 }
-                auto* value = cld::get<llvm::Value*>(pointer);
+                auto value = cld::get<Value>(pointer);
                 m_builder.CreateMemSet(value, m_builder.getInt8(0), type.getSizeOf(m_programInterface),
                                        llvm::MaybeAlign(), type.isVolatile());
                 for (auto& [path, expression] : initializerList.getFields())
                 {
-                    auto* subValue = visit(expression);
-                    auto* currentPointer = value;
+                    auto subValue = visit(expression);
+                    auto currentPointer = value;
                     const cld::Semantics::Type* currentType = &type;
                     std::optional<std::pair<std::uint32_t, std::uint32_t>> bitFieldBounds;
                     for (auto iter : path)
@@ -3340,9 +3548,9 @@ public:
                         if (cld::Semantics::isStruct(*currentType))
                         {
                             auto fieldLayout = m_programInterface.getFieldLayout(*currentType);
-                            currentPointer = m_builder.CreateInBoundsGEP(
-                                currentPointer,
-                                {m_builder.getInt64(0), m_builder.getInt32(fieldLayout[iter].layoutIndex)});
+                            currentPointer =
+                                createInBoundsGEP(currentPointer, {m_builder.getInt64(0),
+                                                                   m_builder.getInt32(fieldLayout[iter].layoutIndex)});
                             currentType = fieldLayout[iter].type.get();
                             bitFieldBounds = fieldLayout[iter].bitFieldBounds;
                         }
@@ -3350,15 +3558,15 @@ public:
                         {
                             auto fields = m_programInterface.getFieldLayout(*currentType);
                             currentType = fields[iter].type.get();
-                            currentPointer = m_builder.CreateBitCast(currentPointer,
-                                                                     llvm::PointerType::getUnqual(visit(*currentType)));
+                            currentPointer =
+                                createBitCast(currentPointer, llvm::PointerType::getUnqual(visit(*currentType)));
                             bitFieldBounds = fields[iter].bitFieldBounds;
                         }
                         else
                         {
                             currentType = &cld::Semantics::getArrayElementType(*currentType);
-                            currentPointer = m_builder.CreateInBoundsGEP(
-                                currentPointer, {m_builder.getInt64(0), m_builder.getInt64(iter)});
+                            currentPointer =
+                                createInBoundsGEP(currentPointer, {m_builder.getInt64(0), m_builder.getInt64(iter)});
                         }
                     }
                     if (!bitFieldBounds)
@@ -3374,10 +3582,10 @@ public:
                     }
                     llvm::Value* loaded = createLoad(currentPointer, type.isVolatile());
                     auto size = bitFieldBounds->second - bitFieldBounds->first;
-                    llvm::Value* mask = llvm::ConstantInt::get(subValue->getType(), (1u << size) - 1);
+                    llvm::Value* mask = llvm::ConstantInt::get(subValue.value->getType(), (1u << size) - 1);
                     subValue = m_builder.CreateAnd(subValue, mask);
-                    subValue = m_builder.CreateShl(subValue,
-                                                   llvm::ConstantInt::get(subValue->getType(), bitFieldBounds->first));
+                    subValue = m_builder.CreateShl(
+                        subValue, llvm::ConstantInt::get(subValue.value->getType(), bitFieldBounds->first));
                     mask = m_builder.CreateShl(mask, llvm::ConstantInt::get(mask->getType(), bitFieldBounds->first));
                     mask = m_builder.CreateNot(mask);
                     loaded = m_builder.CreateAnd(loaded, mask);
