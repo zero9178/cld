@@ -1792,9 +1792,10 @@ public:
             else
             {
                 auto* ptr = llvm::cast<llvm::LoadInst>(value.value)->getPointerOperand();
-                llvm::cast<llvm::LoadInst>(value.value)->eraseFromParent();
-                m_builder.CreateMemCpy(m_returnSlot, m_returnSlot->getAlign(), ptr, value.alignment,
+                m_builder.CreateMemCpy(m_returnSlot, m_returnSlot->getAlign(), ptr,
+                                       llvm::cast<llvm::LoadInst>(value.value)->getAlign(),
                                        returnStatement.getExpression()->getType().getSizeOf(m_programInterface));
+                llvm::cast<llvm::LoadInst>(value.value)->eraseFromParent();
             }
             auto ret = createLoad(m_returnSlot, false);
             runDestructors(returnStatement.getScope(), 0);
@@ -3155,11 +3156,11 @@ public:
                     continue;
                 }
                 // Integer register
-                // TODO: Check if this is Kosher due to alignment
                 auto* load = llvm::cast<llvm::LoadInst>(value.value);
                 auto integer = createBitCast(valueOf(load->getPointerOperand(), load->getAlign()),
                                              llvm::PointerType::getUnqual(m_builder.getIntNTy(
-                                                 m_module.getDataLayout().getTypeAllocSizeInBits(load->getType()))));
+                                                 m_module.getDataLayout().getTypeAllocSizeInBits(load->getType()))),
+                                             false);
                 arguments.emplace_back(createLoad(integer, load->isVolatile()));
                 load->eraseFromParent();
                 continue;
