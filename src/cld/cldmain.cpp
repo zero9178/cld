@@ -626,7 +626,7 @@ int cld::main(llvm::MutableArrayRef<std::string_view> elements, llvm::raw_ostrea
     options.systemDirectories = cli.get<ISYSTEM>();
     for (auto& [name, maybeValue] : cli.get<DEFINE_MACRO>())
     {
-        options.additionalMacros.emplace_back(name, maybeValue.value_or(""));
+        options.additionalMacros.emplace_back(name, maybeValue.value_or("1"));
     }
 
     if (cli.getUnrecognized().empty())

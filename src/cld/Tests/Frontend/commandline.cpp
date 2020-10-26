@@ -51,6 +51,13 @@ TEST_CASE("Commandline without args", "[cli]")
 
 TEST_CASE("Commandline arg types", "[cli]")
 {
+    SECTION("Don't match against whitespace")
+    {
+        std::vector<std::string_view> elements = {"-I", "text"};
+        auto cli = cld::parseCommandLine<INCLUDES>(elements);
+        CHECK(cli.get<INCLUDES>().empty());
+        CHECK_THAT(cli.getUnrecognized(), Catch::Equals(std::vector<std::string_view>{"-I", "text"}));
+    }
     SECTION("Strings")
     {
         SECTION("std::string")

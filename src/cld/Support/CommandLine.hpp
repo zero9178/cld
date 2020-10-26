@@ -24,17 +24,17 @@ enum class CLIMultiArg
     BitwiseMerge
 };
 
-template <class ReturnType, std::size_t firstOptionStringSize, std::size_t args, class... Alternatives>
+template <class ReturnType, std::size_t args, class... Alternatives>
 class CommandLineOption
 {
-    std::array<char, firstOptionStringSize> m_firstOptionString;
+    std::string_view m_firstOptionString;
     std::tuple<Alternatives...> m_alternatives;
     std::array<std::u32string_view, args> m_argNameToRetTypePos;
     std::string_view m_description;
     CLIMultiArg m_multiArg;
 
 public:
-    constexpr CommandLineOption(type_identity<ReturnType>, std::array<char, firstOptionStringSize> firstOptionString,
+    constexpr CommandLineOption(type_identity<ReturnType>, std::string_view firstOptionString,
                                 std::tuple<Alternatives...> alternatives,
                                 std::array<std::u32string_view, args> argNameToRetTypePos, std::string_view description,
                                 CLIMultiArg multiArg)
@@ -404,12 +404,12 @@ constexpr bool isOptional(std::u32string_view, std::tuple<>)
     return true;
 }
 
+template <class T>
+constexpr auto parsedTuple = T::parseOptionsImpl();
+
 template <class T, auto&... args>
 constexpr auto parseOptions(std::string_view description, CLIMultiArg multiArg = CLIMultiArg::Overwrite)
 {
-    constexpr auto parsedTuple = T::parseOptionsImpl();
-    constexpr auto lexems = std::get<0>(parsedTuple);
-    constexpr auto arguments = std::get<1>(parsedTuple);
     constexpr auto tuple = [] {
         if constexpr (sizeof...(args) == 0)
         {
@@ -422,9 +422,7 @@ constexpr auto parseOptions(std::string_view description, CLIMultiArg multiArg =
     }();
     constexpr auto value = std::apply(
         [&](auto&&... values) {
-#if defined(_MSC_VER) && !defined(__clang__)
-            constexpr auto arguments = std::get<1>(T::parseOptionsImpl());
-#endif
+            constexpr auto arguments = std::get<1>(parsedTuple<T>);
             using Tuple =
                 std::tuple<std::conditional_t<isOptional(std::u32string_view(
                                                              std::decay_t<decltype(values.first)>::pointer->begin(),
@@ -443,7 +441,8 @@ constexpr auto parseOptions(std::string_view description, CLIMultiArg multiArg =
         },
         tuple);
 
-    return CommandLineOption(value, std::get<2>(parsedTuple), lexems,
+    return CommandLineOption(value, {std::get<2>(parsedTuple<T>).data(), std::get<2>(parsedTuple<T>).size()},
+                             std::get<0>(parsedTuple<T>),
                              std::apply(
                                  [](auto&&... values) {
                                      return std::array<std::u32string_view, sizeof...(values)>{
@@ -588,7 +587,7 @@ static bool checkAlternative(llvm::MutableArrayRef<std::string_view>& commandLin
             using ArgType =
                 typename std::conditional_t<IsOptional<ArgTypeT>{}, ValueType<ArgTypeT>, type_identity<ArgTypeT>>::type;
             std::string_view text;
-            if (commandLine.empty())
+            if (commandLine.empty() || commandLine.front().empty())
             {
                 return false;
             }
