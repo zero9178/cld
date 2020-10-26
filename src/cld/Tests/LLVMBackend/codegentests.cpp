@@ -379,8 +379,7 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
             }
             SECTION("fp80")
             {
-                auto program = generateProgramWithOptions("void foo(long double r);",
-                                                          x64linux);
+                auto program = generateProgramWithOptions("void foo(long double r);", x64linux);
                 cld::CGLLVM::generateLLVM(*module, program, x64linux);
                 CAPTURE(*module);
                 REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
@@ -4737,7 +4736,6 @@ TEST_CASE("LLVM codegen c-testsuite", "[LLVM]")
         cld::CGLLVM::generateLLVM(*module, program);
         CAPTURE(*module);
         REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
-        module->print(llvm::errs(), nullptr);
         text.clear();
         CHECK(cld::Tests::computeInJIT<int(int (*)(const char*, ...))>(std::move(module), "function", printfCallback)
               == 0);
@@ -4927,45 +4925,36 @@ TEST_CASE("LLVM codegen miscellaneous programs", "[LLVM]")
     {
         auto program = generateProgram("int (*print)(const char*,...);\n"
                                        "\n"
-                                       "struct hfa31 { long double a; } s2 = { 31.1 };\n"
+                                       "struct hfa12 {\n"
+                                       " float a,b;"
+                                       "} hfa12 = { 12.1,12.2};\n"
                                        "\n"
-                                       "void fa_s2(void*p,...) {\n"
+                                       "struct hfa13 {\n"
+                                       " float a,b,c;\n"
+                                       "} hfa13 = { 13.1,13.2,13.3 };\n"
+                                       "\n"
+                                       "void foo(void* p,...) {\n"
                                        "    __builtin_va_list list;\n"
                                        "    __builtin_va_start(list,p);\n"
-                                       "    struct hfa31 a = __builtin_va_arg(list,struct hfa31);\n"
+                                       "    struct hfa12 x = __builtin_va_arg(list,struct hfa12);\n"
+                                       "    print(\"%.1f,%.1f \", x.a, x.b);\n"
+                                       "    for (int i = 0; i < 4; i++) {\n"
+                                       "        struct hfa13 x = __builtin_va_arg(list,struct hfa13);\n"
+                                       "        print(\"%.1f,%.1f \", x.a,x.c);\n"
+                                       "    }\n"
                                        "    __builtin_va_end(list);\n"
-                                       "    print(\"%.1Lf,%.1Lf\",a.a,a.a);\n"
                                        "}\n"
                                        "\n"
                                        "void function(int (*printF)(const char*,...)) {\n"
                                        "print = printF;\n"
-                                       "fa_s2(0,s2);\n"
+                                       "foo(0,hfa12,hfa13,hfa13,hfa13,hfa13);\n"
                                        "}\n");
         cld::CGLLVM::generateLLVM(*module, program);
         CAPTURE(*module);
         REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
         text.clear();
         cld::Tests::computeInJIT<void(int (*)(const char*, ...))>(std::move(module), "function", printfCallback);
-        CHECK(text == "31.1,31.1");
-    }
-    SECTION("vararg issue 2")
-    {
-        auto program = generateProgram("int (*print)(const char*,...);\n"
-                                       "\n"
-                                       "struct s2 { char x[2]; } s2 = { \"12\" };\n\n"
-                                       "\n"
-                                       "void fa_s2(struct s2 a) { print(\"%.2s\\n\",a.x); }\n"
-                                       "\n"
-                                       "void function(int (*printF)(const char*,...)) {\n"
-                                       "print = printF;\n"
-                                       "fa_s2(s2);\n"
-                                       "}\n");
-        cld::CGLLVM::generateLLVM(*module, program);
-        CAPTURE(*module);
-        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
-        text.clear();
-        cld::Tests::computeInJIT<void(int (*)(const char*, ...))>(std::move(module), "function", printfCallback);
-        CHECK(text == "12\n");
+        CHECK(text == "12.1,12.2 13.1,13.3 13.1,13.3 13.1,13.3 13.1,13.3 ");
     }
     SECTION("Member access shenanigans")
     {
@@ -5207,6 +5196,35 @@ TEST_CASE("LLVM codegen var arg", "[LLVM]")
                 CHECK(cld::Tests::computeInJIT<int(void*, ...)>(std::move(module), "function", nullptr,
                                                                 T{3.0, {3, 4, 5, 6, 7}})
                       == 5);
+            }
+        }
+        SECTION("single fp80 in struct")
+        {
+            auto program = generateProgram("int (*print)(const char*,...);\n"
+                                           "\n"
+                                           "struct hfa31 { long double a; } s2 = { 31.1 };\n"
+                                           "\n"
+                                           "void fa_s2(void*p,...) {\n"
+                                           "    __builtin_va_list list;\n"
+                                           "    __builtin_va_start(list,p);\n"
+                                           "    struct hfa31 a = __builtin_va_arg(list,struct hfa31);\n"
+                                           "    __builtin_va_end(list);\n"
+                                           "    print(\"%.1Lf,%.1Lf\",a.a,a.a);\n"
+                                           "}\n"
+                                           "\n"
+                                           "void function(int (*printF)(const char*,...)) {\n"
+                                           "print = printF;\n"
+                                           "fa_s2(0,s2);\n"
+                                           "}\n");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            if (triple == cld::Triple::native())
+            {
+                text.clear();
+                cld::Tests::computeInJIT<void(int (*)(const char*, ...))>(std::move(module), "function",
+                                                                          printfCallback);
+                CHECK(text == "31.1,31.1");
             }
         }
     }

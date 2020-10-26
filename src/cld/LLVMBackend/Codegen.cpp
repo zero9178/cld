@@ -3355,16 +3355,13 @@ public:
                     auto maxOffset = first->isIntOrPtrTy() && second && second->isIntOrPtrTy() ? 32 : 40;
                     cond = m_builder.CreateICmpULE(gpCount, m_builder.getInt32(maxOffset));
                 }
-                if (first->isFPOrFPVectorTy() || (second && second->isFloatingPointTy()))
+                if (first->isFPOrFPVectorTy() || (second && second->isFPOrFPVectorTy()))
                 {
                     fpOffset = createInBoundsGEP(vaList, {m_builder.getInt64(0), m_builder.getInt32(1)});
                     fpCount = createLoad(fpOffset, false);
                     // fpOffset comes after gpOffset therefore all fp registers are used when fpOffset
                     // is 8 Bytes * 6 Integer registers + 16 Bytes * 8 Floating point registers
-                    auto maxOffset =
-                        first->isVectorTy() || (first->isFloatingPointTy() && second && second->isFloatingPointTy()) ?
-                            144 :
-                            160;
+                    auto maxOffset = (first->isFPOrFPVectorTy() && second && second->isFPOrFPVectorTy()) ? 144 : 160;
                     if (!cond)
                     {
                         cond = m_builder.CreateICmpULE(fpCount, m_builder.getInt32(maxOffset));
@@ -3406,8 +3403,7 @@ public:
                         regArea.alignment = llvm::Align(16);
                         regValue = createBitCast(regArea, llvm::PointerType::getUnqual(destType));
 
-                        auto* incremented =
-                            m_builder.CreateAdd(fpCount, m_builder.getInt32(first->isVectorTy() ? 32 : 16));
+                        auto* incremented = m_builder.CreateAdd(fpCount, m_builder.getInt32(16));
                         createStore(incremented, fpOffset, false);
                         m_builder.CreateBr(contBlock);
                     }
