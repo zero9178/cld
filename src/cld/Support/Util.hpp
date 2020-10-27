@@ -17,7 +17,7 @@
                     __builtin_unreachable(); \
                 while (0)
 
-            #define CLD_ASSERT(x) __builtin_assume(bool(x))
+            #define CLD_ASSERT(...) __builtin_assume(bool(__VA_ARGS__))
 
         #elif defined(__GNUC__)
 
@@ -26,10 +26,10 @@
                     __builtin_unreachable(); \
                 while (0)
 
-            #define CLD_ASSERT(x) \
-                if (x)            \
-                    ;             \
-                else              \
+            #define CLD_ASSERT(...) \
+                if (__VA_ARGS__)    \
+                    ;               \
+                else                \
                     __builtin_unreachable()
 
         #elif defined(_MSC_VER)
@@ -39,13 +39,13 @@
                     __assume(false); \
                 while (0)
 
-            #define CLD_ASSERT(x) __assume((bool)(x))
+            #define CLD_ASSERT(...) __assume((bool)(__VA_ARGS__))
 
         #else
 
             #define CLD_UNREACHABLE
 
-            #define CLD_ASSERT(x)
+            #define CLD_ASSERT(...)
 
         #endif
 
@@ -56,28 +56,28 @@
                 std::abort();   \
             while (0)
 
-        #define CLD_ASSERT(x)                                            \
-            do                                                           \
-            {                                                            \
-                if (!(x))                                                \
-                {                                                        \
-                    fprintf(stderr, __FILE__ ":%d: " #x "\n", __LINE__); \
-                    std::abort();                                        \
-                }                                                        \
+        #define CLD_ASSERT(...)                                                    \
+            do                                                                     \
+            {                                                                      \
+                if (!(__VA_ARGS__))                                                \
+                {                                                                  \
+                    fprintf(stderr, __FILE__ ":%d: " #__VA_ARGS__ "\n", __LINE__); \
+                    std::abort();                                                  \
+                }                                                                  \
             } while (0)
 
     #endif
 
 #else
 
-    #define CLD_ASSERT(x)                                            \
-        do                                                           \
-        {                                                            \
-            if (!(x))                                                \
-            {                                                        \
-                fprintf(stderr, __FILE__ ":%d: " #x "\n", __LINE__); \
-                std::abort();                                        \
-            }                                                        \
+    #define CLD_ASSERT(...)                                                    \
+        do                                                                     \
+        {                                                                      \
+            if (!(__VA_ARGS__))                                                \
+            {                                                                  \
+                fprintf(stderr, __FILE__ ":%d: " #__VA_ARGS__ "\n", __LINE__); \
+                std::abort();                                                  \
+            }                                                                  \
         } while (0)
 
     #define CLD_UNREACHABLE                                                              \

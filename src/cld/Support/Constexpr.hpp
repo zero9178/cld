@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <string_view>
 #include <tuple>
 #include <variant>
 
@@ -133,6 +134,9 @@ struct IsEqualComparable<T, U, std::void_t<decltype(std::declval<T>() == std::de
 
 template <class T>
 constexpr bool always_false = false;
+
+template <class T>
+constexpr bool always_true = true;
 
 template <typename, typename = void>
 constexpr bool IsTypeCompleteV = false;

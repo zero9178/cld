@@ -141,7 +141,7 @@ public:
 
     llvm::ArrayRef<FieldInLayout> getFieldLayout(const Type& recordType) const;
 
-    bool isBitfieldAccess(const Expression& expression) const;
+    bool isBitfieldAccess(const ExpressionBase& expression) const;
 
     const std::vector<Scope>& getScopes() const
     {

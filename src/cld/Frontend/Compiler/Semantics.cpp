@@ -14,6 +14,7 @@
 cld::Semantics::Type cld::Semantics::PrimitiveType::createPtrdiffT(bool isConst, bool isVolatile,
                                                                    const LanguageOptions& options)
 {
+    MonadicStorage<Statement> statement(std::in_place_type<ExpressionStatement>, 0, std::nullopt);
     switch (options.ptrdiffType)
     {
         case LanguageOptions::PtrdiffType ::Int: return PrimitiveType::createInt(isConst, isVolatile, options);
@@ -323,14 +324,14 @@ cld::Semantics::Type cld::Semantics::PrimitiveType::createVoid(bool isConst, boo
 
 cld::Semantics::ValArrayType::ValArrayType(bool isRestricted, bool isStatic,
                                            std::shared_ptr<cld::Semantics::Type>&& type,
-                                           std::shared_ptr<const Expression>&& expression)
+                                           std::shared_ptr<const ExpressionBase>&& expression)
     : m_type(std::move(type)), m_restricted(isRestricted), m_static(isStatic), m_expression(std::move(expression))
 {
 }
 
 cld::Semantics::Type cld::Semantics::ValArrayType::create(bool isConst, bool isVolatile, bool isRestricted,
                                                           bool isStatic, cld::Semantics::Type type,
-                                                          std::shared_ptr<const Expression> expression)
+                                                          std::shared_ptr<const ExpressionBase> expression)
 {
     return cld::Semantics::Type(
         isConst, isVolatile,
@@ -459,9 +460,9 @@ std::size_t cld::Semantics::UnionType::getAlignOf(const ProgramInterface& progra
     return def->getAlignOf();
 }
 
-bool cld::Semantics::isStringLiteralExpr(const Expression& expression)
+bool cld::Semantics::isStringLiteralExpr(const ExpressionBase& expression)
 {
-    auto* constant = std::get_if<Constant>(&expression.getVariant());
+    auto* constant = expression.get_if<Constant>();
     if (!constant)
     {
         return false;
@@ -891,13 +892,13 @@ std::string cld::diag::CustomFormat<U'f', U'u', U'l', U'l'>::operator()(const Se
     return "'" + result + "'";
 }
 
-std::string cld::diag::CustomFormat<U't', U'y', U'p', U'e'>::operator()(const Semantics::Expression& arg)
+std::string cld::diag::CustomFormat<U't', U'y', U'p', U'e'>::operator()(const Semantics::ExpressionBase& arg)
 {
     return typeToString(arg.getType());
 }
 
 std::string cld::diag::CustomFormat<U'f', U'u', U'l', U'l', U'T', U'y', U'p', U'e'>::operator()(
-    const Semantics::Expression& arg)
+    const Semantics::ExpressionBase& arg)
 {
     return CustomFormat<U'f', U'u', U'l', U'l'>{}(arg.getType());
 }
@@ -965,7 +966,7 @@ cld::Lexer::CTokenIterator cld::Semantics::UnaryOperator::end() const
 cld::Lexer::CTokenIterator cld::Semantics::SizeofOperator::end() const
 {
     return cld::match(
-        m_variant, [](const std::unique_ptr<Expression>& expression) { return expression->end(); },
+        m_variant, [](const std::unique_ptr<ExpressionBase>& expression) { return expression->end(); },
         [](const TypeVariant& typeVariant) { return typeVariant.closeParentheses + 1; });
 }
 
@@ -984,11 +985,9 @@ cld::Lexer::CTokenIterator cld::Semantics::Conditional::end() const
     return m_falseExpression->end();
 }
 
-cld::Semantics::Expression::Expression(const cld::Syntax::Node& node) : Expression(node.begin(), node.end()) {}
-
 cld::Lexer::CTokenIterator cld::Semantics::CommaExpression::begin() const
 {
-    return m_commaExpressions[0].first.begin();
+    return m_commaExpressions[0].first->begin();
 }
 
 cld::Lexer::CTokenIterator cld::Semantics::CommaExpression::end() const
@@ -1006,10 +1005,11 @@ cld::Lexer::CTokenIterator cld::Semantics::CallExpression::end() const
     return m_closeParentheses + 1;
 }
 
-cld::Semantics::CompoundLiteral::CompoundLiteral(Lexer::CTokenIterator openParentheses, Initializer initializer,
-                                                 Lexer::CTokenIterator closeParentheses, Lexer::CTokenIterator initEnd,
-                                                 bool staticLifetime)
-    : m_openParentheses(openParentheses),
+cld::Semantics::CompoundLiteral::CompoundLiteral(Type type, Lexer::CTokenIterator openParentheses,
+                                                 Initializer initializer, Lexer::CTokenIterator closeParentheses,
+                                                 Lexer::CTokenIterator initEnd, bool staticLifetime)
+    : ExpressionBase(std::in_place_type<CompoundLiteral>, std::move(type), ValueCategory::Lvalue),
+      m_openParentheses(openParentheses),
       m_initializer(std::make_unique<Initializer>(std::move(initializer))),
       m_closeParentheses(closeParentheses),
       m_initEnd(initEnd),
@@ -1119,7 +1119,7 @@ cld::Semantics::Program cld::Semantics::analyse(const Syntax::TranslationUnit& p
     return Program(std::move(translationUnit), std::move(cTokens), std::move(analysis));
 }
 
-const cld::Semantics::Expression& cld::Semantics::BuiltinVAArg::getExpression() const
+const cld::Semantics::ExpressionBase& cld::Semantics::BuiltinVAArg::getExpression() const
 {
     return *m_expression;
 }
@@ -1127,4 +1127,19 @@ const cld::Semantics::Expression& cld::Semantics::BuiltinVAArg::getExpression() 
 std::size_t std::hash<cld::Semantics::Type>::operator()(const cld::Semantics::Type& type) const noexcept
 {
     return cld::hashCombine(type.isConst(), type.isVolatile(), type.getVariant());
+}
+
+cld::Lexer::CTokenIterator cld::Semantics::ExpressionBase::begin() const
+{
+    return this->match([](auto&& value) { return value.begin(); });
+}
+
+cld::Lexer::CTokenIterator cld::Semantics::ExpressionBase::end() const
+{
+    return this->match([](auto&& value) { return value.end(); });
+}
+
+cld::Semantics::ErrorExpression::ErrorExpression(Type type, const cld::Syntax::Node& node)
+    : ErrorExpression(std::move(type), node.begin(), node.end())
+{
 }

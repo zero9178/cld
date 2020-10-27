@@ -180,21 +180,21 @@ class SemanticAnalysis final : public ProgramInterface
 
     Type compositeType(const Type& lhs, const Type& rhs) const;
 
-    Expression lvalueConversion(Expression&& expression);
+    ExpressionValue lvalueConversion(ExpressionValue&& expression);
 
     static Type lvalueConversion(Type type);
 
-    Expression defaultArgumentPromotion(Expression&& type);
+    ExpressionValue defaultArgumentPromotion(ExpressionValue&& type);
 
-    Expression integerPromotion(Expression&& expression);
+    ExpressionValue integerPromotion(ExpressionValue&& expression);
 
-    static Expression toBool(Expression&& expression);
+    static ExpressionValue toBool(ExpressionValue&& expression);
 
-    void arithmeticConversion(Expression& lhs, Expression& rhs);
+    void arithmeticConversion(ExpressionValue& lhs, ExpressionValue& rhs);
 
-    void arithmeticConversion(Type& lhs, Expression& rhs);
+    void arithmeticConversion(Type& lhs, ExpressionValue& rhs);
 
-    bool isModifiableLValue(const Expression& expression) const;
+    bool isModifiableLValue(const ExpressionBase& expression) const;
 
     bool isConst(const Type& type) const;
 
@@ -204,14 +204,14 @@ class SemanticAnalysis final : public ProgramInterface
         checkMemberAccess(const Type& recordType, const Syntax::PostFixExpression& postFixExpr,
                           const Lexer::CToken& identifier);
 
-    Expression checkIncrementAndDecrement(const Syntax::Node& node, UnaryOperator::Kind kind, Expression&& value,
-                                          Lexer::CTokenIterator opToken);
+    ExpressionValue checkIncrementAndDecrement(const Syntax::Node& node, UnaryOperator::Kind kind,
+                                               ExpressionValue&& value, Lexer::CTokenIterator opToken);
 
-    Expression doBitOperators(Expression&& lhs, BinaryOperator::Kind kind, Lexer::CTokenIterator token,
-                              Expression&& rhs);
+    ExpressionValue doBitOperators(ExpressionValue&& lhs, BinaryOperator::Kind kind, Lexer::CTokenIterator token,
+                                   ExpressionValue&& rhs);
 
-    Expression doLogicOperators(Expression&& lhs, BinaryOperator::Kind kind, Lexer::CTokenIterator token,
-                                Expression&& rhs);
+    ExpressionValue doLogicOperators(ExpressionValue&& lhs, BinaryOperator::Kind kind, Lexer::CTokenIterator token,
+                                     ExpressionValue&& rhs);
 
 public:
     enum Mode
@@ -222,7 +222,8 @@ public:
     };
 
 private:
-    ConstValue evaluate(const Expression& expression, Mode mode, cld::function_ref<void(const Message&)> logger) const;
+    ConstValue evaluate(const ExpressionBase& expression, Mode mode,
+                        cld::function_ref<void(const Message&)> logger) const;
 
     template <class T>
     [[nodiscard]] const T* CLD_NULLABLE lookupType(std::string_view name) const
@@ -261,7 +262,7 @@ private:
         return declaratorsToTypeImpl(std::move(temp), &declarator, declarations, paramCallback);
     }
 
-    bool doAssignmentLikeConstraints(const Type& lhsTyp, Expression& rhsValue,
+    bool doAssignmentLikeConstraints(const Type& lhsTyp, ExpressionValue& rhsValue,
                                      cld::function_ref<void()> mustBeArithmetic,
                                      cld::function_ref<void()> mustBeArithmeticOrPointer,
                                      cld::function_ref<void()> incompleteType,
@@ -270,8 +271,8 @@ private:
                                      cld::function_ref<void()> mustBePointer,
                                      cld::function_ref<void()> voidFunctionPointers);
 
-    Expression doSingleElementInitialization(const Syntax::Node& node, const Type& type, Expression&& expression,
-                                             bool staticLifetime, std::size_t* size);
+    ExpressionValue doSingleElementInitialization(const Syntax::Node& node, const Type& type,
+                                                  ExpressionValue&& expression, bool staticLifetime, std::size_t* size);
 
     void checkForIllegalSwitchJumps(std::tuple<const Lexer::CToken&, const Lexer::CToken&> loc,
                                     const SwitchStatement& switchStatement, bool isCaseOrDefault);
@@ -293,7 +294,7 @@ public:
         createBuiltins();
     }
 
-    Expected<ConstValue, std::vector<Message>> evaluateConstantExpression(const Expression& constantExpression,
+    Expected<ConstValue, std::vector<Message>> evaluateConstantExpression(const ExpressionBase& constantExpression,
                                                                           Mode mode = Integer);
 
     [[nodiscard]] const LanguageOptions& getLanguageOptions() const override
@@ -305,79 +306,79 @@ public:
 
     std::vector<TranslationUnit::Variant> visit(const Syntax::FunctionDefinition& node);
 
-    using DeclRetVariant = std::variant<std::unique_ptr<Declaration>, std::shared_ptr<const Expression>>;
+    using DeclRetVariant = std::variant<std::unique_ptr<Declaration>, std::shared_ptr<const ExpressionBase>>;
 
     std::vector<DeclRetVariant> visit(const Syntax::Declaration& node);
 
     std::unique_ptr<Statement> visit(const Syntax::Statement& node);
 
-    Expression visit(const Syntax::Expression& node);
+    ExpressionValue visit(const Syntax::Expression& node);
 
-    Expression visit(const Syntax::AssignmentExpression& node);
+    ExpressionValue visit(const Syntax::AssignmentExpression& node);
 
-    Expression visit(const Syntax::PrimaryExpression& node);
+    ExpressionValue visit(const Syntax::PrimaryExpression& node);
 
-    Expression visit(const Syntax::PrimaryExpressionIdentifier& node);
+    ExpressionValue visit(const Syntax::PrimaryExpressionIdentifier& node);
 
-    Expression visit(const Syntax::PrimaryExpressionConstant& node);
+    ExpressionValue visit(const Syntax::PrimaryExpressionConstant& node);
 
-    Expression visit(const Syntax::PrimaryExpressionParentheses& node);
+    ExpressionValue visit(const Syntax::PrimaryExpressionParentheses& node);
 
-    Expression visit(const Syntax::PrimaryExpressionBuiltinVAArg& node);
+    ExpressionValue visit(const Syntax::PrimaryExpressionBuiltinVAArg& node);
 
-    Expression visit(const Syntax::PrimaryExpressionBuiltinOffsetOf& node);
+    ExpressionValue visit(const Syntax::PrimaryExpressionBuiltinOffsetOf& node);
 
-    Expression visit(const Syntax::PostFixExpression& node);
+    ExpressionValue visit(const Syntax::PostFixExpression& node);
 
-    Expression visit(const Syntax::PostFixExpressionPrimaryExpression& node);
+    ExpressionValue visit(const Syntax::PostFixExpressionPrimaryExpression& node);
 
-    Expression visit(const Syntax::PostFixExpressionSubscript& node);
+    ExpressionValue visit(const Syntax::PostFixExpressionSubscript& node);
 
-    Expression visit(const Syntax::PostFixExpressionDot& node);
+    ExpressionValue visit(const Syntax::PostFixExpressionDot& node);
 
-    Expression visit(const Syntax::PostFixExpressionArrow& node);
+    ExpressionValue visit(const Syntax::PostFixExpressionArrow& node);
 
-    Expression visit(const Syntax::PostFixExpressionFunctionCall& node);
+    ExpressionValue visit(const Syntax::PostFixExpressionFunctionCall& node);
 
-    Expression visit(const Syntax::PostFixExpressionIncrement& node);
+    ExpressionValue visit(const Syntax::PostFixExpressionIncrement& node);
 
-    Expression visit(const Syntax::PostFixExpressionDecrement& node);
+    ExpressionValue visit(const Syntax::PostFixExpressionDecrement& node);
 
-    Expression visit(const Syntax::PostFixExpressionTypeInitializer& node);
+    ExpressionValue visit(const Syntax::PostFixExpressionTypeInitializer& node);
 
-    Expression visit(const Syntax::UnaryExpression& node);
+    ExpressionValue visit(const Syntax::UnaryExpression& node);
 
-    Expression visit(const Syntax::UnaryExpressionPostFixExpression& node);
+    ExpressionValue visit(const Syntax::UnaryExpressionPostFixExpression& node);
 
-    Expression visit(const Syntax::UnaryExpressionUnaryOperator& node);
+    ExpressionValue visit(const Syntax::UnaryExpressionUnaryOperator& node);
 
-    Expression visit(const Syntax::UnaryExpressionSizeOf& node);
+    ExpressionValue visit(const Syntax::UnaryExpressionSizeOf& node);
 
-    Expression visit(const Syntax::UnaryExpressionDefined& node);
+    ExpressionValue visit(const Syntax::UnaryExpressionDefined& node);
 
-    Expression visit(const Syntax::CastExpression& node);
+    ExpressionValue visit(const Syntax::CastExpression& node);
 
-    Expression visit(const Syntax::Term& node);
+    ExpressionValue visit(const Syntax::Term& node);
 
-    Expression visit(const Syntax::AdditiveExpression& node);
+    ExpressionValue visit(const Syntax::AdditiveExpression& node);
 
-    Expression visit(const Syntax::ShiftExpression& node);
+    ExpressionValue visit(const Syntax::ShiftExpression& node);
 
-    Expression visit(const Syntax::RelationalExpression& node);
+    ExpressionValue visit(const Syntax::RelationalExpression& node);
 
-    Expression visit(const Syntax::EqualityExpression& node);
+    ExpressionValue visit(const Syntax::EqualityExpression& node);
 
-    Expression visit(const Syntax::BitAndExpression& node);
+    ExpressionValue visit(const Syntax::BitAndExpression& node);
 
-    Expression visit(const Syntax::BitXorExpression& node);
+    ExpressionValue visit(const Syntax::BitXorExpression& node);
 
-    Expression visit(const Syntax::BitOrExpression& node);
+    ExpressionValue visit(const Syntax::BitOrExpression& node);
 
-    Expression visit(const Syntax::LogicalAndExpression& node);
+    ExpressionValue visit(const Syntax::LogicalAndExpression& node);
 
-    Expression visit(const Syntax::LogicalOrExpression& node);
+    ExpressionValue visit(const Syntax::LogicalOrExpression& node);
 
-    Expression visit(const Syntax::ConditionalExpression& node);
+    ExpressionValue visit(const Syntax::ConditionalExpression& node);
 
     Initializer visit(const Syntax::Initializer& node, const Type& type, bool staticLifetime = false,
                       std::size_t* size = nullptr);

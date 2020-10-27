@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstddef>
+#include <variant>
+
 #include "Constexpr.hpp"
 #include "MonadicInheritance.h"
 
@@ -24,7 +27,6 @@ class MonadicStorageBase
 protected:
     alignas(SubClasses...) std::byte m_storage[std::max({sizeof(SubClasses)...})];
 
-public:
     [[nodiscard]] Base& get() noexcept
     {
         return *reinterpret_cast<Base*>(this->m_storage);
@@ -392,10 +394,11 @@ class MonadicStorage<Base, MonadicInheritance<SubClasses...>>
     : public detail::MonadicStorage::MonadicStorageMoveAss<
           Base, std::max({detail::MonadicStorage::moveAss<SubClasses>()...}), SubClasses...>
 {
+    using detail::MonadicStorage::MonadicStorageBase<Base, SubClasses...>::get;
+
 public:
-    template <class T>
-    MonadicStorage(std::enable_if_t<!detail::MonadicStorage::isInPlaceT<T>::value, T>&& value) noexcept(
-        std::is_nothrow_constructible_v<std::decay_t<T>, T&&>)
+    template <class T, std::enable_if_t<(std::is_same_v<std::decay_t<T>, SubClasses> || ...)>* = nullptr>
+    MonadicStorage(T&& value) noexcept(std::is_nothrow_constructible_v<std::decay_t<T>, T&&>)
     {
         static_assert((std::is_same_v<std::decay_t<T>, SubClasses> || ...));
         new (this->m_storage) std::decay_t<T>(std::forward<T>(value));
@@ -408,7 +411,12 @@ public:
         new (this->m_storage) T(std::forward<Args>(args)...);
     }
 
-    using detail::MonadicStorage::MonadicStorageBase<Base, SubClasses...>::get;
+    template <class T, class... Args>
+    T& emplace(Args&&... args) noexcept(std::is_nothrow_constructible_v<T, Args&&...>)
+    {
+        *this = MonadicStorage(std::in_place_type<T>, std::forward<Args>(args)...);
+        return *reinterpret_cast<T*>(this->m_storage);
+    }
 
     operator Base&() noexcept
     {
@@ -418,6 +426,33 @@ public:
     operator const Base&() const noexcept
     {
         return get();
+    }
+
+    Base* CLD_NON_NULL operator->() noexcept
+    {
+        return &get();
+    }
+
+    const Base* CLD_NON_NULL operator->() const noexcept
+    {
+        return &get();
+    }
+
+    Base& operator*() noexcept
+    {
+        return get();
+    }
+
+    const Base& operator*() const noexcept
+    {
+        return get();
+    }
+
+    std::unique_ptr<Base> toUniquePtr() && noexcept((std::is_nothrow_move_constructible_v<SubClasses> && ...))
+    {
+        return match([](auto&& value) -> std::unique_ptr<Base> {
+            return std::make_unique<std::decay_t<decltype(value)>>(std::move(value));
+        });
     }
 };
 

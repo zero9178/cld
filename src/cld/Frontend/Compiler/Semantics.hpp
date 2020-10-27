@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cld/Support/MonadicInheritance.h>
+#include <cld/Support/MonadicStorage.hpp>
 
 #include <map>
 #include <memory>
@@ -223,21 +224,21 @@ public:
     [[nodiscard]] bool operator!=(const AbstractArrayType& rhs) const;
 };
 
-class Expression;
+class ExpressionBase;
 
 class ValArrayType final
 {
     std::shared_ptr<const Type> m_type;
     bool m_restricted : 1;
     bool m_static : 1;
-    std::shared_ptr<const Expression> m_expression;
+    std::shared_ptr<const ExpressionBase> m_expression;
 
     ValArrayType(bool isRestricted, bool isStatic, std::shared_ptr<cld::Semantics::Type>&& type,
-                 std::shared_ptr<const Expression>&& expression);
+                 std::shared_ptr<const ExpressionBase>&& expression);
 
 public:
     [[nodiscard]] static Type create(bool isConst, bool isVolatile, bool isRestricted, bool isStatic, Type type,
-                                     std::shared_ptr<const Expression> expression);
+                                     std::shared_ptr<const ExpressionBase> expression);
 
     [[nodiscard]] const Type& getType() const
     {
@@ -255,7 +256,7 @@ public:
     }
 
     // NULLABLE
-    [[nodiscard]] const std::shared_ptr<const Expression>& getExpression() const
+    [[nodiscard]] const std::shared_ptr<const ExpressionBase>& getExpression() const
     {
         return m_expression;
     }
@@ -545,7 +546,73 @@ public:
     [[nodiscard]] std::size_t getAlignOf(const ProgramInterface& program) const;
 };
 
-class Constant final
+enum class ValueCategory : std::uint8_t
+{
+    Lvalue,
+    Rvalue
+};
+
+class ExpressionBase
+    : public MonadicInheritance<class Constant, class DeclarationRead, class Conversion, class MemberAccess,
+                                class BinaryOperator, class Cast, class UnaryOperator, class SizeofOperator,
+                                class SubscriptOperator, class Conditional, class Assignment, class CommaExpression,
+                                class CallExpression, class CompoundLiteral, class BuiltinVAArg, class BuiltinOffsetOf,
+                                class ErrorExpression>
+{
+    Type m_type;
+    ValueCategory m_valueCategory;
+
+protected:
+    template <class T>
+    ExpressionBase(std::in_place_type_t<T>, Type type, ValueCategory valueCategory)
+        : MonadicInheritance(std::in_place_type<T>), m_type(std::move(type)), m_valueCategory(valueCategory)
+    {
+    }
+
+public:
+    ExpressionBase(const ExpressionBase&) = delete;
+    ExpressionBase& operator=(const ExpressionBase&) = delete;
+
+    // Currently MSVC deletes the move constructor and assign operator if I mark them noexcept
+    // This is due to llvm::APSInt not being noexcept. Other compilers will believe me that Expression is noexcept
+    // if I mark it as such but Microsoft instead punishes me by deleting it.
+
+    ExpressionBase(ExpressionBase&&)
+#if !defined(_MSC_VER) || defined(__clang__)
+        noexcept
+#endif
+        = default;
+    ExpressionBase& operator=(ExpressionBase&&)
+#if !defined(_MSC_VER) || defined(__clang__)
+        noexcept
+#endif
+        = default;
+
+    [[nodiscard]] const Type& getType() const
+    {
+        return m_type;
+    }
+
+    [[nodiscard]] ValueCategory getValueCategory() const
+    {
+        return m_valueCategory;
+    }
+
+    [[nodiscard]] bool isUndefined() const
+    {
+        return is<ErrorExpression>();
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator begin() const;
+
+    [[nodiscard]] Lexer::CTokenIterator end() const;
+};
+
+using ExpressionValue = MonadicStorage<ExpressionBase>;
+
+bool isStringLiteralExpr(const ExpressionBase& expression);
+
+class Constant final : public ExpressionBase
 {
 public:
     using Variant = std::variant<llvm::APSInt, llvm::APFloat, std::string, Lexer::NonCharString>;
@@ -556,8 +623,11 @@ private:
     Lexer::CTokenIterator m_valueEnd;
 
 public:
-    Constant(Variant value, Lexer::CTokenIterator valueBegin, Lexer::CTokenIterator valueEnd)
-        : m_value(std::move(value)), m_valueBegin(valueBegin), m_valueEnd(valueEnd)
+    Constant(Type type, Variant value, Lexer::CTokenIterator valueBegin, Lexer::CTokenIterator valueEnd)
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Rvalue),
+          m_value(std::move(value)),
+          m_valueBegin(valueBegin),
+          m_valueEnd(valueEnd)
     {
     }
 
@@ -583,7 +653,7 @@ class Declaration;
 
 class BuiltinFunction;
 
-class DeclarationRead final
+class DeclarationRead final : public ExpressionBase
 {
 public:
     using Variant = std::variant<const Declaration * CLD_NON_NULL, const FunctionDefinition * CLD_NON_NULL,
@@ -594,8 +664,10 @@ private:
     Lexer::CTokenIterator m_identifierToken;
 
 public:
-    explicit DeclarationRead(Variant declRead, Lexer::CTokenIterator identifierToken)
-        : m_declRead(declRead), m_identifierToken(identifierToken)
+    explicit DeclarationRead(Type type, Variant declRead, Lexer::CTokenIterator identifierToken)
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Lvalue),
+          m_declRead(declRead),
+          m_identifierToken(identifierToken)
     {
     }
 
@@ -620,7 +692,7 @@ public:
     }
 };
 
-class Conversion final
+class Conversion final : public ExpressionBase
 {
 public:
     enum Kind
@@ -634,17 +706,22 @@ public:
 
 private:
     Kind m_kind;
-    std::unique_ptr<Expression> m_expression;
+    std::unique_ptr<ExpressionBase> m_expression;
 
 public:
-    Conversion(Kind kind, std::unique_ptr<Expression> expression) : m_kind(kind), m_expression(std::move(expression)) {}
+    Conversion(Type type, Kind kind, std::unique_ptr<ExpressionBase> expression)
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Rvalue),
+          m_kind(kind),
+          m_expression(std::move(expression))
+    {
+    }
 
     [[nodiscard]] Kind getKind() const
     {
         return m_kind;
     }
 
-    [[nodiscard]] const Expression& getExpression() const
+    [[nodiscard]] const ExpressionBase& getExpression() const
     {
         return *m_expression;
     }
@@ -654,16 +731,19 @@ public:
     [[nodiscard]] Lexer::CTokenIterator end() const;
 };
 
-class Cast final
+class Cast final : public ExpressionBase
 {
     Lexer::CTokenIterator m_openParentheses;
     Lexer::CTokenIterator m_closeParentheses;
-    std::unique_ptr<Expression> m_expression;
+    std::unique_ptr<ExpressionBase> m_expression;
 
 public:
-    Cast(Lexer::CTokenIterator openParentheses, Lexer::CTokenIterator closeParentheses,
-         std::unique_ptr<Expression> expression)
-        : m_openParentheses(openParentheses), m_closeParentheses(closeParentheses), m_expression(std::move(expression))
+    Cast(Type type, Lexer::CTokenIterator openParentheses, Lexer::CTokenIterator closeParentheses,
+         std::unique_ptr<ExpressionBase> expression)
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Rvalue),
+          m_openParentheses(openParentheses),
+          m_closeParentheses(closeParentheses),
+          m_expression(std::move(expression))
     {
     }
 
@@ -677,7 +757,7 @@ public:
         return m_closeParentheses;
     }
 
-    [[nodiscard]] const Expression& getExpression() const
+    [[nodiscard]] const ExpressionBase& getExpression() const
     {
         return *m_expression;
     }
@@ -700,19 +780,23 @@ struct Field
     std::vector<std::shared_ptr<const Type>> parentTypes;
 };
 
-class MemberAccess final
+class MemberAccess final : public ExpressionBase
 {
-    std::unique_ptr<Expression> m_recordExpr;
+    std::unique_ptr<ExpressionBase> m_recordExpr;
     const Field* m_field;
     Lexer::CTokenIterator m_memberIdentifier;
 
 public:
-    MemberAccess(std::unique_ptr<Expression> recordExpr, const Field& field, Lexer::CTokenIterator memberIdentifier)
-        : m_recordExpr(std::move(recordExpr)), m_field(&field), m_memberIdentifier(memberIdentifier)
+    MemberAccess(Type type, ValueCategory valueCategory, std::unique_ptr<ExpressionBase> recordExpr, const Field& field,
+                 Lexer::CTokenIterator memberIdentifier)
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), valueCategory),
+          m_recordExpr(std::move(recordExpr)),
+          m_field(&field),
+          m_memberIdentifier(memberIdentifier)
     {
     }
 
-    [[nodiscard]] const Expression& getRecordExpression() const
+    [[nodiscard]] const ExpressionBase& getRecordExpression() const
     {
         return *m_recordExpr;
     }
@@ -730,29 +814,30 @@ public:
     }
 };
 
-class SubscriptOperator final
+class SubscriptOperator final : public ExpressionBase
 {
-    std::unique_ptr<Expression> m_leftExpr;
+    std::unique_ptr<ExpressionBase> m_leftExpr;
     Lexer::CTokenIterator m_openBracket;
-    std::unique_ptr<Expression> m_rightExpr;
+    std::unique_ptr<ExpressionBase> m_rightExpr;
     Lexer::CTokenIterator m_closeBracket;
 
 public:
-    SubscriptOperator(std::unique_ptr<Expression> leftExpr, Lexer::CTokenIterator openBracket,
-                      std::unique_ptr<Expression> rightExpr, Lexer::CTokenIterator closeBracket)
-        : m_leftExpr(std::move(leftExpr)),
+    SubscriptOperator(Type type, std::unique_ptr<ExpressionBase> leftExpr, Lexer::CTokenIterator openBracket,
+                      std::unique_ptr<ExpressionBase> rightExpr, Lexer::CTokenIterator closeBracket)
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Lvalue),
+          m_leftExpr(std::move(leftExpr)),
           m_openBracket(openBracket),
           m_rightExpr(std::move(rightExpr)),
           m_closeBracket(closeBracket)
     {
     }
 
-    [[nodiscard]] const Expression& getLeftExpression() const
+    [[nodiscard]] const ExpressionBase& getLeftExpression() const
     {
         return *m_leftExpr;
     }
 
-    [[nodiscard]] const Expression& getRightExpression() const
+    [[nodiscard]] const ExpressionBase& getRightExpression() const
     {
         return *m_rightExpr;
     }
@@ -775,9 +860,9 @@ public:
     }
 };
 
-class BinaryOperator final
+class BinaryOperator final : public ExpressionBase
 {
-    std::unique_ptr<Expression> m_leftOperand;
+    std::unique_ptr<ExpressionBase> m_leftOperand;
 
 public:
     enum Kind
@@ -805,19 +890,20 @@ public:
 private:
     Kind m_kind;
     Lexer::CTokenIterator m_operatorToken;
-    std::unique_ptr<Expression> m_rightOperand;
+    std::unique_ptr<ExpressionBase> m_rightOperand;
 
 public:
-    BinaryOperator(std::unique_ptr<Expression> leftOperand, Kind kind, Lexer::CTokenIterator operatorToken,
-                   std::unique_ptr<Expression> rightOperand)
-        : m_leftOperand(std::move(leftOperand)),
+    BinaryOperator(Type type, std::unique_ptr<ExpressionBase> leftOperand, Kind kind,
+                   Lexer::CTokenIterator operatorToken, std::unique_ptr<ExpressionBase> rightOperand)
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Rvalue),
+          m_leftOperand(std::move(leftOperand)),
           m_kind(kind),
           m_operatorToken(operatorToken),
           m_rightOperand(std::move(rightOperand))
     {
     }
 
-    [[nodiscard]] const Expression& getLeftExpression() const
+    [[nodiscard]] const ExpressionBase& getLeftExpression() const
     {
         return *m_leftOperand;
     }
@@ -832,7 +918,7 @@ public:
         return m_operatorToken;
     }
 
-    [[nodiscard]] const Expression& getRightExpression() const
+    [[nodiscard]] const ExpressionBase& getRightExpression() const
     {
         return *m_rightOperand;
     }
@@ -842,7 +928,7 @@ public:
     [[nodiscard]] Lexer::CTokenIterator end() const;
 };
 
-class UnaryOperator final
+class UnaryOperator final : public ExpressionBase
 {
 public:
     enum Kind
@@ -862,11 +948,15 @@ public:
 private:
     Kind m_kind;
     Lexer::CTokenIterator m_operatorToken;
-    std::unique_ptr<Expression> m_operand;
+    std::unique_ptr<ExpressionBase> m_operand;
 
 public:
-    UnaryOperator(Kind kind, Lexer::CTokenIterator operatorToken, std::unique_ptr<Expression> operand)
-        : m_kind(kind), m_operatorToken(operatorToken), m_operand(std::move(operand))
+    UnaryOperator(Type type, ValueCategory valueCategory, Kind kind, Lexer::CTokenIterator operatorToken,
+                  std::unique_ptr<ExpressionBase> operand)
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), valueCategory),
+          m_kind(kind),
+          m_operatorToken(operatorToken),
+          m_operand(std::move(operand))
     {
     }
 
@@ -880,7 +970,7 @@ public:
         return m_operatorToken;
     }
 
-    [[nodiscard]] const Expression& getOperand() const
+    [[nodiscard]] const ExpressionBase& getOperand() const
     {
         return *m_operand;
     }
@@ -890,7 +980,7 @@ public:
     [[nodiscard]] Lexer::CTokenIterator end() const;
 };
 
-class SizeofOperator final
+class SizeofOperator final : public ExpressionBase
 {
 public:
     struct TypeVariant
@@ -900,7 +990,7 @@ public:
         Lexer::CTokenIterator closeParentheses;
     };
 
-    using Variant = std::variant<std::unique_ptr<Expression>, TypeVariant>;
+    using Variant = std::variant<std::unique_ptr<ExpressionBase>, TypeVariant>;
 
 private:
     Lexer::CTokenIterator m_sizeOfToken;
@@ -908,8 +998,13 @@ private:
     Variant m_variant;
 
 public:
-    explicit SizeofOperator(Lexer::CTokenIterator sizeOfToken, std::optional<std::uint64_t> size, Variant variant)
-        : m_sizeOfToken(sizeOfToken), m_size(size), m_variant(std::move(variant))
+    SizeofOperator(const LanguageOptions& options, Lexer::CTokenIterator sizeOfToken, std::optional<std::uint64_t> size,
+                   Variant variant)
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>,
+                         PrimitiveType::createSizeT(false, false, options), ValueCategory::Rvalue),
+          m_sizeOfToken(sizeOfToken),
+          m_size(size),
+          m_variant(std::move(variant))
     {
     }
 
@@ -931,19 +1026,20 @@ public:
     [[nodiscard]] Lexer::CTokenIterator end() const;
 };
 
-class Conditional final
+class Conditional final : public ExpressionBase
 {
-    std::unique_ptr<Expression> m_boolExpression;
+    std::unique_ptr<ExpressionBase> m_boolExpression;
     Lexer::CTokenIterator m_questionMark;
-    std::unique_ptr<Expression> m_trueExpression;
+    std::unique_ptr<ExpressionBase> m_trueExpression;
     Lexer::CTokenIterator m_colon;
-    std::unique_ptr<Expression> m_falseExpression;
+    std::unique_ptr<ExpressionBase> m_falseExpression;
 
 public:
-    Conditional(std::unique_ptr<Expression> boolExpression, Lexer::CTokenIterator questionMark,
-                std::unique_ptr<Expression> trueExpression, Lexer::CTokenIterator colon,
-                std::unique_ptr<Expression> falseExpression)
-        : m_boolExpression(std::move(boolExpression)),
+    Conditional(Type type, std::unique_ptr<ExpressionBase> boolExpression, Lexer::CTokenIterator questionMark,
+                std::unique_ptr<ExpressionBase> trueExpression, Lexer::CTokenIterator colon,
+                std::unique_ptr<ExpressionBase> falseExpression)
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Rvalue),
+          m_boolExpression(std::move(boolExpression)),
           m_questionMark(questionMark),
           m_trueExpression(std::move(trueExpression)),
           m_colon(colon),
@@ -951,7 +1047,7 @@ public:
     {
     }
 
-    [[nodiscard]] const Expression& getBoolExpression() const
+    [[nodiscard]] const ExpressionBase& getBoolExpression() const
     {
         return *m_boolExpression;
     }
@@ -961,7 +1057,7 @@ public:
         return m_questionMark;
     }
 
-    [[nodiscard]] const Expression& getTrueExpression() const
+    [[nodiscard]] const ExpressionBase& getTrueExpression() const
     {
         return *m_trueExpression;
     }
@@ -971,7 +1067,7 @@ public:
         return m_colon;
     }
 
-    [[nodiscard]] const Expression& getFalseExpression() const
+    [[nodiscard]] const ExpressionBase& getFalseExpression() const
     {
         return *m_falseExpression;
     }
@@ -981,9 +1077,9 @@ public:
     [[nodiscard]] Lexer::CTokenIterator end() const;
 };
 
-class Assignment final
+class Assignment final : public ExpressionBase
 {
-    std::unique_ptr<Expression> m_leftOperand;
+    std::unique_ptr<ExpressionBase> m_leftOperand;
     Type m_leftCalcType;
 
 public:
@@ -1005,12 +1101,13 @@ public:
 private:
     Kind m_kind;
     Lexer::CTokenIterator m_operatorToken;
-    std::unique_ptr<Expression> m_rightOperand;
+    std::unique_ptr<ExpressionBase> m_rightOperand;
 
 public:
-    Assignment(std::unique_ptr<Expression> leftOperand, Type leftCalcType, Kind kind,
-               Lexer::CTokenIterator operatorToken, std::unique_ptr<Expression> rightOperand)
-        : m_leftOperand(std::move(leftOperand)),
+    Assignment(Type type, std::unique_ptr<ExpressionBase> leftOperand, Type leftCalcType, Kind kind,
+               Lexer::CTokenIterator operatorToken, std::unique_ptr<ExpressionBase> rightOperand)
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Rvalue),
+          m_leftOperand(std::move(leftOperand)),
           m_leftCalcType(std::move(leftCalcType)),
           m_kind(kind),
           m_operatorToken(operatorToken),
@@ -1018,7 +1115,7 @@ public:
     {
     }
 
-    [[nodiscard]] const Expression& getLeftExpression() const
+    [[nodiscard]] const ExpressionBase& getLeftExpression() const
     {
         return *m_leftOperand;
     }
@@ -1038,7 +1135,7 @@ public:
         return m_operatorToken;
     }
 
-    [[nodiscard]] const Expression& getRightExpression() const
+    [[nodiscard]] const ExpressionBase& getRightExpression() const
     {
         return *m_rightOperand;
     }
@@ -1048,25 +1145,27 @@ public:
     [[nodiscard]] Lexer::CTokenIterator end() const;
 };
 
-class CommaExpression final
+class CommaExpression final : public ExpressionBase
 {
-    std::vector<std::pair<Expression, Lexer::CTokenIterator>> m_commaExpressions;
-    std::unique_ptr<Expression> m_lastExpression;
+    std::vector<std::pair<ExpressionValue, Lexer::CTokenIterator>> m_commaExpressions;
+    std::unique_ptr<ExpressionBase> m_lastExpression;
 
 public:
-    CommaExpression(std::vector<std::pair<Expression, Lexer::CTokenIterator>>&& commaExpressions,
-                    std::unique_ptr<Expression>&& lastExpression)
-        : m_commaExpressions(std::move(commaExpressions)), m_lastExpression(std::move(lastExpression))
+    CommaExpression(Type type, std::vector<std::pair<ExpressionValue, Lexer::CTokenIterator>>&& commaExpressions,
+                    std::unique_ptr<ExpressionBase>&& lastExpression)
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Rvalue),
+          m_commaExpressions(std::move(commaExpressions)),
+          m_lastExpression(std::move(lastExpression))
     {
         CLD_ASSERT(m_commaExpressions.size() >= 1);
     }
 
-    [[nodiscard]] const std::vector<std::pair<Expression, Lexer::CTokenIterator>>& getCommaExpressions() const
+    [[nodiscard]] const std::vector<std::pair<ExpressionValue, Lexer::CTokenIterator>>& getCommaExpressions() const
     {
         return m_commaExpressions;
     }
 
-    [[nodiscard]] const Expression& getLastExpression() const
+    [[nodiscard]] const ExpressionBase& getLastExpression() const
     {
         return *m_lastExpression;
     }
@@ -1076,24 +1175,26 @@ public:
     [[nodiscard]] Lexer::CTokenIterator end() const;
 };
 
-class CallExpression final
+class CallExpression final : public ExpressionBase
 {
-    std::unique_ptr<Expression> m_functionExpression;
+    std::unique_ptr<ExpressionBase> m_functionExpression;
     Lexer::CTokenIterator m_openParentheses;
-    std::vector<Expression> m_argumentExpressions;
+    std::vector<ExpressionValue> m_argumentExpressions;
     Lexer::CTokenIterator m_closeParentheses;
 
 public:
-    CallExpression(std::unique_ptr<Expression>&& functionExpression, Lexer::CTokenIterator openParentheses,
-                   std::vector<Expression>&& argumentExpressions, Lexer::CTokenIterator closeParentheses)
-        : m_functionExpression(std::move(functionExpression)),
+    CallExpression(Type type, std::unique_ptr<ExpressionBase>&& functionExpression,
+                   Lexer::CTokenIterator openParentheses, std::vector<ExpressionValue>&& argumentExpressions,
+                   Lexer::CTokenIterator closeParentheses)
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Rvalue),
+          m_functionExpression(std::move(functionExpression)),
           m_openParentheses(openParentheses),
           m_argumentExpressions(std::move(argumentExpressions)),
           m_closeParentheses(closeParentheses)
     {
     }
 
-    [[nodiscard]] const Expression& getFunctionExpression() const
+    [[nodiscard]] const ExpressionBase& getFunctionExpression() const
     {
         return *m_functionExpression;
     }
@@ -1103,7 +1204,7 @@ public:
         return m_openParentheses;
     }
 
-    [[nodiscard]] const std::vector<Expression>& getArgumentExpressions() const
+    [[nodiscard]] const std::vector<ExpressionValue>& getArgumentExpressions() const
     {
         return m_argumentExpressions;
     }
@@ -1120,9 +1221,9 @@ public:
 
 class InitializerList;
 
-using Initializer = std::variant<InitializerList, Expression>;
+using Initializer = std::variant<InitializerList, ExpressionValue>;
 
-class CompoundLiteral final
+class CompoundLiteral final : public ExpressionBase
 {
     Lexer::CTokenIterator m_openParentheses;
     std::unique_ptr<Initializer> m_initializer;
@@ -1131,7 +1232,7 @@ class CompoundLiteral final
     bool m_staticLifetime;
 
 public:
-    explicit CompoundLiteral(Lexer::CTokenIterator openParentheses, Initializer initializer,
+    explicit CompoundLiteral(Type type, Lexer::CTokenIterator openParentheses, Initializer initializer,
                              Lexer::CTokenIterator closeParentheses, Lexer::CTokenIterator initEnd,
                              bool staticLifetime);
 
@@ -1151,17 +1252,18 @@ public:
     }
 };
 
-class BuiltinVAArg final
+class BuiltinVAArg final : public ExpressionBase
 {
     Lexer::CTokenIterator m_builtinToken;
     Lexer::CTokenIterator m_openParentheses;
-    std::unique_ptr<Expression> m_expression;
+    std::unique_ptr<ExpressionBase> m_expression;
     Lexer::CTokenIterator m_closeParentheses;
 
 public:
-    BuiltinVAArg(Lexer::CTokenIterator builtinToken, Lexer::CTokenIterator openParentheses,
-                 std::unique_ptr<Expression>&& expression, Lexer::CTokenIterator closeParentheses)
-        : m_builtinToken(builtinToken),
+    BuiltinVAArg(Type type, Lexer::CTokenIterator builtinToken, Lexer::CTokenIterator openParentheses,
+                 std::unique_ptr<ExpressionBase>&& expression, Lexer::CTokenIterator closeParentheses)
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Rvalue),
+          m_builtinToken(builtinToken),
           m_openParentheses(openParentheses),
           m_expression(std::move(expression)),
           m_closeParentheses(closeParentheses)
@@ -1178,7 +1280,7 @@ public:
         return m_openParentheses;
     }
 
-    [[nodiscard]] const Expression& getExpression() const;
+    [[nodiscard]] const ExpressionBase& getExpression() const;
 
     [[nodiscard]] Lexer::CTokenIterator getCloseParentheses() const
     {
@@ -1196,7 +1298,7 @@ public:
     }
 };
 
-class BuiltinOffsetOf final
+class BuiltinOffsetOf final : public ExpressionBase
 {
     Lexer::CTokenIterator m_builtinToken;
     Lexer::CTokenIterator m_openParentheses;
@@ -1204,9 +1306,11 @@ class BuiltinOffsetOf final
     Lexer::CTokenIterator m_closeParentheses;
 
 public:
-    BuiltinOffsetOf(Lexer::CTokenIterator builtinToken, Lexer::CTokenIterator openParentheses, std::uint64_t offset,
-                    Lexer::CTokenIterator closeParentheses)
-        : m_builtinToken(builtinToken),
+    BuiltinOffsetOf(const LanguageOptions& options, Lexer::CTokenIterator builtinToken,
+                    Lexer::CTokenIterator openParentheses, std::uint64_t offset, Lexer::CTokenIterator closeParentheses)
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>,
+                         PrimitiveType::createSizeT(false, false, options), ValueCategory::Rvalue),
+          m_builtinToken(builtinToken),
           m_openParentheses(openParentheses),
           m_offset(offset),
           m_closeParentheses(closeParentheses)
@@ -1244,90 +1348,36 @@ public:
     }
 };
 
-enum class ValueCategory : std::uint8_t
+class ErrorExpression final : public ExpressionBase
 {
-    Lvalue,
-    Rvalue
-};
-
-class Expression final
-{
-    Type m_type;
-    ValueCategory m_valueCategory;
+    Lexer::CTokenIterator m_begin;
+    Lexer::CTokenIterator m_end;
 
 public:
-    using Variant =
-        std::variant<std::pair<Lexer::CTokenIterator, Lexer::CTokenIterator>, Constant, DeclarationRead, Conversion,
-                     MemberAccess, BinaryOperator, Cast, UnaryOperator, SizeofOperator, SubscriptOperator, Conditional,
-                     Assignment, CommaExpression, CallExpression, CompoundLiteral, BuiltinVAArg, BuiltinOffsetOf>;
+    explicit ErrorExpression(const Syntax::Node& node) : ErrorExpression(Type{}, node) {}
 
-private:
-    Variant m_expression;
+    ErrorExpression(Type type, const Syntax::Node& node);
 
-public:
-    explicit Expression(const Syntax::Node& node);
-
-    Expression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end) : m_expression(std::pair{begin, end}) {}
-
-    Expression(Type type, ValueCategory valueCategory, Variant expression)
-        : m_type(std::move(type)), m_valueCategory(valueCategory), m_expression(std::move(expression))
+    ErrorExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end)
+        : ExpressionBase(std::in_place_type<ErrorExpression>, Type{}, {}), m_begin(begin), m_end(end)
     {
     }
 
-    Expression(const Expression&) = delete;
-    Expression& operator=(const Expression&) = delete;
-
-    // Currently MSVC deletes the move constructor and assign operator if I mark them noexcept
-    // This is due to llvm::APSInt not being noexcept. Other compilers will believe me that Expression is noexcept
-    // if I mark it as such but Microsoft instead punishes me by deleting it.
-
-    Expression(Expression&&)
-#if !defined(_MSC_VER) || defined(__clang__)
-        noexcept
-#endif
-        = default;
-    Expression& operator=(Expression&&)
-#if !defined(_MSC_VER) || defined(__clang__)
-        noexcept
-#endif
-        = default;
-
-    [[nodiscard]] const Variant& getVariant() const
+    ErrorExpression(Type type, Lexer::CTokenIterator begin, Lexer::CTokenIterator end)
+        : ExpressionBase(std::in_place_type<ErrorExpression>, std::move(type), {}), m_begin(begin), m_end(end)
     {
-        return m_expression;
-    }
-
-    [[nodiscard]] const Type& getType() const
-    {
-        return m_type;
-    }
-
-    [[nodiscard]] ValueCategory getValueCategory() const
-    {
-        return m_valueCategory;
-    }
-
-    [[nodiscard]] bool isUndefined() const
-    {
-        return std::holds_alternative<std::pair<Lexer::CTokenIterator, Lexer::CTokenIterator>>(m_expression);
     }
 
     [[nodiscard]] Lexer::CTokenIterator begin() const
     {
-        return cld::match(
-            m_expression, [](std::pair<Lexer::CTokenIterator, Lexer::CTokenIterator> pair) { return pair.first; },
-            [](const auto& value) { return value.begin(); });
+        return m_begin;
     }
 
     [[nodiscard]] Lexer::CTokenIterator end() const
     {
-        return cld::match(
-            m_expression, [](std::pair<Lexer::CTokenIterator, Lexer::CTokenIterator> pair) { return pair.second; },
-            [](const auto& value) { return value.end(); });
+        return m_end;
     }
 };
-
-bool isStringLiteralExpr(const Expression& expression);
 
 class CompoundStatement;
 
@@ -1388,15 +1438,15 @@ public:
 
 class ReturnStatement final : public Statement
 {
-    std::optional<Expression> m_expression;
+    std::optional<ExpressionValue> m_expression;
 
 public:
-    explicit ReturnStatement(std::int64_t scope, std::optional<Expression>&& expression)
+    explicit ReturnStatement(std::int64_t scope, std::optional<ExpressionValue>&& expression)
         : Statement(scope, std::in_place_type<ReturnStatement>), m_expression(std::move(expression))
     {
     }
 
-    const std::optional<Expression>& getExpression() const
+    const std::optional<ExpressionValue>& getExpression() const
     {
         return m_expression;
     }
@@ -1404,15 +1454,15 @@ public:
 
 class ExpressionStatement final : public Statement
 {
-    std::optional<Expression> m_expression;
+    std::optional<ExpressionValue> m_expression;
 
 public:
-    explicit ExpressionStatement(std::int64_t scope, std::optional<Expression>&& expression)
+    explicit ExpressionStatement(std::int64_t scope, std::optional<ExpressionValue>&& expression)
         : Statement(scope, std::in_place_type<ExpressionStatement>), m_expression(std::move(expression))
     {
     }
 
-    const std::optional<Expression>& getExpression() const
+    const std::optional<ExpressionValue>& getExpression() const
     {
         return m_expression;
     }
@@ -1474,12 +1524,12 @@ public:
 
 class IfStatement final : public Statement
 {
-    Expression m_expression;
+    ExpressionValue m_expression;
     std::unique_ptr<Statement> m_trueBranch;
     std::unique_ptr<Statement> m_falseBranch;
 
 public:
-    IfStatement(std::int64_t scope, Expression&& expression, std::unique_ptr<Statement>&& trueBranch,
+    IfStatement(std::int64_t scope, ExpressionValue&& expression, std::unique_ptr<Statement>&& trueBranch,
                 std::unique_ptr<Statement>&& falseBranch)
         : Statement(scope, std::in_place_type<IfStatement>),
           m_expression(std::move(expression)),
@@ -1488,7 +1538,7 @@ public:
     {
     }
 
-    [[nodiscard]] const Expression& getExpression() const
+    [[nodiscard]] const ExpressionValue& getExpression() const
     {
         return m_expression;
     }
@@ -1505,7 +1555,7 @@ class CompoundStatement final : public Statement
 {
 public:
     using Variant =
-        std::variant<std::unique_ptr<Statement>, std::unique_ptr<Declaration>, std::shared_ptr<const Expression>>;
+        std::variant<std::unique_ptr<Statement>, std::unique_ptr<Declaration>, std::shared_ptr<const ExpressionBase>>;
 
 private:
     std::vector<Variant> m_compoundItems;
@@ -1531,17 +1581,17 @@ public:
 class ForStatement final : public Statement
 {
 public:
-    using Variant = std::variant<std::monostate, Expression, std::vector<std::unique_ptr<Declaration>>>;
+    using Variant = std::variant<std::monostate, ExpressionValue, std::vector<std::unique_ptr<Declaration>>>;
 
 private:
     Variant m_initial;
-    std::optional<Expression> m_controlling;
-    std::optional<Expression> m_iteration;
+    std::optional<ExpressionValue> m_controlling;
+    std::optional<ExpressionValue> m_iteration;
     std::unique_ptr<Statement> m_statement;
 
 public:
-    ForStatement(std::int64_t scope, Variant initial, std::optional<Expression> controlling,
-                 std::optional<Expression> iteration, std::unique_ptr<Statement>&& statement)
+    ForStatement(std::int64_t scope, Variant initial, std::optional<ExpressionValue> controlling,
+                 std::optional<ExpressionValue> iteration, std::unique_ptr<Statement>&& statement)
         : Statement(scope, std::in_place_type<ForStatement>),
           m_initial(std::move(initial)),
           m_controlling(std::move(controlling)),
@@ -1555,12 +1605,12 @@ public:
         return m_initial;
     }
 
-    [[nodiscard]] const std::optional<Expression>& getControlling() const
+    [[nodiscard]] const std::optional<ExpressionValue>& getControlling() const
     {
         return m_controlling;
     }
 
-    [[nodiscard]] const std::optional<Expression>& getIteration() const
+    [[nodiscard]] const std::optional<ExpressionValue>& getIteration() const
     {
         return m_iteration;
     }
@@ -1570,18 +1620,18 @@ public:
 
 class HeadWhileStatement final : public Statement
 {
-    Expression m_expression;
+    ExpressionValue m_expression;
     std::unique_ptr<Statement> m_statement;
 
 public:
-    HeadWhileStatement(std::int64_t scope, Expression&& expression, std::unique_ptr<Statement>&& statement)
+    HeadWhileStatement(std::int64_t scope, ExpressionValue&& expression, std::unique_ptr<Statement>&& statement)
         : Statement(scope, std::in_place_type<HeadWhileStatement>),
           m_expression(std::move(expression)),
           m_statement(std::move(statement))
     {
     }
 
-    [[nodiscard]] const Expression& getExpression() const
+    [[nodiscard]] const ExpressionValue& getExpression() const
     {
         return m_expression;
     }
@@ -1592,10 +1642,10 @@ public:
 class FootWhileStatement final : public Statement
 {
     std::unique_ptr<Statement> m_statement;
-    Expression m_expression;
+    ExpressionValue m_expression;
 
 public:
-    FootWhileStatement(std::int64_t scope, std::unique_ptr<Statement>&& statement, Expression&& expression)
+    FootWhileStatement(std::int64_t scope, std::unique_ptr<Statement>&& statement, ExpressionValue&& expression)
         : Statement(scope, std::in_place_type<FootWhileStatement>),
           m_statement(std::move(statement)),
           m_expression(std::move(expression))
@@ -1604,7 +1654,7 @@ public:
 
     [[nodiscard]] const Statement& getStatement() const;
 
-    [[nodiscard]] const Expression& getExpression() const
+    [[nodiscard]] const ExpressionValue& getExpression() const
     {
         return m_expression;
     }
@@ -1612,13 +1662,13 @@ public:
 
 class SwitchStatement final : public Statement
 {
-    Expression m_expression;
+    ExpressionValue m_expression;
     std::unique_ptr<Statement> m_statement;
     std::map<llvm::APSInt, const CaseStatement * CLD_NON_NULL> m_cases;
     const DefaultStatement* CLD_NULLABLE m_default;
 
 public:
-    SwitchStatement(std::int64_t scope, Expression&& expression, std::unique_ptr<Statement>&& statement,
+    SwitchStatement(std::int64_t scope, ExpressionValue&& expression, std::unique_ptr<Statement>&& statement,
                     std::map<llvm::APSInt, const CaseStatement* CLD_NON_NULL> cases = {},
                     const DefaultStatement* CLD_NULLABLE defaultStmt = nullptr)
         : Statement(scope, std::in_place_type<SwitchStatement>),
@@ -1629,12 +1679,12 @@ public:
     {
     }
 
-    [[nodiscard]] const Expression& getExpression() const&
+    [[nodiscard]] const ExpressionValue& getExpression() const&
     {
         return m_expression;
     }
 
-    [[nodiscard]] Expression&& getExpression() &&
+    [[nodiscard]] ExpressionValue&& getExpression() &&
     {
         return std::move(m_expression);
     }
@@ -1911,7 +1961,7 @@ public:
     struct Initialization
     {
         std::vector<std::uint32_t> path;
-        Expression expression;
+        ExpressionValue expression;
     };
 
 private:
@@ -2227,13 +2277,13 @@ struct CustomFormat<U'f', U'u', U'l', U'l'>
 template <>
 struct CustomFormat<U't', U'y', U'p', U'e'>
 {
-    std::string operator()(const Semantics::Expression& arg);
+    std::string operator()(const Semantics::ExpressionBase& arg);
 };
 
 template <>
 struct CustomFormat<U'f', U'u', U'l', U'l', U'T', U'y', U'p', U'e'>
 {
-    std::string operator()(const Semantics::Expression& arg);
+    std::string operator()(const Semantics::ExpressionBase& arg);
 };
 
 } // namespace cld::diag
