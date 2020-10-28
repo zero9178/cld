@@ -3522,8 +3522,8 @@ public:
                     return visitStaticInitializerList(initializerList, type, cld::get<llvm::Type*>(pointer));
                 }
                 auto value = cld::get<Value>(pointer);
-                m_builder.CreateMemSet(value, m_builder.getInt8(0), type.getSizeOf(m_programInterface),
-                                       llvm::MaybeAlign(), type.isVolatile());
+                m_builder.CreateMemSet(value, m_builder.getInt8(0), type.getSizeOf(m_programInterface), value.alignment,
+                                       type.isVolatile());
                 for (auto& [path, expression] : initializerList.getFields())
                 {
                     auto subValue = visit(expression);
@@ -3560,7 +3560,8 @@ public:
                     {
                         if (cld::Semantics::isStringLiteralExpr(expression))
                         {
-                            m_builder.CreateMemCpy(currentPointer, llvm::MaybeAlign(), subValue, llvm::MaybeAlign(),
+                            m_builder.CreateMemCpy(currentPointer, currentPointer.alignment, subValue,
+                                                   subValue.alignment,
                                                    expression->getType().getSizeOf(m_programInterface));
                             continue;
                         }
