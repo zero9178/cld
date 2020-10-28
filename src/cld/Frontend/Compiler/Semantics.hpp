@@ -1436,6 +1436,8 @@ public:
     }
 };
 
+static_assert(std::is_move_constructible_v<ExpressionValue>);
+
 class ReturnStatement final : public Statement
 {
     std::optional<ExpressionValue> m_expression;

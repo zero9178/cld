@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <variant>
 
@@ -27,12 +28,12 @@ class MonadicStorageBase
 protected:
     alignas(SubClasses...) std::byte m_storage[std::max({sizeof(SubClasses)...})];
 
-    [[nodiscard]] Base& get() noexcept
+    [[nodiscard]] Base& get()
     {
         return *reinterpret_cast<Base*>(this->m_storage);
     }
 
-    [[nodiscard]] const Base& get() const noexcept
+    [[nodiscard]] const Base& get() const
     {
         return *reinterpret_cast<const Base*>(this->m_storage);
     }
@@ -57,8 +58,8 @@ struct MonadicStorageDestruct<Base, SpecialMem::Trivial, SubClasses...> : Monadi
 
     MonadicStorageDestruct(const MonadicStorageDestruct&) = default;
     MonadicStorageDestruct& operator=(const MonadicStorageDestruct&) = default;
-    MonadicStorageDestruct(MonadicStorageDestruct&&) noexcept = default;
-    MonadicStorageDestruct& operator=(MonadicStorageDestruct&&) noexcept = default;
+    MonadicStorageDestruct(MonadicStorageDestruct&&) = default;
+    MonadicStorageDestruct& operator=(MonadicStorageDestruct&&) = default;
 };
 
 template <class Base, class... SubClasses>
@@ -68,22 +69,22 @@ protected:
     void destruct()
     {
         constexpr std::array<void (*)(void*), sizeof...(SubClasses)> destructorFuncs = {
-            {*[](void* ptr) { reinterpret_cast<SubClasses*>(ptr)->~SubClasses(); }...}};
+            {+[](void* ptr) { std::destroy_at(reinterpret_cast<SubClasses*>(ptr)); }...}};
         destructorFuncs[this->get().index()](this->m_storage);
     }
 
 public:
     MonadicStorageDestruct() = default;
 
-    ~MonadicStorageDestruct() noexcept((std::is_nothrow_destructible_v<SubClasses> && ...))
+    ~MonadicStorageDestruct()
     {
         destruct();
     }
 
     MonadicStorageDestruct(const MonadicStorageDestruct&) = default;
     MonadicStorageDestruct& operator=(const MonadicStorageDestruct&) = default;
-    MonadicStorageDestruct(MonadicStorageDestruct&&) noexcept = default;
-    MonadicStorageDestruct& operator=(MonadicStorageDestruct&&) noexcept = default;
+    MonadicStorageDestruct(MonadicStorageDestruct&&) = default;
+    MonadicStorageDestruct& operator=(MonadicStorageDestruct&&) = default;
 };
 
 template <class T>
@@ -100,16 +101,21 @@ struct MonadicStorageCopy<Base, SpecialMem::Trivial, SubClasses...>
     : MonadicStorageDestruct<Base, std::max({dtor<SubClasses>()...}), SubClasses...>
 {
 protected:
-    void copyConstruct(const MonadicStorageCopy&) noexcept {}
+    void copyConstruct(const MonadicStorageCopy& rhs)
+    {
+        constexpr std::array<void (*)(std::byte*, void*), sizeof...(SubClasses)> copyFuncs = {
+            {+[](std::byte* storage, void* ptr) { new (storage) SubClasses(*reinterpret_cast<SubClasses*>(ptr)); }...}};
+        copyFuncs[rhs.get().index()](this->m_storage, rhs.m_storage);
+    }
 
 public:
     MonadicStorageCopy() = default;
 
-    MonadicStorageCopy(const MonadicStorageCopy&) noexcept = default;
+    MonadicStorageCopy(const MonadicStorageCopy&) = default;
 
-    MonadicStorageCopy& operator=(const MonadicStorageCopy&) noexcept = default;
-    MonadicStorageCopy(MonadicStorageCopy&&) noexcept = default;
-    MonadicStorageCopy& operator=(MonadicStorageCopy&&) noexcept = default;
+    MonadicStorageCopy& operator=(const MonadicStorageCopy&) = default;
+    MonadicStorageCopy(MonadicStorageCopy&&) = default;
+    MonadicStorageCopy& operator=(MonadicStorageCopy&&) = default;
 };
 
 template <class Base, class... SubClasses>
@@ -117,16 +123,16 @@ struct MonadicStorageCopy<Base, SpecialMem::Deleted, SubClasses...>
     : MonadicStorageDestruct<Base, std::max({dtor<SubClasses>()...}), SubClasses...>
 {
 protected:
-    void copyConstruct(const MonadicStorageCopy&) noexcept {}
+    void copyConstruct(const MonadicStorageCopy&) {}
 
 public:
     MonadicStorageCopy() = default;
 
-    MonadicStorageCopy(const MonadicStorageCopy&) noexcept = delete;
+    MonadicStorageCopy(const MonadicStorageCopy&) = delete;
 
-    MonadicStorageCopy& operator=(const MonadicStorageCopy&) noexcept = default;
-    MonadicStorageCopy(MonadicStorageCopy&&) noexcept = default;
-    MonadicStorageCopy& operator=(MonadicStorageCopy&&) noexcept = default;
+    MonadicStorageCopy& operator=(const MonadicStorageCopy&) = default;
+    MonadicStorageCopy(MonadicStorageCopy&&) = default;
+    MonadicStorageCopy& operator=(MonadicStorageCopy&&) = default;
 };
 
 template <class Base, class... SubClasses>
@@ -134,27 +140,25 @@ struct MonadicStorageCopy<Base, SpecialMem::Exists, SubClasses...>
     : MonadicStorageDestruct<Base, std::max({dtor<SubClasses>()...}), SubClasses...>
 {
 protected:
-    void
-        copyConstruct(const MonadicStorageCopy& rhs) noexcept((std::is_nothrow_copy_constructible_v<SubClasses> && ...))
+    void copyConstruct(const MonadicStorageCopy& rhs)
     {
         constexpr std::array<void (*)(std::byte*, void*), sizeof...(SubClasses)> copyFuncs = {
-            {*[](std::byte* storage, void* ptr) { new (storage) SubClasses(*reinterpret_cast<SubClasses*>(ptr)); }...}};
+            {+[](std::byte* storage, void* ptr) { new (storage) SubClasses(*reinterpret_cast<SubClasses*>(ptr)); }...}};
         copyFuncs[rhs.get().index()](this->m_storage, rhs.m_storage);
     }
 
 public:
     MonadicStorageCopy() = default;
 
-    MonadicStorageCopy(const MonadicStorageCopy& rhs) noexcept(
-        (std::is_nothrow_copy_constructible_v<SubClasses> && ...))
+    MonadicStorageCopy(const MonadicStorageCopy& rhs)
     {
         copyConstruct(rhs);
     }
 
     MonadicStorageCopy& operator=(const MonadicStorageCopy&) = default;
 
-    MonadicStorageCopy(MonadicStorageCopy&&) noexcept = default;
-    MonadicStorageCopy& operator=(MonadicStorageCopy&&) noexcept = default;
+    MonadicStorageCopy(MonadicStorageCopy&&) = default;
+    MonadicStorageCopy& operator=(MonadicStorageCopy&&) = default;
 };
 
 template <class T>
@@ -180,12 +184,12 @@ struct MonadicStorageCopyAss<Base, SpecialMem::Deleted, SubClasses...>
 {
     MonadicStorageCopyAss() = default;
 
-    MonadicStorageCopyAss& operator=(const MonadicStorageCopyAss&) noexcept = delete;
+    MonadicStorageCopyAss& operator=(const MonadicStorageCopyAss&) = delete;
 
     ~MonadicStorageCopyAss() = default;
-    MonadicStorageCopyAss(const MonadicStorageCopyAss&) noexcept = default;
-    MonadicStorageCopyAss(MonadicStorageCopyAss&&) noexcept = default;
-    MonadicStorageCopyAss& operator=(MonadicStorageCopyAss&&) noexcept = default;
+    MonadicStorageCopyAss(const MonadicStorageCopyAss&) = default;
+    MonadicStorageCopyAss(MonadicStorageCopyAss&&) = default;
+    MonadicStorageCopyAss& operator=(MonadicStorageCopyAss&&) = default;
 };
 
 template <class Base, class... SubClasses>
@@ -194,13 +198,12 @@ struct MonadicStorageCopyAss<Base, SpecialMem::Exists, SubClasses...>
 {
     MonadicStorageCopyAss() = default;
 
-    MonadicStorageCopyAss&
-        operator=(const MonadicStorageCopyAss& rhs) noexcept((std::is_nothrow_copy_constructible_v<SubClasses> && ...))
+    MonadicStorageCopyAss& operator=(const MonadicStorageCopyAss& rhs)
     {
         if (this->get().index() == rhs.get().index())
         {
             constexpr std::array<void (*)(std::byte*, void*), sizeof...(SubClasses)> copyFuncs = {
-                {*[](std::byte* storage, void* ptr) {
+                {+[](std::byte* storage, void* ptr) {
                     *reinterpret_cast<SubClasses*>(storage) = *(reinterpret_cast<SubClasses*>(ptr));
                 }...}};
             copyFuncs[rhs.get().index()](this->m_storage, rhs.m_storage);
@@ -217,9 +220,9 @@ struct MonadicStorageCopyAss<Base, SpecialMem::Exists, SubClasses...>
     }
 
     ~MonadicStorageCopyAss() = default;
-    MonadicStorageCopyAss(const MonadicStorageCopyAss&) noexcept = default;
-    MonadicStorageCopyAss(MonadicStorageCopyAss&&) noexcept = default;
-    MonadicStorageCopyAss& operator=(MonadicStorageCopyAss&&) noexcept = default;
+    MonadicStorageCopyAss(const MonadicStorageCopyAss&) = default;
+    MonadicStorageCopyAss(MonadicStorageCopyAss&&) = default;
+    MonadicStorageCopyAss& operator=(MonadicStorageCopyAss&&) = default;
 };
 
 template <class T>
@@ -240,43 +243,10 @@ struct MonadicStorageMove<Base, SpecialMem::Trivial, SubClasses...>
     : MonadicStorageCopyAss<Base, std::max({copyAss<SubClasses>()...}), SubClasses...>
 {
 protected:
-    void moveConstruct(MonadicStorageMove&&) noexcept {}
-
-public:
-    MonadicStorageMove() = default;
-
-    MonadicStorageMove(const MonadicStorageMove&) noexcept = default;
-    MonadicStorageMove& operator=(const MonadicStorageMove&) noexcept = default;
-    MonadicStorageMove(MonadicStorageMove&&) noexcept = default;
-    MonadicStorageMove& operator=(MonadicStorageMove&&) noexcept = default;
-};
-
-template <class Base, class... SubClasses>
-struct MonadicStorageMove<Base, SpecialMem::Deleted, SubClasses...>
-    : MonadicStorageCopyAss<Base, std::max({copyAss<SubClasses>()...}), SubClasses...>
-{
-protected:
-    void moveConstruct(MonadicStorageMove&&) noexcept {}
-
-public:
-    MonadicStorageMove() = default;
-
-    MonadicStorageMove(MonadicStorageMove&&) = default;
-
-    MonadicStorageMove& operator=(const MonadicStorageMove&) noexcept = default;
-    MonadicStorageMove(const MonadicStorageMove&) noexcept = default;
-    MonadicStorageMove& operator=(MonadicStorageMove&&) noexcept = default;
-};
-
-template <class Base, class... SubClasses>
-struct MonadicStorageMove<Base, SpecialMem::Exists, SubClasses...>
-    : MonadicStorageCopyAss<Base, std::max({copyAss<SubClasses>()...}), SubClasses...>
-{
-protected:
-    void moveConstruct(MonadicStorageMove&& rhs) noexcept((std::is_nothrow_move_constructible_v<SubClasses> && ...))
+    void moveConstruct(MonadicStorageMove&& rhs)
     {
         constexpr std::array<void (*)(std::byte*, void*), sizeof...(SubClasses)> moveFuncs = {
-            {*[](std::byte* storage, void* ptr) {
+            {+[](std::byte* storage, void* ptr) {
                 new (storage) SubClasses(std::move(*reinterpret_cast<SubClasses*>(ptr)));
             }...}};
         moveFuncs[rhs.get().index()](this->m_storage, rhs.m_storage);
@@ -285,14 +255,57 @@ protected:
 public:
     MonadicStorageMove() = default;
 
-    MonadicStorageMove(MonadicStorageMove&& rhs) noexcept((std::is_nothrow_move_constructible_v<SubClasses> && ...))
+    MonadicStorageMove(const MonadicStorageMove&) = default;
+    MonadicStorageMove& operator=(const MonadicStorageMove&) = default;
+    MonadicStorageMove(MonadicStorageMove&&) = default;
+    MonadicStorageMove& operator=(MonadicStorageMove&&) = default;
+};
+
+template <class Base, class... SubClasses>
+struct MonadicStorageMove<Base, SpecialMem::Deleted, SubClasses...>
+    : MonadicStorageCopyAss<Base, std::max({copyAss<SubClasses>()...}), SubClasses...>
+{
+protected:
+    void moveConstruct(MonadicStorageMove&&) {}
+
+public:
+    MonadicStorageMove() = default;
+
+    MonadicStorageMove(MonadicStorageMove&&) = default;
+
+    MonadicStorageMove& operator=(const MonadicStorageMove&) = default;
+    MonadicStorageMove(const MonadicStorageMove&) = default;
+    MonadicStorageMove& operator=(MonadicStorageMove&&) = default;
+};
+
+template <class Base, class... SubClasses>
+struct MonadicStorageMove<Base, SpecialMem::Exists, SubClasses...>
+    : MonadicStorageCopyAss<Base, std::max({copyAss<SubClasses>()...}), SubClasses...>
+{
+protected:
+    void moveConstruct(MonadicStorageMove&& rhs)
+    {
+        constexpr std::array<void (*)(std::byte*, void*), sizeof...(SubClasses)> moveFuncs = {
+            {+[](std::byte* storage, void* ptr) {
+                new (storage) SubClasses(std::move(*reinterpret_cast<SubClasses*>(ptr)));
+            }...}};
+        moveFuncs[rhs.get().index()](this->m_storage, rhs.m_storage);
+    }
+
+public:
+    MonadicStorageMove() = default;
+
+    MonadicStorageMove(MonadicStorageMove&& rhs)
+#if !defined(_MSC_VER) || defined(__clang__)
+        noexcept((std::is_nothrow_move_constructible_v<SubClasses> && ...))
+#endif
     {
         moveConstruct(std::move(rhs));
     }
 
-    MonadicStorageMove(const MonadicStorageMove&) noexcept = default;
+    MonadicStorageMove(const MonadicStorageMove&) = default;
     MonadicStorageMove& operator=(const MonadicStorageMove&) = default;
-    MonadicStorageMove& operator=(MonadicStorageMove&&) noexcept = default;
+    MonadicStorageMove& operator=(MonadicStorageMove&&) = default;
 };
 
 template <class T>
@@ -318,12 +331,12 @@ struct MonadicStorageMoveAss<Base, SpecialMem::Deleted, SubClasses...>
 {
     MonadicStorageMoveAss() = default;
 
-    MonadicStorageMoveAss& operator=(const MonadicStorageMoveAss&) noexcept = delete;
+    MonadicStorageMoveAss& operator=(const MonadicStorageMoveAss&) = delete;
 
     ~MonadicStorageMoveAss() = default;
-    MonadicStorageMoveAss(const MonadicStorageMoveAss&) noexcept = default;
-    MonadicStorageMoveAss(MonadicStorageMoveAss&&) noexcept = default;
-    MonadicStorageMoveAss& operator=(MonadicStorageMoveAss&&) noexcept = default;
+    MonadicStorageMoveAss(const MonadicStorageMoveAss&) = default;
+    MonadicStorageMoveAss(MonadicStorageMoveAss&&) = default;
+    MonadicStorageMoveAss& operator=(MonadicStorageMoveAss&&) = default;
 };
 
 template <class Base, class... SubClasses>
@@ -332,13 +345,12 @@ struct MonadicStorageMoveAss<Base, SpecialMem::Exists, SubClasses...>
 {
     MonadicStorageMoveAss() = default;
 
-    MonadicStorageMoveAss&
-        operator=(MonadicStorageMoveAss&& rhs) noexcept((std::is_nothrow_copy_constructible_v<SubClasses> && ...))
+    MonadicStorageMoveAss& operator=(MonadicStorageMoveAss&& rhs)
     {
         if (this->get().index() == rhs.get().index())
         {
             constexpr std::array<void (*)(std::byte*, void*), sizeof...(SubClasses)> moveFuncs = {
-                {*[](std::byte* storage, void* ptr) {
+                {+[](std::byte* storage, void* ptr) {
                     *reinterpret_cast<SubClasses*>(storage) = std::move(*reinterpret_cast<SubClasses*>(ptr));
                 }...}};
             moveFuncs[rhs.get().index()](this->m_storage, rhs.m_storage);
@@ -355,9 +367,9 @@ struct MonadicStorageMoveAss<Base, SpecialMem::Exists, SubClasses...>
     }
 
     ~MonadicStorageMoveAss() = default;
-    MonadicStorageMoveAss(const MonadicStorageMoveAss&) noexcept = default;
-    MonadicStorageMoveAss(MonadicStorageMoveAss&&) noexcept = default;
-    MonadicStorageMoveAss& operator=(const MonadicStorageMoveAss&) noexcept = default;
+    MonadicStorageMoveAss(const MonadicStorageMoveAss&) = default;
+    MonadicStorageMoveAss(MonadicStorageMoveAss&&) = default;
+    MonadicStorageMoveAss& operator=(const MonadicStorageMoveAss&) = default;
 };
 
 template <class T>
@@ -370,17 +382,6 @@ constexpr SpecialMem moveAss()
     return SpecialMem::Exists;
 }
 
-template <class T>
-struct isInPlaceT
-{
-    constexpr static bool value = false;
-};
-
-template <class T>
-struct isInPlaceT<std::in_place_type_t<T>>
-{
-    constexpr static bool value = true;
-};
 } // namespace detail::MonadicStorage
 
 template <class T, class U = typename decltype(detail::MonadicStorage::DeduceArgs{std::declval<T*>()})::type>
@@ -398,57 +399,57 @@ class MonadicStorage<Base, MonadicInheritance<SubClasses...>>
 
 public:
     template <class T, std::enable_if_t<(std::is_same_v<std::decay_t<T>, SubClasses> || ...)>* = nullptr>
-    MonadicStorage(T&& value) noexcept(std::is_nothrow_constructible_v<std::decay_t<T>, T&&>)
+    MonadicStorage(T&& value)
     {
         static_assert((std::is_same_v<std::decay_t<T>, SubClasses> || ...));
         new (this->m_storage) std::decay_t<T>(std::forward<T>(value));
     }
 
     template <class T, class... Args>
-    MonadicStorage(std::in_place_type_t<T>, Args&&... args) noexcept(std::is_nothrow_constructible_v<T, Args&&...>)
+    MonadicStorage(std::in_place_type_t<T>, Args&&... args)
     {
         static_assert((std::is_same_v<T, SubClasses> || ...));
         new (this->m_storage) T(std::forward<Args>(args)...);
     }
 
     template <class T, class... Args>
-    T& emplace(Args&&... args) noexcept(std::is_nothrow_constructible_v<T, Args&&...>)
+    T& emplace(Args&&... args)
     {
         *this = MonadicStorage(std::in_place_type<T>, std::forward<Args>(args)...);
         return *reinterpret_cast<T*>(this->m_storage);
     }
 
-    operator Base&() noexcept
+    operator Base&()
     {
         return get();
     }
 
-    operator const Base&() const noexcept
+    operator const Base&() const
     {
         return get();
     }
 
-    Base* CLD_NON_NULL operator->() noexcept
+    Base* CLD_NON_NULL operator->()
     {
         return &get();
     }
 
-    const Base* CLD_NON_NULL operator->() const noexcept
+    const Base* CLD_NON_NULL operator->() const
     {
         return &get();
     }
 
-    Base& operator*() noexcept
+    Base& operator*()
     {
         return get();
     }
 
-    const Base& operator*() const noexcept
+    const Base& operator*() const
     {
         return get();
     }
 
-    std::unique_ptr<Base> toUniquePtr() && noexcept((std::is_nothrow_move_constructible_v<SubClasses> && ...))
+    std::unique_ptr<Base> toUniquePtr() &&
     {
         return get().match([](auto&& value) -> std::unique_ptr<Base> {
             return std::make_unique<std::decay_t<decltype(value)>>(std::move(value));

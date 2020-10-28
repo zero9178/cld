@@ -1174,7 +1174,7 @@ bool cld::Semantics::SemanticAnalysis::hasFlexibleArrayMember(const Type& type) 
 }
 
 cld::Expected<cld::Semantics::ConstValue, std::vector<cld::Message>>
-    cld::Semantics::SemanticAnalysis::evaluateConstantExpression(const Expression& constantExpression, Mode mode)
+    cld::Semantics::SemanticAnalysis::evaluateConstantExpression(const ExpressionBase& constantExpression, Mode mode)
 {
     std::vector<Message> messages;
     bool errors = false;
@@ -1197,10 +1197,10 @@ cld::Expected<cld::Semantics::ConstValue, std::vector<cld::Message>>
 }
 
 cld::Semantics::ConstValue
-    cld::Semantics::SemanticAnalysis::evaluate(const Expression& expression, Mode mode,
+    cld::Semantics::SemanticAnalysis::evaluate(const ExpressionBase& expression, Mode mode,
                                                cld::function_ref<void(const Message&)> logger) const
 {
-    auto typeCheck = [=](const Expression& exp, const ConstValue& value) {
+    auto typeCheck = [=](const ExpressionBase& exp, const ConstValue& value) {
         if (!value.isUndefined() && !isInteger(exp.getType()) && mode == Integer)
         {
             logger(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS.args(exp, m_sourceInterface,
@@ -1209,9 +1209,8 @@ cld::Semantics::ConstValue
         }
         return !value.isUndefined();
     };
-    return cld::match(
-        expression.getVariant(),
-        [](const std::pair<Lexer::CTokenIterator, Lexer::CTokenIterator>&) { return ConstValue{}; },
+    return expression.match(
+        [](const ErrorExpression&) { return ConstValue{}; },
         [&](const Constant& constant) -> ConstValue {
             if (std::holds_alternative<std::string>(constant.getValue())
                 || std::holds_alternative<Lexer::NonCharString>(constant.getValue()))
@@ -1277,7 +1276,7 @@ cld::Semantics::ConstValue
             {
                 if (mode == Initialization
                     && (isArray(conversion.getExpression().getType())
-                        || std::holds_alternative<CompoundLiteral>(conversion.getExpression().getVariant())
+                        || conversion.getExpression().is<CompoundLiteral>()
                         || std::holds_alternative<FunctionType>(conversion.getExpression().getType().getVariant())))
                 {
                     return {AddressConstant{}};
@@ -1290,7 +1289,7 @@ cld::Semantics::ConstValue
             {
                 return {};
             }
-            return exp.castTo(expression.getType(), this, m_sourceInterface.getLanguageOptions());
+            return exp.castTo(conversion.getType(), this, m_sourceInterface.getLanguageOptions());
         },
         [&](const BinaryOperator& binaryOperator) -> ConstValue {
             auto lhs = evaluate(binaryOperator.getLeftExpression(), mode, logger);
@@ -1309,14 +1308,12 @@ cld::Semantics::ConstValue
                     {
                         if (!lhs)
                         {
-                            if (mode == Integer
-                                && std::holds_alternative<Conversion>(binaryOperator.getRightExpression().getVariant())
-                                && cld::get<Conversion>(binaryOperator.getRightExpression().getVariant()).getKind()
+                            if (mode == Integer && binaryOperator.getRightExpression().is<Conversion>()
+                                && binaryOperator.getRightExpression().get<Conversion>().getKind()
                                        == Conversion::Implicit
-                                && cld::Semantics::isBool(binaryOperator.getRightExpression().getType()))
+                                && isBool(binaryOperator.getRightExpression().getType()))
                             {
-                                auto& rExpr = cld::get<Conversion>(binaryOperator.getRightExpression().getVariant())
-                                                  .getExpression();
+                                auto& rExpr = binaryOperator.getRightExpression().get<Conversion>().getExpression();
                                 if (!rExpr.getType().isUndefined() && !isInteger(rExpr.getType()))
                                 {
                                     logger(
@@ -1341,14 +1338,12 @@ cld::Semantics::ConstValue
                     {
                         if (lhs)
                         {
-                            if (mode == Integer
-                                && std::holds_alternative<Conversion>(binaryOperator.getRightExpression().getVariant())
-                                && cld::get<Conversion>(binaryOperator.getRightExpression().getVariant()).getKind()
+                            if (mode == Integer && binaryOperator.getRightExpression().is<Conversion>()
+                                && binaryOperator.getRightExpression().get<Conversion>().getKind()
                                        == Conversion::Implicit
-                                && cld::Semantics::isBool(binaryOperator.getRightExpression().getType()))
+                                && isBool(binaryOperator.getRightExpression().getType()))
                             {
-                                auto& rExpr = cld::get<Conversion>(binaryOperator.getRightExpression().getVariant())
-                                                  .getExpression();
+                                auto& rExpr = binaryOperator.getRightExpression().get<Conversion>().getExpression();
                                 if (!rExpr.getType().isUndefined() && !isInteger(rExpr.getType()))
                                 {
                                     logger(
@@ -1498,17 +1493,17 @@ cld::Semantics::ConstValue
         [&](const UnaryOperator& unaryOperator) -> ConstValue {
             if (unaryOperator.getKind() == UnaryOperator::AddressOf)
             {
-                if (std::holds_alternative<UnaryOperator>(unaryOperator.getOperand().getVariant()))
+                if (unaryOperator.getOperand().is<UnaryOperator>())
                 {
-                    auto& innerUnary = cld::get<UnaryOperator>(unaryOperator.getOperand().getVariant());
+                    auto& innerUnary = unaryOperator.getOperand().get<UnaryOperator>();
                     if (innerUnary.getKind() == UnaryOperator::Dereference)
                     {
                         return evaluate(innerUnary.getOperand(), mode, logger);
                     }
                 }
-                else if (std::holds_alternative<SubscriptOperator>(unaryOperator.getOperand().getVariant()))
+                else if (unaryOperator.getOperand().is<SubscriptOperator>())
                 {
-                    auto& subScript = cld::get<SubscriptOperator>(unaryOperator.getOperand().getVariant());
+                    auto& subScript = unaryOperator.getOperand().get<SubscriptOperator>();
                     auto lhs = evaluate(subScript.getLeftExpression(), mode, logger);
                     auto rhs = evaluate(subScript.getRightExpression(), mode, logger);
                     if (lhs.isUndefined() || rhs.isUndefined())

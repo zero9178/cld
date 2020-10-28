@@ -109,8 +109,8 @@ public:
     decltype(auto) match(F&&... f)
     {
         using Callable = decltype(detail::overload{std::forward<F>(f)...});
-        constexpr std::array<std::common_type_t<decltype(Callable{std::forward<F>(f)...}()(
-                                 std::declval<Args>()))...> (*)(MonadicInheritance&, Callable),
+        constexpr std::array<std::common_type_t<decltype(Callable{std::forward<F>(f)...}(std::declval<Args>()))...> (*)(
+                                 MonadicInheritance&, Callable),
                              sizeof...(Args)>
             calling = {{+[](MonadicInheritance& base, Callable callable) -> decltype(auto) {
                 return callable(static_cast<Args&>(base));
@@ -122,11 +122,11 @@ public:
     decltype(auto) match(F&&... f) const
     {
         using Callable = decltype(detail::overload{std::forward<F>(f)...});
-        constexpr std::array<std::common_type_t<decltype(Callable{std::forward<F>(f)...}()(
-                                 std::declval<Args>()))...> (*)(const MonadicInheritance&, Callable),
+        constexpr std::array<std::common_type_t<decltype(Callable{std::forward<F>(f)...}(std::declval<Args>()))...> (*)(
+                                 const MonadicInheritance&, Callable),
                              sizeof...(Args)>
             calling = {{+[](const MonadicInheritance& base, Callable callable) -> decltype(auto) {
-                return callable(static_cast<Args&>(base));
+                return callable(static_cast<const Args&>(base));
             }...}};
         return calling[index()](*this, Callable{std::forward<F>(f)...});
     }

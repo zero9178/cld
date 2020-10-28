@@ -64,7 +64,7 @@ llvm::ArrayRef<cld::Semantics::Type>
 
 bool cld::Semantics::ProgramInterface::isBitfieldAccess(const ExpressionBase& expression) const
 {
-    if (expression.is<MemberAccess>())
+    if (!expression.is<MemberAccess>())
     {
         return false;
     }

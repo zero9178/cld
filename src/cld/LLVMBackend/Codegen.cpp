@@ -2146,7 +2146,7 @@ public:
         return global;
     }
 
-    Value visit(const cld::Semantics::ExpressionBase&, const cld::Semantics::DeclarationRead& declarationRead)
+    Value visit(const cld::Semantics::DeclarationRead& declarationRead)
     {
         auto result = cld::match(
             declarationRead.getDeclRead(),
@@ -2159,7 +2159,7 @@ public:
         return result->second;
     }
 
-    Value visit(const cld::Semantics::ExpressionBase& expression, const cld::Semantics::Conversion& conversion)
+    Value visit(const cld::Semantics::Conversion& conversion)
     {
         auto value = visit(conversion.getExpression());
         switch (conversion.getKind())
@@ -2190,13 +2190,13 @@ public:
                     return value;
                 }
                 return valueOf(
-                    m_builder.CreateIntCast(value.value, visit(expression.getType()),
+                    m_builder.CreateIntCast(value.value, visit(conversion.getType()),
                                             cld::get<cld::Semantics::PrimitiveType>(prevType.getVariant()).isSigned()));
             }
             case cld::Semantics::Conversion::Implicit:
             {
                 auto& prevType = conversion.getExpression().getType();
-                auto& newType = expression.getType();
+                auto& newType = conversion.getType();
                 if (cld::Semantics::isBool(newType))
                 {
                     return valueOf(m_builder.CreateIntCast(toBool(value.value), visit(newType), false));
@@ -2218,7 +2218,7 @@ public:
             case cld::Semantics::Conversion::ArithmeticConversion:
             {
                 auto& prevType = conversion.getExpression().getType();
-                auto& newType = expression.getType();
+                auto& newType = conversion.getType();
                 if (cld::Semantics::isInteger(prevType) && cld::Semantics::isInteger(newType))
                 {
                     return valueOf(m_builder.CreateIntCast(
@@ -2255,16 +2255,16 @@ public:
                 if (cld::Semantics::isInteger(prevType))
                 {
                     return valueOf(m_builder.CreateIntCast(
-                        value.value, visit(expression.getType()),
+                        value.value, visit(conversion.getType()),
                         cld::get<cld::Semantics::PrimitiveType>(prevType.getVariant()).isSigned()));
                 }
-                return valueOf(m_builder.CreateFPCast(value.value, visit(expression.getType())));
+                return valueOf(m_builder.CreateFPCast(value.value, visit(conversion.getType())));
             }
         }
         CLD_UNREACHABLE;
     }
 
-    Value visit(const cld::Semantics::ExpressionBase& expression, const cld::Semantics::MemberAccess& memberAccess)
+    Value visit(const cld::Semantics::MemberAccess& memberAccess)
     {
         auto value = visit(memberAccess.getRecordExpression());
         auto& type =
@@ -2321,11 +2321,11 @@ public:
             return field;
         }
 
-        auto loaded = createLoad(field, expression.getType().isVolatile());
+        auto loaded = createLoad(field, memberAccess.getType().isVolatile());
         auto upLeft = loaded.value->getType()->getPrimitiveSizeInBits() - cldField.bitFieldBounds->second;
         auto* shl = m_builder.CreateShl(loaded.value, llvm::ConstantInt::get(loaded.value->getType(), upLeft));
         auto* shrConstant = llvm::ConstantInt::get(loaded.value->getType(), upLeft + cldField.bitFieldBounds->first);
-        if (cld::get<cld::Semantics::PrimitiveType>(expression.getType().getVariant()).isSigned())
+        if (cld::get<cld::Semantics::PrimitiveType>(memberAccess.getType().getVariant()).isSigned())
         {
             return valueOf(m_builder.CreateAShr(shl, shrConstant));
         }
@@ -3085,7 +3085,7 @@ public:
             std::vector<std::pair<cld::Semantics::Type, std::string_view>> arguments;
             for (auto& iter : call.getArgumentExpressions())
             {
-                arguments.emplace_back(iter.getType(), "");
+                arguments.emplace_back(iter->getType(), "");
             }
             auto callerFt =
                 cld::Semantics::FunctionType::create(cldFt.getReturnType(), std::move(arguments), false, false);
@@ -3103,9 +3103,8 @@ public:
             llvmFnI = 1;
             llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(), m_currentFunction->getEntryBlock().begin());
             returnSlot = temp.CreateAlloca(ft->getParamType(0)->getPointerElementType(), nullptr, "ret");
-            returnSlot->setAlignment(llvm::Align(expression.getType().getAlignOf(m_programInterface)));
-            m_builder.CreateLifetimeStart(returnSlot,
-                                          m_builder.getInt64(expression.getType().getSizeOf(m_programInterface)));
+            returnSlot->setAlignment(llvm::Align(call.getType().getAlignOf(m_programInterface)));
+            m_builder.CreateLifetimeStart(returnSlot, m_builder.getInt64(call.getType().getSizeOf(m_programInterface)));
             arguments.emplace_back(returnSlot);
         }
 
@@ -3135,9 +3134,9 @@ public:
                     llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(),
                                            m_currentFunction->getEntryBlock().begin());
                     auto* ret = temp.CreateAlloca(value.value->getType());
-                    ret->setAlignment(llvm::Align(iter->getType().getAlignOf(m_programInterface)));
+                    ret->setAlignment(llvm::Align((*iter)->getType().getAlignOf(m_programInterface)));
                     m_builder.CreateLifetimeStart(ret,
-                                                  m_builder.getInt64(iter->getType().getSizeOf(m_programInterface)));
+                                                  m_builder.getInt64((*iter)->getType().getSizeOf(m_programInterface)));
                     if (value.value->getType()->isX86_FP80Ty())
                     {
                         createStore(value, ret, false);
@@ -3146,7 +3145,7 @@ public:
                     {
                         auto* load = llvm::cast<llvm::LoadInst>(value.value);
                         m_builder.CreateMemCpy(ret, ret->getAlign(), load->getPointerOperand(), load->getAlign(),
-                                               iter->getType().getSizeOf(m_programInterface));
+                                               (*iter)->getType().getSizeOf(m_programInterface));
                         load->eraseFromParent();
                     }
                     arguments.emplace_back(ret);
@@ -3213,32 +3212,32 @@ public:
                     intValue, m_builder.getInt64(m_module.getDataLayout().getTypeAllocSize(result->getType())));
                 createStore(result, intValue, false);
 
-                auto cast = createSafeBitCast(intValue, llvm::PointerType::getUnqual(visit(expression.getType())));
+                auto cast = createSafeBitCast(intValue, llvm::PointerType::getUnqual(visit(call.getType())));
                 return createLoad(cast, false);
             }
             default: CLD_UNREACHABLE;
         }
     }
 
-    Value visit(const cld::Semantics::Expression& expression, const cld::Semantics::CompoundLiteral& compoundLiteral)
+    Value visit(const cld::Semantics::CompoundLiteral& compoundLiteral)
     {
-        auto* type = visit(expression.getType());
+        auto* type = visit(compoundLiteral.getType());
         if (compoundLiteral.hasStaticLifetime())
         {
             llvm::Constant* constant = nullptr;
-            constant =
-                llvm::cast<llvm::Constant>(visit(compoundLiteral.getInitializer(), expression.getType(), type).value);
+            constant = llvm::cast<llvm::Constant>(
+                visit(compoundLiteral.getInitializer(), compoundLiteral.getType(), type).value);
             type = constant->getType();
             auto* global = new llvm::GlobalVariable(m_module, type, true, llvm::GlobalValue::PrivateLinkage, constant);
-            global->setAlignment(llvm::MaybeAlign(expression.getType().getAlignOf(m_programInterface)));
+            global->setAlignment(llvm::MaybeAlign(compoundLiteral.getType().getAlignOf(m_programInterface)));
             return global;
         }
         llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(), m_currentFunction->getEntryBlock().begin());
         auto* var = temp.CreateAlloca(type);
-        var->setAlignment(llvm::Align(expression.getType().getAlignOf(m_programInterface)));
+        var->setAlignment(llvm::Align(compoundLiteral.getType().getAlignOf(m_programInterface)));
         if (m_builder.GetInsertBlock())
         {
-            visit(compoundLiteral.getInitializer(), expression.getType(), var);
+            visit(compoundLiteral.getInitializer(), compoundLiteral.getType(), var);
         }
         return var;
     }
@@ -3269,10 +3268,10 @@ public:
         return loadedStackPointer;
     }
 
-    Value visit(const cld::Semantics::Expression& expression, const cld::Semantics::BuiltinVAArg& vaArg)
+    Value visit(const cld::Semantics::BuiltinVAArg& vaArg)
     {
         auto vaList = visit(vaArg.getExpression());
-        std::size_t sizeOf = expression.getType().getSizeOf(m_programInterface);
+        std::size_t sizeOf = vaArg.getType().getSizeOf(m_programInterface);
 
         switch (m_programInterface.getLanguageOptions().vaListKind)
         {
@@ -3286,9 +3285,9 @@ public:
                             Value(llvm::cast<llvm::LoadInst>(vaList.value)->getPointerOperand(),
                                   llvm::cast<llvm::LoadInst>(vaList.value)->getAlign()),
                             false);
-                auto* destType = visit(expression.getType());
+                auto* destType = visit(vaArg.getType());
 
-                auto exprAlign = expression.getType().getAlignOf(m_programInterface);
+                auto exprAlign = vaArg.getType().getAlignOf(m_programInterface);
                 if (m_triple.getPlatform() == cld::Platform::Windows
                     && m_triple.getArchitecture() == cld::Architecture::x86_64)
                 {
@@ -3314,7 +3313,7 @@ public:
             }
             case cld::LanguageOptions::BuiltInVaList::x86_64ABI:
             {
-                auto* destType = visit(expression.getType());
+                auto* destType = visit(vaArg.getType());
                 if (m_module.getDataLayout().getTypeAllocSizeInBits(destType) > 128)
                 {
                 OnStack:
@@ -3323,7 +3322,7 @@ public:
                     llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(),
                                            m_currentFunction->getEntryBlock().begin());
                     auto* allocaInst = temp.CreateAlloca(destType, nullptr, "va_arg.ret");
-                    allocaInst->setAlignment(llvm::Align(expression.getType().getAlignOf(m_programInterface)));
+                    allocaInst->setAlignment(llvm::Align(vaArg.getType().getAlignOf(m_programInterface)));
                     m_builder.CreateLifetimeStart(allocaInst, m_builder.getInt64(sizeOf));
                     m_builder.CreateMemCpy(allocaInst, allocaInst->getAlign(), loadedStackPointer,
                                            *loadedStackPointer.alignment, sizeOf);
@@ -3411,7 +3410,7 @@ public:
                     llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(),
                                            m_currentFunction->getEntryBlock().begin());
                     auto* allocaInst = temp.CreateAlloca(destType, nullptr, "va_arg.temp");
-                    allocaInst->setAlignment(llvm::Align(expression.getType().getAlignOf(m_programInterface)));
+                    allocaInst->setAlignment(llvm::Align(vaArg.getType().getAlignOf(m_programInterface)));
                     m_builder.CreateLifetimeStart(allocaInst, m_builder.getInt64(sizeOf));
                     auto dest = createBitCast(
                         allocaInst, llvm::PointerType::getUnqual(llvm::StructType::get(first, second)), false);
@@ -3475,14 +3474,14 @@ public:
                 phi->addIncoming(regValue, inRegister);
                 phi->addIncoming(stackValue, onStack);
 
-                if (!cld::Semantics::isRecord(expression.getType()))
+                if (!cld::Semantics::isRecord(vaArg.getType()))
                 {
                     return createLoad(valueOf(phi, std::min(*regValue.alignment, *stackValue.alignment)), false);
                 }
 
                 llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(), m_currentFunction->getEntryBlock().begin());
                 auto* allocaInst = temp.CreateAlloca(destType, nullptr, "va_arg.ret");
-                allocaInst->setAlignment(llvm::Align(expression.getType().getAlignOf(m_programInterface)));
+                allocaInst->setAlignment(llvm::Align(vaArg.getType().getAlignOf(m_programInterface)));
                 m_builder.CreateLifetimeStart(allocaInst, m_builder.getInt64(sizeOf));
                 m_builder.CreateMemCpy(allocaInst, allocaInst->getAlign(), phi,
                                        std::min(*regValue.alignment, *stackValue.alignment), sizeOf);
@@ -3492,9 +3491,9 @@ public:
         CLD_UNREACHABLE;
     }
 
-    Value visit(const cld::Semantics::Expression& expression, const cld::Semantics::BuiltinOffsetOf& offsetOf)
+    Value visit(const cld::Semantics::BuiltinOffsetOf& offsetOf)
     {
-        return llvm::ConstantInt::get(visit(expression.getType()), offsetOf.getOffset());
+        return llvm::ConstantInt::get(visit(offsetOf.getType()), offsetOf.getOffset());
     }
 
     Value visit(const cld::Semantics::Initializer& initializer, const cld::Semantics::Type& type,
@@ -3502,14 +3501,14 @@ public:
     {
         return cld::match(
             initializer,
-            [&](const cld::Semantics::Expression& expression) -> llvm::Value* {
+            [&](const cld::Semantics::ExpressionValue& expression) -> llvm::Value* {
                 if (std::holds_alternative<Value>(pointer))
                 {
                     auto value = visit(expression);
                     if (cld::Semantics::isStringLiteralExpr(expression))
                     {
                         m_builder.CreateMemCpy(cld::get<Value>(pointer), cld::get<Value>(pointer).alignment, value,
-                                               value.alignment, expression.getType().getSizeOf(m_programInterface));
+                                               value.alignment, expression->getType().getSizeOf(m_programInterface));
                         return nullptr;
                     }
                     createStore(value, cld::get<Value>(pointer), type.isVolatile());
@@ -3517,8 +3516,8 @@ public:
                 }
                 if (cld::Semantics::isStringLiteralExpr(expression))
                 {
-                    auto& constant = cld::get<cld::Semantics::Constant>(expression.getVariant());
-                    return getStringLiteralData(visit(expression.getType())->getArrayElementType(),
+                    auto& constant = expression->get<cld::Semantics::Constant>();
+                    return getStringLiteralData(visit(expression->getType())->getArrayElementType(),
                                                 constant.getValue());
                 }
                 return visit(expression);
@@ -3568,7 +3567,7 @@ public:
                         if (cld::Semantics::isStringLiteralExpr(expression))
                         {
                             m_builder.CreateMemCpy(currentPointer, llvm::MaybeAlign(), subValue, llvm::MaybeAlign(),
-                                                   expression.getType().getSizeOf(m_programInterface));
+                                                   expression->getType().getSizeOf(m_programInterface));
                             continue;
                         }
                         createStore(subValue, currentPointer, type.isVolatile());

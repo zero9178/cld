@@ -14,7 +14,7 @@ std::unique_ptr<cld::Semantics::ReturnStatement>
                 node, m_sourceInterface, *getCurrentFunctionScope()->currentFunction->getNameToken(),
                 ft.getReturnType(), node));
         }
-        return std::make_unique<ReturnStatement>(m_currentScope, std::optional<Expression>{});
+        return std::make_unique<ReturnStatement>(m_currentScope, std::nullopt);
     }
     if (isVoid(ft.getReturnType()))
     {
@@ -25,40 +25,40 @@ std::unique_ptr<cld::Semantics::ReturnStatement>
     doAssignmentLikeConstraints(
         ft.getReturnType(), value,
         [&] {
-            log(Errors::Semantics::EXPECTED_RETURN_VALUE_TO_BE_AN_ARITHMETIC_TYPE.args(value, m_sourceInterface,
-                                                                                       *node.begin(), value));
+            log(Errors::Semantics::EXPECTED_RETURN_VALUE_TO_BE_AN_ARITHMETIC_TYPE.args(*value, m_sourceInterface,
+                                                                                       *node.begin(), *value));
         },
         [&] {
             log(Errors::Semantics::EXPECTED_RETURN_VALUE_TO_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
-                value, m_sourceInterface, *node.begin(), value));
+                *value, m_sourceInterface, *node.begin(), *value));
         },
         [&] {},
         [&] {
             log(Errors::Semantics::CANNOT_RETURN_VARIABLE_OF_TYPE_N_TO_INCOMPATIBLE_RETURN_TYPE_N.args(
-                value, m_sourceInterface, value, ft.getReturnType(), *node.begin()));
+                *value, m_sourceInterface, *value, ft.getReturnType(), *node.begin()));
         },
         [&] {
-            log(Errors::Semantics::EXPECTED_RETURN_VALUE_TO_BE_NULL_2.args(value, m_sourceInterface, *node.begin(),
-                                                                           value));
+            log(Errors::Semantics::EXPECTED_RETURN_VALUE_TO_BE_NULL_2.args(*value, m_sourceInterface, *node.begin(),
+                                                                           *value));
         },
         [&](const ConstValue& constant) {
-            log(Errors::Semantics::EXPECTED_RETURN_VALUE_TO_BE_NULL.args(value, m_sourceInterface, *node.begin(), value,
-                                                                         constant));
+            log(Errors::Semantics::EXPECTED_RETURN_VALUE_TO_BE_NULL.args(*value, m_sourceInterface, *node.begin(),
+                                                                         *value, constant));
         },
         [&] {
-            log(Errors::Semantics::EXPECTED_RETURN_VALUE_TO_BE_A_POINTER_TYPE.args(value, m_sourceInterface,
-                                                                                   *node.begin(), value));
+            log(Errors::Semantics::EXPECTED_RETURN_VALUE_TO_BE_A_POINTER_TYPE.args(*value, m_sourceInterface,
+                                                                                   *node.begin(), *value));
         },
         [&] {
             if (isVoid(ft.getReturnType()))
             {
                 log(Errors::Semantics::CANNOT_RETURN_FUNCTION_POINTER_WITH_VOID_POINTER_RETURN_TYPE.args(
-                    value, m_sourceInterface, *node.begin(), value));
+                    *value, m_sourceInterface, *node.begin(), *value));
             }
             else
             {
                 log(Errors::Semantics::CANNOT_RETURN_VOID_POINTER_WITH_FUNCTION_POINTER_RETURN_TYPE.args(
-                    value, m_sourceInterface, *node.begin(), value));
+                    *value, m_sourceInterface, *node.begin(), *value));
             }
         });
     return std::make_unique<ReturnStatement>(m_currentScope, std::move(value));
@@ -67,10 +67,10 @@ std::unique_ptr<cld::Semantics::ReturnStatement>
 std::unique_ptr<cld::Semantics::IfStatement> cld::Semantics::SemanticAnalysis::visit(const Syntax::IfStatement& node)
 {
     auto value = lvalueConversion(visit(node.getExpression()));
-    if (!value.getType().isUndefined() && !isScalar(value.getType()))
+    if (!value->getType().isUndefined() && !isScalar(value->getType()))
     {
         log(Errors::Semantics::CONTROLLING_EXPRESSION_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
-            value, m_sourceInterface, value));
+            *value, m_sourceInterface, *value));
     }
     value = toBool(std::move(value));
     auto trueBranch = visit(node.getBranch());
@@ -124,26 +124,26 @@ std::unique_ptr<cld::Semantics::ForStatement> cld::Semantics::SemanticAnalysis::
         }
     }
 
-    std::optional<Expression> controlling;
+    std::optional<ExpressionValue> controlling;
     if (node.getControlling())
     {
         auto result = lvalueConversion(visit(*node.getControlling()));
-        if (!result.getType().isUndefined() && !isScalar(result.getType()))
+        if (!result->getType().isUndefined() && !isScalar(result->getType()))
         {
             log(Errors::Semantics::CONTROLLING_EXPRESSION_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
-                result, m_sourceInterface, result));
+                *result, m_sourceInterface, *result));
         }
         controlling = toBool(std::move(result));
     }
 
-    std::optional<Expression> iteration;
+    std::optional<ExpressionValue> iteration;
     if (node.getPost())
     {
         iteration = visit(*node.getPost());
     }
 
-    auto forStatement = std::make_unique<ForStatement>(
-        m_currentScope, ForStatement::Variant{}, std::optional<Expression>{}, std::optional<Expression>{}, nullptr);
+    auto forStatement =
+        std::make_unique<ForStatement>(m_currentScope, ForStatement::Variant{}, std::nullopt, std::nullopt, nullptr);
     auto loopGuard = pushLoop(forStatement.get());
     auto statement = visit(node.getStatement());
     *forStatement = ForStatement(m_currentScope, std::move(initial), std::move(controlling), std::move(iteration),
@@ -155,12 +155,12 @@ std::unique_ptr<cld::Semantics::HeadWhileStatement>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::HeadWhileStatement& node)
 {
     auto expression = lvalueConversion(visit(node.getExpression()));
-    if (!expression.getType().isUndefined() && !isScalar(expression.getType()))
+    if (!expression->getType().isUndefined() && !isScalar(expression->getType()))
     {
         log(Errors::Semantics::CONTROLLING_EXPRESSION_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
-            expression, m_sourceInterface, expression));
+            *expression, m_sourceInterface, *expression));
     }
-    auto loop = std::make_unique<HeadWhileStatement>(m_currentScope, Expression(node), nullptr);
+    auto loop = std::make_unique<HeadWhileStatement>(m_currentScope, ErrorExpression(node), nullptr);
     auto loopGuard = pushLoop(loop.get());
     auto statement = visit(node.getStatement());
     *loop = HeadWhileStatement(m_currentScope, toBool(std::move(expression)), std::move(statement));
@@ -170,14 +170,14 @@ std::unique_ptr<cld::Semantics::HeadWhileStatement>
 std::unique_ptr<cld::Semantics::FootWhileStatement>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::FootWhileStatement& node)
 {
-    auto loop = std::make_unique<FootWhileStatement>(m_currentScope, nullptr, Expression(node));
+    auto loop = std::make_unique<FootWhileStatement>(m_currentScope, nullptr, ErrorExpression(node));
     auto guard = pushLoop(loop.get());
     auto statement = visit(node.getStatement());
     auto expression = lvalueConversion(visit(node.getExpression()));
-    if (!expression.getType().isUndefined() && !isScalar(expression.getType()))
+    if (!expression->getType().isUndefined() && !isScalar(expression->getType()))
     {
         log(Errors::Semantics::CONTROLLING_EXPRESSION_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
-            expression, m_sourceInterface, expression));
+            *expression, m_sourceInterface, *expression));
     }
     *loop = FootWhileStatement(m_currentScope, std::move(statement), toBool(std::move(expression)));
     return loop;
@@ -209,11 +209,11 @@ std::unique_ptr<cld::Semantics::SwitchStatement>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::SwitchStatement& node)
 {
     auto expression = integerPromotion(visit(node.getExpression()));
-    if (!expression.getType().isUndefined() && !isInteger(expression.getType()))
+    if (!expression->getType().isUndefined() && !isInteger(expression->getType()))
     {
-        log(Errors::Semantics::CONTROLLING_EXPRESSION_MUST_BE_AN_INTEGER_TYPE.args(expression, m_sourceInterface,
-                                                                                   expression));
-        expression = Expression{node};
+        log(Errors::Semantics::CONTROLLING_EXPRESSION_MUST_BE_AN_INTEGER_TYPE.args(*expression, m_sourceInterface,
+                                                                                   *expression));
+        expression = ErrorExpression{node};
     }
     auto switchStmt = std::make_unique<SwitchStatement>(m_currentScope, std::move(expression), nullptr);
     auto guard = pushSwitch(*switchStmt);
@@ -336,10 +336,10 @@ std::unique_ptr<cld::Semantics::CaseStatement>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::CaseStatement& node)
 {
     auto expr = visit(node.getConstantExpression());
-    if (!expr.getType().isUndefined() && !isInteger(expr.getType()))
+    if (!expr->getType().isUndefined() && !isInteger(expr->getType()))
     {
-        log(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS.args(expr, m_sourceInterface,
-                                                                                          expr));
+        log(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS.args(*expr, m_sourceInterface,
+                                                                                          *expr));
     }
     auto constant = evaluateConstantExpression(expr);
     if (!constant)
@@ -362,11 +362,11 @@ std::unique_ptr<cld::Semantics::CaseStatement>
     {
         return {};
     }
-    if (switchStmt.getExpression().isUndefined())
+    if (switchStmt.getExpression()->isUndefined())
     {
         return {};
     }
-    constant = constant->castTo(switchStmt.getExpression().getType(), this, m_sourceInterface.getLanguageOptions());
+    constant = constant->castTo(switchStmt.getExpression()->getType(), this, m_sourceInterface.getLanguageOptions());
     auto caseStmt = std::make_unique<CaseStatement>(m_currentScope, node.getCaseToken(),
                                                     cld::get<llvm::APSInt>(constant->getValue()), node.getColonToken(),
                                                     nullptr, switchStmt);
@@ -374,7 +374,7 @@ std::unique_ptr<cld::Semantics::CaseStatement>
     if (!notRedefinition)
     {
         log(Errors::Semantics::REDEFINITION_OF_CASE_WITH_VALUE_N.args(
-            std::forward_as_tuple(node.getCaseToken(), node.getColonToken()), m_sourceInterface, *constant, expr));
+            std::forward_as_tuple(node.getCaseToken(), node.getColonToken()), m_sourceInterface, *constant, *expr));
         log(Notes::Semantics::PREVIOUS_CASE_HERE.args(
             std::forward_as_tuple(prev->second->getCaseToken(), prev->second->getColonToken()), m_sourceInterface,
             std::forward_as_tuple(prev->second->getCaseToken() + 1, prev->second->getColonToken() - 1), *constant));

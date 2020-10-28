@@ -949,7 +949,7 @@ cld::Semantics::Type
                         }
                     }
                     auto expr = visit(*size);
-                    if (expr.isUndefined())
+                    if (expr->isUndefined())
                     {
                         continue;
                     }
@@ -962,8 +962,8 @@ cld::Semantics::Type
                         }
                         continue;
                     }
-                    CLD_ASSERT(std::holds_alternative<PrimitiveType>(expr.getType().getVariant()));
-                    if (cld::get<PrimitiveType>(expr.getType().getVariant()).isSigned() && result->toInt() < 0)
+                    CLD_ASSERT(std::holds_alternative<PrimitiveType>(expr->getType().getVariant()));
+                    if (cld::get<PrimitiveType>(expr->getType().getVariant()).isSigned() && result->toInt() < 0)
                     {
                         log(Errors::Semantics::BITFIELD_MUST_BE_OF_SIZE_ZERO_OR_GREATER.args(*size, m_sourceInterface,
                                                                                              *size, result->toInt()));
@@ -1212,12 +1212,12 @@ cld::Semantics::Type
         {
             auto expr = visit(*maybeExpression);
             auto result = evaluateConstantExpression(expr);
-            if (!result || !isInteger(expr.getType()))
+            if (!result || !isInteger(expr->getType()))
             {
-                if (result && !isInteger(expr.getType()))
+                if (result && !isInteger(expr->getType()))
                 {
                     log(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS.args(
-                        expr, m_sourceInterface, expr));
+                        *expr, m_sourceInterface, *expr));
                 }
                 validValue = false;
                 value = ConstValue{};
@@ -1527,13 +1527,13 @@ void cld::Semantics::SemanticAnalysis::handleArray(cld::Semantics::Type& type,
         return;
     }
     auto expr = visit(*assignmentExpression);
-    if (!expr.getType().isUndefined() && !isInteger(expr.getType()))
+    if (!expr->getType().isUndefined() && !isInteger(expr->getType()))
     {
-        log(Errors::Semantics::ARRAY_SIZE_MUST_BE_AN_INTEGER_TYPE.args(expr, m_sourceInterface, expr));
+        log(Errors::Semantics::ARRAY_SIZE_MUST_BE_AN_INTEGER_TYPE.args(*expr, m_sourceInterface, *expr));
         type = Type{};
         return;
     }
-    if (expr.getType().isUndefined())
+    if (expr->getType().isUndefined())
     {
         type = Type{};
         return;
@@ -1543,7 +1543,7 @@ void cld::Semantics::SemanticAnalysis::handleArray(cld::Semantics::Type& type,
     {
         expr = lvalueConversion(std::move(expr));
         type = ValArrayType::create(isConst, isVolatile, restricted, isStatic, std::move(type),
-                                    std::make_shared<const Expression>(std::move(expr)));
+                                    std::move(expr).toUniquePtr());
         return;
     }
     if (result->isUndefined())
@@ -1551,9 +1551,9 @@ void cld::Semantics::SemanticAnalysis::handleArray(cld::Semantics::Type& type,
         type = Type{};
         return;
     }
-    if (cld::get<PrimitiveType>(expr.getType().getVariant()).isSigned())
+    if (cld::get<PrimitiveType>(expr->getType().getVariant()).isSigned())
     {
-        if (extensionsEnabled(expr.begin()) ? result->toInt() < 0 : result->toInt() <= 0)
+        if (extensionsEnabled(expr->begin()) ? result->toInt() < 0 : result->toInt() <= 0)
         {
             log(Errors::Semantics::ARRAY_SIZE_MUST_BE_GREATER_THAN_ZERO.args(*assignmentExpression, m_sourceInterface,
                                                                              *assignmentExpression, *result));
@@ -1561,7 +1561,7 @@ void cld::Semantics::SemanticAnalysis::handleArray(cld::Semantics::Type& type,
             return;
         }
     }
-    else if (result->toUInt() == 0 && !extensionsEnabled(expr.begin()))
+    else if (result->toUInt() == 0 && !extensionsEnabled(expr->begin()))
     {
         log(Errors::Semantics::ARRAY_SIZE_MUST_BE_GREATER_THAN_ZERO.args(
             *assignmentExpression, m_sourceInterface, *assignmentExpression,
