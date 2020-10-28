@@ -105,26 +105,30 @@ public:
         return static_cast<T*>(this);
     }
 
-    template <class F>
-    decltype(auto) match(F&& f)
+    template <class... F>
+    decltype(auto) match(F&&... f)
     {
-        constexpr std::array<std::common_type_t<decltype(f(std::declval<Args>()))...> (*)(MonadicInheritance&, F&),
+        using Callable = decltype(detail::overload{std::forward<F>(f)...});
+        constexpr std::array<std::common_type_t<decltype(Callable{std::forward<F>(f)...}()(
+                                 std::declval<Args>()))...> (*)(MonadicInheritance&, Callable),
                              sizeof...(Args)>
-            calling = {
-                {+[](MonadicInheritance& base, F& f) -> decltype(auto) { return f(static_cast<Args&>(base)); }...}};
-        return calling[index()](*this, f);
+            calling = {{+[](MonadicInheritance& base, Callable callable) -> decltype(auto) {
+                return callable(static_cast<Args&>(base));
+            }...}};
+        return calling[index()](*this, Callable{std::forward<F>(f)...});
     }
 
-    template <class F>
-    decltype(auto) match(F&& f) const
+    template <class... F>
+    decltype(auto) match(F&&... f) const
     {
-        constexpr std::array<std::common_type_t<decltype(f(std::declval<Args>()))...> (*)(const MonadicInheritance&,
-                                                                                          F&),
+        using Callable = decltype(detail::overload{std::forward<F>(f)...});
+        constexpr std::array<std::common_type_t<decltype(Callable{std::forward<F>(f)...}()(
+                                 std::declval<Args>()))...> (*)(const MonadicInheritance&, Callable),
                              sizeof...(Args)>
-            calling = {{+[](const MonadicInheritance& base, F& f) -> decltype(auto) {
-                return f(static_cast<const Args&>(base));
+            calling = {{+[](const MonadicInheritance& base, Callable callable) -> decltype(auto) {
+                return callable(static_cast<Args&>(base));
             }...}};
-        return calling[index()](*this, f);
+        return calling[index()](*this, Callable{std::forward<F>(f)...});
     }
 
     template <class T = bool>

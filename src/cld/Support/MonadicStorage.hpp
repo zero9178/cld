@@ -450,7 +450,7 @@ public:
 
     std::unique_ptr<Base> toUniquePtr() && noexcept((std::is_nothrow_move_constructible_v<SubClasses> && ...))
     {
-        return match([](auto&& value) -> std::unique_ptr<Base> {
+        return get().match([](auto&& value) -> std::unique_ptr<Base> {
             return std::make_unique<std::decay_t<decltype(value)>>(std::move(value));
         });
     }

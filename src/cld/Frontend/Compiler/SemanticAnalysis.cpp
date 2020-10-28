@@ -41,14 +41,15 @@ cld::Semantics::TranslationUnit cld::Semantics::SemanticAnalysis::visit(const Sy
             [&](const Syntax::Declaration& declaration) -> std::vector<TranslationUnit::Variant> {
                 auto value = visit(declaration);
                 std::vector<TranslationUnit::Variant> ret(value.size());
-                std::transform(
-                    std::move_iterator(value.begin()), std::move_iterator(value.end()), ret.begin(),
-                    [](DeclRetVariant&& variant) -> TranslationUnit::Variant {
-                        return cld::match(
-                            std::move(variant),
-                            [](std::shared_ptr<const Expression>&&) -> TranslationUnit::Variant { CLD_UNREACHABLE; },
-                            [](auto&& value) -> TranslationUnit::Variant { return {std::move(value)}; });
-                    });
+                std::transform(std::move_iterator(value.begin()), std::move_iterator(value.end()), ret.begin(),
+                               [](DeclRetVariant&& variant) -> TranslationUnit::Variant {
+                                   return cld::match(
+                                       std::move(variant),
+                                       [](std::shared_ptr<const ExpressionBase>&&) -> TranslationUnit::Variant {
+                                           CLD_UNREACHABLE;
+                                       },
+                                       [](auto&& value) -> TranslationUnit::Variant { return {std::move(value)}; });
+                               });
                 return ret;
             },
             [&](const Syntax::GNUSimpleASM&) -> std::vector<TranslationUnit::Variant> {
@@ -771,7 +772,7 @@ std::unique_ptr<cld::Semantics::Statement> cld::Semantics::SemanticAnalysis::vis
         [&](const Syntax::ExpressionStatement& node) -> std::unique_ptr<Statement> {
             if (!node.getOptionalExpression())
             {
-                return std::make_unique<ExpressionStatement>(m_currentScope, std::optional<Expression>{});
+                return std::make_unique<ExpressionStatement>(m_currentScope, std::nullopt);
             }
             return std::make_unique<ExpressionStatement>(m_currentScope, visit(*node.getOptionalExpression()));
         });
