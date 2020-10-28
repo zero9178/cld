@@ -1,7 +1,7 @@
 #pragma once
 
-#include <cld/Support/MonadicInheritance.h>
-#include <cld/Support/MonadicStorage.hpp>
+#include <cld/Support/AbstractIntrusiveVariant.h>
+#include <cld/Support/InstrusiveVariantStorage.hpp>
 
 #include <map>
 #include <memory>
@@ -553,11 +553,11 @@ enum class ValueCategory : std::uint8_t
 };
 
 class ExpressionBase
-    : public MonadicInheritance<class Constant, class DeclarationRead, class Conversion, class MemberAccess,
-                                class BinaryOperator, class Cast, class UnaryOperator, class SizeofOperator,
-                                class SubscriptOperator, class Conditional, class Assignment, class CommaExpression,
-                                class CallExpression, class CompoundLiteral, class BuiltinVAArg, class BuiltinOffsetOf,
-                                class ErrorExpression>
+    : public AbstractIntrusiveVariant<class Constant, class DeclarationRead, class Conversion, class MemberAccess,
+                                      class BinaryOperator, class Cast, class UnaryOperator, class SizeofOperator,
+                                      class SubscriptOperator, class Conditional, class Assignment,
+                                      class CommaExpression, class CallExpression, class CompoundLiteral,
+                                      class BuiltinVAArg, class BuiltinOffsetOf, class ErrorExpression>
 {
     Type m_type;
     ValueCategory m_valueCategory;
@@ -565,7 +565,7 @@ class ExpressionBase
 protected:
     template <class T>
     ExpressionBase(std::in_place_type_t<T>, Type type, ValueCategory valueCategory)
-        : MonadicInheritance(std::in_place_type<T>), m_type(std::move(type)), m_valueCategory(valueCategory)
+        : AbstractIntrusiveVariant(std::in_place_type<T>), m_type(std::move(type)), m_valueCategory(valueCategory)
     {
     }
 
@@ -608,7 +608,7 @@ public:
     [[nodiscard]] Lexer::CTokenIterator end() const;
 };
 
-using ExpressionValue = MonadicStorage<ExpressionBase>;
+using ExpressionValue = InstrusiveVariantStorage<ExpressionBase>;
 
 bool isStringLiteralExpr(const ExpressionBase& expression);
 
@@ -1409,16 +1409,17 @@ class GotoStatement;
 
 class GNUASMStatement;
 
-class Statement : public MonadicInheritance<ForStatement, ReturnStatement, ExpressionStatement, IfStatement,
-                                            CompoundStatement, HeadWhileStatement, FootWhileStatement, BreakStatement,
-                                            ContinueStatement, SwitchStatement, DefaultStatement, CaseStatement,
-                                            GotoStatement, LabelStatement, GNUASMStatement>
+class Statement : public AbstractIntrusiveVariant<ForStatement, ReturnStatement, ExpressionStatement, IfStatement,
+                                                  CompoundStatement, HeadWhileStatement, FootWhileStatement,
+                                                  BreakStatement, ContinueStatement, SwitchStatement, DefaultStatement,
+                                                  CaseStatement, GotoStatement, LabelStatement, GNUASMStatement>
 {
     std::int64_t m_scope;
 
 protected:
     template <class T>
-    Statement(std::int64_t scope, std::in_place_type_t<T>) : MonadicInheritance(std::in_place_type<T>), m_scope(scope)
+    Statement(std::int64_t scope, std::in_place_type_t<T>)
+        : AbstractIntrusiveVariant(std::in_place_type<T>), m_scope(scope)
     {
     }
 

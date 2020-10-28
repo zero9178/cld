@@ -14,7 +14,7 @@
 cld::Semantics::Type cld::Semantics::PrimitiveType::createPtrdiffT(bool isConst, bool isVolatile,
                                                                    const LanguageOptions& options)
 {
-    MonadicStorage<Statement> statement(std::in_place_type<ExpressionStatement>, 0, std::nullopt);
+    InstrusiveVariantStorage<Statement> statement(std::in_place_type<ExpressionStatement>, 0, std::nullopt);
     switch (options.ptrdiffType)
     {
         case LanguageOptions::PtrdiffType ::Int: return PrimitiveType::createInt(isConst, isVolatile, options);

@@ -68,7 +68,7 @@ bool cld::Semantics::ProgramInterface::isBitfieldAccess(const ExpressionBase& ex
     {
         return false;
     }
-    auto& mem = expression.get<MemberAccess>();
+    auto& mem = expression.cast<MemberAccess>();
     return static_cast<bool>(mem.getField().bitFieldBounds);
 }
 

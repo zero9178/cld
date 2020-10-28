@@ -1017,7 +1017,7 @@ cld::Semantics::ExpressionValue
             {
                 return false;
             }
-            auto& conversion = function->get<Conversion>();
+            auto& conversion = function->cast<Conversion>();
             if (conversion.getKind() != Conversion::LValue)
             {
                 return false;
@@ -1026,7 +1026,7 @@ cld::Semantics::ExpressionValue
             {
                 return false;
             }
-            auto& decl = conversion.getExpression().get<DeclarationRead>();
+            auto& decl = conversion.getExpression().cast<DeclarationRead>();
             return cld::match(
                 decl.getDeclRead(), [](const FunctionDefinition*) { return true; },
                 [](const Declaration* declaration) {
@@ -1041,7 +1041,7 @@ cld::Semantics::ExpressionValue
             {
                 if (callsFunction)
                 {
-                    auto& decl = function->get<Conversion>().getExpression().get<DeclarationRead>();
+                    auto& decl = function->cast<Conversion>().getExpression().cast<DeclarationRead>();
                     log(Errors::Semantics::NOT_ENOUGH_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_N_GOT_N.args(
                         decl, m_sourceInterface, *decl.getIdentifierToken(), argumentTypes.size(),
                         node.getOptionalAssignmentExpressions().size()));
@@ -1057,7 +1057,7 @@ cld::Semantics::ExpressionValue
             {
                 if (callsFunction)
                 {
-                    auto& decl = function->get<Conversion>().getExpression().get<DeclarationRead>();
+                    auto& decl = function->cast<Conversion>().getExpression().cast<DeclarationRead>();
                     log(Errors::Semantics::NOT_ENOUGH_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_AT_LEAST_N_GOT_N.args(
                         decl, m_sourceInterface, *decl.getIdentifierToken(), argumentTypes.size(),
                         node.getOptionalAssignmentExpressions().size()));
@@ -1074,7 +1074,7 @@ cld::Semantics::ExpressionValue
         {
             if (callsFunction)
             {
-                auto& decl = function->get<Conversion>().getExpression().get<DeclarationRead>();
+                auto& decl = function->cast<Conversion>().getExpression().cast<DeclarationRead>();
                 log(Errors::Semantics::TOO_MANY_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_N_GOT_N.args(
                     decl, m_sourceInterface, *decl.getIdentifierToken(), argumentTypes.size(),
                     node.getOptionalAssignmentExpressions().size(),
@@ -2426,7 +2426,7 @@ cld::Semantics::ExpressionValue cld::Semantics::SemanticAnalysis::doSingleElemen
             }
             return ErrorExpression(node);
         }
-        auto& str = expression->get<Constant>().getValue();
+        auto& str = expression->cast<Constant>().getValue();
         if (std::holds_alternative<std::string>(str) && !isCharType(elementType))
         {
             log(Errors::Semantics::CANNOT_INITIALIZE_WCHART_ARRAY_WITH_STRING_LITERAL.args(
@@ -2502,9 +2502,9 @@ cld::Semantics::ExpressionValue cld::Semantics::SemanticAnalysis::doSingleElemen
         if (isCharType(elementType))
         {
             if (expression->is<Constant>()
-                && std::holds_alternative<std::string>(expression->get<Constant>().getValue()))
+                && std::holds_alternative<std::string>(expression->cast<Constant>().getValue()))
             {
-                *size = cld::get<std::string>(expression->get<Constant>().getValue()).size() + 1;
+                *size = cld::get<std::string>(expression->cast<Constant>().getValue()).size() + 1;
             }
         }
         else if (std::holds_alternative<PrimitiveType>(elementType.getVariant())
@@ -2512,9 +2512,9 @@ cld::Semantics::ExpressionValue cld::Semantics::SemanticAnalysis::doSingleElemen
                         == PrimitiveType::createWcharT(false, false, m_sourceInterface.getLanguageOptions()))
         {
             if (expression->is<Constant>()
-                && std::holds_alternative<Lexer::NonCharString>(expression->get<Constant>().getValue()))
+                && std::holds_alternative<Lexer::NonCharString>(expression->cast<Constant>().getValue()))
             {
-                *size = cld::get<Lexer::NonCharString>(expression->get<Constant>().getValue()).characters.size() + 1;
+                *size = cld::get<Lexer::NonCharString>(expression->cast<Constant>().getValue()).characters.size() + 1;
             }
         }
     }

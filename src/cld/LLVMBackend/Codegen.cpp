@@ -936,7 +936,7 @@ class CodeGenerator final
                 }
                 if (cld::Semantics::isStringLiteralExpr(expression))
                 {
-                    auto& constant = expression->get<cld::Semantics::Constant>();
+                    auto& constant = expression->cast<cld::Semantics::Constant>();
                     auto& aggregate = cld::get<Aggregate>(current->vector[path.back()]);
                     auto size = std::min(aggregate.vector.size(),
                                          cld::match(
@@ -1159,7 +1159,7 @@ class CodeGenerator final
         {
             return false;
         }
-        auto& conversion = expression.get<cld::Semantics::Conversion>();
+        auto& conversion = expression.cast<cld::Semantics::Conversion>();
         if (conversion.getKind() != cld::Semantics::Conversion::LValue)
         {
             return false;
@@ -1168,7 +1168,7 @@ class CodeGenerator final
         {
             return false;
         }
-        auto& decl = conversion.getExpression().get<cld::Semantics::DeclarationRead>();
+        auto& decl = conversion.getExpression().cast<cld::Semantics::DeclarationRead>();
         return cld::match(
             decl.getDeclRead(), [](const auto*) { return false; },
             [](const cld::Semantics::BuiltinFunction*) { return true; });
@@ -1178,10 +1178,10 @@ class CodeGenerator final
         getBuiltinFunctionCall(const cld::Semantics::ExpressionBase& expression)
     {
         CLD_ASSERT(expression.is<cld::Semantics::Conversion>());
-        auto& conversion = expression.get<cld::Semantics::Conversion>();
+        auto& conversion = expression.cast<cld::Semantics::Conversion>();
         CLD_ASSERT(conversion.getKind() == cld::Semantics::Conversion::LValue);
         CLD_ASSERT(conversion.getExpression().is<cld::Semantics::DeclarationRead>());
-        auto& decl = conversion.getExpression().get<cld::Semantics::DeclarationRead>();
+        auto& decl = conversion.getExpression().cast<cld::Semantics::DeclarationRead>();
         return *cld::get<const cld::Semantics::BuiltinFunction*>(decl.getDeclRead());
     }
 
@@ -1742,20 +1742,14 @@ public:
 
     void visit(const cld::Semantics::Statement& statement)
     {
-        cld::match(
-            statement.getVariant(), [&](const auto* statement) { visit(*statement); },
-            [&](const cld::Semantics::ExpressionStatement* expressionStatement) {
-                if (!expressionStatement->getExpression() || !m_builder.GetInsertBlock())
-                {
-                    return;
-                }
-                auto instr = visit(*expressionStatement->getExpression());
-                if (llvm::isa_and_nonnull<llvm::Instruction>(instr.value) && instr.value->getNumUses() == 0
-                    && !llvm::cast<llvm::Instruction>(instr.value)->mayHaveSideEffects())
-                {
-                    llvm::cast<llvm::Instruction>(instr.value)->eraseFromParent();
-                }
-            });
+        statement.match([&](const auto& statement) { visit(statement); },
+                        [&](const cld::Semantics::ExpressionStatement& expressionStatement) {
+                            if (!expressionStatement.getExpression() || !m_builder.GetInsertBlock())
+                            {
+                                return;
+                            }
+                            visitVoidExpression(*expressionStatement.getExpression());
+                        });
     }
 
     void visit(const cld::Semantics::ReturnStatement& returnStatement)
@@ -2757,9 +2751,9 @@ public:
                                                                              &subscriptOperator.getLeftExpression();
 
         if (!pointer->is<cld::Semantics::Conversion>()
-            || pointer->get<cld::Semantics::Conversion>().getKind() != cld::Semantics::Conversion::LValue
+            || pointer->cast<cld::Semantics::Conversion>().getKind() != cld::Semantics::Conversion::LValue
             || !std::holds_alternative<cld::Semantics::ValArrayType>(
-                pointer->get<cld::Semantics::Conversion>().getExpression().getType().getVariant()))
+                pointer->cast<cld::Semantics::Conversion>().getExpression().getType().getVariant()))
         {
             auto llvmInteger = visit(integer);
             auto llvmPointer = visit(*pointer);
@@ -2775,14 +2769,14 @@ public:
             cld::get<cld::Semantics::PrimitiveType>(integer.getType().getVariant()).isSigned())};
         llvm::Value* dimensionProduct = nullptr;
         while (pointer->is<cld::Semantics::Conversion>()
-               && pointer->get<cld::Semantics::Conversion>().getKind() == cld::Semantics::Conversion::LValue)
+               && pointer->cast<cld::Semantics::Conversion>().getKind() == cld::Semantics::Conversion::LValue)
         {
-            auto& subExpr = pointer->get<cld::Semantics::Conversion>().getExpression();
+            auto& subExpr = pointer->cast<cld::Semantics::Conversion>().getExpression();
             if (!subExpr.is<cld::Semantics::SubscriptOperator>())
             {
                 break;
             }
-            auto& subOp = subExpr.get<cld::Semantics::SubscriptOperator>();
+            auto& subOp = subExpr.cast<cld::Semantics::SubscriptOperator>();
             auto& subPointer = cld::Semantics::isInteger(subOp.getLeftExpression().getType()) ?
                                    subOp.getRightExpression() :
                                    subOp.getLeftExpression();
@@ -2893,7 +2887,7 @@ public:
             createStore(rhs, lhs, assignment.getLeftExpression().getType().isVolatile());
             return createLoad(lhs, assignment.getLeftExpression().getType().isVolatile());
         }
-        auto& memberAccess = assignment.getLeftExpression().get<cld::Semantics::MemberAccess>();
+        auto& memberAccess = assignment.getLeftExpression().cast<cld::Semantics::MemberAccess>();
         auto lhsRecord = visit(memberAccess.getRecordExpression());
         auto& type =
             std::holds_alternative<cld::Semantics::PointerType>(
@@ -3516,7 +3510,7 @@ public:
                 }
                 if (cld::Semantics::isStringLiteralExpr(expression))
                 {
-                    auto& constant = expression->get<cld::Semantics::Constant>();
+                    auto& constant = expression->cast<cld::Semantics::Constant>();
                     return getStringLiteralData(visit(expression->getType())->getArrayElementType(),
                                                 constant.getValue());
                 }

@@ -1309,11 +1309,11 @@ cld::Semantics::ConstValue
                         if (!lhs)
                         {
                             if (mode == Integer && binaryOperator.getRightExpression().is<Conversion>()
-                                && binaryOperator.getRightExpression().get<Conversion>().getKind()
+                                && binaryOperator.getRightExpression().cast<Conversion>().getKind()
                                        == Conversion::Implicit
                                 && isBool(binaryOperator.getRightExpression().getType()))
                             {
-                                auto& rExpr = binaryOperator.getRightExpression().get<Conversion>().getExpression();
+                                auto& rExpr = binaryOperator.getRightExpression().cast<Conversion>().getExpression();
                                 if (!rExpr.getType().isUndefined() && !isInteger(rExpr.getType()))
                                 {
                                     logger(
@@ -1339,11 +1339,11 @@ cld::Semantics::ConstValue
                         if (lhs)
                         {
                             if (mode == Integer && binaryOperator.getRightExpression().is<Conversion>()
-                                && binaryOperator.getRightExpression().get<Conversion>().getKind()
+                                && binaryOperator.getRightExpression().cast<Conversion>().getKind()
                                        == Conversion::Implicit
                                 && isBool(binaryOperator.getRightExpression().getType()))
                             {
-                                auto& rExpr = binaryOperator.getRightExpression().get<Conversion>().getExpression();
+                                auto& rExpr = binaryOperator.getRightExpression().cast<Conversion>().getExpression();
                                 if (!rExpr.getType().isUndefined() && !isInteger(rExpr.getType()))
                                 {
                                     logger(
@@ -1495,7 +1495,7 @@ cld::Semantics::ConstValue
             {
                 if (unaryOperator.getOperand().is<UnaryOperator>())
                 {
-                    auto& innerUnary = unaryOperator.getOperand().get<UnaryOperator>();
+                    auto& innerUnary = unaryOperator.getOperand().cast<UnaryOperator>();
                     if (innerUnary.getKind() == UnaryOperator::Dereference)
                     {
                         return evaluate(innerUnary.getOperand(), mode, logger);
@@ -1503,7 +1503,7 @@ cld::Semantics::ConstValue
                 }
                 else if (unaryOperator.getOperand().is<SubscriptOperator>())
                 {
-                    auto& subScript = unaryOperator.getOperand().get<SubscriptOperator>();
+                    auto& subScript = unaryOperator.getOperand().cast<SubscriptOperator>();
                     auto lhs = evaluate(subScript.getLeftExpression(), mode, logger);
                     auto rhs = evaluate(subScript.getRightExpression(), mode, logger);
                     if (lhs.isUndefined() || rhs.isUndefined())
