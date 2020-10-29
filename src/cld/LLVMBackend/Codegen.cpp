@@ -1169,9 +1169,7 @@ class CodeGenerator final
             return false;
         }
         auto& decl = conversion.getExpression().cast<cld::Semantics::DeclarationRead>();
-        return cld::match(
-            decl.getDeclRead(), [](const auto*) { return false; },
-            [](const cld::Semantics::BuiltinFunction*) { return true; });
+        return decl.getDeclRead().is<cld::Semantics::BuiltinFunction>();
     }
 
     static const cld::Semantics::BuiltinFunction&
@@ -1182,7 +1180,7 @@ class CodeGenerator final
         CLD_ASSERT(conversion.getKind() == cld::Semantics::Conversion::LValue);
         CLD_ASSERT(conversion.getExpression().is<cld::Semantics::DeclarationRead>());
         auto& decl = conversion.getExpression().cast<cld::Semantics::DeclarationRead>();
-        return *cld::get<const cld::Semantics::BuiltinFunction*>(decl.getDeclRead());
+        return decl.getDeclRead().cast<cld::Semantics::BuiltinFunction>();
     }
 
     void visitVoidExpression(const cld::Semantics::ExpressionBase& expression)
@@ -2142,13 +2140,12 @@ public:
 
     Value visit(const cld::Semantics::DeclarationRead& declarationRead)
     {
-        auto result = cld::match(
-            declarationRead.getDeclRead(),
-            [&](const cld::Semantics::Declaration* declaration) { return m_lvalues.find(declaration); },
-            [&](const cld::Semantics::FunctionDefinition* functionDefinition) {
-                return m_lvalues.find(functionDefinition);
+        auto result = declarationRead.getDeclRead().match(
+            [&](const cld::Semantics::Declaration& declaration) { return m_lvalues.find(&declaration); },
+            [&](const cld::Semantics::FunctionDefinition& functionDefinition) {
+                return m_lvalues.find(&functionDefinition);
             },
-            [&](const cld::Semantics::BuiltinFunction*) -> decltype(m_lvalues)::iterator { CLD_UNREACHABLE; });
+            [&](const cld::Semantics::BuiltinFunction&) -> decltype(m_lvalues)::iterator { CLD_UNREACHABLE; });
         CLD_ASSERT(result != m_lvalues.end());
         return result->second;
     }

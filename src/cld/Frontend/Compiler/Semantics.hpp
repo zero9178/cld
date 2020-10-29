@@ -653,20 +653,17 @@ class Declaration;
 
 class BuiltinFunction;
 
+class Useable;
+
 class DeclarationRead final : public ExpressionBase
 {
-public:
-    using Variant = std::variant<const Declaration * CLD_NON_NULL, const FunctionDefinition * CLD_NON_NULL,
-                                 const BuiltinFunction * CLD_NON_NULL>;
-
-private:
-    Variant m_declRead;
+    const Useable* CLD_NON_NULL m_declRead;
     Lexer::CTokenIterator m_identifierToken;
 
 public:
-    explicit DeclarationRead(Type type, Variant declRead, Lexer::CTokenIterator identifierToken)
+    explicit DeclarationRead(Type type, const Useable& useable, Lexer::CTokenIterator identifierToken)
         : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Lvalue),
-          m_declRead(declRead),
+          m_declRead(&useable),
           m_identifierToken(identifierToken)
     {
     }
@@ -676,9 +673,9 @@ public:
         return m_identifierToken;
     }
 
-    [[nodiscard]] const Variant& getDeclRead() const
+    [[nodiscard]] const Useable& getDeclRead() const
     {
-        return m_declRead;
+        return *m_declRead;
     }
 
     [[nodiscard]] Lexer::CTokenIterator begin() const
@@ -1984,6 +1981,33 @@ public:
     }
 };
 
+class Useable : public AbstractIntrusiveVariant<Declaration, FunctionDefinition, BuiltinFunction>
+{
+    std::uint64_t m_uses{};
+
+protected:
+    template <class T>
+    Useable(std::in_place_type_t<T>) : AbstractIntrusiveVariant(std::in_place_type<T>)
+    {
+    }
+
+public:
+    [[nodiscard]] std::uint64_t getUses() const noexcept
+    {
+        return m_uses;
+    }
+
+    void incrementUsage() noexcept
+    {
+        m_uses++;
+    }
+
+    [[nodiscard]] bool isUsed() const noexcept
+    {
+        return m_uses;
+    }
+};
+
 enum class Linkage : std::uint8_t
 {
     Internal,
@@ -2005,13 +2029,13 @@ enum class InlineKind : std::uint8_t
     None,
 };
 
-class Declaration final
+class Declaration final : public Useable
 {
 public:
     enum Kind : std::uint8_t
     {
-        DeclarationOnly,
-        TentativeDefinition,
+        DeclarationOnly,     // If a declaration is not at file scope it's a "DeclarationOnly" if "extern"
+        TentativeDefinition, // Only possible at file scope
         Definition
     };
 
@@ -2027,7 +2051,8 @@ private:
 public:
     Declaration(Type type, Linkage linkage, Lifetime lifetime, Lexer::CTokenIterator nameToken, Kind kind,
                 InlineKind inlineKind, std::optional<Initializer> initializer = {})
-        : m_type(std::move(type)),
+        : Useable(std::in_place_type<Declaration>),
+          m_type(std::move(type)),
           m_linkage(linkage),
           m_lifetime(lifetime),
           m_nameToken(nameToken),
@@ -2078,7 +2103,7 @@ public:
     }
 };
 
-class FunctionDefinition final
+class FunctionDefinition final : public Useable
 {
     Type m_type;
     Lexer::CTokenIterator m_nameToken;
@@ -2091,7 +2116,8 @@ public:
     FunctionDefinition(Type type, Lexer::CTokenIterator nameToken,
                        std::vector<std::unique_ptr<Declaration>> parameterDeclarations, Linkage linkage,
                        InlineKind inlineKind, CompoundStatement compoundStatement)
-        : m_type(std::move(type)),
+        : Useable(std::in_place_type<FunctionDefinition>),
+          m_type(std::move(type)),
           m_nameToken(nameToken),
           m_parameterDeclarations(std::move(parameterDeclarations)),
           m_linkage(linkage),
@@ -2151,7 +2177,7 @@ public:
     }
 };
 
-class BuiltinFunction final
+class BuiltinFunction final : public Useable
 {
     Type m_type;
 
@@ -2177,7 +2203,10 @@ private:
     Kind m_kind;
 
 public:
-    BuiltinFunction(Type type, Kind kind) : m_type(std::move(type)), m_kind(kind) {}
+    BuiltinFunction(Type type, Kind kind)
+        : Useable(std::in_place_type<BuiltinFunction>), m_type(std::move(type)), m_kind(kind)
+    {
+    }
 
     [[nodiscard]] const Type& getType() const noexcept
     {

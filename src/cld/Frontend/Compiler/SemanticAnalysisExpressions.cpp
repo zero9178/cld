@@ -528,17 +528,16 @@ cld::Semantics::ExpressionValue cld::Semantics::SemanticAnalysis::visit(const Sy
             }
             return ptr->getType();
         });
-    return DeclarationRead(std::move(type),
-                           cld::match(*result,
-                                      [](auto&& value) -> DeclarationRead::Variant {
-                                          using T = std::decay_t<decltype(value)>;
-                                          if constexpr (std::is_constructible_v<DeclarationRead::Variant, T>)
-                                          {
-                                              return value;
-                                          }
-                                          CLD_UNREACHABLE;
-                                      }),
-                           node.getIdentifier());
+    auto& useable = cld::match(*result, [](auto&& value) -> Useable& {
+        using T = std::remove_pointer_t<std::decay_t<decltype(value)>>;
+        if constexpr (std::is_base_of_v<Useable, T>)
+        {
+            return *value;
+        }
+        CLD_UNREACHABLE;
+    });
+    useable.incrementUsage();
+    return DeclarationRead(std::move(type), useable, node.getIdentifier());
 }
 
 cld::Semantics::ExpressionValue
@@ -888,12 +887,12 @@ bool isBuiltinVAStart(const cld::Semantics::ExpressionBase& expression)
     {
         return false;
     }
-    auto* builtin = std::get_if<const cld::Semantics::BuiltinFunction*>(&declRead->getDeclRead());
+    auto* builtin = declRead->getDeclRead().get_if<cld::Semantics::BuiltinFunction>();
     if (!builtin)
     {
         return false;
     }
-    return (*builtin)->getKind() == cld::Semantics::BuiltinFunction::VAStart;
+    return builtin->getKind() == cld::Semantics::BuiltinFunction::VAStart;
 }
 
 bool isBuiltinFunction(const cld::Semantics::ExpressionBase& expression)
@@ -903,7 +902,7 @@ bool isBuiltinFunction(const cld::Semantics::ExpressionBase& expression)
     {
         return false;
     }
-    return std::holds_alternative<const cld::Semantics::BuiltinFunction*>(declRead->getDeclRead());
+    return declRead->getDeclRead().is<cld::Semantics::BuiltinFunction>();
 }
 } // namespace
 
@@ -958,11 +957,8 @@ cld::Semantics::ExpressionValue
             else if (auto* declRead = expression->get_if<DeclarationRead>();
                      !declRead
                      || (!getCurrentFunctionScope()->currentFunction->getParameterDeclarations().empty()
-                         && declRead->getDeclRead()
-                                != DeclarationRead::Variant(getCurrentFunctionScope()
-                                                                ->currentFunction->getParameterDeclarations()
-                                                                .back()
-                                                                .get())))
+                         && &declRead->getDeclRead()
+                                != getCurrentFunctionScope()->currentFunction->getParameterDeclarations().back().get()))
             {
                 log(Warnings::Semantics::SECOND_ARGUMENT_OF_VA_START_SHOULD_BE_THE_LAST_PARAMETER.args(
                     *expression, m_sourceInterface, *expression));
@@ -1027,12 +1023,12 @@ cld::Semantics::ExpressionValue
                 return false;
             }
             auto& decl = conversion.getExpression().cast<DeclarationRead>();
-            return cld::match(
-                decl.getDeclRead(), [](const FunctionDefinition*) { return true; },
-                [](const Declaration* declaration) {
-                    return std::holds_alternative<FunctionType>(declaration->getType().getVariant());
-                },
-                [](const BuiltinFunction*) { return true; });
+            return decl.getDeclRead().match([](const FunctionDefinition&) { return true; },
+                                            [](const Declaration& declaration) {
+                                                return std::holds_alternative<FunctionType>(
+                                                    declaration.getType().getVariant());
+                                            },
+                                            [](const BuiltinFunction&) { return true; });
         }();
         auto& argumentTypes = ft.getArguments();
         if (node.getOptionalAssignmentExpressions().size() < argumentTypes.size())
@@ -1286,8 +1282,8 @@ cld::Semantics::ExpressionValue
         {
             if (auto* declRead = value->get_if<DeclarationRead>())
             {
-                if (std::holds_alternative<const Declaration*>(declRead->getDeclRead())
-                    && cld::get<const Declaration*>(declRead->getDeclRead())->getLifetime() == Lifetime::Register)
+                if (auto* decl = declRead->getDeclRead().get_if<Declaration>();
+                    decl && decl->getLifetime() == Lifetime::Register)
                 {
                     log(Errors::Semantics::CANNOT_TAKE_ADDRESS_OF_DECLARATION_ANNOTATED_WITH_REGISTER.args(
                         *value, m_sourceInterface, *node.getUnaryToken(), *value));

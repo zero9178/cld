@@ -1777,7 +1777,7 @@ TEST_CASE("Semantics primary expressions", "[semantics]")
             CHECK(expr.getType() == FunctionType::create(PrimitiveType::createVoid(false, false), {}, false, false));
             CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
             REQUIRE(expr.is<DeclarationRead>());
-            CHECK(std::holds_alternative<const FunctionDefinition*>(expr.cast<DeclarationRead>().getDeclRead()));
+            CHECK(expr.cast<DeclarationRead>().getDeclRead().is<FunctionDefinition>());
         }
         SECTION("Enum constants")
         {

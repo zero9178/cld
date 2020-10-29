@@ -31,6 +31,19 @@ template <class T, std::uint8_t i, class First, class... Rest>
 template <class... Args>
 class AbstractIntrusiveVariant
 {
+    template <class F, class First, class... Rest>
+    static decltype(auto) matchHelper(F&& f, First&& first, Rest&&... rest)
+    {
+        return f(std::forward<First>(first));
+        if constexpr (sizeof...(Rest) > 0)
+        {
+            return matchHelper(f, std::forward<Rest>(rest)...);
+        }
+    }
+
+    template <class F>
+    using MatchReturn = decltype(matchHelper(std::declval<F>(), std::declval<Args>()...));
+
     std::uint8_t m_index;
 
 public:
@@ -92,10 +105,8 @@ public:
     decltype(auto) match(F&&... f)
     {
         using Callable = decltype(detail::overload{std::forward<F>(f)...});
-        constexpr std::array<std::common_type_t<decltype(Callable{std::forward<F>(f)...}(std::declval<Args>()))...> (*)(
-                                 AbstractIntrusiveVariant&, Callable),
-                             sizeof...(Args)>
-            calling = {{+[](AbstractIntrusiveVariant& base, Callable callable) -> decltype(auto) {
+        constexpr std::array<MatchReturn<Callable> (*)(AbstractIntrusiveVariant&, Callable &&), sizeof...(Args)>
+            calling = {{+[](AbstractIntrusiveVariant& base, Callable&& callable) -> decltype(auto) {
                 return callable(static_cast<Args&>(base));
             }...}};
         return calling[index()](*this, Callable{std::forward<F>(f)...});
@@ -105,10 +116,8 @@ public:
     decltype(auto) match(F&&... f) const
     {
         using Callable = decltype(detail::overload{std::forward<F>(f)...});
-        constexpr std::array<std::common_type_t<decltype(Callable{std::forward<F>(f)...}(std::declval<Args>()))...> (*)(
-                                 const AbstractIntrusiveVariant&, Callable),
-                             sizeof...(Args)>
-            calling = {{+[](const AbstractIntrusiveVariant& base, Callable callable) -> decltype(auto) {
+        constexpr std::array<MatchReturn<Callable> (*)(const AbstractIntrusiveVariant&, Callable&&), sizeof...(Args)>
+            calling = {{+[](const AbstractIntrusiveVariant& base, Callable&& callable) -> decltype(auto) {
                 return callable(static_cast<const Args&>(base));
             }...}};
         return calling[index()](*this, Callable{std::forward<F>(f)...});

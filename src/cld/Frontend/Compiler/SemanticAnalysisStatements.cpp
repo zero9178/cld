@@ -236,7 +236,7 @@ void cld::Semantics::SemanticAnalysis::checkForIllegalSwitchJumps(
     {
         for (auto& [name, decl] : m_scopes[curr].declarations)
         {
-            if (auto* val = std::get_if<const Declaration*>(&decl.declared))
+            if (auto* val = std::get_if<Declaration*>(&decl.declared))
             {
                 if (isVariablyModified((*val)->getType()))
                 {
@@ -424,7 +424,7 @@ void cld::Semantics::SemanticAnalysis::resolveGotos()
                     break;
                 }
                 auto& [name, decl] = *iter;
-                if (auto* val = std::get_if<const Declaration*>(&decl.declared))
+                if (auto* val = std::get_if<Declaration*>(&decl.declared))
                 {
                     if (isVariablyModified((*val)->getType()))
                     {
