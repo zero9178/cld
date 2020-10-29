@@ -64,7 +64,7 @@ std::pair<cld::Semantics::ConstValue, std::string>
     tokens = cld::Lexer::tokenize(std::move(source), options, &ss, &errors);
     UNSCOPED_INFO(storage);
     REQUIRE_FALSE(errors);
-    tokens = cld::PP::preprocess(std::move(tokens), &ss, &errors);
+    tokens = cld::PP::preprocess(std::move(tokens), {}, &ss, &errors);
     UNSCOPED_INFO(storage);
     REQUIRE_FALSE(errors);
     static cld::CSourceObject ctokens;

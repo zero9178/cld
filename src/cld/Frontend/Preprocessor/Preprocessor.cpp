@@ -32,7 +32,8 @@ std::vector<T>& append(std::vector<T>& lhs, std::vector<T>&& rhs)
 class Preprocessor final : private cld::PPSourceInterface
 {
     llvm::raw_ostream* m_reporter;
-    const cld::LanguageOptions& m_options;
+    const cld::LanguageOptions& m_languageOptions;
+    const cld::PP::Options& m_ppOptions;
     std::uint32_t m_macroID = 0;
     std::uint32_t m_currentFile = 0;
     std::vector<cld::Lexer::PPToken> m_result;
@@ -265,7 +266,7 @@ class Preprocessor final : private cld::PPSourceInterface
                 text += '\"';
                 bool errorsOccurred = false;
                 auto scratchPadPP =
-                    cld::Lexer::tokenize(std::move(text), m_options, m_reporter, &errorsOccurred, "<Strings>");
+                    cld::Lexer::tokenize(std::move(text), m_languageOptions, m_reporter, &errorsOccurred, "<Strings>");
                 CLD_ASSERT(!errorsOccurred);
                 CLD_ASSERT(scratchPadPP.getFiles().size() == 1);
                 CLD_ASSERT(scratchPadPP.getFiles()[0].ppTokens.size() == 1);
@@ -455,7 +456,8 @@ class Preprocessor final : private cld::PPSourceInterface
                 std::memcpy(text.data() + lhsView.size(), rhsView.data(), rhsView.size());
             }
             bool errors = false;
-            auto scratchPadPP = cld::Lexer::tokenize(std::move(text), m_options, &llvm::nulls(), &errors, "<Pastings>");
+            auto scratchPadPP =
+                cld::Lexer::tokenize(std::move(text), m_languageOptions, &llvm::nulls(), &errors, "<Pastings>");
             CLD_ASSERT(scratchPadPP.getFiles().size() == 1);
             if (errors || scratchPadPP.getFiles()[0].ppTokens.size() != 1)
             {
@@ -560,8 +562,8 @@ class Preprocessor final : private cld::PPSourceInterface
                     source = "#define __LINE__ " + std::to_string(printedLine) + "\n";
                 }
                 bool errorsOccurred = false;
-                auto scratchPadPP =
-                    cld::Lexer::tokenize(std::move(source), m_options, m_reporter, &errorsOccurred, "<Scratch Pad>");
+                auto scratchPadPP = cld::Lexer::tokenize(std::move(source), m_languageOptions, m_reporter,
+                                                         &errorsOccurred, "<Scratch Pad>");
                 CLD_ASSERT(!errorsOccurred);
                 include(std::move(scratchPadPP));
             }
@@ -1064,7 +1066,7 @@ class Preprocessor final : private cld::PPSourceInterface
 
     const cld::LanguageOptions& getLanguageOptions() const noexcept override
     {
-        return m_options;
+        return m_languageOptions;
     }
 
     llvm::ArrayRef<cld::Lexer::IntervalMap> getIntervalMaps() const noexcept override
@@ -1073,8 +1075,9 @@ class Preprocessor final : private cld::PPSourceInterface
     }
 
 public:
-    Preprocessor(llvm::raw_ostream* report, const cld::LanguageOptions& options) noexcept
-        : m_reporter(report), m_options(options)
+    Preprocessor(llvm::raw_ostream* report, const cld::PP::Options& ppOptions,
+                 const cld::LanguageOptions& languageOptions) noexcept
+        : m_reporter(report), m_languageOptions(languageOptions), m_ppOptions(ppOptions)
     {
         std::string scratchPadSource;
         const auto t = std::time(nullptr);
@@ -1108,17 +1111,17 @@ public:
 
         scratchPadSource += "#define __STDC__ 1\n";
         scratchPadSource += "#define __STDC_HOSTED__ ";
-        scratchPadSource += (options.freeStanding ? "0\n" : "1\n");
+        scratchPadSource += (languageOptions.freeStanding ? "0\n" : "1\n");
         scratchPadSource += "#define __STDC_MB_MIGHT_NEQ_WC__ 1\n";
         scratchPadSource += "#define __STDC_VERSION__ 199901L\n";
-        for (auto& [name, def] : options.additionalMacros)
+        for (auto& [name, def] : m_ppOptions.additionalMacros)
         {
             scratchPadSource += "#define " + name + " " + def + "\n";
         }
 
         bool errorsOccurred = false;
-        auto scratchPadPP =
-            cld::Lexer::tokenize(std::move(scratchPadSource), options, report, &errorsOccurred, "<Scratch Pad>");
+        auto scratchPadPP = cld::Lexer::tokenize(std::move(scratchPadSource), languageOptions, report, &errorsOccurred,
+                                                 "<Scratch Pad>");
         if (!errorsOccurred)
         {
             include(std::move(scratchPadPP));
@@ -1429,12 +1432,13 @@ public:
                         candidates.emplace_back(cld::fs::current_path().string());
                     }
                 }
-                candidates.insert(candidates.end(), m_options.includeQuoteDirectories.begin(),
-                                  m_options.includeQuoteDirectories.end());
+                candidates.insert(candidates.end(), m_ppOptions.includeQuoteDirectories.begin(),
+                                  m_ppOptions.includeQuoteDirectories.end());
             }
-            candidates.insert(candidates.end(), m_options.includeDirectories.begin(),
-                              m_options.includeDirectories.end());
-            candidates.insert(candidates.end(), m_options.systemDirectories.begin(), m_options.systemDirectories.end());
+            candidates.insert(candidates.end(), m_ppOptions.includeDirectories.begin(),
+                              m_ppOptions.includeDirectories.end());
+            candidates.insert(candidates.end(), m_ppOptions.systemDirectories.begin(),
+                              m_ppOptions.systemDirectories.end());
             if (includeTag.includeToken->getValue() == "include_next")
             {
                 auto dir = cld::fs::u8path(m_files[m_currentFile].path);
@@ -1455,8 +1459,8 @@ public:
                 if (result.is_open())
                 {
                     resultPath = std::move(filename);
-                    systemHeader = std::unordered_set<std::string_view>(m_options.systemDirectories.begin(),
-                                                                        m_options.systemDirectories.end())
+                    systemHeader = std::unordered_set<std::string_view>(m_ppOptions.systemDirectories.begin(),
+                                                                        m_ppOptions.systemDirectories.end())
                                        .count(*iter);
                     break;
                 }
@@ -1487,7 +1491,8 @@ public:
         result.close();
 
         bool errors = false;
-        auto newFile = cld::Lexer::tokenize(std::move(text), m_options, m_reporter, &errors, resultPath.u8string());
+        auto newFile =
+            cld::Lexer::tokenize(std::move(text), m_languageOptions, m_reporter, &errors, resultPath.u8string());
         if (errors)
         {
             m_errorsOccurred = true;
@@ -1718,16 +1723,16 @@ public:
 };
 } // namespace
 
-cld::PPSourceObject cld::PP::preprocess(cld::PPSourceObject&& sourceObject, llvm::raw_ostream* reporter,
-                                        bool* errorsOccurred) noexcept
+cld::PPSourceObject cld::PP::preprocess(cld::PPSourceObject&& sourceObject, const Options& options,
+                                        llvm::raw_ostream* reporter, bool* errorsOccurred) noexcept
 {
-    auto options = sourceObject.getLanguageOptions();
-    Preprocessor preprocessor(reporter, options);
+    auto languageOptions = sourceObject.getLanguageOptions();
+    Preprocessor preprocessor(reporter, options, languageOptions);
     preprocessor.include(std::move(sourceObject));
     if (errorsOccurred)
     {
         *errorsOccurred = preprocessor.errorsOccurred();
     }
-    return PPSourceObject(std::move(preprocessor.getResult()), std::move(preprocessor.getFiles()), options,
+    return PPSourceObject(std::move(preprocessor.getResult()), std::move(preprocessor.getFiles()), languageOptions,
                           std::move(preprocessor.getSubstitutions()), {std::move(preprocessor.getIntervalMaps())});
 }

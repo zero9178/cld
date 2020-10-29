@@ -93,18 +93,19 @@ int main(int argc, char** argv)
     }
     else if (mode == "sema")
     {
-        auto options = cld::LanguageOptions::native();
-        for (int i = 3; i < argc; i++)
-        {
-            options.includeDirectories.push_back(argv[i]);
-        }
         bool errors = false;
-        auto pptokens = cld::Lexer::tokenize(std::move(input), options, &llvm::errs(), &errors, filename);
+        auto pptokens =
+            cld::Lexer::tokenize(std::move(input), cld::LanguageOptions::native(), &llvm::errs(), &errors, filename);
         if (errors)
         {
             return 0;
         }
-        pptokens = cld::PP::preprocess(std::move(pptokens), &llvm::errs(), &errors);
+        cld::PP::Options ppOptions;
+        for (int i = 3; i < argc; i++)
+        {
+            ppOptions.includeDirectories.push_back(argv[i]);
+        }
+        pptokens = cld::PP::preprocess(std::move(pptokens), ppOptions, &llvm::errs(), &errors);
         if (errors)
         {
             return 0;
@@ -126,12 +127,6 @@ int main(int argc, char** argv)
     else if (mode == "csmith")
     {
         auto options = cld::LanguageOptions::native();
-        options.additionalMacros.emplace_back("CSMITH_MINIMAL", "");
-        options.additionalMacros.emplace_back("STANDALONE", "");
-        for (int i = 3; i < argc; i++)
-        {
-            options.includeDirectories.push_back(argv[i]);
-        }
         options.enabledWarnings.erase("macro-redefined");
         bool errors = false;
         auto pptokens = cld::Lexer::tokenize(std::move(input), options, &llvm::errs(), &errors, filename);
@@ -139,7 +134,14 @@ int main(int argc, char** argv)
         {
             return -1;
         }
-        pptokens = cld::PP::preprocess(std::move(pptokens), &llvm::errs(), &errors);
+        cld::PP::Options ppOptions;
+        ppOptions.additionalMacros.emplace_back("CSMITH_MINIMAL", "");
+        ppOptions.additionalMacros.emplace_back("STANDALONE", "");
+        for (int i = 3; i < argc; i++)
+        {
+            ppOptions.includeDirectories.push_back(argv[i]);
+        }
+        pptokens = cld::PP::preprocess(std::move(pptokens), ppOptions, &llvm::errs(), &errors);
         if (errors)
         {
             return -1;

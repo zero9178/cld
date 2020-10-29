@@ -13,8 +13,16 @@ struct LanguageOptions;
 
 namespace PP
 {
-PPSourceObject preprocess(PPSourceObject&& sourceObject, llvm::raw_ostream* reporter = &llvm::errs(),
-                          bool* errorsOccurred = nullptr) noexcept;
+struct Options
+{
+    std::vector<std::string> includeDirectories;
+    std::vector<std::string> includeQuoteDirectories;
+    std::vector<std::string> systemDirectories;
+    std::vector<std::pair<std::string, std::string>> additionalMacros;
+};
+
+PPSourceObject preprocess(PPSourceObject&& sourceObject, const Options& options = {},
+                          llvm::raw_ostream* reporter = &llvm::errs(), bool* errorsOccurred = nullptr) noexcept;
 
 template <class T>
 std::string reconstruct(const T* begin, const T* end, const SourceInterface& sourceInterface) noexcept

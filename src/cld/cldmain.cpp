@@ -75,6 +75,260 @@ struct InitialStorage<WARNINGS>
 
 namespace
 {
+template <class CL>
+void addUnixMacroStyle(cld::PP::Options& ppOptions, const cld::LanguageOptions& languageOptions, std::string_view name,
+                       const CL&)
+{
+    auto alloc = cld::to_string(name);
+    ppOptions.additionalMacros.emplace_back("__" + alloc, "1");
+    ppOptions.additionalMacros.emplace_back("__" + alloc + "__", "1");
+    if (languageOptions.extension == cld::LanguageOptions::Extension::GNU)
+    {
+        ppOptions.additionalMacros.emplace_back(alloc, "1");
+    }
+}
+
+template <class Integer>
+Integer safeShiftLeft(Integer number, std::size_t value)
+{
+    if (value >= std::numeric_limits<Integer>::digits)
+    {
+        return 0;
+    }
+
+    return number << value;
+}
+
+template <class CL>
+cld::PP::Options getTargetSpecificPreprocessorOptions(const cld::LanguageOptions& languageOptions,
+                                                      const cld::Triple& triple, const CL& cli)
+{
+    cld::PP::Options result;
+    if (triple.getArchitecture() == cld::Architecture::x86_64)
+    {
+        result.additionalMacros.emplace_back("__amd64__", "1");
+        result.additionalMacros.emplace_back("__amd64", "1");
+        result.additionalMacros.emplace_back("__x86_64", "1");
+        result.additionalMacros.emplace_back("__x86_64__", "1");
+        result.additionalMacros.emplace_back("__NO_MATH_INLINES", "1");
+    }
+    else if (triple.getArchitecture() == cld::Architecture::x86)
+    {
+        addUnixMacroStyle(result, languageOptions, "i386", cli);
+        result.additionalMacros.emplace_back("__NO_MATH_INLINES", "1");
+    }
+    if (triple.getPlatform() == cld::Platform::Windows)
+    {
+        if (triple.getEnvironment() == cld::Environment::GNU)
+        {
+            result.additionalMacros.emplace_back("__declspec(a)", "__attribute__((a))");
+            for (std::string iter : {"cdecl", "stdcall", "fastcall", "thiscall", "pascal"})
+            {
+                auto attribute = "__attribute__((__" + iter + "__))";
+                result.additionalMacros.emplace_back("__" + iter, attribute);
+                result.additionalMacros.emplace_back("_" + iter, attribute);
+            }
+            addUnixMacroStyle(result, languageOptions, "WIN32", cli);
+            addUnixMacroStyle(result, languageOptions, "WINNT", cli);
+            if (triple.getArchitecture() == cld::Architecture::x86_64)
+            {
+                addUnixMacroStyle(result, languageOptions, "WIN64", cli);
+                result.additionalMacros.emplace_back("__MINGW64__", "1");
+            }
+            result.additionalMacros.emplace_back("__MINGW632__", "1");
+            result.additionalMacros.emplace_back("__MSVCRT__", "1");
+        }
+        else if (triple.getEnvironment() == cld::Environment::MSVC)
+        {
+            result.additionalMacros.emplace_back("_INTEGRAL_MAX_BITS", "64");
+            // TODO: Few more based on options
+        }
+        result.additionalMacros.emplace_back("_WIN32", "1");
+        if (triple.getArchitecture() == cld::Architecture::x86_64)
+        {
+            result.additionalMacros.emplace_back("_WIN64", "1");
+        }
+    }
+    else if (triple.getPlatform() == cld::Platform::Linux)
+    {
+        addUnixMacroStyle(result, languageOptions, "unix", cli);
+        addUnixMacroStyle(result, languageOptions, "linux", cli);
+        result.additionalMacros.emplace_back("__ELF__", "1");
+        result.additionalMacros.emplace_back("__gnu_linux__", "1");
+    }
+
+    result.additionalMacros.emplace_back("__llvm__", "1");
+    result.additionalMacros.emplace_back("__cld__", "1");
+    // TODO: Command line option for this
+    result.additionalMacros.emplace_back("__GNUC__", "4");
+    result.additionalMacros.emplace_back("__GNUC_MINOR__", "2");
+    result.additionalMacros.emplace_back("__GNUC_PATCHLEVEL__", "1");
+    if (cli.template get<OPT>() && *cli.template get<OPT>() > 0)
+    {
+        result.additionalMacros.emplace_back("__OPTIMIZE__", "1");
+    }
+
+    // TODO: Macro definitions that follow should be more generalized and not depend on hard coded known values of
+    // targets
+
+    result.additionalMacros.emplace_back("__ORDER_LITTLE_ENDIAN__", "1234");
+    result.additionalMacros.emplace_back("__ORDER_BIG_ENDIAN__", "4321");
+
+    result.additionalMacros.emplace_back("__BYTE_ORDER__", "__ORDER_LITTLE_ENDIAN__");
+    result.additionalMacros.emplace_back("__LITTLE_ENDIAN__", "1");
+
+    if (languageOptions.sizeOfInt == 4 && languageOptions.sizeOfLong == 8 && languageOptions.sizeOfVoidStar == 8)
+    {
+        result.additionalMacros.emplace_back("_LP64", "1");
+        result.additionalMacros.emplace_back("__LP64__", "1");
+    }
+    else if (languageOptions.sizeOfVoidStar == 4 && languageOptions.sizeOfInt == 4 && languageOptions.sizeOfLong == 4)
+    {
+        result.additionalMacros.emplace_back("_ILP32", "1");
+        result.additionalMacros.emplace_back("__ILP32__", "1");
+    }
+
+    result.additionalMacros.emplace_back("__CHAR_BIT__", "8");
+
+    result.additionalMacros.emplace_back("__SCHAR_MAX__", "127");
+    result.additionalMacros.emplace_back(
+        "__SHRT_MAX__", cld::to_string(safeShiftLeft(1uLL, (8 * languageOptions.sizeOfShort - 1)) - 1));
+    result.additionalMacros.emplace_back("__INT_MAX__",
+                                         cld::to_string(safeShiftLeft(1uLL, (8 * languageOptions.sizeOfInt - 1)) - 1));
+    result.additionalMacros.emplace_back("__LONG_MAX__",
+                                         cld::to_string(safeShiftLeft(1uLL, (8 * languageOptions.sizeOfLong - 1)) - 1));
+    result.additionalMacros.emplace_back("__LONG_LONG_MAX__", cld::to_string(safeShiftLeft(1ull, (8 * 8 - 1)) - 1));
+    std::size_t wcharSize;
+    bool wcharSigned;
+    switch (languageOptions.wcharUnderlyingType)
+    {
+        case cld::LanguageOptions::WideCharType::UnsignedShort:
+            wcharSigned = false;
+            wcharSize = languageOptions.sizeOfShort;
+            break;
+        case cld::LanguageOptions::WideCharType::Int:
+            wcharSigned = true;
+            wcharSize = languageOptions.sizeOfInt;
+            break;
+    }
+    result.additionalMacros.emplace_back("__WCHAR_MAX__",
+                                         cld::to_string(safeShiftLeft(1uLL, (8 * wcharSize - wcharSigned)) - 1));
+    result.additionalMacros.emplace_back("__INTMAX_MAX__", "__LONG_LONG_MAX__");
+    result.additionalMacros.emplace_back("__UINTMAX_MAX__", cld::to_string(~0ull));
+
+    std::size_t sizeTSize;
+    switch (languageOptions.sizeTType)
+    {
+        case cld::LanguageOptions::SizeTType::UnsignedInt: sizeTSize = languageOptions.sizeOfInt; break;
+        case cld::LanguageOptions::SizeTType::UnsignedLong: sizeTSize = languageOptions.sizeOfLong; break;
+        case cld::LanguageOptions::SizeTType::UnsignedLongLong: sizeTSize = 8; break;
+    }
+    result.additionalMacros.emplace_back("__SIZE_MAX__", cld::to_string(safeShiftLeft(1ull, (8 * sizeTSize)) - 1));
+    std::size_t ptrDiffSize;
+    switch (languageOptions.ptrdiffType)
+    {
+        case cld::LanguageOptions::PtrdiffType::Int: ptrDiffSize = languageOptions.sizeOfInt; break;
+        case cld::LanguageOptions::PtrdiffType::Long: ptrDiffSize = languageOptions.sizeOfLong; break;
+        case cld::LanguageOptions::PtrdiffType::LongLong: ptrDiffSize = 8; break;
+    }
+    result.additionalMacros.emplace_back("__PTRDIFF_MAX___",
+                                         cld::to_string(safeShiftLeft(1ull, (8 * ptrDiffSize - 1)) - 1));
+    result.additionalMacros.emplace_back(
+        "__INTPTR_MAX__", cld::to_string(safeShiftLeft(1ull, (8 * languageOptions.sizeOfVoidStar - 1)) - 1));
+    result.additionalMacros.emplace_back("__UNTPTR_MAX__",
+                                         cld::to_string(safeShiftLeft(1ull, (8 * languageOptions.sizeOfVoidStar)) - 1));
+
+    result.additionalMacros.emplace_back("__SIZEOF_DOUBLE__", "8");
+    result.additionalMacros.emplace_back("__SIZEOF_FLOAT__", "4");
+    result.additionalMacros.emplace_back("__SIZEOF_INT__", cld::to_string(languageOptions.sizeOfInt));
+    result.additionalMacros.emplace_back("__SIZEOF_LONG__", cld::to_string(languageOptions.sizeOfLong));
+    // TODO: Not always right
+    switch (languageOptions.sizeOfLongDoubleBits)
+    {
+        case 64: result.additionalMacros.emplace_back("__SIZEOF_LONG_DOUBLE__", cld::to_string(8)); break;
+        case 128: result.additionalMacros.emplace_back("__SIZEOF_LONG_DOUBLE__", cld::to_string(16)); break;
+        case 80:
+            if (triple.getArchitecture() == cld::Architecture::x86)
+            {
+                result.additionalMacros.emplace_back("__SIZEOF_LONG_DOUBLE__", cld::to_string(12));
+            }
+            else
+            {
+                result.additionalMacros.emplace_back("__SIZEOF_LONG_DOUBLE__", cld::to_string(16));
+            }
+    }
+    result.additionalMacros.emplace_back("__SIZEOF_LONG_LONG__", "64");
+    result.additionalMacros.emplace_back("__SIZEOF_POINTER__", cld::to_string(languageOptions.sizeOfVoidStar));
+    result.additionalMacros.emplace_back("__SIZEOF_SHORT__", cld::to_string(languageOptions.sizeOfShort));
+    result.additionalMacros.emplace_back("__SIZEOF_PTRDIFF_T__", cld::to_string(ptrDiffSize));
+    result.additionalMacros.emplace_back("__SIZEOF_SIZE_T__", cld::to_string(sizeTSize));
+    result.additionalMacros.emplace_back("__SIZEOF_WCHAR_T__", cld::to_string(wcharSize));
+
+    result.additionalMacros.emplace_back("__INTMAX_TYPE__", "long long");
+    result.additionalMacros.emplace_back("__INTMAX_C_SUFFIX__", "LL");
+    result.additionalMacros.emplace_back("__INTMAX_WIDTH____", "64");
+    result.additionalMacros.emplace_back("__UINTMAX_TYPE__", "unsigned long long");
+    result.additionalMacros.emplace_back("__UINTMAX_C_SUFFIX__", "ULL");
+    result.additionalMacros.emplace_back("__UINTMAX_WIDTH__", "64");
+    switch (languageOptions.ptrdiffType)
+    {
+        case cld::LanguageOptions::PtrdiffType::Int:
+            result.additionalMacros.emplace_back("__PTRDIFF_TYPE__", "int");
+            break;
+        case cld::LanguageOptions::PtrdiffType::Long:
+            result.additionalMacros.emplace_back("__PTRDIFF_TYPE__", "long");
+            break;
+        case cld::LanguageOptions::PtrdiffType::LongLong:
+            result.additionalMacros.emplace_back("__PTRDIFF_TYPE__", "long long");
+            break;
+    }
+    result.additionalMacros.emplace_back("__PTRDIFF_WIDTH__", cld::to_string(ptrDiffSize * 8));
+    switch (languageOptions.sizeTType)
+    {
+        case cld::LanguageOptions::SizeTType::UnsignedInt:
+            result.additionalMacros.emplace_back("__SIZE_TYPE__", "unsigned int");
+            break;
+        case cld::LanguageOptions::SizeTType::UnsignedLong:
+            result.additionalMacros.emplace_back("__SIZE_TYPE__", "unsigned long");
+            break;
+        case cld::LanguageOptions::SizeTType::UnsignedLongLong:
+            result.additionalMacros.emplace_back("__SIZE_TYPE__", "unsigned long long");
+            break;
+    }
+    result.additionalMacros.emplace_back("__SIZE_WIDTH__", cld::to_string(sizeTSize * 8));
+    switch (languageOptions.wcharUnderlyingType)
+    {
+        case cld::LanguageOptions::WideCharType::UnsignedShort:
+            result.additionalMacros.emplace_back("__WCHAR_TYPE__", "unsigned short");
+            break;
+        case cld::LanguageOptions::WideCharType::Int:
+            result.additionalMacros.emplace_back("__WCHAR_TYPE__", "int");
+            break;
+    }
+    result.additionalMacros.emplace_back("__WCHAR_WIDTH__", cld::to_string(wcharSize * 8));
+
+    result.additionalMacros.emplace_back("__POINTER__WIDTH__", cld::to_string(8 * languageOptions.sizeOfVoidStar));
+    if (!languageOptions.charIsSigned)
+    {
+        result.additionalMacros.emplace_back("__CHAR_UNSIGNED__", "1");
+    }
+
+    switch (languageOptions.wcharUnderlyingType)
+    {
+        case cld::LanguageOptions::WideCharType::UnsignedShort:
+            result.additionalMacros.emplace_back("__WCHAR_UNSIGNED__", "1");
+        default: break;
+    }
+
+    result.additionalMacros.emplace_back("__FINITE_MATH_ONLY__", "0");
+    result.additionalMacros.emplace_back("__GNUC_STDC_INLINE__", "1");
+    if (languageOptions.extension == cld::LanguageOptions::Extension::None)
+    {
+        result.additionalMacros.emplace_back("__STRICT_ANSI__", "1");
+    }
+    return result;
+}
+
 enum class Action
 {
     Compile,
@@ -110,7 +364,26 @@ std::optional<cld::fs::path> compileCFile(Action action, const cld::fs::path& cS
     {
         return {};
     }
-    pptokens = cld::PP::preprocess(std::move(pptokens), reporter, &errors);
+
+    cld::PP::Options ppOptions = getTargetSpecificPreprocessorOptions(languageOptions, triple, cli);
+    for (auto& iter : cli.template get<INCLUDES>())
+    {
+        if (std::none_of(cli.template get<ISYSTEM>().begin(), cli.template get<ISYSTEM>().end(),
+                         [&iter](const cld::fs::path& path) {
+                             std::error_code ec;
+                             auto res = cld::fs::equivalent(path, cld::fs::u8path(iter), ec);
+                             return res && !ec;
+                         }))
+        {
+            ppOptions.includeDirectories.emplace_back(iter);
+        }
+    }
+    ppOptions.systemDirectories = cli.template get<ISYSTEM>();
+    for (auto& [name, maybeValue] : cli.template get<DEFINE_MACRO>())
+    {
+        ppOptions.additionalMacros.emplace_back(name, maybeValue.value_or("1"));
+    }
+    pptokens = cld::PP::preprocess(std::move(pptokens), ppOptions, reporter, &errors);
     if (errors)
     {
         return {};
@@ -287,259 +560,6 @@ int doActionOnAllFiles(Action action, const cld::LanguageOptions& languageOption
     return 0;
 }
 
-template <class CL>
-void addUnixMacroStyle(cld::LanguageOptions& languageOptions, std::string_view name, const CL&)
-{
-    auto alloc = cld::to_string(name);
-    languageOptions.additionalMacros.emplace_back("__" + alloc, "1");
-    languageOptions.additionalMacros.emplace_back("__" + alloc + "__", "1");
-    if (languageOptions.extension == cld::LanguageOptions::Extension::GNU)
-    {
-        languageOptions.additionalMacros.emplace_back(alloc, "1");
-    }
-}
-
-template <class Integer>
-Integer safeShiftLeft(Integer number, std::size_t value)
-{
-    if (value >= std::numeric_limits<Integer>::digits)
-    {
-        return 0;
-    }
-
-    return number << value;
-}
-
-template <class CL>
-void applyTargetSpecificLanguageOptions(cld::LanguageOptions& languageOptions, const cld::Triple& triple, const CL& cli)
-{
-    if (triple.getArchitecture() == cld::Architecture::x86_64)
-    {
-        languageOptions.additionalMacros.emplace_back("__amd64__", "1");
-        languageOptions.additionalMacros.emplace_back("__amd64", "1");
-        languageOptions.additionalMacros.emplace_back("__x86_64", "1");
-        languageOptions.additionalMacros.emplace_back("__x86_64__", "1");
-        languageOptions.additionalMacros.emplace_back("__NO_MATH_INLINES", "1");
-    }
-    else if (triple.getArchitecture() == cld::Architecture::x86)
-    {
-        addUnixMacroStyle(languageOptions, "i386", cli);
-        languageOptions.additionalMacros.emplace_back("__NO_MATH_INLINES", "1");
-    }
-    if (triple.getPlatform() == cld::Platform::Windows)
-    {
-        if (triple.getEnvironment() == cld::Environment::GNU)
-        {
-            languageOptions.additionalMacros.emplace_back("__declspec(a)", "__attribute__((a))");
-            for (std::string iter : {"cdecl", "stdcall", "fastcall", "thiscall", "pascal"})
-            {
-                auto attribute = "__attribute__((__" + iter + "__))";
-                languageOptions.additionalMacros.emplace_back("__" + iter, attribute);
-                languageOptions.additionalMacros.emplace_back("_" + iter, attribute);
-            }
-            addUnixMacroStyle(languageOptions, "WIN32", cli);
-            addUnixMacroStyle(languageOptions, "WINNT", cli);
-            if (triple.getArchitecture() == cld::Architecture::x86_64)
-            {
-                addUnixMacroStyle(languageOptions, "WIN64", cli);
-                languageOptions.additionalMacros.emplace_back("__MINGW64__", "1");
-            }
-            languageOptions.additionalMacros.emplace_back("__MINGW632__", "1");
-            languageOptions.additionalMacros.emplace_back("__MSVCRT__", "1");
-        }
-        else if (triple.getEnvironment() == cld::Environment::MSVC)
-        {
-            languageOptions.additionalMacros.emplace_back("_INTEGRAL_MAX_BITS", "64");
-            // TODO: Few more based on options
-        }
-        languageOptions.additionalMacros.emplace_back("_WIN32", "1");
-        if (triple.getArchitecture() == cld::Architecture::x86_64)
-        {
-            languageOptions.additionalMacros.emplace_back("_WIN64", "1");
-        }
-    }
-    else if (triple.getPlatform() == cld::Platform::Linux)
-    {
-        addUnixMacroStyle(languageOptions, "unix", cli);
-        addUnixMacroStyle(languageOptions, "linux", cli);
-        languageOptions.additionalMacros.emplace_back("__ELF__", "1");
-        languageOptions.additionalMacros.emplace_back("__gnu_linux__", "1");
-    }
-
-    languageOptions.additionalMacros.emplace_back("__llvm__", "1");
-    languageOptions.additionalMacros.emplace_back("__cld__", "1");
-    // TODO: Command line option for this
-    languageOptions.additionalMacros.emplace_back("__GNUC__", "4");
-    languageOptions.additionalMacros.emplace_back("__GNUC_MINOR__", "2");
-    languageOptions.additionalMacros.emplace_back("__GNUC_PATCHLEVEL__", "1");
-    if (cli.template get<OPT>() && *cli.template get<OPT>() > 0)
-    {
-        languageOptions.additionalMacros.emplace_back("__OPTIMIZE__", "1");
-    }
-
-    // TODO: Macro definitions that follow should be more generalized and not depend on hard coded known values of
-    // targets
-
-    languageOptions.additionalMacros.emplace_back("__ORDER_LITTLE_ENDIAN__", "1234");
-    languageOptions.additionalMacros.emplace_back("__ORDER_BIG_ENDIAN__", "4321");
-
-    languageOptions.additionalMacros.emplace_back("__BYTE_ORDER__", "__ORDER_LITTLE_ENDIAN__");
-    languageOptions.additionalMacros.emplace_back("__LITTLE_ENDIAN__", "1");
-
-    if (languageOptions.sizeOfInt == 4 && languageOptions.sizeOfLong == 8 && languageOptions.sizeOfVoidStar == 8)
-    {
-        languageOptions.additionalMacros.emplace_back("_LP64", "1");
-        languageOptions.additionalMacros.emplace_back("__LP64__", "1");
-    }
-    else if (languageOptions.sizeOfVoidStar == 4 && languageOptions.sizeOfInt == 4 && languageOptions.sizeOfLong == 4)
-    {
-        languageOptions.additionalMacros.emplace_back("_ILP32", "1");
-        languageOptions.additionalMacros.emplace_back("__ILP32__", "1");
-    }
-
-    languageOptions.additionalMacros.emplace_back("__CHAR_BIT__", "8");
-
-    languageOptions.additionalMacros.emplace_back("__SCHAR_MAX__", "127");
-    languageOptions.additionalMacros.emplace_back(
-        "__SHRT_MAX__", cld::to_string(safeShiftLeft(1uLL, (8 * languageOptions.sizeOfShort - 1)) - 1));
-    languageOptions.additionalMacros.emplace_back(
-        "__INT_MAX__", cld::to_string(safeShiftLeft(1uLL, (8 * languageOptions.sizeOfInt - 1)) - 1));
-    languageOptions.additionalMacros.emplace_back(
-        "__LONG_MAX__", cld::to_string(safeShiftLeft(1uLL, (8 * languageOptions.sizeOfLong - 1)) - 1));
-    languageOptions.additionalMacros.emplace_back("__LONG_LONG_MAX__",
-                                                  cld::to_string(safeShiftLeft(1ull, (8 * 8 - 1)) - 1));
-    std::size_t wcharSize;
-    bool wcharSigned;
-    switch (languageOptions.wcharUnderlyingType)
-    {
-        case cld::LanguageOptions::WideCharType::UnsignedShort:
-            wcharSigned = false;
-            wcharSize = languageOptions.sizeOfShort;
-            break;
-        case cld::LanguageOptions::WideCharType::Int:
-            wcharSigned = true;
-            wcharSize = languageOptions.sizeOfInt;
-            break;
-    }
-    languageOptions.additionalMacros.emplace_back(
-        "__WCHAR_MAX__", cld::to_string(safeShiftLeft(1uLL, (8 * wcharSize - wcharSigned)) - 1));
-    languageOptions.additionalMacros.emplace_back("__INTMAX_MAX__", "__LONG_LONG_MAX__");
-    languageOptions.additionalMacros.emplace_back("__UINTMAX_MAX__", cld::to_string(~0ull));
-
-    std::size_t sizeTSize;
-    switch (languageOptions.sizeTType)
-    {
-        case cld::LanguageOptions::SizeTType::UnsignedInt: sizeTSize = languageOptions.sizeOfInt; break;
-        case cld::LanguageOptions::SizeTType::UnsignedLong: sizeTSize = languageOptions.sizeOfLong; break;
-        case cld::LanguageOptions::SizeTType::UnsignedLongLong: sizeTSize = 8; break;
-    }
-    languageOptions.additionalMacros.emplace_back("__SIZE_MAX__",
-                                                  cld::to_string(safeShiftLeft(1ull, (8 * sizeTSize)) - 1));
-    std::size_t ptrDiffSize;
-    switch (languageOptions.ptrdiffType)
-    {
-        case cld::LanguageOptions::PtrdiffType::Int: ptrDiffSize = languageOptions.sizeOfInt; break;
-        case cld::LanguageOptions::PtrdiffType::Long: ptrDiffSize = languageOptions.sizeOfLong; break;
-        case cld::LanguageOptions::PtrdiffType::LongLong: ptrDiffSize = 8; break;
-    }
-    languageOptions.additionalMacros.emplace_back("__PTRDIFF_MAX___",
-                                                  cld::to_string(safeShiftLeft(1ull, (8 * ptrDiffSize - 1)) - 1));
-    languageOptions.additionalMacros.emplace_back(
-        "__INTPTR_MAX__", cld::to_string(safeShiftLeft(1ull, (8 * languageOptions.sizeOfVoidStar - 1)) - 1));
-    languageOptions.additionalMacros.emplace_back(
-        "__UNTPTR_MAX__", cld::to_string(safeShiftLeft(1ull, (8 * languageOptions.sizeOfVoidStar)) - 1));
-
-    languageOptions.additionalMacros.emplace_back("__SIZEOF_DOUBLE__", "8");
-    languageOptions.additionalMacros.emplace_back("__SIZEOF_FLOAT__", "4");
-    languageOptions.additionalMacros.emplace_back("__SIZEOF_INT__", cld::to_string(languageOptions.sizeOfInt));
-    languageOptions.additionalMacros.emplace_back("__SIZEOF_LONG__", cld::to_string(languageOptions.sizeOfLong));
-    // TODO: Not always right
-    switch (languageOptions.sizeOfLongDoubleBits)
-    {
-        case 64: languageOptions.additionalMacros.emplace_back("__SIZEOF_LONG_DOUBLE__", cld::to_string(8)); break;
-        case 128: languageOptions.additionalMacros.emplace_back("__SIZEOF_LONG_DOUBLE__", cld::to_string(16)); break;
-        case 80:
-            if (triple.getArchitecture() == cld::Architecture::x86)
-            {
-                languageOptions.additionalMacros.emplace_back("__SIZEOF_LONG_DOUBLE__", cld::to_string(12));
-            }
-            else
-            {
-                languageOptions.additionalMacros.emplace_back("__SIZEOF_LONG_DOUBLE__", cld::to_string(16));
-            }
-    }
-    languageOptions.additionalMacros.emplace_back("__SIZEOF_LONG_LONG__", "64");
-    languageOptions.additionalMacros.emplace_back("__SIZEOF_POINTER__", cld::to_string(languageOptions.sizeOfVoidStar));
-    languageOptions.additionalMacros.emplace_back("__SIZEOF_SHORT__", cld::to_string(languageOptions.sizeOfShort));
-    languageOptions.additionalMacros.emplace_back("__SIZEOF_PTRDIFF_T__", cld::to_string(ptrDiffSize));
-    languageOptions.additionalMacros.emplace_back("__SIZEOF_SIZE_T__", cld::to_string(sizeTSize));
-    languageOptions.additionalMacros.emplace_back("__SIZEOF_WCHAR_T__", cld::to_string(wcharSize));
-
-    languageOptions.additionalMacros.emplace_back("__INTMAX_TYPE__", "long long");
-    languageOptions.additionalMacros.emplace_back("__INTMAX_C_SUFFIX__", "LL");
-    languageOptions.additionalMacros.emplace_back("__INTMAX_WIDTH____", "64");
-    languageOptions.additionalMacros.emplace_back("__UINTMAX_TYPE__", "unsigned long long");
-    languageOptions.additionalMacros.emplace_back("__UINTMAX_C_SUFFIX__", "ULL");
-    languageOptions.additionalMacros.emplace_back("__UINTMAX_WIDTH__", "64");
-    switch (languageOptions.ptrdiffType)
-    {
-        case cld::LanguageOptions::PtrdiffType::Int:
-            languageOptions.additionalMacros.emplace_back("__PTRDIFF_TYPE__", "int");
-            break;
-        case cld::LanguageOptions::PtrdiffType::Long:
-            languageOptions.additionalMacros.emplace_back("__PTRDIFF_TYPE__", "long");
-            break;
-        case cld::LanguageOptions::PtrdiffType::LongLong:
-            languageOptions.additionalMacros.emplace_back("__PTRDIFF_TYPE__", "long long");
-            break;
-    }
-    languageOptions.additionalMacros.emplace_back("__PTRDIFF_WIDTH__", cld::to_string(ptrDiffSize * 8));
-    switch (languageOptions.sizeTType)
-    {
-        case cld::LanguageOptions::SizeTType::UnsignedInt:
-            languageOptions.additionalMacros.emplace_back("__SIZE_TYPE__", "unsigned int");
-            break;
-        case cld::LanguageOptions::SizeTType::UnsignedLong:
-            languageOptions.additionalMacros.emplace_back("__SIZE_TYPE__", "unsigned long");
-            break;
-        case cld::LanguageOptions::SizeTType::UnsignedLongLong:
-            languageOptions.additionalMacros.emplace_back("__SIZE_TYPE__", "unsigned long long");
-            break;
-    }
-    languageOptions.additionalMacros.emplace_back("__SIZE_WIDTH__", cld::to_string(sizeTSize * 8));
-    switch (languageOptions.wcharUnderlyingType)
-    {
-        case cld::LanguageOptions::WideCharType::UnsignedShort:
-            languageOptions.additionalMacros.emplace_back("__WCHAR_TYPE__", "unsigned short");
-            break;
-        case cld::LanguageOptions::WideCharType::Int:
-            languageOptions.additionalMacros.emplace_back("__WCHAR_TYPE__", "int");
-            break;
-    }
-    languageOptions.additionalMacros.emplace_back("__WCHAR_WIDTH__", cld::to_string(wcharSize * 8));
-
-    languageOptions.additionalMacros.emplace_back("__POINTER__WIDTH__",
-                                                  cld::to_string(8 * languageOptions.sizeOfVoidStar));
-    if (!languageOptions.charIsSigned)
-    {
-        languageOptions.additionalMacros.emplace_back("__CHAR_UNSIGNED__", "1");
-    }
-
-    switch (languageOptions.wcharUnderlyingType)
-    {
-        case cld::LanguageOptions::WideCharType::UnsignedShort:
-            languageOptions.additionalMacros.emplace_back("__WCHAR_UNSIGNED__", "1");
-        default: break;
-    }
-
-    languageOptions.additionalMacros.emplace_back("__FINITE_MATH_ONLY__", "0");
-    languageOptions.additionalMacros.emplace_back("__GNUC_STDC_INLINE__", "1");
-    if (languageOptions.extension == cld::LanguageOptions::Extension::None)
-    {
-        languageOptions.additionalMacros.emplace_back("__STRICT_ANSI__", "1");
-    }
-}
-
 void printVersion(llvm::raw_ostream& os)
 {
     os << "cld version " << CLD_VERSION << '\n';
@@ -611,23 +631,6 @@ int cld::main(llvm::MutableArrayRef<std::string_view> elements, llvm::raw_ostrea
     }
     options.enabledWarnings = cli.get<WARNINGS>();
     options.freeStanding = cli.get<FREESTANDING>().has_value();
-    applyTargetSpecificLanguageOptions(options, triple, cli);
-    for (auto& iter : cli.get<INCLUDES>())
-    {
-        if (std::none_of(cli.get<ISYSTEM>().begin(), cli.get<ISYSTEM>().end(), [&iter](const cld::fs::path& path) {
-                std::error_code ec;
-                auto res = cld::fs::equivalent(path, cld::fs::u8path(iter), ec);
-                return res && !ec;
-            }))
-        {
-            options.includeDirectories.emplace_back(iter);
-        }
-    }
-    options.systemDirectories = cli.get<ISYSTEM>();
-    for (auto& [name, maybeValue] : cli.get<DEFINE_MACRO>())
-    {
-        options.additionalMacros.emplace_back(name, maybeValue.value_or("1"));
-    }
 
     if (cli.getUnrecognized().empty())
     {

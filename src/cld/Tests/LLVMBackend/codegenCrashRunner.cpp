@@ -51,7 +51,7 @@ int main(int, char** argv)
     {
         return 1;
     }
-    pptokens = cld::PP::preprocess(std::move(pptokens), &llvm::errs(), &errors);
+    pptokens = cld::PP::preprocess(std::move(pptokens), {}, &llvm::errs(), &errors);
     if (errors)
     {
         return 1;

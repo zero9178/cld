@@ -19,7 +19,7 @@
         auto pptokens = cld::Lexer::tokenize(                                                                    \
             std::move(source), cld::LanguageOptions::fromTriple(cld::Triple::native()), &llvm::errs(), &errors); \
         REQUIRE_FALSE(errors);                                                                                   \
-        pptokens = cld::PP::preprocess(std::move(pptokens), &llvm::errs(), &errors);                             \
+        pptokens = cld::PP::preprocess(std::move(pptokens), {}, &llvm::errs(), &errors);                         \
         REQUIRE_FALSE(errors);                                                                                   \
         auto ctokens = cld::Lexer::toCTokens(pptokens, &llvm::errs(), &errors);                                  \
         REQUIRE_FALSE(errors);                                                                                   \
@@ -35,7 +35,7 @@
         bool errors = false;                                                                      \
         auto pptokens = cld::Lexer::tokenize(std::move(source), options, &llvm::errs(), &errors); \
         REQUIRE_FALSE(errors);                                                                    \
-        pptokens = cld::PP::preprocess(std::move(pptokens), &llvm::errs(), &errors);              \
+        pptokens = cld::PP::preprocess(std::move(pptokens), {}, &llvm::errs(), &errors);          \
         REQUIRE_FALSE(errors);                                                                    \
         auto ctokens = cld::Lexer::toCTokens(pptokens, &llvm::errs(), &errors);                   \
         REQUIRE_FALSE(errors);                                                                    \

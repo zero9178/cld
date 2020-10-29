@@ -80,9 +80,6 @@ int main()
             std::cerr << "No directory for csmith headers set";
             return -1;
         }
-        options.includeDirectories.emplace_back(std::getenv("CSMITH_INC"));
-        options.additionalMacros.emplace_back("CSMITH_MINIMAL", "");
-        options.additionalMacros.emplace_back("STANDALONE", "");
         options.enabledWarnings.erase("macro-redefined");
         bool errors = false;
         auto pptokens = cld::Lexer::tokenize(std::move(input), options, &llvm::errs(), &errors,
@@ -92,7 +89,11 @@ int main()
             std::cerr << "Lexer failed";
             return -1;
         }
-        pptokens = cld::PP::preprocess(std::move(pptokens), &llvm::errs(), &errors);
+        cld::PP::Options ppOptions;
+        ppOptions.includeDirectories.emplace_back(std::getenv("CSMITH_INC"));
+        ppOptions.additionalMacros.emplace_back("CSMITH_MINIMAL", "");
+        ppOptions.additionalMacros.emplace_back("STANDALONE", "");
+        pptokens = cld::PP::preprocess(std::move(pptokens), ppOptions, &llvm::errs(), &errors);
         if (errors)
         {
             std::cerr << "Preprocessor failed";

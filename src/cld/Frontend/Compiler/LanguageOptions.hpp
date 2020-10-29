@@ -43,10 +43,7 @@ struct LanguageOptions
         UnsignedLong,
         UnsignedLongLong,
     } sizeTType;
-    std::vector<std::string> includeDirectories{};
-    std::vector<std::string> includeQuoteDirectories{};
-    std::vector<std::string> systemDirectories{};
-    std::vector<std::pair<std::string, std::string>> additionalMacros{};
+
     std::unordered_set<std::string_view> enabledWarnings{};
     bool freeStanding{};
     enum class Extension

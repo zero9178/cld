@@ -112,7 +112,8 @@ cld::SourceInterface* interface;
 }
 
 [[nodiscard]] cld::Lexer::PPTokenIterator pp(std::string code,
-                                             const cld::LanguageOptions& options = cld::LanguageOptions::native())
+                                             const cld::LanguageOptions& options = cld::LanguageOptions::native(),
+                                             const cld::PP::Options& ppOptions = {})
 {
     std::string buffer;
     llvm::raw_string_ostream ss(buffer);
@@ -120,7 +121,7 @@ cld::SourceInterface* interface;
     ppsourceObject = cld::Lexer::tokenize(std::move(code), options, &ss);
     UNSCOPED_INFO(buffer);
     REQUIRE(buffer.empty());
-    ppsourceObject = cld::PP::preprocess(std::move(ppsourceObject), &ss);
+    ppsourceObject = cld::PP::preprocess(std::move(ppsourceObject), ppOptions, &ss);
     UNSCOPED_INFO(buffer);
     REQUIRE(buffer.empty());
     interface = &ppsourceObject;

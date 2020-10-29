@@ -18,23 +18,23 @@
         auto tokens = cld::Lexer::tokenize(str, cld::LanguageOptions::native(), &ss, &errorsOccurred); \
         UNSCOPED_INFO(ss.str());                                                                       \
         REQUIRE_FALSE(errorsOccurred);                                                                 \
-        auto result = cld::PP::preprocess(std::move(tokens), &ss, &errorsOccurred);                    \
+        auto result = cld::PP::preprocess(std::move(tokens), {}, &ss, &errorsOccurred);                \
         UNSCOPED_INFO(ss.str());                                                                       \
         REQUIRE_FALSE(errorsOccurred);                                                                 \
         return result;                                                                                 \
     }(source)
 
-#define preprocessResultWith(source, option)                           \
-    [](const std::string& str, cld::LanguageOptions languageOptions) { \
-        std::string storage;                                           \
-        llvm::raw_string_ostream ss(storage);                          \
-        auto tokens = cld::Lexer::tokenize(str, languageOptions, &ss); \
-        UNSCOPED_INFO(ss.str());                                       \
-        REQUIRE_THAT(ss.str(), ProducesNoErrors());                    \
-        auto result = cld::PP::preprocess(std::move(tokens), &ss);     \
-        UNSCOPED_INFO(ss.str());                                       \
-        REQUIRE_THAT(ss.str(), ProducesNoErrors());                    \
-        return result;                                                 \
+#define preprocessResultWith(source, option)                                          \
+    [](const std::string& str, cld::PP::Options options) {                            \
+        std::string storage;                                                          \
+        llvm::raw_string_ostream ss(storage);                                         \
+        auto tokens = cld::Lexer::tokenize(str, cld::LanguageOptions::native(), &ss); \
+        UNSCOPED_INFO(ss.str());                                                      \
+        REQUIRE_THAT(ss.str(), ProducesNoErrors());                                   \
+        auto result = cld::PP::preprocess(std::move(tokens), options, &ss);           \
+        UNSCOPED_INFO(ss.str());                                                      \
+        REQUIRE_THAT(ss.str(), ProducesNoErrors());                                   \
+        return result;                                                                \
     }(source, option)
 
 #define preprocessReconstructsTo(source, resultSource)                                                  \
@@ -45,7 +45,7 @@
         auto tokens = cld::Lexer::tokenize(source, cld::LanguageOptions::native(), &ss);                \
         UNSCOPED_INFO(ss.str());                                                                        \
         REQUIRE(ss.str().empty());                                                                      \
-        auto ret = cld::PP::preprocess(std::move(tokens), &ss);                                         \
+        auto ret = cld::PP::preprocess(std::move(tokens), {}, &ss);                                     \
         UNSCOPED_INFO(ss.str());                                                                        \
         REQUIRE(ss.str().empty());                                                                      \
         auto str = cld::PP::reconstruct(ret.data().data(), ret.data().data() + ret.data().size(), ret); \
@@ -60,7 +60,7 @@
         auto tokens = cld::Lexer::tokenize(input, cld::LanguageOptions::native(), &ss); \
         UNSCOPED_INFO(ss.str());                                                        \
         REQUIRE(ss.str().empty());                                                      \
-        cld::PP::preprocess(std::move(tokens), &ss);                                    \
+        cld::PP::preprocess(std::move(tokens), {}, &ss);                                \
         CHECK_THAT(s, match);                                                           \
         if (!s.empty())                                                                 \
         {                                                                               \
@@ -1088,7 +1088,7 @@ TEST_CASE("PP includes", "[PP]")
         auto cwd = cld::fs::current_path();
         auto file1 = createInclude("Quoted/A.h", "#define MACRO 1\n");
         auto file2 = createInclude("Unquoted/A.h", "#define MACRO 0\n");
-        auto options = cld::LanguageOptions::native();
+        cld::PP::Options options;
         options.includeQuoteDirectories.push_back((cwd / "Quoted").string());
         options.includeDirectories.push_back((cwd / "Unquoted").string());
         auto ret = preprocessResultWith("#include \"A.h\"\n"
@@ -1100,7 +1100,7 @@ TEST_CASE("PP includes", "[PP]")
     {
         auto cwd = cld::fs::current_path();
         auto file2 = createInclude("Unquoted/A.h", "#define MACRO 1\n");
-        auto options = cld::LanguageOptions::native();
+        cld::PP::Options options;
         options.includeDirectories.push_back((cwd / "Unquoted").string());
         auto ret = preprocessResultWith("#include \"A.h\"\n"
                                         "MACRO",
@@ -1112,7 +1112,7 @@ TEST_CASE("PP includes", "[PP]")
         auto cwd = cld::fs::current_path();
         auto file2 = createInclude("A.h", "#define MACRO 1\n");
         auto file1 = createInclude("Quoted/A.h", "#define MACRO 0\n");
-        auto options = cld::LanguageOptions::native();
+        cld::PP::Options options;
         options.includeQuoteDirectories.push_back((cwd / "Quoted").string());
         auto ret = preprocessResultWith("#include \"A.h\"\n"
                                         "MACRO",
@@ -1123,7 +1123,7 @@ TEST_CASE("PP includes", "[PP]")
     {
         auto cwd = cld::fs::current_path();
         auto file2 = createInclude("Quoted/A.h", "#define MACRO 1\n");
-        auto options = cld::LanguageOptions::native();
+        cld::PP::Options options;
         options.includeDirectories.push_back((cwd / "Quoted").string());
         auto ret = preprocessResultWith("#include <A.h>\n"
                                         "MACRO",
@@ -1134,7 +1134,7 @@ TEST_CASE("PP includes", "[PP]")
     {
         auto cwd = cld::fs::current_path();
         auto file2 = createInclude("Quoted/A.h", "#define MACRO 1\n");
-        auto options = cld::LanguageOptions::native();
+        cld::PP::Options options;
         options.includeQuoteDirectories.push_back((cwd / "Quoted").string());
         PP_OUTPUTS_WITH("#include <A.h>\n", ProducesError(FILE_NOT_FOUND, "A.h"));
     }
@@ -1182,7 +1182,7 @@ TEST_CASE("PP includes", "[PP]")
         {
             auto cwd = cld::fs::current_path();
             auto file1 = createInclude("A.h", "#define MACRO 1\n");
-            auto options = cld::LanguageOptions::native();
+            cld::PP::Options options;
             options.includeDirectories.emplace_back(cwd.string());
             auto ret = preprocessResultWith("#define PATH <A.h>\n"
                                             "#include PATH\n"

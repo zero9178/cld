@@ -20,7 +20,7 @@ static std::pair<const cld::Semantics::TranslationUnit * CLD_NON_NULL, std::stri
     tokens = cld::Lexer::tokenize(cld::to_string(source), options, &ss, &errors);
     UNSCOPED_INFO(storage);
     REQUIRE_FALSE(errors);
-    tokens = cld::PP::preprocess(std::move(tokens), &ss, &errors);
+    tokens = cld::PP::preprocess(std::move(tokens), {}, &ss, &errors);
     UNSCOPED_INFO(storage);
     REQUIRE_FALSE(errors);
     auto ctokens = cld::Lexer::toCTokens(tokens, &ss, &errors);
@@ -49,7 +49,7 @@ static cld::Semantics::Program generateProgram(std::string_view source, cld::Tri
     tokens = cld::Lexer::tokenize(cld::to_string(source), cld::LanguageOptions::fromTriple(triple), &ss, &errors);
     UNSCOPED_INFO(storage);
     REQUIRE_FALSE(errors);
-    tokens = cld::PP::preprocess(std::move(tokens), &ss, &errors);
+    tokens = cld::PP::preprocess(std::move(tokens), {}, &ss, &errors);
     UNSCOPED_INFO(storage);
     REQUIRE_FALSE(errors);
     auto ctokens = cld::Lexer::toCTokens(tokens, &ss, &errors);
