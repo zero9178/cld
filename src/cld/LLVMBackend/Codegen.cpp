@@ -1464,9 +1464,11 @@ public:
                 global = new llvm::GlobalVariable(
                     m_module, type, declType.isConst() && linkageType != llvm::GlobalValue::CommonLinkage, linkageType,
                     constant, llvm::StringRef{declaration.getNameToken()->getText()});
-                if (m_programInterface.isCompleteType(declType))
+                if (m_programInterface.isCompleteType(declType)
+                    || std::holds_alternative<cld::Semantics::AbstractArrayType>(declType.getVariant()))
                 {
                     if (m_triple.getArchitecture() == cld::Architecture::x86_64 && cld::Semantics::isArray(declType)
+                        && !std::holds_alternative<cld::Semantics::AbstractArrayType>(declType.getVariant())
                         && declType.getSizeOf(m_programInterface) >= 16)
                     {
                         global->setAlignment(llvm::Align(16));
