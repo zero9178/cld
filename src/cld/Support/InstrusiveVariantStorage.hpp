@@ -53,6 +53,10 @@ template <class Base, class... SubClasses>
 struct InstrusiveVariantStorageDestruct<Base, SpecialMem::Trivial, SubClasses...>
     : InstrusiveVariantStorageBase<Base, SubClasses...>
 {
+protected:
+    void destruct() {}
+
+public:
     InstrusiveVariantStorageDestruct() = default;
 
     ~InstrusiveVariantStorageDestruct() = default;
@@ -70,9 +74,9 @@ struct InstrusiveVariantStorageDestruct<Base, SpecialMem::Exists, SubClasses...>
 protected:
     void destruct()
     {
-        constexpr std::array<void (*)(void*), sizeof...(SubClasses)> destructorFuncs = {
-            {+[](void* ptr) { std::destroy_at(reinterpret_cast<SubClasses*>(ptr)); }...}};
-        destructorFuncs[this->get().index()](this->m_storage);
+        constexpr std::array<void (*)(Base*), sizeof...(SubClasses)> destructorFuncs = {
+            {+[](Base* ptr) { std::destroy_at(static_cast<SubClasses*>(ptr)); }...}};
+        destructorFuncs[this->get().index()](&this->get());
     }
 
 public:
@@ -105,9 +109,9 @@ struct InstrusiveVariantStorageCopy<Base, SpecialMem::Trivial, SubClasses...>
 protected:
     void copyConstruct(const InstrusiveVariantStorageCopy& rhs)
     {
-        constexpr std::array<void (*)(std::byte*, void*), sizeof...(SubClasses)> copyFuncs = {
-            {+[](std::byte* storage, void* ptr) { new (storage) SubClasses(*reinterpret_cast<SubClasses*>(ptr)); }...}};
-        copyFuncs[rhs.cast().index()](this->m_storage, rhs.m_storage);
+        constexpr std::array<void (*)(std::byte*, Base*), sizeof...(SubClasses)> copyFuncs = {
+            {+[](std::byte* storage, Base* ptr) { new (storage) SubClasses(*static_cast<SubClasses*>(ptr)); }...}};
+        copyFuncs[rhs.cast().index()](this->m_storage, &rhs.get());
     }
 
 public:
@@ -144,9 +148,9 @@ struct InstrusiveVariantStorageCopy<Base, SpecialMem::Exists, SubClasses...>
 protected:
     void copyConstruct(const InstrusiveVariantStorageCopy& rhs)
     {
-        constexpr std::array<void (*)(std::byte*, void*), sizeof...(SubClasses)> copyFuncs = {
-            {+[](std::byte* storage, void* ptr) { new (storage) SubClasses(*reinterpret_cast<SubClasses*>(ptr)); }...}};
-        copyFuncs[rhs.cast().index()](this->m_storage, rhs.m_storage);
+        constexpr std::array<void (*)(std::byte*, Base*), sizeof...(SubClasses)> copyFuncs = {
+            {+[](std::byte* storage, Base* ptr) { new (storage) SubClasses(*static_cast<SubClasses*>(ptr)); }...}};
+        copyFuncs[rhs.cast().index()](this->m_storage, &rhs.get());
     }
 
 public:
@@ -204,18 +208,15 @@ struct InstrusiveVariantStorageCopyAss<Base, SpecialMem::Exists, SubClasses...>
     {
         if (this->get().index() == rhs.cast().index())
         {
-            constexpr std::array<void (*)(std::byte*, void*), sizeof...(SubClasses)> copyFuncs = {
-                {+[](std::byte* storage, void* ptr) {
-                    *reinterpret_cast<SubClasses*>(storage) = *(reinterpret_cast<SubClasses*>(ptr));
+            constexpr std::array<void (*)(Base*, Base*), sizeof...(SubClasses)> copyFuncs = {
+                {+[](Base* storage, Base* ptr) {
+                    *static_cast<SubClasses*>(storage) = *static_cast<SubClasses*>(ptr);
                 }...}};
-            copyFuncs[rhs.cast().index()](this->m_storage, rhs.m_storage);
+            copyFuncs[rhs.cast().index()](&this->get(), &rhs.get());
         }
         else
         {
-            if constexpr (!(std::is_trivially_destructible_v<SubClasses> && ...))
-            {
-                this->destruct();
-            }
+            this->destruct();
             this->copyConstruct(rhs);
         }
         return *this;
@@ -247,11 +248,11 @@ struct InstrusiveVariantStorageMove<Base, SpecialMem::Trivial, SubClasses...>
 protected:
     void moveConstruct(InstrusiveVariantStorageMove&& rhs)
     {
-        constexpr std::array<void (*)(std::byte*, void*), sizeof...(SubClasses)> moveFuncs = {
-            {+[](std::byte* storage, void* ptr) {
-                new (storage) SubClasses(std::move(*reinterpret_cast<SubClasses*>(ptr)));
+        constexpr std::array<void (*)(std::byte*, Base*), sizeof...(SubClasses)> moveFuncs = {
+            {+[](std::byte* storage, Base* ptr) {
+                new (storage) SubClasses(std::move(*static_cast<SubClasses*>(ptr)));
             }...}};
-        moveFuncs[rhs.cast().index()](this->m_storage, rhs.m_storage);
+        moveFuncs[rhs.cast().index()](this->m_storage, &rhs.get());
     }
 
 public:
@@ -287,11 +288,11 @@ struct InstrusiveVariantStorageMove<Base, SpecialMem::Exists, SubClasses...>
 protected:
     void moveConstruct(InstrusiveVariantStorageMove&& rhs)
     {
-        constexpr std::array<void (*)(std::byte*, void*), sizeof...(SubClasses)> moveFuncs = {
-            {+[](std::byte* storage, void* ptr) {
-                new (storage) SubClasses(std::move(*reinterpret_cast<SubClasses*>(ptr)));
+        constexpr std::array<void (*)(std::byte*, Base*), sizeof...(SubClasses)> moveFuncs = {
+            {+[](std::byte* storage, Base* ptr) {
+                new (storage) SubClasses(std::move(*static_cast<SubClasses*>(ptr)));
             }...}};
-        moveFuncs[rhs.get().index()](this->m_storage, rhs.m_storage);
+        moveFuncs[rhs.get().index()](this->m_storage, &rhs.get());
     }
 
 public:
@@ -351,18 +352,15 @@ struct InstrusiveVariantStorageMoveAss<Base, SpecialMem::Exists, SubClasses...>
     {
         if (this->get().index() == rhs.get().index())
         {
-            constexpr std::array<void (*)(std::byte*, void*), sizeof...(SubClasses)> moveFuncs = {
-                {+[](std::byte* storage, void* ptr) {
-                    *reinterpret_cast<SubClasses*>(storage) = std::move(*reinterpret_cast<SubClasses*>(ptr));
+            constexpr std::array<void (*)(Base*, Base*), sizeof...(SubClasses)> moveFuncs = {
+                {+[](Base* storage, Base* ptr) {
+                    *static_cast<SubClasses*>(storage) = std::move(*static_cast<SubClasses*>(ptr));
                 }...}};
-            moveFuncs[rhs.get().index()](this->m_storage, rhs.m_storage);
+            moveFuncs[rhs.get().index()](&this->get(), &rhs.get());
         }
         else
         {
-            if constexpr (!(std::is_trivially_destructible_v<SubClasses> && ...))
-            {
-                this->destruct();
-            }
+            this->destruct();
             this->moveConstruct(std::move(rhs));
         }
         return *this;
@@ -419,7 +417,7 @@ public:
     T& emplace(Args&&... args)
     {
         *this = InstrusiveVariantStorage(std::in_place_type<T>, std::forward<Args>(args)...);
-        return *reinterpret_cast<T*>(this->m_storage);
+        return this->get().template cast<T>();
     }
 
     operator Base&()

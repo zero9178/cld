@@ -570,6 +570,13 @@ protected:
     }
 
 public:
+    // I am not a fan of this. Due to the virtual we did end up having to generate a virtual destructor call after all.
+    // But if I do want `delete` to work in every case when called on an ExpressionBase (such as in std::shared_ptr
+    // or std::unique_ptr) I seemingly have no other choice. I could make a custom deleter for std::unique_ptr or
+    // specialized std::default_delete for ExpressionBase but those all seem like hacks to me and I still need to pass
+    // custom deleters to std::make_shared which can easily be forgotten and is cumbersome.
+    virtual ~ExpressionBase();
+
     ExpressionBase(const ExpressionBase&) = delete;
     ExpressionBase& operator=(const ExpressionBase&) = delete;
 

@@ -1129,6 +1129,8 @@ std::size_t std::hash<cld::Semantics::Type>::operator()(const cld::Semantics::Ty
     return cld::hashCombine(type.isConst(), type.isVolatile(), type.getVariant());
 }
 
+cld::Semantics::ExpressionBase::~ExpressionBase() = default;
+
 cld::Lexer::CTokenIterator cld::Semantics::ExpressionBase::begin() const
 {
     return this->match([](auto&& value) { return value.begin(); });

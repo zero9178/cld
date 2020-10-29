@@ -1128,11 +1128,11 @@ class CodeGenerator final
             for (auto iter = m_programInterface.getScopes()[from].declarations.rbegin();
                  iter != m_programInterface.getScopes()[from].declarations.rend(); iter++)
             {
-                if (!std::holds_alternative<const cld::Semantics::Declaration*>(iter->second.declared))
+                if (!std::holds_alternative<cld::Semantics::Declaration*>(iter->second.declared))
                 {
                     continue;
                 }
-                const auto* decl = cld::get<const cld::Semantics::Declaration*>(iter->second.declared);
+                const auto* decl = cld::get<cld::Semantics::Declaration*>(iter->second.declared);
                 if (cld::Semantics::isVariableLengthArray(decl->getType()))
                 {
                     auto* alloca = m_stackSaves[decl];
@@ -1433,7 +1433,7 @@ public:
 
                 auto& decl =
                     m_programInterface.getScopes()[0].declarations.at(declaration.getNameToken()->getText()).declared;
-                return cld::get<const cld::Semantics::Declaration*>(decl)->getType();
+                return cld::get<cld::Semantics::Declaration*>(decl)->getType();
             }();
             auto* type = visit(declType);
 
