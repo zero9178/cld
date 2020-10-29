@@ -420,6 +420,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                     *declaration =
                         Declaration(std::move(composite), linkage, lifetime, loc, Declaration::Kind::DeclarationOnly,
                                     std::max(inlineKind, prevDecl.getInlineKind()));
+                    declaration->setUses(prevDecl.getUses());
                     prev.value().declared = declaration.get();
                     decls.push_back(std::move(declaration));
                 }
@@ -427,10 +428,6 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                 {
                     auto& fd = *cld::get<FunctionDefinition*>(prev->second.declared);
                     fd.setInlineKind(std::max(fd.getInlineKind(), inlineKind));
-                }
-                else
-                {
-                    decls.push_back(std::move(declaration));
                 }
             }
             else

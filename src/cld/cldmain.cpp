@@ -50,6 +50,8 @@ CLD_CLI_OPT(PIC, ("-f[no-]PIC"))("Build position independent code");
 
 CLD_CLI_OPT(FREESTANDING, ("-ffreestanding"))("Compile in a freestanding environment");
 
+CLD_CLI_OPT(EMIT_ALL_DECLS, ("-femit-all-decls"))("Compile in a freestanding environment");
+
 CLD_CLI_OPT(VERSION, ("--version"))("Print version");
 
 CLD_CLI_OPT(HELP, ("--help", "-help"))("Display all options");
@@ -429,16 +431,19 @@ std::optional<cld::fs::path> compileCFile(Action action, const cld::fs::path& cS
         return {};
     }
 
+    cld::CGLLVM::Options codegenOptions;
     llvm::LLVMContext context;
     llvm::Module module("", context);
     llvm::Optional<llvm::Reloc::Model> cm;
     if (triple.getArchitecture() == cld::Architecture::x86_64 && triple.getPlatform() == cld::Platform::Windows)
     {
         cm = llvm::Reloc::Model::PIC_;
+        codegenOptions.pic = true;
     }
     else if (cli.template get<PIE>() || cli.template get<PIC>())
     {
         cm = llvm::Reloc::Model::PIC_;
+        codegenOptions.pic = true;
     }
     llvm::CodeGenOpt::Level ol;
     if (cli.template get<OPT>())
@@ -455,7 +460,8 @@ std::optional<cld::fs::path> compileCFile(Action action, const cld::fs::path& cS
     {
         ol = llvm::CodeGenOpt::None;
     }
-    auto targetMachine = cld::CGLLVM::generateLLVM(module, program, triple, cm, ol);
+    codegenOptions.emitAllDecls = cli.template get<EMIT_ALL_DECLS>();
+    auto targetMachine = cld::CGLLVM::generateLLVM(module, program, triple, codegenOptions, cm, ol);
 #ifndef NDEBUG
     if (llvm::verifyModule(module, &llvm::errs()))
     {
@@ -578,7 +584,7 @@ int cld::main(llvm::MutableArrayRef<std::string_view> elements, llvm::raw_ostrea
 
     auto cli = cld::parseCommandLine<OUTPUT_FILE, COMPILE_ONLY, ASSEMBLY_OUTPUT, PREPROCESS_ONLY, TARGET, EMIT_LLVM,
                                      OPT, DEFINE_MACRO, INCLUDES, PIE, PIC, FREESTANDING, HELP, VERSION,
-                                     STANDARD_VERSION, WARNINGS, ISYSTEM>(elements);
+                                     STANDARD_VERSION, WARNINGS, ISYSTEM, EMIT_ALL_DECLS>(elements);
     if (cli.get<HELP>())
     {
         if (out)
@@ -630,7 +636,7 @@ int cld::main(llvm::MutableArrayRef<std::string_view> elements, llvm::raw_ostrea
         options.extension = cld::LanguageOptions::Extension::GNU;
     }
     options.enabledWarnings = cli.get<WARNINGS>();
-    options.freeStanding = cli.get<FREESTANDING>().has_value();
+    options.freeStanding = cli.get<FREESTANDING>();
 
     if (cli.getUnrecognized().empty())
     {

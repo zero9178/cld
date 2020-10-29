@@ -22,6 +22,7 @@ class CodeGenerator final
     llvm::Module& m_module;
     const cld::Semantics::ProgramInterface& m_programInterface;
     const cld::SourceInterface& m_sourceInterface;
+    const cld::CGLLVM::Options& m_options;
     cld::Triple m_triple;
 
     template <class T, class = void>
@@ -1211,8 +1212,13 @@ class CodeGenerator final
 
 public:
     explicit CodeGenerator(llvm::Module& module, const cld::Semantics::ProgramInterface& programInterface,
-                           const cld::SourceInterface& sourceInterface, cld::Triple triple)
-        : m_module(module), m_programInterface(programInterface), m_sourceInterface(sourceInterface), m_triple(triple)
+                           const cld::SourceInterface& sourceInterface, cld::Triple triple,
+                           const cld::CGLLVM::Options& options)
+        : m_module(module),
+          m_programInterface(programInterface),
+          m_sourceInterface(sourceInterface),
+          m_options(options),
+          m_triple(triple)
     {
         auto fullPath = cld::fs::u8path(m_sourceInterface.getFiles()[1].path);
         module.setSourceFileName(fullPath.filename().u8string());
@@ -1597,6 +1603,10 @@ public:
             return;
         }
 
+        if (m_options.pic)
+        {
+            function->setDSOLocal(true);
+        }
         auto* bb = llvm::BasicBlock::Create(m_module.getContext(), "entry", function);
         m_builder.SetInsertPoint(bb);
         m_currentFunction = function;
@@ -3587,7 +3597,8 @@ public:
 } // namespace
 
 std::unique_ptr<llvm::TargetMachine> cld::CGLLVM::generateLLVM(llvm::Module& module, const Semantics::Program& program,
-                                                               Triple triple, llvm::Optional<llvm::Reloc::Model> reloc,
+                                                               Triple triple, const Options& options,
+                                                               llvm::Optional<llvm::Reloc::Model> reloc,
                                                                llvm::CodeGenOpt::Level ol)
 {
     llvm::Triple llvmTriple;
@@ -3620,7 +3631,7 @@ std::unique_ptr<llvm::TargetMachine> cld::CGLLVM::generateLLVM(llvm::Module& mod
     auto machine = std::unique_ptr<llvm::TargetMachine>(
         targetM->createTargetMachine(module.getTargetTriple(), "generic", "", {}, reloc, {}, ol));
     module.setDataLayout(machine->createDataLayout());
-    CodeGenerator codeGenerator(module, program, program.getSourceObject(), triple);
+    CodeGenerator codeGenerator(module, program, program.getSourceObject(), triple, options);
     codeGenerator.visit(program.getTranslationUnit());
     return machine;
 }

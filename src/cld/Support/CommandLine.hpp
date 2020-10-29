@@ -472,6 +472,12 @@ struct ValueType
     using type = typename T::value_type;
 };
 
+template <>
+struct ValueType<bool>
+{
+    using type = bool;
+};
+
 template <auto* cliOption, std::size_t i, class Storage>
 static bool checkAlternative(llvm::MutableArrayRef<std::string_view>& commandLine, Storage& storage)
 {
@@ -483,6 +489,10 @@ static bool checkAlternative(llvm::MutableArrayRef<std::string_view>& commandLin
                 return storage.back();
             }
             CLD_UNREACHABLE;
+        }
+        else if constexpr (std::is_same_v<Storage, bool>)
+        {
+            return storage;
         }
         else
         {
@@ -508,6 +518,10 @@ static bool checkAlternative(llvm::MutableArrayRef<std::string_view>& commandLin
         {
             storage.emplace_back();
         }
+    }
+    else if constexpr (std::is_same_v<bool, Storage>)
+    {
+        storage = true;
     }
     else
     {
@@ -555,7 +569,14 @@ static bool checkAlternative(llvm::MutableArrayRef<std::string_view>& commandLin
                 commandLine.front().remove_prefix(prefix.size());
                 if constexpr (cliOption->getMultiArg() == CLIMultiArg::Overwrite)
                 {
-                    storage.reset();
+                    if constexpr (std::is_same_v<bool, Storage>)
+                    {
+                        storage = false;
+                    }
+                    else
+                    {
+                        storage.reset();
+                    }
                 }
                 else if constexpr (cliOption->getMultiArg() == CLIMultiArg::List)
                 {
@@ -779,13 +800,26 @@ static bool checkAllAlternatives(llvm::MutableArrayRef<std::string_view>& comman
         Constexpr::integerSequenceToTuple(std::make_index_sequence<std::tuple_size_v<AllAlternatives>>{}));
 }
 
+template <class T>
+struct tupleSizeOr1
+{
+    constexpr static std::size_t value = 1;
+};
+
+template <class... Args>
+struct tupleSizeOr1<std::tuple<Args...>>
+{
+    constexpr static std::size_t value = sizeof...(Args);
+};
+
 template <auto& option>
 using OptionStorage =
     std::conditional_t<option.getMultiArg() == CLIMultiArg::List,
                        std::conditional_t<containsNegate<option>(),
                                           std::unordered_set<typename std::decay_t<decltype(option)>::value_type>,
                                           std::vector<typename std::decay_t<decltype(option)>::value_type>>,
-                       std::optional<typename std::decay_t<decltype(option)>::value_type>>;
+                       std::conditional_t<tupleSizeOr1<typename std::decay_t<decltype(option)>::value_type>::value == 0,
+                                          bool, std::optional<typename std::decay_t<decltype(option)>::value_type>>>;
 
 void printHelp(llvm::raw_ostream& os, std::vector<std::pair<std::string_view, std::string_view>> options);
 

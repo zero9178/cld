@@ -2004,6 +2004,11 @@ public:
         return m_uses;
     }
 
+    void setUses(std::uint64_t uses) noexcept
+    {
+        m_uses = uses;
+    }
+
     void incrementUsage() noexcept
     {
         m_uses++;
