@@ -3653,17 +3653,17 @@ TEST_CASE("LLVM Codegen initialization", "[LLVM]")
         SECTION("Union")
         {
             auto program = generateProgram("struct R {\n"
-                                           "float f[2];\n"
+                                           "float f[3];\n"
                                            "};\n"
                                            "\n"
                                            "union U {\n"
-                                           "int i[10];\n"
+                                           "int* i;\n"
                                            "struct R r;\n"
                                            "};\n"
                                            "\n"
                                            "float function(void) {\n"
                                            "union U u = {.r.f = {3456.34,4356.2134}};\n"
-                                           "return u.r.f[0] + u.r.f[1];\n"
+                                           "return u.r.f[0] + u.r.f[1] + (long long)&u % sizeof(void*);\n"
                                            "}");
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);

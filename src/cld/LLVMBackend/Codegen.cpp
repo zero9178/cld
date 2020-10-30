@@ -1330,30 +1330,33 @@ public:
                     m_types.insert({unionType, type});
                     return type;
                 }
-                std::vector<std::shared_ptr<const cld::Semantics::Type>> layout;
-                for (auto iter = unionDef->getFields().begin(); iter != unionDef->getFields().end();)
+                const cld::Semantics::Type* largestAlignment = nullptr;
+                std::size_t largestSize = 0;
+                for (auto& iter : unionDef->getFieldLayout())
                 {
-                    if (iter->second.indices.size() == 1)
+                    if (!largestAlignment)
                     {
-                        layout.push_back(iter->second.type);
-                        iter++;
-                        continue;
+                        largestAlignment = iter.type.get();
                     }
-                    layout.push_back(iter->second.parentTypes.front());
-                    iter = std::find_if_not(iter, unionDef->getFields().end(), [&](auto& pair) {
-                        return pair.second.parentTypes.front().get() == layout.back().get();
-                    });
+                    else if (largestAlignment->getAlignOf(m_programInterface)
+                             < iter.type->getAlignOf(m_programInterface))
+                    {
+                        largestAlignment = iter.type.get();
+                    }
+                    largestSize = std::max(largestSize, iter.type->getSizeOf(m_programInterface));
                 }
-                auto largestField =
-                    std::max_element(layout.begin(), layout.end(),
-                                     [&](const std::shared_ptr<const cld::Semantics::Type>& lhs,
-                                         const std::shared_ptr<const cld::Semantics::Type>& rhs) {
-                                         return lhs->getSizeOf(m_programInterface) < rhs->getSizeOf(m_programInterface);
-                                     });
+                CLD_ASSERT(largestAlignment);
+                largestSize = cld::roundUpTo(largestSize, largestAlignment->getAlignOf(m_programInterface));
                 auto* type = unionType.isAnonymous() ?
                                  llvm::StructType::create(m_module.getContext()) :
                                  llvm::StructType::create(m_module.getContext(), unionType.getName());
-                type->setBody(llvm::ArrayRef(visit(**largestField)));
+                std::vector<llvm::Type*> body = {visit(*largestAlignment)};
+                if (largestSize > largestAlignment->getSizeOf(m_programInterface))
+                {
+                    body.emplace_back(llvm::ArrayType::get(
+                        m_builder.getInt8Ty(), largestSize - largestAlignment->getSizeOf(m_programInterface)));
+                }
+                type->setBody(body);
                 m_types.insert({unionType, type});
                 return type;
             },
