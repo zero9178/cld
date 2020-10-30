@@ -981,8 +981,8 @@ bool cld::Semantics::SemanticAnalysis::typesAreCompatible(const cld::Semantics::
             {
                 auto kandRType = adjustParameterType(kandRFunc.getArguments()[i].first);
                 auto paramType = adjustParameterType(paramFunc.getArguments()[i].first);
-                auto nonQualifiedkandR = Type(false, false, kandRType.getVariant());
-                auto nonQualifiedParam = Type(false, false, paramType.getVariant());
+                auto nonQualifiedkandR = removeQualifiers(kandRType);
+                auto nonQualifiedParam = removeQualifiers(paramType);
                 if (!typesAreCompatible(defaultArgumentPromotion(nonQualifiedkandR), nonQualifiedParam))
                 {
                     return false;
@@ -1006,8 +1006,8 @@ bool cld::Semantics::SemanticAnalysis::typesAreCompatible(const cld::Semantics::
         {
             auto lhsType = adjustParameterType(lhsFtype.getArguments()[i].first);
             auto rhsType = adjustParameterType(rhsFtype.getArguments()[i].first);
-            auto nonQualifiedLhs = Type(false, false, lhsType.getVariant());
-            auto nonQualifiedRhs = Type(false, false, rhsType.getVariant());
+            auto nonQualifiedLhs = removeQualifiers(lhsType);
+            auto nonQualifiedRhs = removeQualifiers(rhsType);
             if (!typesAreCompatible(nonQualifiedLhs, nonQualifiedRhs))
             {
                 return false;
@@ -1637,7 +1637,8 @@ enum class Types
     Float,
     Double,
     LongDouble,
-    VAList
+    VAList,
+    ConstVoidStar
 };
 
 template <std::size_t n>
@@ -1693,6 +1694,12 @@ constexpr Types extractType(std::u32string_view& text)
             CLD_ASSERT(!result);
             result = Types::VAList;
             text.remove_prefix(7);
+        }
+        else if (text.substr(0, 11) == U"const void*")
+        {
+            CLD_ASSERT(!result);
+            result = Types::ConstVoidStar;
+            text.remove_prefix(11);
         }
         else if (text.substr(0, 5) == U"float")
         {
@@ -1856,6 +1863,8 @@ DECL_BUILTIN("double __builtin_inf()", Inf);
 DECL_BUILTIN("float __builtin_inff()", Inff);
 DECL_BUILTIN("long double __builtin_infl()", Infl);
 DECL_BUILTIN("void __sync_synchronize()", SyncSynchronize);
+DECL_BUILTIN("long __builtin_expect(long,long)", Expect);
+DECL_BUILTIN("void __builtin_prefetch(const void*,...)", Prefetch);
 
 const cld::Semantics::ProgramInterface::DeclarationInScope::Variant* CLD_NULLABLE
     cld::Semantics::SemanticAnalysis::getBuiltinFuncDecl(std::string_view name)
@@ -1872,6 +1881,8 @@ const cld::Semantics::ProgramInterface::DeclarationInScope::Variant* CLD_NULLABL
             case Types::LongDouble:
                 return PrimitiveType::createLongDouble(false, false, m_sourceInterface.getLanguageOptions());
             case Types::VAList: return *getTypedef("__builtin_va_list");
+            case Types::ConstVoidStar:
+                return PointerType::create(false, false, false, PrimitiveType::createVoid(true, false));
         }
         CLD_UNREACHABLE;
     };
@@ -1888,6 +1899,8 @@ const cld::Semantics::ProgramInterface::DeclarationInScope::Variant* CLD_NULLABL
     DEF_BUILTIN(Inff);
     DEF_BUILTIN(Infl);
     DEF_BUILTIN(SyncSynchronize);
+    DEF_BUILTIN(Expect);
+    DEF_BUILTIN(Prefetch);
     return nullptr;
 }
 

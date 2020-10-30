@@ -3116,6 +3116,22 @@ public:
                 }
                 case cld::Semantics::BuiltinFunction::SyncSynchronize:
                     return m_builder.CreateFence(llvm::AtomicOrdering::SequentiallyConsistent);
+                case cld::Semantics::BuiltinFunction::Expect:
+                {
+                    // TODO:
+                    auto ret = visit(call.getArgumentExpressions()[0]);
+                    visitVoidExpression(call.getArgumentExpressions()[1]);
+                    return ret;
+                }
+                case cld::Semantics::BuiltinFunction::Prefetch:
+                {
+                    auto address = visit(call.getArgumentExpressions()[0]);
+                    // TODO: rw flags
+                    auto* i8Star = m_builder.CreateBitCast(address, m_builder.getInt8PtrTy());
+                    return m_builder.CreateIntrinsic(
+                        llvm::Intrinsic::prefetch, {i8Star->getType()},
+                        {i8Star, m_builder.getInt32(0), m_builder.getInt32(3), m_builder.getInt32(1)});
+                }
             }
             CLD_UNREACHABLE;
         }

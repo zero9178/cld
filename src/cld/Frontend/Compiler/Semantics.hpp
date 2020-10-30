@@ -2213,7 +2213,9 @@ public:
         Inf,
         Inff,
         Infl,
-        SyncSynchronize
+        SyncSynchronize,
+        Expect,
+        Prefetch
     };
 
 private:
