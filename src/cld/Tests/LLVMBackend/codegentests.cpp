@@ -3485,6 +3485,29 @@ TEST_CASE("LLVM codegen switch, case and default", "[LLVM]")
         REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
         CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "intoSwitch") != 0);
     }
+    SECTION("Cascade")
+    {
+        auto program = generateProgram("static int switchFunc(int n) {\n"
+                                       "switch (n) {\n"
+                                       "case 3: \n"
+                                       "case 5: n += 3;\n"
+                                       "default: n += 7;\n"
+                                       "}\n"
+                                       "return n;\n"
+                                       "}"
+                                       "\n"
+                                       "int intoSwitch(void) {\n"
+                                       "int first,second,third;\n"
+                                       "first = switchFunc(3);\n"
+                                       "second = switchFunc(5);\n"
+                                       "third = switchFunc(300);\n"
+                                       "return first == 13 && second == 15 && third == 307;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "intoSwitch") != 0);
+    }
     SECTION("In dead code")
     {
         auto program = generateProgram("static int switchFunc(int n) {\n"

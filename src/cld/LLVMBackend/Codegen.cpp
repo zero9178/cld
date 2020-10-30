@@ -135,7 +135,7 @@ class CodeGenerator final
     std::unordered_map<const cld::Semantics::LabelStatement*, llvm::BasicBlock*> m_labels;
     struct Switch
     {
-        std::unordered_map<const cld::Semantics::CaseStatement*, llvm::BasicBlock*> cases;
+        llvm::SwitchInst* llvmSwitch;
         llvm::BasicBlock* defaultBlock;
     };
     std::unordered_map<const cld::Semantics::SwitchStatement*, Switch> m_switches;
@@ -1298,9 +1298,8 @@ public:
                     return result->second;
                 }
                 auto* structDef = m_programInterface.getStructDefinition(structType.getId());
-                auto* type = structType.isAnonymous() ?
-                                 llvm::StructType::create(m_module.getContext()) :
-                                 llvm::StructType::create(m_module.getContext(), structType.getName());
+                auto* type = llvm::StructType::create(m_module.getContext(),
+                                                      structType.isAnonymous() ? "struct.anon" : structType.getName());
                 m_types.insert({structType, type});
                 if (!structDef)
                 {
@@ -1324,9 +1323,8 @@ public:
                 auto* unionDef = m_programInterface.getUnionDefinition(unionType.getId());
                 if (!unionDef)
                 {
-                    auto* type = unionType.isAnonymous() ?
-                                     llvm::StructType::create(m_module.getContext()) :
-                                     llvm::StructType::create(m_module.getContext(), unionType.getName());
+                    auto* type = llvm::StructType::create(m_module.getContext(),
+                                                          unionType.isAnonymous() ? "union.anon" : unionType.getName());
                     m_types.insert({unionType, type});
                     return type;
                 }
@@ -2051,20 +2049,10 @@ public:
         auto* switchStmt =
             expression.value ?
                 m_builder.CreateSwitch(expression.value, switchData.defaultBlock ? switchData.defaultBlock : contBlock,
-                                       switchData.cases.size()) :
+                                       switchStatement.getCases().size()) :
                 nullptr;
+        switchData.llvmSwitch = switchStmt;
         m_builder.ClearInsertionPoint();
-        for (auto& [value, theCase] : switchStatement.getCases())
-        {
-            auto iter = switchData.cases.emplace(
-                theCase, llvm::BasicBlock::Create(m_module.getContext(), "switch.case", m_currentFunction));
-            if (switchStmt && expression.value)
-            {
-                switchStmt->addCase(
-                    llvm::cast<llvm::ConstantInt>(llvm::ConstantInt::get(expression.value->getType(), value)),
-                    iter.first->second);
-            }
-        }
         m_breakTargets[&switchStatement] = contBlock;
         visit(switchStatement.getStatement());
         if (m_builder.GetInsertBlock())
@@ -2086,15 +2074,38 @@ public:
         visit(defaultStatement.getStatement());
     }
 
-    void visit(const cld::Semantics::CaseStatement& caseStatement)
+    void visit(const cld::Semantics::CaseStatement& caseStatement, llvm::BasicBlock* bb = nullptr)
     {
         auto& switchData = m_switches[&caseStatement.getSwitchStatement()];
-        auto* bb = switchData.cases[&caseStatement];
-        if (m_builder.GetInsertBlock())
+        if (!bb && (switchData.llvmSwitch || m_builder.GetInsertBlock()))
         {
-            m_builder.CreateBr(bb);
+            bb = llvm::BasicBlock::Create(m_module.getContext(), "switch.case", m_currentFunction);
+            if (m_builder.GetInsertBlock())
+            {
+                m_builder.CreateBr(bb);
+            }
         }
-        m_builder.SetInsertPoint(bb);
+        if (caseStatement.getStatement().is<cld::Semantics::CaseStatement>())
+        {
+            if (switchData.llvmSwitch)
+            {
+                llvm::Constant* val = llvm::ConstantInt::get(switchData.llvmSwitch->getCondition()->getType(),
+                                                             caseStatement.getConstant());
+                switchData.llvmSwitch->addCase(llvm::cast<llvm::ConstantInt>(val), bb);
+            }
+            visit(caseStatement.getStatement().cast<cld::Semantics::CaseStatement>(), bb);
+            return;
+        }
+        if (bb)
+        {
+            if (switchData.llvmSwitch)
+            {
+                llvm::Constant* val = llvm::ConstantInt::get(switchData.llvmSwitch->getCondition()->getType(),
+                                                             caseStatement.getConstant());
+                switchData.llvmSwitch->addCase(llvm::cast<llvm::ConstantInt>(val), bb);
+            }
+            m_builder.SetInsertPoint(bb);
+        }
         visit(caseStatement.getStatement());
     }
 
