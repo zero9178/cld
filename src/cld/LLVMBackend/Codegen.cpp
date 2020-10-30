@@ -1435,6 +1435,10 @@ public:
                                               llvm::StringRef{declaration.getNameToken()->getText()}, &m_module);
             applyFunctionAttributes(*function, ft,
                                     cld::get<cld::Semantics::FunctionType>(declaration.getType().getVariant()));
+            if (!m_options.pic)
+            {
+                function->setDSOLocal(true);
+            }
             m_lvalues.emplace(&declaration, valueOf(function));
             return valueOf(function);
         }
@@ -1497,6 +1501,10 @@ public:
                     {
                         global->setAlignment(llvm::Align(declType.getAlignOf(m_programInterface)));
                     }
+                }
+                if (!m_options.pic)
+                {
+                    global->setDSOLocal(true);
                 }
             }
             else
@@ -1626,7 +1634,7 @@ public:
             return;
         }
 
-        if (m_options.pic)
+        if (!m_options.pic)
         {
             function->setDSOLocal(true);
         }

@@ -262,6 +262,7 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
         {
             ptr->setInlineKind(
                 std::max(ptr->getInlineKind(), cld::get<Declaration*>(prev->second.declared)->getInlineKind()));
+            ptr->setUses(cld::get<Declaration*>(prev->second.declared)->getUses());
             prev.value() = DeclarationInScope{loc, ptr.get()};
         }
     }
