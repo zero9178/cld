@@ -1579,6 +1579,11 @@ public:
     CompoundStatement(CompoundStatement&&) noexcept = default;
     CompoundStatement& operator=(CompoundStatement&&) noexcept = default;
 
+    void prependItem(Variant&& variant)
+    {
+        m_compoundItems.insert(m_compoundItems.begin(), std::move(variant));
+    }
+
     [[nodiscard]] const std::vector<Variant>& getCompoundItems() const
     {
         return m_compoundItems;

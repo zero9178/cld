@@ -27,7 +27,8 @@ public:
 
     struct DeclarationInScope
     {
-        const Lexer::CToken* CLD_NULLABLE identifier; // Guaranteed to be non null if the scope isn't global
+        const Lexer::CToken* CLD_NULLABLE identifier; // Guaranteed to be non null if the scope isn't global and the
+                                                      // declaration isn't a builtin variable like __func__
         using Variant = std::variant<Declaration * CLD_NON_NULL, FunctionDefinition * CLD_NON_NULL,
                                      BuiltinFunction * CLD_NON_NULL, Type, std::pair<ConstValue, Type>>;
         Variant declared;

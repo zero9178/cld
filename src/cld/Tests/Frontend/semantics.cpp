@@ -212,8 +212,8 @@ TEST_CASE("Semantics declarations", "[semantics]")
                     translationUnit->getGlobals()[0]));
                 auto& func =
                     *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit->getGlobals()[0]);
-                REQUIRE(func.getCompoundStatement().getCompoundItems().size() == 1);
-                auto& var = func.getCompoundStatement().getCompoundItems()[0];
+                REQUIRE(func.getCompoundStatement().getCompoundItems().size() >= 1);
+                auto& var = func.getCompoundStatement().getCompoundItems().back();
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(var));
                 auto& decl = *cld::get<std::unique_ptr<cld::Semantics::Declaration>>(var);
                 CHECK(decl.getLinkage() == cld::Semantics::Linkage::None);
@@ -230,8 +230,8 @@ TEST_CASE("Semantics declarations", "[semantics]")
                     translationUnit->getGlobals()[0]));
                 auto& func =
                     *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit->getGlobals()[0]);
-                REQUIRE(func.getCompoundStatement().getCompoundItems().size() == 1);
-                auto& var = func.getCompoundStatement().getCompoundItems()[0];
+                REQUIRE(func.getCompoundStatement().getCompoundItems().size() >= 1);
+                auto& var = func.getCompoundStatement().getCompoundItems().back();
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(var));
                 auto& decl = *cld::get<std::unique_ptr<cld::Semantics::Declaration>>(var);
                 CHECK(decl.getLinkage() == cld::Semantics::Linkage::External);
@@ -290,8 +290,8 @@ TEST_CASE("Semantics declarations", "[semantics]")
                     translationUnit->getGlobals()[0]));
                 auto& func =
                     *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit->getGlobals()[0]);
-                REQUIRE(func.getCompoundStatement().getCompoundItems().size() == 1);
-                auto& var = func.getCompoundStatement().getCompoundItems()[0];
+                REQUIRE(func.getCompoundStatement().getCompoundItems().size() >= 1);
+                auto& var = func.getCompoundStatement().getCompoundItems().back();
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(var));
                 auto& decl = *cld::get<std::unique_ptr<cld::Semantics::Declaration>>(var);
                 CHECK(decl.getLifetime() == cld::Semantics::Lifetime::Automatic);
@@ -308,8 +308,8 @@ TEST_CASE("Semantics declarations", "[semantics]")
                     translationUnit->getGlobals()[0]));
                 auto& func =
                     *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit->getGlobals()[0]);
-                REQUIRE(func.getCompoundStatement().getCompoundItems().size() == 1);
-                auto& var = func.getCompoundStatement().getCompoundItems()[0];
+                REQUIRE(func.getCompoundStatement().getCompoundItems().size() >= 1);
+                auto& var = func.getCompoundStatement().getCompoundItems().back();
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(var));
                 auto& decl = *cld::get<std::unique_ptr<cld::Semantics::Declaration>>(var);
                 CHECK(decl.getLifetime() == cld::Semantics::Lifetime::Automatic);
@@ -326,8 +326,8 @@ TEST_CASE("Semantics declarations", "[semantics]")
                     translationUnit->getGlobals()[0]));
                 auto& func =
                     *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit->getGlobals()[0]);
-                REQUIRE(func.getCompoundStatement().getCompoundItems().size() == 1);
-                auto& var = func.getCompoundStatement().getCompoundItems()[0];
+                REQUIRE(func.getCompoundStatement().getCompoundItems().size() >= 1);
+                auto& var = func.getCompoundStatement().getCompoundItems().back();
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(var));
                 auto& decl = *cld::get<std::unique_ptr<cld::Semantics::Declaration>>(var);
                 CHECK(decl.getLifetime() == cld::Semantics::Lifetime::Static);
@@ -344,8 +344,8 @@ TEST_CASE("Semantics declarations", "[semantics]")
                     translationUnit->getGlobals()[0]));
                 auto& func =
                     *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit->getGlobals()[0]);
-                REQUIRE(func.getCompoundStatement().getCompoundItems().size() == 1);
-                auto& var = func.getCompoundStatement().getCompoundItems()[0];
+                REQUIRE(func.getCompoundStatement().getCompoundItems().size() >= 1);
+                auto& var = func.getCompoundStatement().getCompoundItems().back();
                 REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(var));
                 auto& decl = *cld::get<std::unique_ptr<cld::Semantics::Declaration>>(var);
                 CHECK(decl.getLifetime() == cld::Semantics::Lifetime::Static);
@@ -464,16 +464,16 @@ TEST_CASE("Semantics declarations", "[semantics]")
             auto& global = translationUnit->getGlobals()[0];
             REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(global));
             auto& def = *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(global);
-            REQUIRE(def.getCompoundStatement().getCompoundItems().size() == 3);
-            auto& first = def.getCompoundStatement().getCompoundItems()[0];
+            REQUIRE(def.getCompoundStatement().getCompoundItems().size() >= 4);
+            auto& first = def.getCompoundStatement().getCompoundItems()[1];
             REQUIRE(std::holds_alternative<std::shared_ptr<const cld::Semantics::ExpressionBase>>(first));
             auto& firstExpr = *cld::get<std::shared_ptr<const cld::Semantics::ExpressionBase>>(first);
             CHECK(firstExpr.is<cld::Semantics::BinaryOperator>());
-            auto& second = def.getCompoundStatement().getCompoundItems()[1];
+            auto& second = def.getCompoundStatement().getCompoundItems()[2];
             REQUIRE(std::holds_alternative<std::shared_ptr<const cld::Semantics::ExpressionBase>>(second));
             auto& secondExpr = *cld::get<std::shared_ptr<const cld::Semantics::ExpressionBase>>(second);
             CHECK(secondExpr.is<cld::Semantics::UnaryOperator>());
-            auto& third = def.getCompoundStatement().getCompoundItems()[2];
+            auto& third = def.getCompoundStatement().getCompoundItems()[3];
             REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(third));
             auto& thirdDecl = *cld::get<std::unique_ptr<cld::Semantics::Declaration>>(third);
             CHECK(std::holds_alternative<cld::Semantics::ValArrayType>(thirdDecl.getType().getVariant()));
@@ -4061,9 +4061,14 @@ TEST_CASE("Semantics __func__", "[semantics]")
     auto& exp = generateExpression("void foo(void) {\n"
                                    "__func__;\n"
                                    "}");
-    REQUIRE(exp.is<Constant>());
-    auto& constant = exp.cast<Constant>();
-    REQUIRE(std::holds_alternative<std::string>(constant.getValue()));
+    REQUIRE(exp.is<DeclarationRead>());
+    auto& declarationRead = exp.cast<DeclarationRead>();
+    REQUIRE(declarationRead.getDeclRead().is<Declaration>());
+    auto& decl = declarationRead.getDeclRead().cast<Declaration>();
+    REQUIRE(decl.getInitializer());
+    REQUIRE(std::holds_alternative<ExpressionValue>(*decl.getInitializer()));
+    REQUIRE(cld::get<ExpressionValue>(*decl.getInitializer())->is<Constant>());
+    auto& constant = cld::get<ExpressionValue>(*decl.getInitializer())->cast<Constant>();
     CHECK(cld::get<std::string>(constant.getValue()) == "foo");
     SEMA_PRODUCES("void __func__(void) {}",
                   ProducesError(DEFINING_FUNCTIONS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR));

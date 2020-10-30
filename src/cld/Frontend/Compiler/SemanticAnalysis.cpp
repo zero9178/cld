@@ -266,9 +266,21 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
         }
     }
 
+    Type funcType =
+        ArrayType::create(false, false, false, false, PrimitiveType::createChar(true, false, getLanguageOptions()),
+                          loc->getText().size() + 1);
+    auto funcName = std::make_unique<Declaration>(
+        std::move(funcType), Linkage::Internal, Lifetime::Static, loc, Declaration::Definition, InlineKind::None,
+        Constant(ArrayType::create(false, false, false, false,
+                                   PrimitiveType::createChar(false, false, getLanguageOptions()),
+                                   loc->getText().size() + 1),
+                 cld::to_string(loc->getText()), loc, loc + 1));
+    getCurrentScope().declarations.insert({"__func__", DeclarationInScope{loc, funcName.get()}});
+
     auto functionScope = pushFunctionScope(*ptr);
 
     auto comp = visit(node.getCompoundStatement(), false);
+    comp->prependItem(std::move(funcName));
     ptr->setCompoundStatement(std::move(*comp));
     return result;
 }

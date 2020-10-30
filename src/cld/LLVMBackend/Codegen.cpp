@@ -1415,6 +1415,10 @@ public:
         }
         if (std::holds_alternative<cld::Semantics::FunctionType>(declaration.getType().getVariant()))
         {
+            if (!m_options.emitAllDecls && !declaration.isUsed())
+            {
+                return nullptr;
+            }
             auto* function = m_module.getFunction(declaration.getNameToken()->getText());
             if (function)
             {
@@ -1431,6 +1435,11 @@ public:
         }
         if (declaration.getLifetime() == cld::Semantics::Lifetime::Static)
         {
+            if (!m_options.emitAllDecls && declaration.getLinkage() == cld::Semantics::Linkage::Internal
+                && !declaration.isUsed())
+            {
+                return nullptr;
+            }
             auto& declType = [&]() -> decltype(auto) {
                 if (m_currentFunction)
                 {
@@ -1495,6 +1504,10 @@ public:
 
             m_lvalues.emplace(&declaration, createBitCast(global, llvm::PointerType::getUnqual(prevType)));
             return global;
+        }
+        if (!m_options.emitAllDecls && !declaration.isUsed())
+        {
+            return nullptr;
         }
         auto* type = visit(declaration.getType());
         // Place all allocas up top except variably modified types
@@ -1580,6 +1593,11 @@ public:
 
     void visit(const cld::Semantics::FunctionDefinition& functionDefinition)
     {
+        if (!m_options.emitAllDecls && functionDefinition.getLinkage() != cld::Semantics::Linkage::External
+            && !functionDefinition.isUsed())
+        {
+            return;
+        }
         auto* function = m_module.getFunction(functionDefinition.getNameToken()->getText());
         if (!function)
         {
@@ -2122,6 +2140,8 @@ public:
     void visit(const cld::Semantics::GNUASMStatement&)
     {
         // TODO:
+        llvm::errs() << "GNU ASM Statements are not yet implemented. Sorry";
+        std::terminate();
     }
 
     Value visit(const cld::Semantics::ExpressionBase& expression)

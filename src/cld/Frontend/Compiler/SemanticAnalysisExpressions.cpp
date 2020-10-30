@@ -472,16 +472,6 @@ cld::Semantics::ExpressionValue cld::Semantics::SemanticAnalysis::visit(const Sy
 
 cld::Semantics::ExpressionValue cld::Semantics::SemanticAnalysis::visit(const Syntax::PrimaryExpressionIdentifier& node)
 {
-    if (node.getIdentifier()->getText() == "__func__" && inFunction())
-    {
-        auto functionName = getCurrentFunctionScope()->currentFunction->getNameToken()->getText();
-        auto type = ArrayType::create(false, false, false, false,
-                                      PrimitiveType::createChar(false, false, m_sourceInterface.getLanguageOptions()),
-                                      functionName.size() + 1);
-        // TODO: Not really a constant
-        //        return Expression(std::move(type), ValueCategory::Lvalue,
-        //                          (cld::to_string(functionName), node.begin(), node.end()));
-    }
     auto* result = lookupDecl(node.getIdentifier()->getText());
     if (!result || std::holds_alternative<Type>(*result))
     {
