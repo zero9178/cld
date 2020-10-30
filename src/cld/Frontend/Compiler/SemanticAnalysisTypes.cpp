@@ -1036,7 +1036,6 @@ cld::Semantics::Type
                         return pair.second.parentTypes.front().get() == parentType.get();
                     });
                     fieldLayout[fieldLayoutCounter++].layoutIndex = memoryLayout.size();
-                    fieldLayout[fieldLayoutCounter - 1].offset = currentSize;
                     for (; iter != end; iter++)
                     {
                         iter.value().indices[0] = memoryLayout.size();
@@ -1045,6 +1044,7 @@ cld::Semantics::Type
                     auto alignment = parentType->getAlignOf(*this);
                     currentAlignment = std::max(currentAlignment, alignment);
                     currentSize = roundUpTo(currentSize, alignment);
+                    fieldLayout[fieldLayoutCounter - 1].offset = currentSize;
                     auto subSize = parentType->getSizeOf(*this);
                     currentSize += subSize;
                     continue;
@@ -1053,9 +1053,9 @@ cld::Semantics::Type
                 {
                     iter.value().indices[0] = memoryLayout.size();
                     fieldLayout[fieldLayoutCounter++].layoutIndex = memoryLayout.size();
-                    fieldLayout[fieldLayoutCounter - 1].offset = currentSize;
                     memoryLayout.push_back(*iter->second.type);
-                    if (!isCompleteType(*iter->second.type))
+                    if (!isCompleteType(*iter->second.type)
+                        && !std::holds_alternative<AbstractArrayType>(iter->second.type->getVariant()))
                     {
                         iter++;
                         continue;
@@ -1063,6 +1063,12 @@ cld::Semantics::Type
                     auto alignment = iter->second.type->getAlignOf(*this);
                     currentAlignment = std::max(currentAlignment, alignment);
                     currentSize = roundUpTo(currentSize, alignment);
+                    fieldLayout[fieldLayoutCounter - 1].offset = currentSize;
+                    if (!isCompleteType(*iter->second.type))
+                    {
+                        iter++;
+                        continue;
+                    }
                     auto subSize = iter->second.type->getSizeOf(*this);
                     currentSize += subSize;
                     iter++;
@@ -1129,8 +1135,9 @@ cld::Semantics::Type
                     if (size > currentSize)
                     {
                         currentSize = size;
-                        currentAlignment = fieldLayout[fieldLayoutCounter - 1].type->getAlignOf(*this);
                     }
+                    currentAlignment =
+                        std::max(currentAlignment, fieldLayout[fieldLayoutCounter - 1].type->getAlignOf(*this));
                 }
                 if (!field.parentTypes.empty())
                 {

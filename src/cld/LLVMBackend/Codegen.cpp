@@ -786,8 +786,7 @@ class CodeGenerator final
 
     Value createPointerCast(Value ptr, llvm::Type* pointerType)
     {
-        return valueOf(m_builder.CreateBitCast(ptr, pointerType),
-                       m_module.getDataLayout().getABITypeAlign(pointerType->getPointerElementType()));
+        return valueOf(m_builder.CreateBitCast(ptr, pointerType));
     }
 
     Value createBitCast(Value ptr, llvm::Type* pointerType, bool checked = true)
@@ -819,11 +818,12 @@ class CodeGenerator final
         return alloca;
     }
 
-    llvm::Constant* getStringLiteralData(llvm::Type* elementType, const cld::Semantics::Constant::Variant& value)
+    Value getStringLiteralData(llvm::Type* elementType, const cld::Semantics::Constant::Variant& value)
     {
         if (std::holds_alternative<std::string>(value))
         {
-            return llvm::ConstantDataArray::getString(m_module.getContext(), cld::get<std::string>(value));
+            return Value(llvm::ConstantDataArray::getString(m_module.getContext(), cld::get<std::string>(value)),
+                         llvm::Align(1));
         }
 
         auto& str = cld::get<cld::Lexer::NonCharString>(value);
@@ -846,15 +846,17 @@ class CodeGenerator final
                                [](std::uint32_t value) -> std::uint16_t { return value; });
                 std::vector<char> rawData(convertedData.size() * 2);
                 std::memcpy(rawData.data(), convertedData.data(), rawData.size());
-                return llvm::ConstantDataArray::getRaw(llvm::StringRef(rawData.data(), rawData.size()),
-                                                       convertedData.size(), elementType);
+                return Value(llvm::ConstantDataArray::getRaw(llvm::StringRef(rawData.data(), rawData.size()),
+                                                             convertedData.size(), elementType),
+                             llvm::Align(2));
             }
             case 4:
             {
                 std::vector<char> rawData(str.characters.size() * 4);
                 std::memcpy(rawData.data(), str.characters.data(), rawData.size());
-                return llvm::ConstantDataArray::getRaw(llvm::StringRef(rawData.data(), rawData.size()),
-                                                       str.characters.size(), elementType);
+                return Value(llvm::ConstantDataArray::getRaw(llvm::StringRef(rawData.data(), rawData.size()),
+                                                             str.characters.size(), elementType),
+                             llvm::Align(4));
             }
         }
         CLD_UNREACHABLE;
@@ -2162,10 +2164,11 @@ public:
             return valueOf(llvm::ConstantFP::get(type, cld::get<llvm::APFloat>(constant.getValue())));
         }
 
-        auto* array = getStringLiteralData(type->getArrayElementType(), constant.getValue());
+        auto array = getStringLiteralData(type->getArrayElementType(), constant.getValue());
         auto* global =
-            new llvm::GlobalVariable(m_module, array->getType(), true, llvm::GlobalValue::PrivateLinkage, array);
-        global->setAlignment(llvm::Align(1));
+            new llvm::GlobalVariable(m_module, array.value->getType(), true, llvm::GlobalValue::PrivateLinkage,
+                                     llvm::cast<llvm::Constant>(array.value));
+        global->setAlignment(array.alignment);
         global->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
         return global;
     }
@@ -3524,7 +3527,7 @@ public:
     {
         return cld::match(
             initializer,
-            [&](const cld::Semantics::ExpressionValue& expression) -> llvm::Value* {
+            [&](const cld::Semantics::ExpressionValue& expression) -> Value {
                 if (std::holds_alternative<Value>(pointer))
                 {
                     auto value = visit(expression);
@@ -3545,7 +3548,7 @@ public:
                 }
                 return visit(expression);
             },
-            [&](const cld::Semantics::InitializerList& initializerList) -> llvm::Value* {
+            [&](const cld::Semantics::InitializerList& initializerList) -> Value {
                 if (std::holds_alternative<llvm::Type*>(pointer))
                 {
                     return visitStaticInitializerList(initializerList, type, cld::get<llvm::Type*>(pointer));

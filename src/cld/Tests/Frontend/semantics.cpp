@@ -901,6 +901,15 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
         CHECK(cld::get<cld::Semantics::UnionType>(decl->getType().getVariant()).getName() == "A");
         CHECK(cld::get<cld::Semantics::UnionType>(decl->getType().getVariant()).getId() == 0);
     }
+    SECTION("Union alignment")
+    {
+        auto program = generateProgram("union A{ int i[3]; int* f; } a;");
+        auto* unionTag = program.lookupType<cld::Semantics::ProgramInterface::UnionTag>("A", 0);
+        REQUIRE(unionTag);
+        auto* unionDef = program.getUnionDefinition(static_cast<std::size_t>(*unionTag));
+        CHECK(unionDef->getAlignOf() == cld::LanguageOptions::native().sizeOfVoidStar);
+        CHECK(unionDef->getSizeOf() == 4 * cld::LanguageOptions::native().sizeOfInt);
+    }
     SECTION("Anonymous struct")
     {
         auto program = generateProgram("struct { int i; float f, r; } a;");
@@ -4661,6 +4670,8 @@ TEST_CASE("Semantics flexible array member", "[semantics]")
         REQUIRE(structDef->getFields().size() == 2);
         REQUIRE(structDef->getFieldLayout().size() == 2);
         REQUIRE(structDef->getMemLayout().size() == 2);
+        CHECK(structDef->getFieldLayout()[0].offset == 0);
+        CHECK(structDef->getFieldLayout()[1].offset == 4);
     }
     SEMA_PRODUCES("struct A{ int f[]; };", ProducesError(INCOMPLETE_TYPE_NOT_ALLOWED_IN_STRUCT, "'int[]'"));
     SEMA_PRODUCES("struct A{ int r;int f[],c; };", ProducesError(INCOMPLETE_TYPE_NOT_ALLOWED_IN_STRUCT, "'int[]'"));
