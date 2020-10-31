@@ -7,6 +7,7 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/TargetSelect.h>
+#include <llvm/Transforms/IPO/PassManagerBuilder.h>
 
 #include <cld/Frontend/Compiler/ErrorMessages.hpp>
 #include <cld/Frontend/Compiler/LanguageOptions.hpp>
@@ -453,19 +454,12 @@ std::optional<cld::fs::path> compileCFile(Action action, cld::fs::path cSourceFi
     {
         codegenOptions.reloc = llvm::Reloc::Model::PIC_;
     }
-    if (cli.template get<OPT>())
+    switch (cli.template get<OPT>()->value_or(0))
     {
-        switch (cli.template get<OPT>()->value_or(0))
-        {
-            case 0: codegenOptions.ol = llvm::CodeGenOpt::None; break;
-            case 1: codegenOptions.ol = llvm::CodeGenOpt::Less; break;
-            case 2: codegenOptions.ol = llvm::CodeGenOpt::Default; break;
-            default: codegenOptions.ol = llvm::CodeGenOpt::Aggressive; break;
-        }
-    }
-    else
-    {
-        codegenOptions.ol = llvm::CodeGenOpt::None;
+        case 0: codegenOptions.ol = llvm::CodeGenOpt::None; break;
+        case 1: codegenOptions.ol = llvm::CodeGenOpt::Less; break;
+        case 2: codegenOptions.ol = llvm::CodeGenOpt::Default; break;
+        default: codegenOptions.ol = llvm::CodeGenOpt::Aggressive; break;
     }
     codegenOptions.emitAllDecls = cli.template get<EMIT_ALL_DECLS>();
     auto* debugOption = cli.template lastSpecified<G0, G1, G2, G3>();
@@ -542,7 +536,10 @@ std::optional<cld::fs::path> compileCFile(Action action, cld::fs::path cSourceFi
         return {};
     }
 
+    llvm::PassManagerBuilder builder;
+    targetMachine->adjustPassManager(builder);
     llvm::legacy::PassManager pass;
+    builder.populateModulePassManager(pass);
     if (cli.template get<EMIT_LLVM>())
     {
         if (action == Action::AssemblyOutput)
