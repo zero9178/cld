@@ -4753,4 +4753,35 @@ TEST_CASE("Semantics offsetof", "[semantics]")
         cld::LanguageOptions::fromTriple(x64linux));
     REQUIRE(expr.is<BuiltinOffsetOf>());
     CHECK(expr.cast<BuiltinOffsetOf>().getOffset() == 104);
+    SEMA_PRODUCES("struct T {\n"
+                  "int i;\n"
+                  "int f : 3;\n"
+                  "};\n"
+                  "\n"
+                  "int main(void) { \n"
+                  "__builtin_offsetof(struct T,f);\n"
+                  "}",
+                  ProducesError(BITFIELD_NOT_ALLOWED_IN_OFFSET_OF));
+    SEMA_PRODUCES("int main(void) { \n"
+                  "__builtin_offsetof(int,f);\n"
+                  "}",
+                  ProducesError(TYPE_N_IN_OFFSETOF_MUST_BE_A_STRUCT_OR_UNION_TYPE, "'int'"));
+    SEMA_PRODUCES("struct T {\n"
+                  "int i;\n"
+                  "int f : 3;\n"
+                  "};\n"
+                  "\n"
+                  "int main(void) { \n"
+                  "__builtin_offsetof(struct T,i.m);\n"
+                  "}",
+                  ProducesError(EXPECTED_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_THE_DOT_OPERATOR_2));
+    SEMA_PRODUCES("struct T {\n"
+                  "int* i;\n"
+                  "int f : 3;\n"
+                  "};\n"
+                  "\n"
+                  "int main(void) { \n"
+                  "__builtin_offsetof(struct T,i[0]);\n"
+                  "}",
+                  ProducesError(EXPECTED_ARRAY_TYPE_ON_THE_LEFT_SIDE_OF_THE_SUBSCRIPT_OPERATOR));
 }

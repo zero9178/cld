@@ -236,9 +236,10 @@ CREATE_ERROR(ARRAY_OUTSIDE_OF_FUNCTION_PARAMETER_MAY_NOT_BE_STATIC,
 CREATE_ERROR(ARRAY_OUTSIDE_OF_FUNCTION_PARAMETER_MAY_NOT_BE_QUALIFIED,
              "Array outside of function parameter may not be qualified", PointAt<0>);
 
-CREATE_ERROR(ONLY_PARAMETER_OF_ARRAY_TYPE_MAY_BE_QUALIFIED,"Only parameter of array type may be qualified",Annotate<0,1>);
+CREATE_ERROR(ONLY_PARAMETER_OF_ARRAY_TYPE_MAY_BE_QUALIFIED, "Only parameter of array type may be qualified",
+             Annotate<0, 1>);
 
-CREATE_ERROR(ONLY_PARAMETER_OF_ARRAY_TYPE_MAY_BE_STATIC,"Only parameter of array type may be static",Annotate<0,1>);
+CREATE_ERROR(ONLY_PARAMETER_OF_ARRAY_TYPE_MAY_BE_STATIC, "Only parameter of array type may be static", Annotate<0, 1>);
 
 // VLA
 
@@ -270,7 +271,8 @@ CREATE_ERROR(FUNCTION_PROTOTYPE_MUST_NOT_HAVE_AN_INITIALIZER, "Function prototyp
 
 CREATE_ERROR(STATIC_ONLY_ALLOWED_IN_OUTERMOST_ARRAY, "'static' only allowed in outermost array", Underline<0>);
 
-CREATE_ERROR(ARRAY_QUALIFIERS_ONLY_ALLOWED_IN_OUTERMOST_ARRAY, "Array qualifiers only allowed in outermost array", Underline<0>);
+CREATE_ERROR(ARRAY_QUALIFIERS_ONLY_ALLOWED_IN_OUTERMOST_ARRAY, "Array qualifiers only allowed in outermost array",
+             Underline<0>);
 
 CREATE_ERROR(VOID_TYPE_NOT_ALLOWED_AS_FUNCTION_PARAMETER, "Void type not allowed as function parameter", Underline<0>);
 
@@ -590,7 +592,7 @@ CREATE_ERROR(CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_VA_LIST,
 
 // Offset of
 
-CREATE_ERROR(TYPE_IN_OFFSETOF_MUST_BE_A_STRUCT_OR_UNION_TYPE, "Type %0 in 'offsetof' must be a struct or union type",
+CREATE_ERROR(TYPE_N_IN_OFFSETOF_MUST_BE_A_STRUCT_OR_UNION_TYPE, "Type %0 in 'offsetof' must be a struct or union type",
              Annotate<1, 0>);
 
 CREATE_ERROR(EXPECTED_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_THE_DOT_OPERATOR_2,
@@ -600,6 +602,20 @@ CREATE_ERROR(EXPECTED_ARRAY_TYPE_ON_THE_LEFT_SIDE_OF_THE_SUBSCRIPT_OPERATOR,
              "Expected array type on the left side of the subscript operator", Annotate<0, 1>);
 
 CREATE_ERROR(BITFIELD_NOT_ALLOWED_IN_OFFSET_OF, "Bitfield not allowed in 'offsetof'", Underline<0>);
+
+// __builtin_prefetch
+
+CREATE_ERROR(EXPECTED_INTEGER_CONSTANT_EXPRESSION_AS_SECOND_ARGUMENT_TO_BUILTIN_PREFETCH,
+             "Expected integer constant expression as second argument to __builtin_prefetch", Underline<0>);
+
+CREATE_ERROR(EXPECTED_INTEGER_CONSTANT_EXPRESSION_AS_THIRD_ARGUMENT_TO_BUILTIN_PREFETCH,
+             "Expected integer constant expression as third argument to __builtin_prefetch", Underline<0>);
+
+CREATE_ERROR(EXPECTED_A_VALUE_OF_0_OR_1_AS_SECOND_ARGUMENT_TO_BUILTIN_PREFETCH,
+             "Expected a value of 0 or 1 as second argument to __builtin_prefetch", Annotate<0, 1>);
+
+CREATE_ERROR(EXPECTED_A_VALUE_OF_0_TO_3_AS_THIRD_ARGUMENT_TO_BUILTIN_PREFETCH,
+             "Expected a value of 0 to 3 as third argument to __builtin_prefetch", Annotate<0, 1>);
 
 // Size of
 

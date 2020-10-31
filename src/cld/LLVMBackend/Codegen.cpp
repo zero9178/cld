@@ -3376,9 +3376,9 @@ public:
                 }
                 case cld::Semantics::BuiltinFunction::SyncSynchronize:
                     return m_builder.CreateFence(llvm::AtomicOrdering::SequentiallyConsistent);
+                case cld::Semantics::BuiltinFunction::ExpectWithProbability:
                 case cld::Semantics::BuiltinFunction::Expect:
                 {
-                    // TODO:
                     auto ret = visit(call.getArgumentExpressions()[0]);
                     visitVoidExpression(call.getArgumentExpressions()[1]);
                     return ret;
@@ -3386,12 +3386,26 @@ public:
                 case cld::Semantics::BuiltinFunction::Prefetch:
                 {
                     auto address = visit(call.getArgumentExpressions()[0]);
-                    // TODO: rw flags
+                    llvm::Value* rw = m_builder.getInt32(0);
+                    llvm::Value* locality = m_builder.getInt32(3);
+                    if (call.getArgumentExpressions().size() > 1)
+                    {
+                        auto rwValue = visit(call.getArgumentExpressions()[1]);
+                        rw = m_builder.CreateIntCast(rwValue.value, m_builder.getInt32Ty(), false);
+                    }
+                    if (call.getArgumentExpressions().size() > 2)
+                    {
+                        auto localityValue = visit(call.getArgumentExpressions()[2]);
+                        locality = m_builder.CreateIntCast(localityValue.value, m_builder.getInt32Ty(), false);
+                    }
+
                     auto* i8Star = m_builder.CreateBitCast(address, m_builder.getInt8PtrTy());
-                    return m_builder.CreateIntrinsic(
-                        llvm::Intrinsic::prefetch, {i8Star->getType()},
-                        {i8Star, m_builder.getInt32(0), m_builder.getInt32(3), m_builder.getInt32(1)});
+                    return m_builder.CreateIntrinsic(llvm::Intrinsic::prefetch, {i8Star->getType()},
+                                                     {i8Star, rw, locality, m_builder.getInt32(1)});
                 }
+                case cld::Semantics::BuiltinFunction::Unreachable: return m_builder.CreateUnreachable();
+                case cld::Semantics::BuiltinFunction::Trap:
+                    return m_builder.CreateIntrinsic(llvm::Intrinsic::trap, {}, {});
             }
             CLD_UNREACHABLE;
         }

@@ -2220,7 +2220,10 @@ public:
         Infl,
         SyncSynchronize,
         Expect,
-        Prefetch
+        ExpectWithProbability,
+        Prefetch,
+        Trap,
+        Unreachable
     };
 
 private:

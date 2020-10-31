@@ -1642,6 +1642,7 @@ enum class Types
     Double,
     LongDouble,
     VAList,
+    VoidStar,
     ConstVoidStar
 };
 
@@ -1698,6 +1699,12 @@ constexpr Types extractType(std::u32string_view& text)
             CLD_ASSERT(!result);
             result = Types::VAList;
             text.remove_prefix(7);
+        }
+        else if (text.substr(0, 5) == U"void*")
+        {
+            CLD_ASSERT(!result);
+            result = Types::VoidStar;
+            text.remove_prefix(5);
         }
         else if (text.substr(0, 11) == U"const void*")
         {
@@ -1868,7 +1875,10 @@ DECL_BUILTIN("float __builtin_inff()", Inff);
 DECL_BUILTIN("long double __builtin_infl()", Infl);
 DECL_BUILTIN("void __sync_synchronize()", SyncSynchronize);
 DECL_BUILTIN("long __builtin_expect(long,long)", Expect);
+DECL_BUILTIN("long __builtin_expect_with_probability(long,long,double)", ExpectWithProbability);
 DECL_BUILTIN("void __builtin_prefetch(const void*,...)", Prefetch);
+DECL_BUILTIN("void __builtin_trap()", Trap);
+DECL_BUILTIN("void __builtin_unreachable()", Unreachable);
 
 const cld::Semantics::ProgramInterface::DeclarationInScope::Variant* CLD_NULLABLE
     cld::Semantics::SemanticAnalysis::getBuiltinFuncDecl(std::string_view name)
@@ -1885,6 +1895,8 @@ const cld::Semantics::ProgramInterface::DeclarationInScope::Variant* CLD_NULLABL
             case Types::LongDouble:
                 return PrimitiveType::createLongDouble(false, false, m_sourceInterface.getLanguageOptions());
             case Types::VAList: return *getTypedef("__builtin_va_list");
+            case Types::VoidStar:
+                return PointerType::create(false, false, false, PrimitiveType::createVoid(false, false));
             case Types::ConstVoidStar:
                 return PointerType::create(false, false, false, PrimitiveType::createVoid(true, false));
         }
@@ -1904,7 +1916,10 @@ const cld::Semantics::ProgramInterface::DeclarationInScope::Variant* CLD_NULLABL
     DEF_BUILTIN(Infl);
     DEF_BUILTIN(SyncSynchronize);
     DEF_BUILTIN(Expect);
+    DEF_BUILTIN(ExpectWithProbability);
     DEF_BUILTIN(Prefetch);
+    DEF_BUILTIN(Trap);
+    DEF_BUILTIN(Unreachable);
     return nullptr;
 }
 

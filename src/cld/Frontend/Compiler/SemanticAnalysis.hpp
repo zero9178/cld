@@ -283,6 +283,12 @@ private:
 
     [[nodiscard]] bool extensionsEnabled(const Lexer::CToken* token = nullptr);
 
+    CallExpression visitVAStart(const Syntax::PostFixExpressionFunctionCall& node, ExpressionValue&& function);
+
+    CallExpression visitPrefetch(const Syntax::PostFixExpressionFunctionCall& node, ExpressionValue&& function);
+
+    std::optional<ExpressionValue> checkFunctionArg(std::size_t i, Type paramType, ExpressionValue&& expression);
+
 public:
     explicit SemanticAnalysis(const SourceInterface& sourceInterface, llvm::raw_ostream* reporter = &llvm::errs(),
                               bool* errors = nullptr, std::function<bool(std::string_view)> definedCallback = {})

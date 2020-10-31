@@ -571,7 +571,7 @@ cld::Semantics::ExpressionValue
     {
         if (!isRecord(type))
         {
-            log(Errors::Semantics::TYPE_IN_OFFSETOF_MUST_BE_A_STRUCT_OR_UNION_TYPE.args(
+            log(Errors::Semantics::TYPE_N_IN_OFFSETOF_MUST_BE_A_STRUCT_OR_UNION_TYPE.args(
                 node.getTypeName(), m_sourceInterface, type, node.getTypeName()));
         }
         return ErrorExpression(PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()), node);
@@ -888,7 +888,7 @@ cld::Semantics::ExpressionValue cld::Semantics::SemanticAnalysis::visit(const Sy
 
 namespace
 {
-bool isBuiltinVAStart(const cld::Semantics::ExpressionBase& expression)
+bool isBuiltinKind(const cld::Semantics::ExpressionBase& expression, cld::Semantics::BuiltinFunction::Kind kind)
 {
     auto* declRead = expression.get_if<cld::Semantics::DeclarationRead>();
     if (!declRead)
@@ -900,7 +900,7 @@ bool isBuiltinVAStart(const cld::Semantics::ExpressionBase& expression)
     {
         return false;
     }
-    return builtin->getKind() == cld::Semantics::BuiltinFunction::VAStart;
+    return builtin->getKind() == kind;
 }
 
 bool isBuiltinFunction(const cld::Semantics::ExpressionBase& expression)
@@ -914,70 +914,207 @@ bool isBuiltinFunction(const cld::Semantics::ExpressionBase& expression)
 }
 } // namespace
 
+cld::Semantics::CallExpression
+    cld::Semantics::SemanticAnalysis::visitVAStart(const Syntax::PostFixExpressionFunctionCall& node,
+                                                   ExpressionValue&& function)
+{
+    std::vector<ExpressionValue> arguments;
+    if (node.getOptionalAssignmentExpressions().size() < 2)
+    {
+        log(Errors::Semantics::NOT_ENOUGH_ARGUMENTS_FOR_CALLING_FUNCTION_VA_START_EXPECTED_N_GOT_N.args(
+            *function, m_sourceInterface, 2, node.getOptionalAssignmentExpressions().size(), *function));
+    }
+    else if (node.getOptionalAssignmentExpressions().size() > 2)
+    {
+        log(Errors::Semantics::TOO_MANY_ARGUMENTS_FOR_CALLING_FUNCTION_VA_START_EXPECTED_N_GOT_N.args(
+            *function, m_sourceInterface, 2, node.getOptionalAssignmentExpressions().size(), *function,
+            llvm::ArrayRef(node.getOptionalAssignmentExpressions()).drop_front(2)));
+    }
+    else
+    {
+        arguments.push_back(visit(node.getOptionalAssignmentExpressions()[0]));
+        auto& vaList = *getTypedef("__builtin_va_list");
+        if (!arguments[0]->getType().isUndefined() && !typesAreCompatible(arguments[0]->getType(), vaList))
+        {
+            log(Errors::Semantics::CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_VA_LIST.args(
+                *arguments[0], m_sourceInterface, 1, *arguments[0]));
+        }
+        // even if the call is done using "__builtin_va_start(list,...)" the list is actually passed as a pointer.
+        // In the case of x86_64 ABI __builtin_va_list is an array type causing pointer decay, in the case
+        // of Windows x64 it's basically as if &list was written. Since this is a builtin call the backend will
+        // have to do special handling either way but we'll insert an lvalueConversion now to force array to pointer
+        // decay
+        if (isArray(vaList))
+        {
+            arguments.back() = lvalueConversion(std::move(arguments.back()));
+        }
+        auto expression = visit(node.getOptionalAssignmentExpressions()[1]);
+        if (!getCurrentFunctionScope())
+        {
+            log(Errors::Semantics::CANNOT_USE_VA_START_OUTSIDE_OF_A_FUNCTION.args(*function, m_sourceInterface,
+                                                                                  *function));
+        }
+        else if (!cld::get<FunctionType>(getCurrentFunctionScope()->currentFunction->getType().getVariant())
+                      .isLastVararg())
+        {
+            log(Errors::Semantics::CANNOT_USE_VA_START_IN_A_FUNCTION_WITH_FIXED_ARGUMENT_COUNT.args(
+                *function, m_sourceInterface, *function));
+        }
+        else if (auto* declRead = expression->get_if<DeclarationRead>();
+                 !declRead
+                 || (!getCurrentFunctionScope()->currentFunction->getParameterDeclarations().empty()
+                     && &declRead->getDeclRead()
+                            != getCurrentFunctionScope()->currentFunction->getParameterDeclarations().back().get()))
+        {
+            log(Warnings::Semantics::SECOND_ARGUMENT_OF_VA_START_SHOULD_BE_THE_LAST_PARAMETER.args(
+                *expression, m_sourceInterface, *expression));
+        }
+        arguments.push_back(lvalueConversion(std::move(expression)));
+    }
+    return CallExpression(PrimitiveType::createVoid(false, false),
+                          std::make_unique<Conversion>(PointerType::create(false, false, false, function->getType()),
+                                                       Conversion::LValue, std::move(function).toUniquePtr()),
+                          node.getOpenParentheses(), std::move(arguments), node.getCloseParentheses());
+}
+
+cld::Semantics::CallExpression
+    cld::Semantics::SemanticAnalysis::visitPrefetch(const Syntax::PostFixExpressionFunctionCall& node,
+                                                    ExpressionValue&& function)
+{
+    std::vector<ExpressionValue> arguments;
+    auto& ft = cld::get<FunctionType>(function->getType().getVariant());
+    if (node.getOptionalAssignmentExpressions().size() == 0)
+    {
+        auto& decl = function->cast<DeclarationRead>();
+        log(Errors::Semantics::NOT_ENOUGH_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_AT_LEAST_N_GOT_N.args(
+            decl, m_sourceInterface, *decl.getIdentifierToken(), 1, 0));
+    }
+    else if (node.getOptionalAssignmentExpressions().size() > 3)
+    {
+        auto& decl = function->cast<DeclarationRead>();
+        log(Errors::Semantics::TOO_MANY_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_N_GOT_N.args(
+            decl, m_sourceInterface, *decl.getIdentifierToken(), 3, node.getOptionalAssignmentExpressions().size(),
+            llvm::ArrayRef(node.getOptionalAssignmentExpressions()).drop_front(3)));
+    }
+    else
+    {
+        arguments.push_back(
+            checkFunctionArg(1, ft.getArguments()[0].first, visit(node.getOptionalAssignmentExpressions()[0]))
+                .value_or(ErrorExpression(node.getOptionalAssignmentExpressions()[0])));
+        if (node.getOptionalAssignmentExpressions().size() > 1)
+        {
+            auto expression = visit(node.getOptionalAssignmentExpressions()[1]);
+            if (!expression->isUndefined())
+            {
+                auto constant = evaluateConstantExpression(expression);
+                if (!constant || !isInteger(expression->getType()))
+                {
+                    log(Errors::Semantics::EXPECTED_INTEGER_CONSTANT_EXPRESSION_AS_SECOND_ARGUMENT_TO_BUILTIN_PREFETCH
+                            .args(*expression, m_sourceInterface, *expression));
+                }
+                else if (constant->toInt() != 0 && constant->toInt() != 1)
+                {
+                    log(Errors::Semantics::EXPECTED_A_VALUE_OF_0_OR_1_AS_SECOND_ARGUMENT_TO_BUILTIN_PREFETCH.args(
+                        *expression, m_sourceInterface, *expression, *constant));
+                }
+            }
+            arguments.push_back(std::move(expression));
+        }
+        if (node.getOptionalAssignmentExpressions().size() > 2)
+        {
+            auto expression = visit(node.getOptionalAssignmentExpressions()[2]);
+            if (!expression->isUndefined())
+            {
+                auto constant = evaluateConstantExpression(expression);
+                if (!constant || !isInteger(expression->getType()))
+                {
+                    log(Errors::Semantics::EXPECTED_INTEGER_CONSTANT_EXPRESSION_AS_THIRD_ARGUMENT_TO_BUILTIN_PREFETCH
+                            .args(*expression, m_sourceInterface, *expression));
+                }
+                else if (constant->toInt() < 0 || constant->toInt() > 3)
+                {
+                    log(Errors::Semantics::EXPECTED_A_VALUE_OF_0_TO_3_AS_THIRD_ARGUMENT_TO_BUILTIN_PREFETCH.args(
+                        *expression, m_sourceInterface, *expression, *constant));
+                }
+            }
+            arguments.push_back(std::move(expression));
+        }
+    }
+    return CallExpression(PrimitiveType::createVoid(false, false),
+                          std::make_unique<Conversion>(PointerType::create(false, false, false, function->getType()),
+                                                       Conversion::LValue, std::move(function).toUniquePtr()),
+                          node.getOpenParentheses(), std::move(arguments), node.getCloseParentheses());
+}
+
+std::optional<cld::Semantics::ExpressionValue>
+    cld::Semantics::SemanticAnalysis::checkFunctionArg(std::size_t i, Type paramType, ExpressionValue&& expression)
+{
+    paramType = removeQualifiers(adjustParameterType(std::move(paramType)));
+    if (paramType.isUndefined())
+    {
+        return {};
+    }
+    expression = lvalueConversion(std::move(expression));
+    if (expression->isUndefined())
+    {
+        return {std::move(expression)};
+    }
+    doAssignmentLikeConstraints(
+        paramType, expression,
+        [&] {
+            log(Errors::Semantics::EXPECTED_ARGUMENT_N_TO_BE_AN_ARITHMETIC_TYPE.args(*expression, m_sourceInterface, i,
+                                                                                     *expression));
+        },
+        [&] {
+            log(Errors::Semantics::EXPECTED_ARGUMENT_N_TO_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
+                *expression, m_sourceInterface, i, *expression));
+        },
+        [&] {
+            log(Errors::Semantics::CANNOT_PASS_ARGUMENT_TO_INCOMPLETE_TYPE_N_OF_PARAMETER_N.args(
+                *expression, m_sourceInterface, paramType, i, *expression));
+        },
+        [&] {
+            log(Errors::Semantics::CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_N.args(
+                *expression, m_sourceInterface, i, paramType, *expression));
+        },
+        [&] {
+            log(Errors::Semantics::EXPECTED_ARGUMENT_N_TO_BE_NULL_2.args(*expression, m_sourceInterface, i,
+                                                                         *expression));
+        },
+        [&](const ConstValue& constant) {
+            log(Errors::Semantics::EXPECTED_ARGUMENT_N_TO_BE_NULL.args(*expression, m_sourceInterface, i, *expression,
+                                                                       constant));
+        },
+        [&] {
+            log(Errors::Semantics::EXPECTED_ARGUMENT_N_TO_BE_A_POINTER_TYPE.args(*expression, m_sourceInterface, i,
+                                                                                 *expression));
+        },
+        [&] {
+            if (isVoid(cld::get<PointerType>(paramType.getVariant()).getElementType()))
+            {
+                log(Errors::Semantics::CANNOT_PASS_FUNCTION_POINTER_TO_VOID_POINTER_PARAMETER.args(
+                    *expression, m_sourceInterface, *expression));
+            }
+            else
+            {
+                log(Errors::Semantics::CANNOT_PASS_VOID_POINTER_TO_FUNCTION_POINTER_PARAMETER.args(
+                    *expression, m_sourceInterface, *expression));
+            }
+        });
+    return {std::move(expression)};
+}
+
 cld::Semantics::ExpressionValue
     cld::Semantics::SemanticAnalysis::visit(const Syntax::PostFixExpressionFunctionCall& node)
 {
     auto function = visit(node.getPostFixExpression());
-    if (isBuiltinVAStart(function))
+    if (isBuiltinKind(function, BuiltinFunction::VAStart))
     {
-        std::vector<ExpressionValue> arguments;
-        if (node.getOptionalAssignmentExpressions().size() < 2)
-        {
-            log(Errors::Semantics::NOT_ENOUGH_ARGUMENTS_FOR_CALLING_FUNCTION_VA_START_EXPECTED_N_GOT_N.args(
-                *function, m_sourceInterface, 2, node.getOptionalAssignmentExpressions().size(), *function));
-        }
-        else if (node.getOptionalAssignmentExpressions().size() > 2)
-        {
-            log(Errors::Semantics::TOO_MANY_ARGUMENTS_FOR_CALLING_FUNCTION_VA_START_EXPECTED_N_GOT_N.args(
-                *function, m_sourceInterface, 2, node.getOptionalAssignmentExpressions().size(), *function,
-                llvm::ArrayRef(node.getOptionalAssignmentExpressions()).drop_front(2)));
-        }
-        else
-        {
-            arguments.push_back(visit(node.getOptionalAssignmentExpressions()[0]));
-            auto& vaList = *getTypedef("__builtin_va_list");
-            if (!arguments[0]->getType().isUndefined() && !typesAreCompatible(arguments[0]->getType(), vaList))
-            {
-                log(Errors::Semantics::CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_VA_LIST.args(
-                    *arguments[0], m_sourceInterface, 1, *arguments[0]));
-            }
-            // even if the call is done using "__builtin_va_start(list,...)" the list is actually passed as a pointer.
-            // In the case of x86_64 ABI __builtin_va_list is an array type causing pointer decay, in the case
-            // of Windows x64 it's basically as if &list was written. Since this is a builtin call the backend will
-            // have to do special handling either way but we'll insert an lvalueConversion now to force array to pointer
-            // decay
-            if (isArray(vaList))
-            {
-                arguments.back() = lvalueConversion(std::move(arguments.back()));
-            }
-            auto expression = visit(node.getOptionalAssignmentExpressions()[1]);
-            if (!getCurrentFunctionScope())
-            {
-                log(Errors::Semantics::CANNOT_USE_VA_START_OUTSIDE_OF_A_FUNCTION.args(*function, m_sourceInterface,
-                                                                                      *function));
-            }
-            else if (!cld::get<FunctionType>(getCurrentFunctionScope()->currentFunction->getType().getVariant())
-                          .isLastVararg())
-            {
-                log(Errors::Semantics::CANNOT_USE_VA_START_IN_A_FUNCTION_WITH_FIXED_ARGUMENT_COUNT.args(
-                    *function, m_sourceInterface, *function));
-            }
-            else if (auto* declRead = expression->get_if<DeclarationRead>();
-                     !declRead
-                     || (!getCurrentFunctionScope()->currentFunction->getParameterDeclarations().empty()
-                         && &declRead->getDeclRead()
-                                != getCurrentFunctionScope()->currentFunction->getParameterDeclarations().back().get()))
-            {
-                log(Warnings::Semantics::SECOND_ARGUMENT_OF_VA_START_SHOULD_BE_THE_LAST_PARAMETER.args(
-                    *expression, m_sourceInterface, *expression));
-            }
-            arguments.push_back(lvalueConversion(std::move(expression)));
-        }
-        return CallExpression(
-            PrimitiveType::createVoid(false, false),
-            std::make_unique<Conversion>(PointerType::create(false, false, false, function->getType()),
-                                         Conversion::LValue, std::move(function).toUniquePtr()),
-            node.getOpenParentheses(), std::move(arguments), node.getCloseParentheses());
+        return visitVAStart(node, std::move(function));
+    }
+    if (isBuiltinKind(function, BuiltinFunction::Prefetch))
+    {
+        return visitPrefetch(node, std::move(function));
     }
     if (!isBuiltinFunction(function))
     {
@@ -1097,62 +1234,9 @@ cld::Semantics::ExpressionValue
             std::size_t i = 0;
             for (; i < argumentTypes.size(); i++)
             {
-                auto paramType = removeQualifiers(adjustParameterType(argumentTypes[i].first));
-                if (paramType.isUndefined())
-                {
-                    visit(node.getOptionalAssignmentExpressions()[i]);
-                    arguments.emplace_back(ErrorExpression(node.getOptionalAssignmentExpressions()[i]));
-                    continue;
-                }
-                auto expression = lvalueConversion(visit(node.getOptionalAssignmentExpressions()[i]));
-                if (expression->isUndefined())
-                {
-                    arguments.push_back(std::move(expression));
-                    continue;
-                }
-                doAssignmentLikeConstraints(
-                    paramType, expression,
-                    [&] {
-                        log(Errors::Semantics::EXPECTED_ARGUMENT_N_TO_BE_AN_ARITHMETIC_TYPE.args(
-                            *expression, m_sourceInterface, i + 1, *expression));
-                    },
-                    [&] {
-                        log(Errors::Semantics::EXPECTED_ARGUMENT_N_TO_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
-                            *expression, m_sourceInterface, i + 1, *expression));
-                    },
-                    [&] {
-                        log(Errors::Semantics::CANNOT_PASS_ARGUMENT_TO_INCOMPLETE_TYPE_N_OF_PARAMETER_N.args(
-                            *expression, m_sourceInterface, paramType, i + 1, *expression));
-                    },
-                    [&] {
-                        log(Errors::Semantics::CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_N.args(
-                            *expression, m_sourceInterface, i + 1, paramType, *expression));
-                    },
-                    [&] {
-                        log(Errors::Semantics::EXPECTED_ARGUMENT_N_TO_BE_NULL_2.args(*expression, m_sourceInterface,
-                                                                                     i + 1, *expression));
-                    },
-                    [&](const ConstValue& constant) {
-                        log(Errors::Semantics::EXPECTED_ARGUMENT_N_TO_BE_NULL.args(*expression, m_sourceInterface,
-                                                                                   i + 1, *expression, constant));
-                    },
-                    [&] {
-                        log(Errors::Semantics::EXPECTED_ARGUMENT_N_TO_BE_A_POINTER_TYPE.args(
-                            *expression, m_sourceInterface, i + 1, *expression));
-                    },
-                    [&] {
-                        if (isVoid(cld::get<PointerType>(paramType.getVariant()).getElementType()))
-                        {
-                            log(Errors::Semantics::CANNOT_PASS_FUNCTION_POINTER_TO_VOID_POINTER_PARAMETER.args(
-                                *expression, m_sourceInterface, *expression));
-                        }
-                        else
-                        {
-                            log(Errors::Semantics::CANNOT_PASS_VOID_POINTER_TO_FUNCTION_POINTER_PARAMETER.args(
-                                *expression, m_sourceInterface, *expression));
-                        }
-                    });
-                arguments.push_back(std::move(expression));
+                arguments.push_back(
+                    checkFunctionArg(i + 1, argumentTypes[i].first, visit(node.getOptionalAssignmentExpressions()[i]))
+                        .value_or(ErrorExpression(node.getOptionalAssignmentExpressions()[i])));
             }
             for (; i < node.getOptionalAssignmentExpressions().size(); i++)
             {
