@@ -40,7 +40,7 @@ cld::Semantics::analyse(tree,std::move(ctokens),&llvm::errs(),&errors);
 Compiling C source code can be done just like with GCC:
 `cld -c test.c` which will then produce a `test.o` object file.
 
-Projects that have already successfully been compiled include zlib using both glibc and MinGW as libc.
+Projects that have already successfully been compiled include zlib and sqlite3 using both glibc and MinGW as libc.
 
 ## WIP
 
