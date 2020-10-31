@@ -11,7 +11,10 @@ class ValueReset
     T* m_assignedTo;
 
 public:
-    ValueReset(T& assignedTo, T valueAfter) : m_valueAfter(valueAfter), m_assignedTo(&assignedTo) {}
+    template <class U = T>
+    ValueReset(T& assignedTo, U valueAfter) : m_valueAfter(valueAfter), m_assignedTo(&assignedTo)
+    {
+    }
 
     ~ValueReset()
     {

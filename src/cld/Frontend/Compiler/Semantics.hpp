@@ -1834,25 +1834,30 @@ struct FieldInLayout
     std::shared_ptr<const Type> type;
     std::size_t layoutIndex;
     std::optional<std::pair<std::uint32_t, std::uint32_t>> bitFieldBounds;
-    std::uint64_t offset;
 };
 
 using FieldMap = tsl::ordered_map<std::string_view, Field, std::hash<std::string_view>, std::equal_to<std::string_view>,
                                   std::allocator<std::pair<std::string_view, Field>>,
                                   std::vector<std::pair<std::string_view, Field>>>;
 
+struct MemoryLayout
+{
+    Type type;
+    std::size_t offset;
+};
+
 class StructDefinition
 {
     std::string_view m_name;
     FieldMap m_fields;
     std::vector<FieldInLayout> m_fieldLayout;
-    std::vector<Type> m_memLayout;
+    std::vector<MemoryLayout> m_memLayout;
     std::uint64_t m_sizeOf;
     std::uint64_t m_alignOf;
 
 public:
     StructDefinition(std::string_view name, FieldMap fields, std::vector<FieldInLayout> fieldLayout,
-                     std::vector<Type> memLayout, std::uint64_t sizeOf, std::uint64_t alignOf)
+                     std::vector<MemoryLayout> memLayout, std::uint64_t sizeOf, std::uint64_t alignOf)
         : m_name(name),
           m_fields(std::move(fields)),
           m_fieldLayout(std::move(fieldLayout)),
@@ -1882,7 +1887,7 @@ public:
         return m_fieldLayout;
     }
 
-    [[nodiscard]] const std::vector<Type>& getMemLayout() const
+    [[nodiscard]] const std::vector<MemoryLayout>& getMemLayout() const
     {
         return m_memLayout;
     }

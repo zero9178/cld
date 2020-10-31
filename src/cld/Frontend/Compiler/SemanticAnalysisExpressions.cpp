@@ -591,12 +591,19 @@ cld::Semantics::ExpressionValue
     }
     llvm::ArrayRef<Lexer::CToken> range(node.getMemberName(), node.getMemberName() + 1);
     std::uint64_t currentOffset = 0;
-    auto fieldLayout = getFieldLayout(type);
+
+    const Type* currentType = &type;
     for (auto& iter : result->second.indices)
     {
-        currentOffset += fieldLayout[iter].offset;
+        if (isUnion(*currentType))
+        {
+            currentType = result->second.type.get();
+            continue;
+        }
+        auto memLayout = getMemoryLayout(*currentType);
+        currentOffset += memLayout[iter].offset;
+        currentType = &memLayout[iter].type;
     }
-    const Type* currentType = result->second.type.get();
     for (auto& iter : node.getMemberSuffix())
     {
         if (std::holds_alternative<Lexer::CTokenIterator>(iter))
@@ -624,6 +631,17 @@ cld::Semantics::ExpressionValue
                                        node);
             }
             range = llvm::ArrayRef(node.getMemberName(), cld::get<Lexer::CTokenIterator>(iter) + 1);
+            for (auto& index : result->second.indices)
+            {
+                if (isUnion(*currentType))
+                {
+                    currentType = result->second.type.get();
+                    continue;
+                }
+                auto memLayout = getMemoryLayout(*currentType);
+                currentOffset += memLayout[index].offset;
+                currentType = &memLayout[index].type;
+            }
         }
         else
         {

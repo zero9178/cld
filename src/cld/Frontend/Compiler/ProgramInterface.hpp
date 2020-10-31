@@ -138,7 +138,7 @@ public:
 
     const FieldMap& getFields(const Type& recordType) const;
 
-    llvm::ArrayRef<Type> getMemoryLayout(const Type& structType) const;
+    llvm::ArrayRef<MemoryLayout> getMemoryLayout(const Type& structType) const;
 
     llvm::ArrayRef<FieldInLayout> getFieldLayout(const Type& recordType) const;
 

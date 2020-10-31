@@ -12,6 +12,7 @@
 #include <cld/Frontend/Compiler/SemanticUtil.hpp>
 #include <cld/Support/Filesystem.hpp>
 #include <cld/Support/ScopeExit.hpp>
+#include <cld/Support/ValueReset.h>
 
 #include <numeric>
 
@@ -109,6 +110,7 @@ class CodeGenerator final
     using TypeVariantKey = std::variant<cld::Semantics::StructType, cld::Semantics::UnionType>;
 
     std::unordered_map<TypeVariantKey, llvm::Type*> m_types;
+    std::unordered_map<TypeVariantKey, llvm::DIType*> m_debugTypes;
 
     struct ABITransformations
     {
@@ -148,6 +150,8 @@ class CodeGenerator final
     std::unordered_map<std::shared_ptr<const cld::Semantics::ExpressionBase>, llvm::Value*> m_valSizes;
     std::unordered_map<const cld::Semantics::Declaration * CLD_NON_NULL, llvm::AllocaInst*> m_stackSaves;
     std::unordered_map<std::string_view, llvm::GlobalVariable*> m_cGlobalVariables;
+    std::vector<llvm::DIFile*> m_fileIdToFile;
+    std::vector<llvm::DILocalScope*> m_debugScopes;
 
     llvm::Value* toBool(llvm::Value* value)
     {
@@ -507,14 +511,12 @@ class CodeGenerator final
                 i++;
                 if (change == ABITransformations::Unchanged)
                 {
-                    auto* var =
-                        m_builder.CreateAlloca(operand, nullptr, llvm::StringRef{paramDecl->getNameToken()->getText()});
+                    auto* var = createAllocaAtTop(operand, paramDecl->getNameToken()->getText());
                     var->setAlignment(llvm::Align(paramDecl->getType().getAlignOf(m_programInterface)));
                     m_lvalues.emplace(paramDecl.get(), var);
                     continue;
                 }
-                auto* var = m_builder.CreateAlloca(visit(paramDecl->getType()), nullptr,
-                                                   llvm::StringRef{paramDecl->getNameToken()->getText()});
+                auto* var = createAllocaAtTop(visit(paramDecl->getType()), paramDecl->getNameToken()->getText());
                 var->setAlignment(llvm::Align(paramDecl->getType().getAlignOf(m_programInterface)));
                 m_lvalues.emplace(paramDecl.get(), var);
             }
@@ -527,8 +529,7 @@ class CodeGenerator final
                     continue;
                 }
                 auto& paramDecl = (*paramDecls)[origArgI];
-                auto* var = m_builder.CreateAlloca(visit(paramDecl->getType()), nullptr,
-                                                   llvm::StringRef{paramDecl->getNameToken()->getText()});
+                auto* var = createAllocaAtTop(visit(paramDecl->getType()), paramDecl->getNameToken()->getText());
                 var->setAlignment(llvm::Align(paramDecl->getType().getAlignOf(m_programInterface)));
                 m_lvalues.emplace(paramDecl.get(), var);
             }
@@ -737,6 +738,13 @@ class CodeGenerator final
         m_builder.CreateAlignedStore(value, ptr.value, ptr.alignment, isVolatile);
     }
 
+    llvm::AllocaInst* createAllocaAtTop(llvm::Type* type, std::string_view name = {})
+    {
+        llvm::IRBuilderBase::InsertPointGuard guard(m_builder);
+        m_builder.SetInsertPoint(&m_currentFunction->getEntryBlock(), m_currentFunction->getEntryBlock().begin());
+        return m_builder.CreateAlloca(type, nullptr, llvm::StringRef{name});
+    }
+
     llvm::Align calcAlign(llvm::Value* gep, llvm::Align alignment)
     {
         bool deleteInst = false;
@@ -808,8 +816,8 @@ class CodeGenerator final
             // valid
             return valueOf(m_builder.CreateBitCast(ptr, pointerType), ptr.alignment);
         }
-        llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(), m_currentFunction->getEntryBlock().begin());
-        auto* alloca = temp.CreateAlloca(pointerType->getPointerElementType());
+
+        auto* alloca = createAllocaAtTop(pointerType->getPointerElementType());
         alloca->setAlignment(m_module.getDataLayout().getABITypeAlign(pointerType->getPointerElementType()));
         m_builder.CreateLifetimeStart(alloca, m_builder.getInt64(m_module.getDataLayout().getTypeAllocSize(
                                                   pointerType->getPointerElementType())));
@@ -1212,6 +1220,26 @@ class CodeGenerator final
         return m_builder.CreateTrunc(value.value, m_builder.getInt1Ty());
     }
 
+    llvm::DIFile* getFile(cld::Lexer::CTokenIterator iter) const
+    {
+        return m_fileIdToFile[iter->getFileId()];
+    }
+
+    unsigned getLine(cld::Lexer::CTokenIterator iter) const
+    {
+        return iter->getLine(m_sourceInterface);
+    }
+
+    unsigned getColumn(cld::Lexer::CTokenIterator iter) const
+    {
+        return iter->getLine(m_sourceInterface);
+    }
+
+    llvm::DILocation* getLocation(cld::Lexer::CTokenIterator iter)
+    {
+        return llvm::DILocation::get(m_module.getContext(), getLine(iter), getColumn(iter), m_debugScopes.back());
+    }
+
 public:
     explicit CodeGenerator(llvm::Module& module, const cld::Semantics::ProgramInterface& programInterface,
                            const cld::SourceInterface& sourceInterface, cld::Triple triple,
@@ -1224,6 +1252,42 @@ public:
     {
         auto fullPath = cld::fs::u8path(m_sourceInterface.getFiles()[1].path);
         module.setSourceFileName(fullPath.filename().u8string());
+        if (m_options.debugEmission == cld::CGLLVM::DebugEmission::None)
+        {
+            return;
+        }
+        llvm::DIFile* mainFile;
+        for (auto& iter : m_sourceInterface.getFiles())
+        {
+            auto path = cld::fs::u8path(iter.path);
+            auto dir = path;
+            dir.remove_filename();
+            auto* file = m_debugInfo.createFile(path.filename().u8string(), dir.u8string());
+            if (path == fullPath)
+            {
+                mainFile = file;
+            }
+            m_fileIdToFile.push_back(file);
+        }
+        if (!mainFile)
+        {
+            return;
+        }
+        llvm::DICompileUnit::DebugEmissionKind kind = llvm::DICompileUnit::NoDebug;
+        switch (m_options.debugEmission)
+        {
+            case cld::CGLLVM::DebugEmission::None: kind = llvm::DICompileUnit::NoDebug; break;
+            case cld::CGLLVM::DebugEmission::Line: kind = llvm::DICompileUnit::LineTablesOnly; break;
+            case cld::CGLLVM::DebugEmission::Default:
+            case cld::CGLLVM::DebugEmission::Extended: kind = llvm::DICompileUnit::FullDebug; break;
+        }
+        m_debugInfo.createCompileUnit(llvm::dwarf::DW_LANG_C99, mainFile, "cld", options.ol != llvm::CodeGenOpt::None,
+                                      "", 0, {}, kind);
+    }
+
+    ~CodeGenerator()
+    {
+        m_debugInfo.finalize();
     }
 
     llvm::Type* visit(const cld::Semantics::Type& type)
@@ -1309,7 +1373,7 @@ public:
                 std::vector<llvm::Type*> fields;
                 for (auto& iter : structDef->getMemLayout())
                 {
-                    fields.push_back(visit(iter));
+                    fields.push_back(visit(iter.type));
                 }
                 type->setBody(fields);
                 return type;
@@ -1387,6 +1451,135 @@ public:
             });
     }
 
+    llvm::DIType* visitDebug(const cld::Semantics::Type& type)
+    {
+        auto* result = cld::match(
+            type.getVariant(), [](const auto&) -> llvm::DIType* { CLD_UNREACHABLE; },
+            [&](const cld::Semantics::PrimitiveType& primitive) -> llvm::DIType* {
+                std::string_view name;
+                unsigned encoding = 0;
+                switch (primitive.getKind())
+                {
+                    case cld::Semantics::PrimitiveType::Char:
+                        name = "char";
+                        encoding = m_programInterface.getLanguageOptions().charIsSigned ?
+                                       llvm::dwarf::DW_ATE_signed_char :
+                                       llvm::dwarf::DW_ATE_unsigned_char;
+                        break;
+                    case cld::Semantics::PrimitiveType::SignedChar:
+                        name = "signed char";
+                        encoding = llvm::dwarf::DW_ATE_signed_char;
+                        break;
+                    case cld::Semantics::PrimitiveType::UnsignedChar:
+                        name = "unsigned char";
+                        encoding = llvm::dwarf::DW_ATE_unsigned_char;
+                        break;
+                    case cld::Semantics::PrimitiveType::Bool:
+                        name = "bool";
+                        encoding = llvm::dwarf::DW_ATE_boolean;
+                        break;
+                    case cld::Semantics::PrimitiveType::Short:
+                        name = "short";
+                        encoding = llvm::dwarf::DW_ATE_signed;
+                        break;
+                    case cld::Semantics::PrimitiveType::UnsignedShort:
+                        name = "unsigned short";
+                        encoding = llvm::dwarf::DW_ATE_unsigned;
+                        break;
+                    case cld::Semantics::PrimitiveType::Int:
+                        name = "int";
+                        encoding = llvm::dwarf::DW_ATE_signed;
+                        break;
+                    case cld::Semantics::PrimitiveType::UnsignedInt:
+                        name = "unsigned int";
+                        encoding = llvm::dwarf::DW_ATE_unsigned;
+                        break;
+                    case cld::Semantics::PrimitiveType::Long:
+                        name = "long";
+                        encoding = llvm::dwarf::DW_ATE_signed;
+                        break;
+                    case cld::Semantics::PrimitiveType::UnsignedLong:
+                        name = "unsigned long";
+                        encoding = llvm::dwarf::DW_ATE_unsigned;
+                        break;
+                    case cld::Semantics::PrimitiveType::LongLong:
+                        name = "long long";
+                        encoding = llvm::dwarf::DW_ATE_signed;
+                        break;
+                    case cld::Semantics::PrimitiveType::UnsignedLongLong:
+                        name = "unsigned long long";
+                        encoding = llvm::dwarf::DW_ATE_unsigned;
+                        break;
+                    case cld::Semantics::PrimitiveType::Float:
+                        name = "float";
+                        encoding = llvm::dwarf::DW_ATE_float;
+                        break;
+                    case cld::Semantics::PrimitiveType::Double:
+                        name = "double";
+                        encoding = llvm::dwarf::DW_ATE_float;
+                        break;
+                    case cld::Semantics::PrimitiveType::LongDouble:
+                        name = "long double";
+                        encoding = llvm::dwarf::DW_ATE_float;
+                        break;
+                    case cld::Semantics::PrimitiveType::Void:
+                        name = "void";
+                        encoding = llvm::dwarf::DW_ATE_unsigned;
+                        break;
+                }
+                return m_debugInfo.createBasicType(name, primitive.getBitCount(), encoding);
+            },
+            [&](const cld::Semantics::PointerType& pointerType) -> llvm::DIType* {
+                auto* element = visitDebug(pointerType.getElementType());
+                auto* pointer =
+                    m_debugInfo.createPointerType(element, m_programInterface.getLanguageOptions().sizeOfVoidStar);
+                if (pointerType.isRestricted())
+                {
+                    pointer = m_debugInfo.createQualifiedType(llvm::dwarf::DW_TAG_restrict_type, pointer);
+                }
+                return pointer;
+            },
+            [&](const cld::Semantics::ArrayType& arrayType) -> llvm::DIType* {
+                auto* element = visitDebug(arrayType.getType());
+                return m_debugInfo.createArrayType(arrayType.getSize(),
+                                                   arrayType.getType().getAlignOf(m_programInterface) * 8, element, {});
+            },
+            [&](const cld::Semantics::AbstractArrayType& arrayType) -> llvm::DIType* {
+                auto* element = visitDebug(arrayType.getType());
+                return m_debugInfo.createArrayType(1, arrayType.getType().getAlignOf(m_programInterface) * 8, element,
+                                                   {});
+            },
+            [&](const cld::Semantics::ValArrayType&) -> llvm::DIType* {
+                // TODO:
+                CLD_UNREACHABLE;
+            },
+            [&](const cld::Semantics::StructType& structType) -> llvm::DIType* {
+                auto result = m_debugTypes.find(structType);
+                if (result != m_debugTypes.end())
+                {
+                    return result->second;
+                }
+                auto* structDef = m_programInterface.getStructDefinition(structType.getId());
+                (void)structDef;
+                CLD_UNREACHABLE;
+            });
+        if (type.isVolatile())
+        {
+            result = m_debugInfo.createQualifiedType(llvm::dwarf::DW_TAG_volatile_type, result);
+        }
+        if (type.isConst())
+        {
+            result = m_debugInfo.createQualifiedType(llvm::dwarf::DW_TAG_const_type, result);
+        }
+        if (!type.isTypedef())
+        {
+            return result;
+        }
+        // TODO:
+        // return m_debugInfo.createTypedef(result,type.getName(),);
+        return result;
+    }
+
     void visit(const cld::Semantics::TranslationUnit& translationUnit)
     {
         for (auto& iter : translationUnit.getGlobals())
@@ -1433,7 +1626,7 @@ public:
                                               llvm::StringRef{declaration.getNameToken()->getText()}, &m_module);
             applyFunctionAttributes(*function, ft,
                                     cld::get<cld::Semantics::FunctionType>(declaration.getType().getVariant()));
-            if (!m_options.pic)
+            if (!m_options.reloc)
             {
                 function->setDSOLocal(true);
             }
@@ -1500,7 +1693,7 @@ public:
                         global->setAlignment(llvm::Align(declType.getAlignOf(m_programInterface)));
                     }
                 }
-                if (!m_options.pic)
+                if (!m_options.reloc)
                 {
                     global->setDSOLocal(true);
                 }
@@ -1562,8 +1755,8 @@ public:
                     break;
                 }
             }
-            llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(), m_currentFunction->getEntryBlock().begin());
-            auto* stackSave = temp.CreateAlloca(m_builder.getInt8PtrTy(0), nullptr, "stack.save");
+
+            auto* stackSave = createAllocaAtTop(m_builder.getInt8PtrTy(0), "stack.save");
             m_stackSaves[&declaration] = stackSave;
             auto* stack = m_builder.CreateIntrinsic(llvm::Intrinsic::stacksave, {}, {});
             createStore(stack, stackSave, false);
@@ -1572,8 +1765,7 @@ public:
         }
         else
         {
-            llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(), m_currentFunction->getEntryBlock().begin());
-            var = temp.CreateAlloca(type, nullptr, llvm::StringRef{declaration.getNameToken()->getText()});
+            var = createAllocaAtTop(type, declaration.getNameToken()->getText());
             if (m_triple.getArchitecture() == cld::Architecture::x86_64
                 && cld::Semantics::isArray(declaration.getType())
                 && declaration.getType().getSizeOf(m_programInterface) >= 16)
@@ -1632,22 +1824,59 @@ public:
             return;
         }
 
-        if (!m_options.pic)
+        if (!m_options.reloc)
         {
             function->setDSOLocal(true);
         }
+
         auto* bb = llvm::BasicBlock::Create(m_module.getContext(), "entry", function);
         m_builder.SetInsertPoint(bb);
+        cld::ScopeExit insertionPointReset{[&] {
+            m_builder.ClearInsertionPoint();
+            m_builder.SetCurrentDebugLocation({});
+        }};
+
         m_currentFunction = function;
-        applyFunctionAttributes(*function, function->getFunctionType(), ft,
+        cld::ValueReset currentFunctionReset(m_currentFunction, nullptr);
+
+        if (m_options.debugEmission != cld::CGLLVM::DebugEmission::None)
+        {
+            std::vector<llvm::Metadata*> parameters;
+            for (auto& [type, name] : ft.getArguments())
+            {
+                (void)name;
+                // TODO parameters.push_back(visitDebug(cld::Semantics::adjustParameterType(type)));
+                (void)type;
+            }
+            auto* subRoutineType =
+                m_debugInfo.createSubroutineType(llvm::MDTuple::get(m_module.getContext(), parameters));
+            llvm::DISubprogram::DISPFlags spFlags = llvm::DISubprogram::SPFlagDefinition;
+            if (functionDefinition.getNameToken()->getText() == "main")
+            {
+                spFlags |= llvm::DISubprogram::SPFlagMainSubprogram;
+            }
+            auto* subProgram = m_debugInfo.createFunction(
+                getFile(functionDefinition.getNameToken()), functionDefinition.getNameToken()->getText(),
+                functionDefinition.getNameToken()->getText(), getFile(functionDefinition.getNameToken()),
+                getLine(functionDefinition.getNameToken()), subRoutineType, getLine(functionDefinition.getNameToken()),
+                ft.isKandR() ? llvm::DINode::FlagZero : llvm::DINode::FlagPrototyped, spFlags);
+            m_debugScopes = {subProgram};
+            cld::ValueReset subProgramReset(m_debugScopes, {});
+            m_currentFunction->setSubprogram(subProgram);
+            m_builder.SetCurrentDebugLocation(getLocation(functionDefinition.getNameToken()));
+        }
+
+        applyFunctionAttributes(*m_currentFunction, m_currentFunction->getFunctionType(), ft,
                                 &functionDefinition.getParameterDeclarations());
+
         auto transformations = m_functionABITransformations.find(ft);
         CLD_ASSERT(transformations != m_functionABITransformations.end());
         m_currentFunctionABI = &transformations->second;
+        cld::ValueReset currentFunctionABIReset(m_currentFunctionABI, nullptr);
         if (transformations->second.returnType == ABITransformations::Flattened
             || transformations->second.returnType == ABITransformations::IntegerRegister)
         {
-            m_returnSlot = m_builder.CreateAlloca(function->getReturnType());
+            m_returnSlot = createAllocaAtTop(function->getReturnType());
             m_returnSlot->setAlignment(llvm::Align(ft.getReturnType().getAlignOf(m_programInterface)));
         }
         else
@@ -1723,7 +1952,10 @@ public:
             // The expressions of these could previously not be evaluated as there was no function block to
             // evaluate the expressions nor parameters transferred that's why we're doing it now
             (void)name;
-            visit(type);
+            if (cld::Semantics::isVariablyModified(type))
+            {
+                visit(type);
+            }
         }
 
         visit(functionDefinition.getCompoundStatement());
@@ -1745,9 +1977,6 @@ public:
                 m_builder.CreateUnreachable();
             }
         }
-        m_builder.ClearInsertionPoint();
-        m_currentFunction = nullptr;
-        m_currentFunctionABI = nullptr;
     }
 
     void visit(const cld::Semantics::CompoundStatement& compoundStatement)
@@ -2170,6 +2399,10 @@ public:
 
     Value visit(const cld::Semantics::ExpressionBase& expression)
     {
+        if (!m_debugScopes.empty())
+        {
+            m_builder.SetCurrentDebugLocation(getLocation(expression.begin()));
+        }
         return expression.match([](const cld::Semantics::ErrorExpression&) -> Value { CLD_UNREACHABLE; },
                                 [&](const auto& value) -> Value { return visit(value); });
     }
@@ -2544,6 +2777,14 @@ public:
             }
             case cld::Semantics::BinaryOperator::LogicAnd:
             {
+                if (!m_currentFunction)
+                {
+                    if (llvm::cast<llvm::Constant>(lhs.value)->isNullValue())
+                    {
+                        return lhs;
+                    }
+                    return visit(binaryExpression.getRightExpression());
+                }
                 lhs = boolToi1(lhs);
                 auto* falseBranch =
                     llvm::BasicBlock::Create(m_module.getContext(), "logicAnd.false", m_currentFunction);
@@ -2566,6 +2807,14 @@ public:
             }
             case cld::Semantics::BinaryOperator::LogicOr:
             {
+                if (!m_currentFunction)
+                {
+                    if (!llvm::cast<llvm::Constant>(lhs.value)->isNullValue())
+                    {
+                        return lhs;
+                    }
+                    return visit(binaryExpression.getRightExpression());
+                }
                 lhs = boolToi1(lhs);
                 auto* falseBranch = llvm::BasicBlock::Create(m_module.getContext(), "logicOr.false", m_currentFunction);
                 auto* trueBranch = llvm::BasicBlock::Create(m_module.getContext(), "logicOr.true", m_currentFunction);
@@ -2872,6 +3121,17 @@ public:
     {
         auto boolean = visit(conditional.getBoolExpression());
         boolean = boolToi1(boolean);
+        if (!m_currentFunction)
+        {
+            // We are in a constant expression, most likely in an initializer constant expression
+            auto* constant = llvm::cast<llvm::Constant>(boolean.value);
+            if (constant->isNullValue())
+            {
+                return visit(conditional.getFalseExpression());
+            }
+            return visit(conditional.getTrueExpression());
+        }
+
         auto* trueBranch = llvm::BasicBlock::Create(m_builder.getContext(), "cond.true", m_currentFunction);
         auto* falseBranch = llvm::BasicBlock::Create(m_builder.getContext(), "cond.false", m_currentFunction);
         auto* contBr = llvm::BasicBlock::Create(m_builder.getContext(), "cond.continue", m_currentFunction);
@@ -3165,8 +3425,8 @@ public:
         if (transformation->second.returnType == ABITransformations::PointerToTemporary)
         {
             llvmFnI = 1;
-            llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(), m_currentFunction->getEntryBlock().begin());
-            returnSlot = temp.CreateAlloca(ft->getParamType(0)->getPointerElementType(), nullptr, "ret");
+
+            returnSlot = createAllocaAtTop(ft->getParamType(0)->getPointerElementType(), "ret");
             returnSlot->setAlignment(llvm::Align(call.getType().getAlignOf(m_programInterface)));
             m_builder.CreateLifetimeStart(returnSlot, m_builder.getInt64(call.getType().getSizeOf(m_programInterface)));
             arguments.emplace_back(returnSlot);
@@ -3195,9 +3455,7 @@ public:
                 }
                 if (change == ABITransformations::PointerToTemporary)
                 {
-                    llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(),
-                                           m_currentFunction->getEntryBlock().begin());
-                    auto* ret = temp.CreateAlloca(value.value->getType());
+                    auto* ret = createAllocaAtTop(value.value->getType());
                     ret->setAlignment(llvm::Align((*iter)->getType().getAlignOf(m_programInterface)));
                     m_builder.CreateLifetimeStart(ret,
                                                   m_builder.getInt64((*iter)->getType().getSizeOf(m_programInterface)));
@@ -3269,8 +3527,7 @@ public:
             case ABITransformations::IntegerRegister:
             case ABITransformations::Flattened:
             {
-                llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(), m_currentFunction->getEntryBlock().begin());
-                auto* intValue = temp.CreateAlloca(result->getType());
+                auto* intValue = createAllocaAtTop(result->getType());
                 intValue->setAlignment(llvm::Align(m_module.getDataLayout().getABITypeAlign(result->getType())));
                 m_builder.CreateLifetimeStart(
                     intValue, m_builder.getInt64(m_module.getDataLayout().getTypeAllocSize(result->getType())));
@@ -3296,8 +3553,8 @@ public:
             global->setAlignment(llvm::MaybeAlign(compoundLiteral.getType().getAlignOf(m_programInterface)));
             return global;
         }
-        llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(), m_currentFunction->getEntryBlock().begin());
-        auto* var = temp.CreateAlloca(type);
+
+        auto* var = createAllocaAtTop(type);
         var->setAlignment(llvm::Align(compoundLiteral.getType().getAlignOf(m_programInterface)));
         if (m_builder.GetInsertBlock())
         {
@@ -3368,8 +3625,7 @@ public:
                     }
                 }
 
-                llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(), m_currentFunction->getEntryBlock().begin());
-                auto* allocaInst = temp.CreateAlloca(destType, nullptr, "va_arg.ret");
+                auto* allocaInst = createAllocaAtTop(destType, "va_arg.ret");
                 allocaInst->setAlignment(llvm::Align(exprAlign));
                 m_builder.CreateLifetimeStart(allocaInst, m_builder.getInt64(sizeOf));
                 m_builder.CreateMemCpy(allocaInst, allocaInst->getAlign(), vaList, *vaList.alignment, sizeOf);
@@ -3383,9 +3639,7 @@ public:
                 OnStack:
                     auto loadedStackPointer = x64LoadFromStack(vaList, destType);
 
-                    llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(),
-                                           m_currentFunction->getEntryBlock().begin());
-                    auto* allocaInst = temp.CreateAlloca(destType, nullptr, "va_arg.ret");
+                    auto* allocaInst = createAllocaAtTop(destType, "va_arg.ret");
                     allocaInst->setAlignment(llvm::Align(vaArg.getType().getAlignOf(m_programInterface)));
                     m_builder.CreateLifetimeStart(allocaInst, m_builder.getInt64(sizeOf));
                     m_builder.CreateMemCpy(allocaInst, allocaInst->getAlign(), loadedStackPointer,
@@ -3471,9 +3725,7 @@ public:
                 }
                 else
                 {
-                    llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(),
-                                           m_currentFunction->getEntryBlock().begin());
-                    auto* allocaInst = temp.CreateAlloca(destType, nullptr, "va_arg.temp");
+                    auto* allocaInst = createAllocaAtTop(destType, "va_arg.temp");
                     allocaInst->setAlignment(llvm::Align(vaArg.getType().getAlignOf(m_programInterface)));
                     m_builder.CreateLifetimeStart(allocaInst, m_builder.getInt64(sizeOf));
                     auto dest = createBitCast(
@@ -3543,8 +3795,7 @@ public:
                     return createLoad(valueOf(phi, std::min(*regValue.alignment, *stackValue.alignment)), false);
                 }
 
-                llvm::IRBuilder<> temp(&m_currentFunction->getEntryBlock(), m_currentFunction->getEntryBlock().begin());
-                auto* allocaInst = temp.CreateAlloca(destType, nullptr, "va_arg.ret");
+                auto* allocaInst = createAllocaAtTop(destType, "va_arg.ret");
                 allocaInst->setAlignment(llvm::Align(vaArg.getType().getAlignOf(m_programInterface)));
                 m_builder.CreateLifetimeStart(allocaInst, m_builder.getInt64(sizeOf));
                 m_builder.CreateMemCpy(allocaInst, allocaInst->getAlign(), phi,
@@ -3658,9 +3909,7 @@ public:
 } // namespace
 
 std::unique_ptr<llvm::TargetMachine> cld::CGLLVM::generateLLVM(llvm::Module& module, const Semantics::Program& program,
-                                                               Triple triple, const Options& options,
-                                                               llvm::Optional<llvm::Reloc::Model> reloc,
-                                                               llvm::CodeGenOpt::Level ol)
+                                                               Triple triple, const Options& options)
 {
     llvm::Triple llvmTriple;
     switch (triple.getArchitecture())
@@ -3690,7 +3939,7 @@ std::unique_ptr<llvm::TargetMachine> cld::CGLLVM::generateLLVM(llvm::Module& mod
         return {};
     }
     auto machine = std::unique_ptr<llvm::TargetMachine>(
-        targetM->createTargetMachine(module.getTargetTriple(), "generic", "", {}, reloc, {}, ol));
+        targetM->createTargetMachine(module.getTargetTriple(), "generic", "", {}, options.reloc, {}, options.ol));
     module.setDataLayout(machine->createDataLayout());
     CodeGenerator codeGenerator(module, program, program.getSourceObject(), triple, options);
     codeGenerator.visit(program.getTranslationUnit());

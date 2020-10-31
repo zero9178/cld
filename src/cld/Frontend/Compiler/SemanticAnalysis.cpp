@@ -1317,6 +1317,9 @@ cld::Semantics::ConstValue
                     {
                         if (!lhs)
                         {
+                            // Check if the right operand is an integer so that we do check if it'd be a valid integer
+                            // constant expression if this wasn't short circuiting. This actually isn't sufficient
+                            // though. TODO: Implement a tree walk to check for non integer constant expressions
                             if (mode == Integer && binaryOperator.getRightExpression().is<Conversion>()
                                 && binaryOperator.getRightExpression().cast<Conversion>().getKind()
                                        == Conversion::Implicit
@@ -1347,6 +1350,7 @@ cld::Semantics::ConstValue
                     {
                         if (lhs)
                         {
+                            // TODO: Implement a tree walk to check for non integer constant expressions
                             if (mode == Integer && binaryOperator.getRightExpression().is<Conversion>()
                                 && binaryOperator.getRightExpression().cast<Conversion>().getKind()
                                        == Conversion::Implicit
@@ -1938,10 +1942,11 @@ void cld::Semantics::SemanticAnalysis::createBuiltins()
             fields.insert({"overflow_arg_area", {voidStar, "overflow_arg_area", nullptr, {2}, {}, {}}});
             fields.insert({"reg_save_area", {voidStar, "reg_save_area", nullptr, {3}, {}, {}}});
             auto fieldLayout = std::vector<FieldInLayout>{
-                {unsignedInt, 0, {}, 0}, {unsignedInt, 1, {}, 4}, {voidStar, 2, {}, 8}, {voidStar, 3, {}, 16}};
-            auto memLayout = std::vector<Type>{*unsignedInt, *unsignedInt, *voidStar, *voidStar};
+                {unsignedInt, 0, {}}, {unsignedInt, 1, {}}, {voidStar, 2, {}}, {voidStar, 3, {}}};
+            auto memLayout =
+                std::vector<MemoryLayout>{{*unsignedInt, 0}, {*unsignedInt, 4}, {*voidStar, 8}, {*voidStar, 16}};
             m_structDefinitions.emplace_back(StructDefinition("__va_list_tag", std::move(fields),
-                                                              std::move(fieldLayout), std::move(memLayout), 24, 16));
+                                                              std::move(fieldLayout), std::move(memLayout), 24, 8));
             auto elementType = StructType::create(false, false, "__va_list_tag", m_structDefinitions.size() - 1);
             getCurrentScope().types.emplace("__va_list_tag",
                                             TagTypeInScope{nullptr, StructTag{m_structDefinitions.size() - 1}});

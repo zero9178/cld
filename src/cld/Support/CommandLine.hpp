@@ -24,8 +24,12 @@ enum class CLIMultiArg
     BitwiseMerge
 };
 
+struct CommandLineOptionBase
+{
+};
+
 template <class ReturnType, std::size_t args, class... Alternatives>
-class CommandLineOption
+class CommandLineOption : public CommandLineOptionBase
 {
     std::string_view m_firstOptionString;
     std::tuple<Alternatives...> m_alternatives;
@@ -854,6 +858,21 @@ public:
     {
         return std::get<2>(std::get<std::tuple<detail::CommandLine::Pointer<&option>,
                                                detail::CommandLine::OptionStorage<option>, int>>(m_storage));
+    }
+
+    template <auto&... options>
+    [[nodiscard]] const CommandLineOptionBase* lastSpecified() const noexcept
+    {
+        static_assert(sizeof...(options) > 0);
+        std::array<std::pair<const CommandLineOptionBase*, int>, sizeof...(options)> temp = {
+            std::pair{&options, pos<options>()}...};
+        auto result = std::max_element(temp.begin(), temp.end(),
+                                       [](const auto& lhs, const auto& rhs) { return lhs.second < rhs.second; });
+        if (result->second < 0)
+        {
+            return nullptr;
+        }
+        return result->first;
     }
 
     void printHelp(llvm::raw_ostream& os) const

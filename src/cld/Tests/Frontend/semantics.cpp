@@ -4670,8 +4670,8 @@ TEST_CASE("Semantics flexible array member", "[semantics]")
         REQUIRE(structDef->getFields().size() == 2);
         REQUIRE(structDef->getFieldLayout().size() == 2);
         REQUIRE(structDef->getMemLayout().size() == 2);
-        CHECK(structDef->getFieldLayout()[0].offset == 0);
-        CHECK(structDef->getFieldLayout()[1].offset == 4);
+        CHECK(structDef->getMemLayout()[0].offset == 0);
+        CHECK(structDef->getMemLayout()[1].offset == 4);
     }
     SEMA_PRODUCES("struct A{ int f[]; };", ProducesError(INCOMPLETE_TYPE_NOT_ALLOWED_IN_STRUCT, "'int[]'"));
     SEMA_PRODUCES("struct A{ int r;int f[],c; };", ProducesError(INCOMPLETE_TYPE_NOT_ALLOWED_IN_STRUCT, "'int[]'"));
@@ -4707,4 +4707,50 @@ TEST_CASE("Semantics flexible array member", "[semantics]")
         " union B r;\n"
         "};",
         ProducesError(UNION_WITH_STRUCT_OR_UNION_CONTAINING_A_FLEXIBLE_ARRAY_MEMBER_IS_NOT_ALLOWED_IN_STRUCT));
+}
+
+TEST_CASE("Semantics offsetof", "[semantics]")
+{
+    auto& expr = generateExpression(
+        "\n"
+        "typedef unsigned short LogEst;\n"
+        "\n"
+        "typedef unsigned long long Bitmask;\n"
+        "\n"
+        "struct WhereInfo\n"
+        "{\n"
+        "    int* pParse;\n"
+        "    int* pTabList;\n"
+        "    int* pOrderBy;\n"
+        "    int* pResultSet;\n"
+        "    int* pWhere;\n"
+        "    int aiCurOnePass[2];\n"
+        "    int iContinue;\n"
+        "    int iBreak;\n"
+        "    int savedNQueryLoop;\n"
+        "    unsigned short wctrlFlags;\n"
+        "    LogEst iLimit;\n"
+        "    unsigned char nLevel;\n"
+        "    char nOBSat;\n"
+        "    unsigned char eOnePass;\n"
+        "    unsigned char eDistinct;\n"
+        "    unsigned bDeferredSeek:1;\n"
+        "    unsigned untestedTerms:1;\n"
+        "    unsigned bOrderedInnerLoops:1;\n"
+        "    unsigned sorted:1;\n"
+        "    LogEst nRowOut;\n"
+        "    int iTop;\n"
+        "    int* pLoops;\n"
+        "    int* pExprMods;\n"
+        "    Bitmask revMask;\n"
+        "    int f;\n"
+        "};\n"
+        "\n"
+        "int main(void)\n"
+        "{\n"
+        "    __builtin_offsetof(struct WhereInfo,f);// - __builtin_offsetof(struct WhereInfo,nOBSat);\n"
+        "}",
+        cld::LanguageOptions::fromTriple(x64linux));
+    REQUIRE(expr.is<BuiltinOffsetOf>());
+    CHECK(expr.cast<BuiltinOffsetOf>().getOffset() == 104);
 }

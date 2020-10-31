@@ -14,7 +14,7 @@
 
 using namespace Catch::Matchers;
 
-constexpr cld::CGLLVM::Options emitAllDecls = [] {
+static cld::CGLLVM::Options emitAllDecls = [] {
     cld::CGLLVM::Options result;
     result.emitAllDecls = true;
     return result;
@@ -5577,5 +5577,53 @@ TEST_CASE("LLVM codegen flexible array members", "[LLVM]")
         REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
         struct S s = {0, {0, 1, 2, 3, 4}};
         CHECK(cld::Tests::computeInJIT<int(struct S*)>(std::move(module), "function", &s) == 0);
+    }
+}
+
+TEST_CASE("LLVM codegen Initializer constant expression", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    auto module = std::make_unique<llvm::Module>("", context);
+    SECTION("Conditional expression")
+    {
+        auto program = generateProgram("int i = 5;\n"
+                                       "\n"
+                                       "int f = &i != 0 ? 5 : 4;\n"
+                                       "\n"
+                                       "int function(void) {\n"
+                                       "    return f;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 5);
+    }
+    SECTION("And expression")
+    {
+        auto program = generateProgram("int i = 5;\n"
+                                       "\n"
+                                       "_Bool f = !&i && 0/0;\n"
+                                       "\n"
+                                       "int function(void) {\n"
+                                       "    return f;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 0);
+    }
+    SECTION("Or expression")
+    {
+        auto program = generateProgram("int i = 5;\n"
+                                       "\n"
+                                       "_Bool f = &i || 0/0;\n"
+                                       "\n"
+                                       "int function(void) {\n"
+                                       "    return f;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 1);
     }
 }

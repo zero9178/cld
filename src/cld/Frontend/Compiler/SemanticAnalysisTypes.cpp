@@ -809,7 +809,7 @@ cld::Semantics::Type
             {
                 auto type = declaratorsToType(specifiers);
                 auto parentType = std::make_shared<const Type>(std::move(type));
-                fieldLayout.push_back({parentType, static_cast<std::size_t>(-1), {}, {}});
+                fieldLayout.push_back({parentType, static_cast<std::size_t>(-1), {}});
                 if (!extensionsEnabled(structOrUnion->begin()) || !isAnonymous(*parentType))
                 {
                     log(Errors::Semantics::FIELD_WITHOUT_A_NAME_IS_NOT_ALLOWED.args(specifiers, m_sourceInterface,
@@ -998,7 +998,7 @@ cld::Semantics::Type
                     auto [prev, notRedefinition] = fields.insert(
                         {token->getText(),
                          {sharedType, token->getText(), token, {static_cast<std::size_t>(-1)}, value, {}}});
-                    fieldLayout.push_back({sharedType, static_cast<std::size_t>(-1), value, {}});
+                    fieldLayout.push_back({sharedType, static_cast<std::size_t>(-1), value});
                     if (!notRedefinition)
                     {
                         log(Errors::Semantics::REDEFINITION_OF_FIELD_N.args(*token, m_sourceInterface, *token));
@@ -1012,7 +1012,7 @@ cld::Semantics::Type
             }
         }
         std::size_t currentSize = 0, currentAlignment = 0;
-        std::vector<Type> memoryLayout;
+        std::vector<MemoryLayout> memoryLayout;
         std::size_t fieldLayoutCounter = 0;
         if (!structOrUnion->isUnion())
         {
@@ -1021,7 +1021,7 @@ cld::Semantics::Type
                 if (iter->second.type->isUndefined())
                 {
                     iter.value().indices[0] = memoryLayout.size();
-                    memoryLayout.push_back(*iter->second.type);
+                    memoryLayout.push_back({*iter->second.type, currentSize});
                     iter++;
                     continue;
                 }
@@ -1040,11 +1040,10 @@ cld::Semantics::Type
                     {
                         iter.value().indices[0] = memoryLayout.size();
                     }
-                    memoryLayout.emplace_back(*parentType);
                     auto alignment = parentType->getAlignOf(*this);
                     currentAlignment = std::max(currentAlignment, alignment);
                     currentSize = roundUpTo(currentSize, alignment);
-                    fieldLayout[fieldLayoutCounter - 1].offset = currentSize;
+                    memoryLayout.push_back({*parentType, currentSize});
                     auto subSize = parentType->getSizeOf(*this);
                     currentSize += subSize;
                     continue;
@@ -1053,7 +1052,6 @@ cld::Semantics::Type
                 {
                     iter.value().indices[0] = memoryLayout.size();
                     fieldLayout[fieldLayoutCounter++].layoutIndex = memoryLayout.size();
-                    memoryLayout.push_back(*iter->second.type);
                     if (!isCompleteType(*iter->second.type)
                         && !std::holds_alternative<AbstractArrayType>(iter->second.type->getVariant()))
                     {
@@ -1063,7 +1061,7 @@ cld::Semantics::Type
                     auto alignment = iter->second.type->getAlignOf(*this);
                     currentAlignment = std::max(currentAlignment, alignment);
                     currentSize = roundUpTo(currentSize, alignment);
-                    fieldLayout[fieldLayoutCounter - 1].offset = currentSize;
+                    memoryLayout.push_back({*iter->second.type, currentSize});
                     if (!isCompleteType(*iter->second.type))
                     {
                         iter++;
@@ -1111,7 +1109,7 @@ cld::Semantics::Type
                     iter.value().indices[0] = memoryLayout.size();
                     fieldLayout[fieldLayoutCounter].bitFieldBounds.emplace(0, used);
                     fieldLayout[fieldLayoutCounter++].layoutIndex = memoryLayout.size();
-                    memoryLayout.push_back(*iter->second.type);
+                    memoryLayout.push_back({*iter->second.type, currentSize});
                     iter++;
                 }
                 currentSize += prevSize;

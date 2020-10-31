@@ -32,7 +32,12 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::logicalNegate(const Langu
         [&options](VoidStar address) -> ConstValue {
             return {llvm::APSInt(llvm::APInt(options.sizeOfInt * 8, address.address == 0), false)};
         },
-        [this](AddressConstant) -> ConstValue { return *this; }, [](std::monostate) -> ConstValue { CLD_UNREACHABLE; },
+        [&options](AddressConstant) -> ConstValue {
+            // AddressConstants are always non null. If the ConstValue were null they'd be VoidStar
+            // therefore return 0
+            return {llvm::APSInt(llvm::APInt(options.sizeOfInt * 8, 0), false)};
+        },
+        [](std::monostate) -> ConstValue { CLD_UNREACHABLE; },
         [&options](const llvm::APFloat& floating) -> ConstValue {
             return {llvm::APSInt(llvm::APInt(options.sizeOfInt * 8, floating.isZero()), false)};
         },

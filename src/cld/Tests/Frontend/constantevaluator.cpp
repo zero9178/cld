@@ -1485,20 +1485,4 @@ TEST_CASE("Const eval initialization", "[constEval]")
                                 "}",
                                 ProducesError(VARIABLE_ACCESS_NOT_ALLOWED_IN_CONSTANT_EXPRESSION));
     }
-    //    SECTION("Member access")
-    //    {
-    //        auto [value, error] =
-    //            evaluateProgram("struct R {\n"
-    //                            "float r,f,t;\n"
-    //                            "int m;\n"
-    //                            "};\n"
-    //                            "\n"
-    //                            "void foo(void) {\n"
-    //                            "(char*)&(*((struct R*)0)).m - (char*)0;\n"
-    //                            "}",
-    //                            x64linux, cld::Semantics::SemanticAnalysis::Initialization);
-    //        REQUIRE_THAT(error, ProducesNoErrors());
-    //        CHECK(std::holds_alternative<llvm::APSInt>(value.getValue()));
-    //        CHECK(cld::getVariant<llvm::APSInt>(value.getValue()) == 12);
-    //    }
 }

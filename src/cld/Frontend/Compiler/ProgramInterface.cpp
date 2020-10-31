@@ -49,7 +49,7 @@ const cld::Semantics::FieldMap&
     CLD_UNREACHABLE;
 }
 
-llvm::ArrayRef<cld::Semantics::Type>
+llvm::ArrayRef<cld::Semantics::MemoryLayout>
     cld::Semantics::ProgramInterface::getMemoryLayout(const cld::Semantics::Type& structType) const
 {
     if (std::holds_alternative<StructType>(structType.getVariant()))

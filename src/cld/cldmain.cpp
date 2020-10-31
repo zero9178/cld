@@ -63,6 +63,14 @@ CLD_CLI_OPT(WARNINGS, ("-W[no-]<warning>", "--warn-[no-]<warning>", "--warn-=[no
             (std::string_view, warning))
 ("Enable/disable specified warning", cld::CLIMultiArg::List);
 
+CLD_CLI_OPT(G0, ("-g0"))("No debug info");
+
+CLD_CLI_OPT(G1, ("-g1", "-gline-tables-only", "-gmlt"))("Lines only");
+
+CLD_CLI_OPT(G2, ("-g2", "-g"))("Generated debugging info");
+
+CLD_CLI_OPT(G3, ("-g3"))("Generated extded debugging info");
+
 namespace cld::cli
 {
 template <>
@@ -340,7 +348,7 @@ enum class Action
 };
 
 template <class CL>
-std::optional<cld::fs::path> compileCFile(Action action, const cld::fs::path& cSourceFile, const cld::Triple& triple,
+std::optional<cld::fs::path> compileCFile(Action action, cld::fs::path cSourceFile, const cld::Triple& triple,
                                           const cld::LanguageOptions& languageOptions, const CL& cli,
                                           llvm::raw_ostream* reporter)
 {
@@ -359,6 +367,9 @@ std::optional<cld::fs::path> compileCFile(Action action, const cld::fs::path& cS
     std::string input(size, '\0');
     file.read(input.data(), size);
     file.close();
+
+    cSourceFile = cld::fs::absolute(cSourceFile);
+    cSourceFile = cSourceFile.lexically_normal();
 
     bool errors = false;
     auto pptokens = cld::Lexer::tokenize(std::move(input), languageOptions, reporter, &errors, cSourceFile.u8string());
@@ -434,34 +445,52 @@ std::optional<cld::fs::path> compileCFile(Action action, const cld::fs::path& cS
     cld::CGLLVM::Options codegenOptions;
     llvm::LLVMContext context;
     llvm::Module module("", context);
-    llvm::Optional<llvm::Reloc::Model> cm;
     if (triple.getArchitecture() == cld::Architecture::x86_64 && triple.getPlatform() == cld::Platform::Windows)
     {
-        cm = llvm::Reloc::Model::PIC_;
-        codegenOptions.pic = true;
+        codegenOptions.reloc = llvm::Reloc::Model::PIC_;
     }
     else if (cli.template get<PIE>() || cli.template get<PIC>())
     {
-        cm = llvm::Reloc::Model::PIC_;
-        codegenOptions.pic = true;
+        codegenOptions.reloc = llvm::Reloc::Model::PIC_;
     }
-    llvm::CodeGenOpt::Level ol;
     if (cli.template get<OPT>())
     {
         switch (cli.template get<OPT>()->value_or(0))
         {
-            case 0: ol = llvm::CodeGenOpt::None; break;
-            case 1: ol = llvm::CodeGenOpt::Less; break;
-            case 2: ol = llvm::CodeGenOpt::Default; break;
-            default: ol = llvm::CodeGenOpt::Aggressive; break;
+            case 0: codegenOptions.ol = llvm::CodeGenOpt::None; break;
+            case 1: codegenOptions.ol = llvm::CodeGenOpt::Less; break;
+            case 2: codegenOptions.ol = llvm::CodeGenOpt::Default; break;
+            default: codegenOptions.ol = llvm::CodeGenOpt::Aggressive; break;
         }
     }
     else
     {
-        ol = llvm::CodeGenOpt::None;
+        codegenOptions.ol = llvm::CodeGenOpt::None;
     }
     codegenOptions.emitAllDecls = cli.template get<EMIT_ALL_DECLS>();
-    auto targetMachine = cld::CGLLVM::generateLLVM(module, program, triple, codegenOptions, cm, ol);
+    auto* debugOption = cli.template lastSpecified<G0, G1, G2, G3>();
+    if (!debugOption)
+    {
+        debugOption = &G0;
+    }
+    if (debugOption == &G0)
+    {
+        codegenOptions.debugEmission = cld::CGLLVM::DebugEmission::None;
+    }
+    else if (debugOption == &G1)
+    {
+        codegenOptions.debugEmission = cld::CGLLVM::DebugEmission::Line;
+    }
+    else if (debugOption == &G2)
+    {
+        codegenOptions.debugEmission = cld::CGLLVM::DebugEmission::Default;
+    }
+    else if (debugOption == &G3)
+    {
+        codegenOptions.debugEmission = cld::CGLLVM::DebugEmission::Extended;
+    }
+
+    auto targetMachine = cld::CGLLVM::generateLLVM(module, program, triple, codegenOptions);
 #ifndef NDEBUG
     if (llvm::verifyModule(module, &llvm::errs()))
     {
@@ -584,7 +613,7 @@ int cld::main(llvm::MutableArrayRef<std::string_view> elements, llvm::raw_ostrea
 
     auto cli = cld::parseCommandLine<OUTPUT_FILE, COMPILE_ONLY, ASSEMBLY_OUTPUT, PREPROCESS_ONLY, TARGET, EMIT_LLVM,
                                      OPT, DEFINE_MACRO, INCLUDES, PIE, PIC, FREESTANDING, HELP, VERSION,
-                                     STANDARD_VERSION, WARNINGS, ISYSTEM, EMIT_ALL_DECLS>(elements);
+                                     STANDARD_VERSION, WARNINGS, ISYSTEM, EMIT_ALL_DECLS, G0, G1, G2, G3>(elements);
     if (cli.get<HELP>())
     {
         if (out)
