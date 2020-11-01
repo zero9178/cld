@@ -2720,8 +2720,12 @@ std::optional<cld::Syntax::GNUAttributes> cld::Parser::parseGNUAttributes(Lexer:
             }
             if (begin == end || begin->getTokenType() != Lexer::TokenType::OpenParentheses)
             {
-                attributes.push_back({attributeName, {}, {}});
-                continue;
+                if (attributeName)
+                {
+                    attributes.push_back({attributeName, {}, {}});
+                    continue;
+                }
+                break;
             }
             const auto* openParenthAttrib = begin++;
             const Lexer::CToken* optionalIdentifier = nullptr;

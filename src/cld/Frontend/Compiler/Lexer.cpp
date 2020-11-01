@@ -598,6 +598,12 @@ std::uint8_t getNumUTF8ForUTF32(std::uint32_t c)
     CLD_UNREACHABLE;
 }
 
+template <class Iter>
+Iter findUTF8StartByte(Iter begin, Iter end)
+{
+    return std::find_if(begin, end, [](std::uint8_t c) { return c >= 0b1100'0000 || c < 0b1000'0000; });
+}
+
 struct Start;
 struct CharacterLiteral;
 struct StringLiteral;
@@ -849,19 +855,13 @@ public:
         bool leadingWhitespace = m_lastBlockCommentEndPos == start;
         if (!leadingWhitespace)
         {
-            std::int64_t i = start - 1;
             // Find the first byte of a UTF-8 Sequence
-            // If the UTF8 character is a single byte the one byte will be less than 0b1000 0000
-            // If the UTF8 character is more than a single byte all bytes that aren't the first are less than 0b1100
-            // 0000
-            for (; i >= 0 && (static_cast<std::uint8_t>(m_characterSpace[i]) < 0b1100'0000)
-                   && (static_cast<std::uint8_t>(m_characterSpace[i]) >= 0b1000'0000);
-                 i--)
-                ;
-            if (i >= 0)
+            auto iter = findUTF8StartByte(std::make_reverse_iterator(m_characterSpace.begin() + start),
+                                          m_characterSpace.rend());
+            if (iter != m_characterSpace.rend())
             {
                 std::uint32_t codePoint;
-                auto* sourceStart = m_characterSpace.data() + i;
+                auto* sourceStart = m_characterSpace.data() + (iter.base() - m_characterSpace.begin() - 1);
                 auto result =
                     llvm::convertUTF8Sequence(reinterpret_cast<const llvm::UTF8**>(&sourceStart),
                                               reinterpret_cast<const llvm::UTF8*>(m_characterSpace.data() + start),
@@ -2036,27 +2036,26 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view cha
             if (res != llvm::conversionOK)
             {
                 auto invalidStart = context.token.getCharSpaceOffset() + (wide ? 2 : 1) + (start - characters.data());
-                auto invalidEnd =
-                    invalidStart + std::min<std::size_t>(llvm::getNumBytesForUTF8(*start), iter - start) - 1;
+                auto invalidEnd = invalidStart + cld::getNumBytesForUTF8(start, end) - 1;
                 context.report(cld::Errors::Lexer::INVALID_UTF8_SEQUENCE, invalidStart,
                                std::make_tuple(context.token, invalidStart, invalidEnd));
                 errorOccured = true;
             }
             continue;
         }
-        // We can assume that if *iter == '\\' that iter + 1 != end. That is because if *iter == '\\' and
+        // Normally we could assume that if *iter == '\\' that iter + 1 != end. That is because if *iter == '\\' and
         // iter + 1 == end the last character would be '\\' and following that '\'' or '\"'.
         // Therefore the character literal wouldn't have ended and we wouldn't be here.
-#ifndef CLD_IN_FUZZER
-        CLD_ASSERT(iter + 1 != end);
-#else
-        // In the fuzzer there might be such invalid occurrences due to #include followed by a string literal
-        // So we don't have to go through the pre preprocessor lets break if this is the case
+
+        // But if we didn't go through a preprocessor a #include followed by a string literal could be present and
+        // therefore contain such a character. For now we will just break at such an occurrence but in the future
+        // we might simply want to disable the special handling of string literals after #include for API consumers
+        // that do not want to preprocess
         if (iter + 1 == end)
         {
             break;
         }
-#endif
+
         if (iter[1] == 'u' || iter[1] == 'U')
         {
             bool big = iter[1] == 'U';
@@ -2272,7 +2271,7 @@ std::optional<std::pair<CToken::ValueType, CToken::Type>>
     bool isHex = std::distance(begin, end) > 2 && *begin == '0' && (*(begin + 1) == 'x' || *(begin + 1) == 'X')
                  && ((*(begin + 2) >= '0' && *(begin + 2) <= '9') || (*(begin + 2) >= 'a' && *(begin + 2) <= 'f')
                      || (*(begin + 2) >= 'A' && *(begin + 2) <= 'F'));
-    llvm::SmallVector<char, 22> legalValues(10);
+    cld::MaxVector<char, 22> legalValues(10);
     std::iota(legalValues.begin(), legalValues.end(), '0');
     if (isHex)
     {
@@ -2312,9 +2311,10 @@ std::optional<std::pair<CToken::ValueType, CToken::Type>>
         suffixBegin = std::find_if(suffixBegin, end, searchFunction);
         if (prev == suffixBegin)
         {
+            auto result = findUTF8StartByte(std::make_reverse_iterator(begin), std::make_reverse_iterator(prev));
             context.report(cld::Errors::Lexer::EXPECTED_DIGITS_AFTER_EXPONENT,
                            context.token.getCharSpaceOffset() + context.token.getCharSpaceLength(),
-                           context.token.getCharSpaceOffset() + context.token.getCharSpaceLength() - 1, context.token);
+                           context.token.getCharSpaceOffset() + result.base() - begin - 1, context.token);
             errorsOccurred = true;
         }
     }
@@ -2365,10 +2365,12 @@ std::optional<std::pair<CToken::ValueType, CToken::Type>>
     }
     if (!isFloat)
     {
+        bool unsignedConsidered =
+            isHexOrOctal || std::any_of(suffix.begin(), suffix.end(), [](char c) { return c == 'u' || c == 'U'; });
         std::string number(begin, suffixBegin);
         llvm::APInt test;
         llvm::StringRef(number).getAsInteger(0, test);
-        if (test.getActiveBits() > 64)
+        if (test.getActiveBits() > (unsignedConsidered ? 64 : 63))
         {
             context.report(cld::Errors::Lexer::INTEGER_VALUE_TOO_BIG_TO_BE_REPRESENTABLE, beginLocation, context.token);
             return {};

@@ -919,6 +919,7 @@ void parse(const std::string& source)
 
 TEST_CASE("Parser fuzzer discoveries", "[parser]")
 {
+    parse("__attribute__;*=e");
     parse(
         " un union u union{A^union\\\n"
         "J  union u union{An uninion nu[ union V    ucontinuen union nu[ union V^union  un union nu[ union V^^uun union u union{An union u  ni uu[ union V^ V^^union un uou inn union{A^union u5n union u union{An uninion nu[ union V^^union  un union nu[ union V^^union uu[ uon u union{A");
@@ -977,6 +978,7 @@ I=')");
     excludeFromAddressSanitizer();
 #endif
     parse("V=V==L+E");
+    parse("?I5\"e     \tn\"G");
 }
 
 #undef treeProduces

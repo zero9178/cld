@@ -1072,6 +1072,8 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
     SECTION("Too big")
     {
         LEXER_OUTPUTS_WITH("9223372036854775807u", ProducesNoErrors());
+        LEXER_OUTPUTS_WITH("9999999999999999999u", ProducesNoErrors());
+        LEXER_OUTPUTS_WITH("9999999999999999999", ProducesError(INTEGER_VALUE_TOO_BIG_TO_BE_REPRESENTABLE));
         LEXER_OUTPUTS_WITH("18446744073709551618", ProducesError(INTEGER_VALUE_TOO_BIG_TO_BE_REPRESENTABLE));
         LEXER_OUTPUTS_WITH("0x1FFFFFFFFFFFFFFFF", ProducesError(INTEGER_VALUE_TOO_BIG_TO_BE_REPRESENTABLE));
         LEXER_OUTPUTS_WITH("077777777777777777777777", ProducesError(INTEGER_VALUE_TOO_BIG_TO_BE_REPRESENTABLE));
@@ -1827,6 +1829,14 @@ TEST_CASE("Lexing fuzzer discoveries", "[lexer]")
     cld::Lexer::tokenize("har_^c\"6?c0. 0r_^\x0a\x0ar!!0z?!? u\x0a   ");
     cld::Lexer::tokenize("h\"&u20U^58v\\u .L<bF\".A !< G\x0a"
                          "30bG\x0a0G\x0a:::!\x0a<0");
+    {
+        auto tokens = cld::Lexer::tokenize("0eɣ?ifd");
+        cld::Lexer::toCTokens(tokens);
+    }
+    {
+        auto tokens = cld::Lexer::tokenize("'<<�\uFEFF=='");
+        cld::Lexer::toCTokens(tokens);
+    }
 }
 
 #undef LEXRE_OUTPUTS_WITH

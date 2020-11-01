@@ -16,6 +16,11 @@ class MaxVector
 public:
     constexpr MaxVector() = default;
 
+    constexpr MaxVector(std::size_t size) : m_size(size)
+    {
+        CLD_ASSERT(m_size <= N);
+    }
+
     constexpr MaxVector(std::initializer_list<T> initializerList) noexcept : m_size(initializerList.size())
     {
         CLD_ASSERT(m_size <= N);

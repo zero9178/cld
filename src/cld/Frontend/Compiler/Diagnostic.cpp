@@ -103,7 +103,7 @@ void printLine(llvm::raw_ostream& ss, std::uint64_t line, std::uint64_t lineStar
         cld::match(
             iter.value,
             [&](const ModifierOfLine::Underline& underline) {
-                const auto indent = cld::unsafeColumnWidth(text.substr(0, iter.fromToInLine.first - lineStartOffset));
+                auto indent = cld::unsafeColumnWidth(text.substr(0, iter.fromToInLine.first - lineStartOffset));
                 canvas.resize(std::max<std::size_t>(1, canvas.size()), std::string(widthOfText, ' '));
 
                 if (iter.fromToInLine.first == iter.fromToInLine.second && text.size() == iter.fromToInLine.first)
@@ -163,7 +163,9 @@ void printLine(llvm::raw_ostream& ss, std::uint64_t line, std::uint64_t lineStar
                         }
                     }
                     const auto size = cld::unsafeColumnWidth({ptr, static_cast<std::size_t>(start - ptr)});
-                    std::fill_n(canvas[0].begin() + indent + (ptr - textAbove.data()), size, underline.character);
+                    indent = cld::unsafeColumnWidth(
+                        text.substr(0, iter.fromToInLine.first - lineStartOffset + ptr - textAbove.data()));
+                    std::fill_n(canvas[0].begin() + indent, size, underline.character);
                     ptr = start;
                 }
             },
