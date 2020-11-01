@@ -14,7 +14,7 @@ std::unique_ptr<cld::Semantics::ReturnStatement>
                 node, m_sourceInterface, *getCurrentFunctionScope()->currentFunction->getNameToken(),
                 ft.getReturnType(), node));
         }
-        return std::make_unique<ReturnStatement>(m_currentScope, std::nullopt);
+        return std::make_unique<ReturnStatement>(m_currentScope, nullptr);
     }
     if (isVoid(ft.getReturnType()))
     {
@@ -124,7 +124,7 @@ std::unique_ptr<cld::Semantics::ForStatement> cld::Semantics::SemanticAnalysis::
         }
     }
 
-    std::optional<ExpressionValue> controlling;
+    IntrVarPtr<ExpressionBase> controlling;
     if (node.getControlling())
     {
         auto result = lvalueConversion(visit(*node.getControlling()));
@@ -136,14 +136,14 @@ std::unique_ptr<cld::Semantics::ForStatement> cld::Semantics::SemanticAnalysis::
         controlling = toBool(std::move(result));
     }
 
-    std::optional<ExpressionValue> iteration;
+    IntrVarPtr<ExpressionBase> iteration;
     if (node.getPost())
     {
         iteration = visit(*node.getPost());
     }
 
     auto forStatement =
-        std::make_unique<ForStatement>(m_currentScope, ForStatement::Variant{}, std::nullopt, std::nullopt, nullptr);
+        std::make_unique<ForStatement>(m_currentScope, ForStatement::Variant{}, nullptr, nullptr, nullptr);
     auto loopGuard = pushLoop(forStatement.get());
     auto statement = visit(node.getStatement());
     *forStatement = ForStatement(m_currentScope, std::move(initial), std::move(controlling), std::move(iteration),
@@ -160,7 +160,7 @@ std::unique_ptr<cld::Semantics::HeadWhileStatement>
         log(Errors::Semantics::CONTROLLING_EXPRESSION_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
             *expression, m_sourceInterface, *expression));
     }
-    auto loop = std::make_unique<HeadWhileStatement>(m_currentScope, ErrorExpression(node), nullptr);
+    auto loop = std::make_unique<HeadWhileStatement>(m_currentScope, nullptr, nullptr);
     auto loopGuard = pushLoop(loop.get());
     auto statement = visit(node.getStatement());
     *loop = HeadWhileStatement(m_currentScope, toBool(std::move(expression)), std::move(statement));
@@ -170,7 +170,7 @@ std::unique_ptr<cld::Semantics::HeadWhileStatement>
 std::unique_ptr<cld::Semantics::FootWhileStatement>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::FootWhileStatement& node)
 {
-    auto loop = std::make_unique<FootWhileStatement>(m_currentScope, nullptr, ErrorExpression(node));
+    auto loop = std::make_unique<FootWhileStatement>(m_currentScope, nullptr, std::make_unique<ErrorExpression>(node));
     auto guard = pushLoop(loop.get());
     auto statement = visit(node.getStatement());
     auto expression = lvalueConversion(visit(node.getExpression()));
@@ -213,7 +213,7 @@ std::unique_ptr<cld::Semantics::SwitchStatement>
     {
         log(Errors::Semantics::CONTROLLING_EXPRESSION_MUST_BE_AN_INTEGER_TYPE.args(*expression, m_sourceInterface,
                                                                                    *expression));
-        expression = ErrorExpression{node};
+        expression = std::make_unique<ErrorExpression>(node);
     }
     auto switchStmt = std::make_unique<SwitchStatement>(m_currentScope, std::move(expression), nullptr);
     auto guard = pushSwitch(*switchStmt);
@@ -341,7 +341,7 @@ std::unique_ptr<cld::Semantics::CaseStatement>
         log(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS.args(*expr, m_sourceInterface,
                                                                                           *expr));
     }
-    auto constant = evaluateConstantExpression(expr);
+    auto constant = evaluateConstantExpression(*expr);
     if (!constant)
     {
         for (auto& iter : constant.error())
@@ -362,11 +362,11 @@ std::unique_ptr<cld::Semantics::CaseStatement>
     {
         return {};
     }
-    if (switchStmt.getExpression()->isUndefined())
+    if (switchStmt.getExpression().isUndefined())
     {
         return {};
     }
-    constant = constant->castTo(switchStmt.getExpression()->getType(), this, m_sourceInterface.getLanguageOptions());
+    constant = constant->castTo(switchStmt.getExpression().getType(), this, m_sourceInterface.getLanguageOptions());
     auto caseStmt = std::make_unique<CaseStatement>(m_currentScope, node.getCaseToken(),
                                                     cld::get<llvm::APSInt>(constant->getValue()), node.getColonToken(),
                                                     nullptr, switchStmt);

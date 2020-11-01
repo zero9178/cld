@@ -231,15 +231,14 @@ constexpr auto filterOutArgs(First first, Args&&... args)
     }
 }
 
-template <bool sizeOrArray, std::size_t inputSize, std::size_t maxOutputSize = inputSize>
+template <std::size_t inputSize, std::size_t maxOutputSize = inputSize>
 constexpr auto unique(std::array<std::u32string_view, inputSize> array)
 {
-    std::size_t currentResultSize = 0;
-    std::array<std::u32string_view, maxOutputSize> result;
+    MaxVector<std::u32string_view, maxOutputSize> result;
     for (std::size_t i = 0; i < inputSize; i++)
     {
         bool contains = false;
-        for (std::size_t i2 = 0; i2 < currentResultSize; i2++)
+        for (std::size_t i2 = 0; i2 < result.size(); i2++)
         {
             if (array[i] == result[i2])
             {
@@ -251,21 +250,14 @@ constexpr auto unique(std::array<std::u32string_view, inputSize> array)
         {
             continue;
         }
-        result[currentResultSize++] = array[i];
+        result.push_back(array[i]);
     }
-    if constexpr (!sizeOrArray)
-    {
-        return currentResultSize;
-    }
-    else
-    {
-        return result;
-    }
+    return result;
 }
 
 template <std::size_t size, class Tuple>
 constexpr std::array<std::pair<std::u32string_view, bool>, size>
-    evaluateOptional(std::array<std::u32string_view, size> args, const Tuple& tuple)
+    evaluateOptional(MaxVector<std::u32string_view, size> args, const Tuple& tuple)
 {
     std::array<std::pair<std::u32string_view, bool>, size> result;
     for (std::size_t i = 0; i < size; i++)
@@ -361,20 +353,15 @@ struct Pack
             },
             tuple);
         constexpr auto firstString = std::get<0>(std::tuple(args...));
-        constexpr std::size_t u8Size =
-            Constexpr::utf32ToUtf8<false, firstString.size()>({firstString.begin(), firstString.size()});
-        constexpr std::array<char, u8Size> u8String =
-            Constexpr::utf32ToUtf8<true, u8Size>({firstString.begin(), firstString.size()});
+        constexpr auto u8String = Constexpr::utf32ToUtf8<firstString.size()>({firstString.begin(), firstString.size()});
         // libc++ until either version LLVM 11 or 12 does not support constexpr std::array<T,0>
         if constexpr (std::tuple_size_v<std::decay_t<decltype(allArgsTuple)>> != 0)
         {
             constexpr auto allArgsSVArray = std::apply(
                 [](auto&&... input) { return std::array<std::u32string_view, sizeof...(input)>{input.value...}; },
                 allArgsTuple);
-            constexpr std::size_t setSize = unique<false>(allArgsSVArray);
-            constexpr auto uniqueSet = unique<true, allArgsSVArray.size(), setSize>(allArgsSVArray);
-
-            constexpr auto foundOptionals = evaluateOptional(uniqueSet, tuple);
+            constexpr auto uniqueSet = unique(allArgsSVArray);
+            constexpr auto foundOptionals = evaluateOptional<uniqueSet.size()>(uniqueSet, tuple);
             return std::tuple{tuple, foundOptionals, u8String};
         }
         else
@@ -546,12 +533,10 @@ static bool checkAlternative(llvm::MutableArrayRef<std::string_view>& commandLin
                 return false;
             }
             constexpr auto utf32 = cld::get<detail::CommandLine::Text>(curr).value;
-            constexpr std::size_t utf8Size = Constexpr::utf32ToUtf8<false, utf32.size() * 4>(utf32);
-            constexpr static auto utf8Array = Constexpr::utf32ToUtf8<true, utf8Size>(utf32);
-            constexpr std::string_view prefix(utf8Array.data(), utf8Array.size());
-            if (commandLine.front().substr(0, prefix.size()) == prefix)
+            constexpr auto utf8Array = Constexpr::utf32ToUtf8<utf32.size() * 4>(utf32);
+            if (commandLine.front().substr(0, utf8Array.size()) == std::string_view(utf8Array.data(), utf8Array.size()))
             {
-                commandLine.front().remove_prefix(prefix.size());
+                commandLine.front().remove_prefix(utf8Array.size());
             }
             else
             {
@@ -565,12 +550,10 @@ static bool checkAlternative(llvm::MutableArrayRef<std::string_view>& commandLin
                 return true;
             }
             constexpr auto utf32 = cld::get<detail::CommandLine::NegationOption>(curr).value;
-            constexpr std::size_t utf8Size = Constexpr::utf32ToUtf8<false, utf32.size() * 4>(utf32);
-            constexpr static auto utf8Array = Constexpr::utf32ToUtf8<true, utf8Size>(utf32);
-            constexpr std::string_view prefix(utf8Array.data(), utf8Array.size());
-            if (commandLine.front().substr(0, prefix.size()) == prefix)
+            constexpr auto utf8Array = Constexpr::utf32ToUtf8<utf32.size() * 4>(utf32);
+            if (commandLine.front().substr(0, utf8Array.size()) == std::string_view(utf8Array.data(), utf8Array.size()))
             {
-                commandLine.front().remove_prefix(prefix.size());
+                commandLine.front().remove_prefix(utf8Array.size());
                 if constexpr (cliOption->getMultiArg() == CLIMultiArg::Overwrite)
                 {
                     if constexpr (std::is_same_v<bool, Storage>)
@@ -780,11 +763,8 @@ static bool checkAllAlternatives(llvm::MutableArrayRef<std::string_view>& comman
                 constexpr auto alternative = std::get<i>(cliOption->getAlternatives());
                 using Tuple = std::decay_t<decltype(alternative)>;
                 constexpr std::u32string_view u32prefix = std::get<0>(alternative).value;
-                constexpr std::size_t utf8Size = Constexpr::utf32ToUtf8<false, u32prefix.size() * 4>(u32prefix);
-                constexpr static auto utf8Prefix = Constexpr::utf32ToUtf8<true, utf8Size>(u32prefix);
-
-                constexpr std::string_view prefix(utf8Prefix.data(), utf8Prefix.size());
-                if (commandLine.front() == prefix)
+                constexpr auto utf8Prefix = Constexpr::utf32ToUtf8<u32prefix.size() * 4>(u32prefix);
+                if (commandLine.front() == std::string_view(utf8Prefix.data(), utf8Prefix.size()))
                 {
                     return checkAlternative<cliOption, i>(commandLine, storage);
                 }
@@ -792,7 +772,8 @@ static bool checkAllAlternatives(llvm::MutableArrayRef<std::string_view>& comman
                 {
                     if constexpr (!std::is_same_v<std::tuple_element_t<1, Tuple>, detail::CommandLine::Whitespace>)
                     {
-                        if (commandLine.front().substr(0, prefix.size()) == prefix)
+                        if (commandLine.front().substr(0, utf8Prefix.size())
+                            == std::string_view(utf8Prefix.data(), utf8Prefix.size()))
                         {
                             return checkAlternative<cliOption, i>(commandLine, storage);
                         }

@@ -1713,10 +1713,10 @@ const ExpressionBase& generateExpression(std::string source,
     REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit->getGlobals().back()));
     auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit->getGlobals().back());
     REQUIRE(
-        std::holds_alternative<std::unique_ptr<Statement>>(funcDef.getCompoundStatement().getCompoundItems().back()));
-    auto& statement = *cld::get<std::unique_ptr<Statement>>(funcDef.getCompoundStatement().getCompoundItems().back());
+        std::holds_alternative<cld::IntrVarPtr<Statement>>(funcDef.getCompoundStatement().getCompoundItems().back()));
+    auto& statement = *cld::get<cld::IntrVarPtr<Statement>>(funcDef.getCompoundStatement().getCompoundItems().back());
     REQUIRE(statement.is<ExpressionStatement>());
-    auto& expr = static_cast<ExpressionStatement&>(statement).getExpression();
+    auto* expr = static_cast<ExpressionStatement&>(statement).getExpression();
     REQUIRE(expr);
     return *expr;
 }
@@ -4075,9 +4075,9 @@ TEST_CASE("Semantics __func__", "[semantics]")
     REQUIRE(declarationRead.getDeclRead().is<Declaration>());
     auto& decl = declarationRead.getDeclRead().cast<Declaration>();
     REQUIRE(decl.getInitializer());
-    REQUIRE(std::holds_alternative<ExpressionValue>(*decl.getInitializer()));
-    REQUIRE(cld::get<ExpressionValue>(*decl.getInitializer())->is<Constant>());
-    auto& constant = cld::get<ExpressionValue>(*decl.getInitializer())->cast<Constant>();
+    REQUIRE(std::holds_alternative<cld::IntrVarPtr<ExpressionBase>>(*decl.getInitializer()));
+    REQUIRE(cld::get<cld::IntrVarPtr<ExpressionBase>>(*decl.getInitializer())->is<Constant>());
+    auto& constant = cld::get<cld::IntrVarPtr<ExpressionBase>>(*decl.getInitializer())->cast<Constant>();
     CHECK(cld::get<std::string>(constant.getValue()) == "foo");
     SEMA_PRODUCES("void __func__(void) {}",
                   ProducesError(DEFINING_FUNCTIONS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR));

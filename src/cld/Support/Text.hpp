@@ -8,6 +8,8 @@
 #include <string>
 #include <string_view>
 
+#include "Constexpr.hpp"
+#include "MaxVector.hpp"
 #include "Util.hpp"
 
 namespace llvm
@@ -113,6 +115,43 @@ inline std::string to_string(std::string_view stringView)
 {
     return std::string(stringView.begin(), stringView.end());
 }
+
+namespace Constexpr
+{
+template <std::size_t maxSize>
+constexpr MaxVector<char, maxSize> utf32ToUtf8(std::u32string_view stringView)
+{
+    MaxVector<char, maxSize> result;
+    for (std::size_t i = 0; i < stringView.size(); i++)
+    {
+        char32_t code = stringView[i];
+        if (code <= 0x7F)
+        {
+            result.push_back(code);
+        }
+        else if (code <= 0x7FF)
+        {
+            result.push_back(0xC0 | (code >> 6));
+            result.push_back(0x80 | (code & 0x3F));
+        }
+        else if (code <= 0xFFFF)
+        {
+            result.push_back(0xE0 | (code >> 12));
+            result.push_back(0x80 | ((code >> 6) & 0x3F));
+            result.push_back(0x80 | (code & 0x3F));
+        }
+        else if (code <= 0x10FFFF)
+        {
+            result.push_back(0xF0 | (code >> 18));
+            result.push_back(0x80 | ((code >> 12) & 0x3F));
+            result.push_back(0x80 | ((code >> 6) & 0x3F));
+            result.push_back(0x80 | (code & 0x3F));
+        }
+    }
+    return result;
+}
+
+} // namespace Constexpr
 
 template <class T, class = void>
 struct ToString : std::false_type

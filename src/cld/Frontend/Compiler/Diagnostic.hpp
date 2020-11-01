@@ -716,8 +716,7 @@ Message Diagnostic<N, format, Mods...>::args(const T& location, const SourceInte
                                                                                 // function to improve debug perf a lil
     static_assert(locationConstraintCheck<T>(), "First argument must denote a location");
     constexpr auto u32string = getFormat();
-    constexpr auto u8size = Constexpr::utf32ToUtf8<false, u32string.size()>(u32string);
-    constexpr auto u8array = Constexpr::utf32ToUtf8<true, u8size>(u32string);
+    constexpr auto u8array = Constexpr::utf32ToUtf8<u32string.size() * 4>(u32string);
     auto array = createArgumentArray(&sourceInterface, std::forward_as_tuple(std::forward<Args>(args)...),
                                      std::index_sequence_for<Args...>{});
     return print(getPointRange(location), {u8array.data(), u8array.size()}, array, modifiers, sourceInterface);
@@ -731,8 +730,7 @@ Message Diagnostic<N, format, Mods...>::argsCLI(Args&&... args) const
     [[maybe_unused]] auto* v = this->checkConstraints<constraints, 0, Args...>; // Instantiate but don't call the
     // function to improve debug perf a lil
     constexpr auto u32string = getFormat();
-    constexpr auto u8size = Constexpr::utf32ToUtf8<false, u32string.size()>(u32string);
-    constexpr auto u8array = Constexpr::utf32ToUtf8<true, u8size>(u32string);
+    constexpr auto u8array = Constexpr::utf32ToUtf8<u32string.size() * 4>(u32string);
     // TODO: Instead of passing nullptr make it so that StringConverter may use const SourceInterface& as a second
     //  argument but make it a compiler error if such a string converter is used when using argsCLI instead of args
     auto array = createArgumentArray(nullptr, std::forward_as_tuple(std::forward<Args>(args)...),

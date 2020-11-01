@@ -272,10 +272,10 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
                           loc->getText().size() + 1);
     auto funcName = std::make_unique<Declaration>(
         std::move(funcType), Linkage::Internal, Lifetime::Static, loc, Declaration::Definition, InlineKind::None,
-        Constant(ArrayType::create(false, false, false, false,
-                                   PrimitiveType::createChar(false, false, getLanguageOptions()),
-                                   loc->getText().size() + 1),
-                 cld::to_string(loc->getText()), loc, loc + 1));
+        std::make_unique<Constant>(ArrayType::create(false, false, false, false,
+                                                     PrimitiveType::createChar(false, false, getLanguageOptions()),
+                                                     loc->getText().size() + 1),
+                                   cld::to_string(loc->getText()), loc, loc + 1));
     getCurrentScope().declarations.insert({"__func__", DeclarationInScope{loc, funcName.get()}});
 
     auto functionScope = pushFunctionScope(*ptr);
@@ -774,14 +774,14 @@ std::vector<cld::Semantics::CompoundStatement::Variant>
     return result;
 }
 
-std::unique_ptr<cld::Semantics::Statement> cld::Semantics::SemanticAnalysis::visit(const Syntax::Statement& node)
+cld::IntrVarPtr<cld::Semantics::Statement> cld::Semantics::SemanticAnalysis::visit(const Syntax::Statement& node)
 {
     return cld::match(
-        node, [&](const auto& node) -> std::unique_ptr<Statement> { return visit(node); },
-        [&](const Syntax::ExpressionStatement& node) -> std::unique_ptr<Statement> {
+        node, [&](const auto& node) -> cld::IntrVarPtr<Statement> { return visit(node); },
+        [&](const Syntax::ExpressionStatement& node) -> cld::IntrVarPtr<Statement> {
             if (!node.getOptionalExpression())
             {
-                return std::make_unique<ExpressionStatement>(m_currentScope, std::nullopt);
+                return std::make_unique<ExpressionStatement>(m_currentScope, nullptr);
             }
             return std::make_unique<ExpressionStatement>(m_currentScope, visit(*node.getOptionalExpression()));
         });
@@ -1834,31 +1834,33 @@ constexpr auto createBuiltin(cld::Semantics::BuiltinFunction::Kind kind)
     constexpr auto value##Text = ::ctll::fixed_string{string}; \
     constexpr auto value##Builtin = createBuiltin<value##Text>(cld::Semantics::BuiltinFunction::Kind::value)
 
-#define DEF_BUILTIN(value)                                                                                             \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        constexpr std::size_t u8size = Constexpr::utf32ToUtf8<false, value##Builtin.name.size()>(value##Builtin.name); \
-        constexpr static auto u8array = Constexpr::utf32ToUtf8<true, u8size>(value##Builtin.name);                     \
-        constexpr auto str = std::string_view(u8array.data(), u8size);                                                 \
-        if (name == str)                                                                                               \
-        {                                                                                                              \
-            std::vector<std::pair<Type, std::string_view>> parameters;                                                 \
-            if constexpr (value##Builtin.size != 0)                                                                    \
-            {                                                                                                          \
-                for (auto& iter : value##Builtin.parameterTypes)                                                       \
-                {                                                                                                      \
-                    parameters.emplace_back(adjustParameterType(typeEnumToType(iter)), "");                            \
-                }                                                                                                      \
-            }                                                                                                          \
-            auto result = m_usedBuiltins                                                                               \
-                              .insert({str,                                                                            \
-                                       {FunctionType::create(typeEnumToType(value##Builtin.returnType),                \
-                                                             std::move(parameters), value##Builtin.vararg, false),     \
-                                        value##Builtin.kind}})                                                         \
-                              .first;                                                                                  \
-            auto iter = m_scopes[0].declarations.insert({str, DeclarationInScope{nullptr, &result->second}}).first;    \
-            return &iter->second.declared;                                                                             \
-        }                                                                                                              \
+#define DEF_BUILTIN(value)                                                                                         \
+    do                                                                                                             \
+    {                                                                                                              \
+        constexpr auto u8array = Constexpr::utf32ToUtf8<value##Builtin.name.size()>(value##Builtin.name);          \
+        if (name == std::string_view(u8array.data(), u8array.size()))                                              \
+        {                                                                                                          \
+            std::vector<std::pair<Type, std::string_view>> parameters;                                             \
+            if constexpr (value##Builtin.size != 0)                                                                \
+            {                                                                                                      \
+                for (auto& iter : value##Builtin.parameterTypes)                                                   \
+                {                                                                                                  \
+                    parameters.emplace_back(adjustParameterType(typeEnumToType(iter)), "");                        \
+                }                                                                                                  \
+            }                                                                                                      \
+            auto result = m_usedBuiltins                                                                           \
+                              .insert({std::string_view(u8array.data(), u8array.size()),                           \
+                                       {FunctionType::create(typeEnumToType(value##Builtin.returnType),            \
+                                                             std::move(parameters), value##Builtin.vararg, false), \
+                                        value##Builtin.kind}})                                                     \
+                              .first;                                                                              \
+            auto iter = m_scopes[0]                                                                                \
+                            .declarations                                                                          \
+                            .insert({std::string_view(u8array.data(), u8array.size()),                             \
+                                     DeclarationInScope{nullptr, &result->second}})                                \
+                            .first;                                                                                \
+            return &iter->second.declared;                                                                         \
+        }                                                                                                          \
     } while (0)
 
 DECL_BUILTIN("void __builtin_va_start(va_list,...)", VAStart);

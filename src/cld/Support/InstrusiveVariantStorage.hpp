@@ -12,15 +12,7 @@ namespace cld
 namespace detail::InstrusiveVariantStorage
 {
 template <class... Args>
-struct DeduceArgs
-{
-    AbstractIntrusiveVariant<Args...>* p;
-
-    using type = AbstractIntrusiveVariant<Args...>;
-};
-
-template <class... Args>
-DeduceArgs(AbstractIntrusiveVariant<Args...>*) -> DeduceArgs<Args...>;
+auto deduceArgs(::cld::AbstractIntrusiveVariant<Args...>*) -> ::cld::AbstractIntrusiveVariant<Args...>;
 
 template <class Base, class... SubClasses>
 class InstrusiveVariantStorageBase
@@ -384,11 +376,11 @@ constexpr SpecialMem moveAss()
 
 } // namespace detail::InstrusiveVariantStorage
 
-template <class T, class U = typename decltype(detail::InstrusiveVariantStorage::DeduceArgs{std::declval<T*>()})::type>
+template <class T, class U = decltype(detail::InstrusiveVariantStorage::deduceArgs(std::declval<T*>()))>
 class InstrusiveVariantStorage
 {
     static_assert(always_false<T>,
-                  "InstrusiveVariantStorage can only store a class inheriting from MonadicInheritance");
+                  "InstrusiveVariantStorage can only store a class inheriting from AbstractIntrusiveVariant");
 };
 
 template <class Base, class... SubClasses>

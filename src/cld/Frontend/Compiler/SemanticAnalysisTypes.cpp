@@ -953,7 +953,7 @@ cld::Semantics::Type
                     {
                         continue;
                     }
-                    auto result = evaluateConstantExpression(expr);
+                    auto result = evaluateConstantExpression(*expr);
                     if (!result)
                     {
                         for (auto& message : result.error())
@@ -1216,7 +1216,7 @@ cld::Semantics::Type
         if (maybeExpression)
         {
             auto expr = visit(*maybeExpression);
-            auto result = evaluateConstantExpression(expr);
+            auto result = evaluateConstantExpression(*expr);
             if (!result || !isInteger(expr->getType()))
             {
                 if (result && !isInteger(expr->getType()))
@@ -1543,12 +1543,11 @@ void cld::Semantics::SemanticAnalysis::handleArray(cld::Semantics::Type& type,
         type = Type{};
         return;
     }
-    auto result = evaluateConstantExpression(expr, Arithmetic);
+    auto result = evaluateConstantExpression(*expr, Arithmetic);
     if (!result)
     {
         expr = lvalueConversion(std::move(expr));
-        type = ValArrayType::create(isConst, isVolatile, restricted, isStatic, std::move(type),
-                                    std::move(expr).toUniquePtr());
+        type = ValArrayType::create(isConst, isVolatile, restricted, isStatic, std::move(type), std::move(expr));
         return;
     }
     if (result->isUndefined())

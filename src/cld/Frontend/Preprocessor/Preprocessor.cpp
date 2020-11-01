@@ -1017,7 +1017,7 @@ class Preprocessor final : private cld::PPSourceInterface
             m_errorsOccurred = true;
             return {};
         }
-        auto value = analysis.evaluateConstantExpression(exp);
+        auto value = analysis.evaluateConstantExpression(*exp);
         if (!value)
         {
             for (auto& iter : value.error())

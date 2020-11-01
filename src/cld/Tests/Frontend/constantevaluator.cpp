@@ -33,7 +33,7 @@ std::pair<cld::Semantics::ConstValue, std::string>
     auto expr = analysis.visit(*parsing);
     UNSCOPED_INFO(ss.str());
     REQUIRE_THAT(ss.str(), ProducesNoErrors());
-    auto ret = analysis.evaluateConstantExpression(expr, mode);
+    auto ret = analysis.evaluateConstantExpression(*expr, mode);
     if (!ret)
     {
         for (auto& iter : ret.error())
@@ -80,12 +80,12 @@ std::pair<cld::Semantics::ConstValue, std::string>
     REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
         translationUnit.getGlobals().back()));
     auto& funcDef = *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit.getGlobals().back());
-    REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Statement>>(
+    REQUIRE(std::holds_alternative<cld::IntrVarPtr<cld::Semantics::Statement>>(
         funcDef.getCompoundStatement().getCompoundItems().back()));
     auto& statement =
-        cld::get<std::unique_ptr<cld::Semantics::Statement>>(funcDef.getCompoundStatement().getCompoundItems().back());
+        cld::get<cld::IntrVarPtr<cld::Semantics::Statement>>(funcDef.getCompoundStatement().getCompoundItems().back());
     REQUIRE(statement->is<cld::Semantics::ExpressionStatement>());
-    auto& expr = static_cast<cld::Semantics::ExpressionStatement&>(*statement).getExpression();
+    auto* expr = static_cast<cld::Semantics::ExpressionStatement&>(*statement).getExpression();
     REQUIRE(expr);
     auto ret = analysis.evaluateConstantExpression(*expr, mode);
     if (!ret)

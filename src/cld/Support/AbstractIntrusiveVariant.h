@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <memory>
 
 #include "Constexpr.hpp"
 #include "Util.hpp"
@@ -9,8 +10,8 @@ namespace cld
 {
 namespace detail
 {
-template <class T, std::uint8_t i, class First, class... Rest>
-[[nodiscard]] constexpr std::uint8_t getIndex() noexcept
+template <class T, std::size_t i, class First, class... Rest>
+[[nodiscard]] constexpr std::size_t getIndex() noexcept
 {
     if constexpr (std::is_same_v<T, First>)
     {
@@ -44,7 +45,7 @@ class AbstractIntrusiveVariant
     template <class F>
     using MatchReturn = decltype(matchHelper(std::declval<F>(), std::declval<Args>()...));
 
-    std::uint8_t m_index;
+    cld::suitableUInt<sizeof...(Args) - 1> m_index;
 
 public:
     template <class T>
@@ -146,5 +147,39 @@ public:
         return !(lhs == rhs);
     }
 };
+
+namespace detail::AbstractIntrusiveVariant
+{
+template <class... Args>
+auto deduceArgs(::cld::AbstractIntrusiveVariant<Args...>*) -> ::cld::AbstractIntrusiveVariant<Args...>;
+} // namespace detail::AbstractIntrusiveVariant
+
+template <class T, class U = decltype(detail::AbstractIntrusiveVariant::deduceArgs(std::declval<T*>()))>
+class IntrusiveVariantDeleter
+{
+    static_assert(always_false<T>, "Can't delete pointer that isn't a subclass of AbstractIntrusiveVariant");
+};
+
+template <class Base, class... SubClasses>
+class IntrusiveVariantDeleter<Base, AbstractIntrusiveVariant<SubClasses...>>
+{
+public:
+    IntrusiveVariantDeleter() = default;
+
+    template <class T, std::enable_if_t<std::disjunction_v<std::is_same<T, SubClasses>...>>* = nullptr>
+    IntrusiveVariantDeleter(const std::default_delete<T>&) noexcept
+    {
+    }
+
+    void operator()(Base* pointer) const noexcept
+    {
+        constexpr std::array<void (*)(Base*), sizeof...(SubClasses)> deleteFuncs = {
+            {+[](Base* ptr) { delete static_cast<SubClasses*>(ptr); }...}};
+        deleteFuncs[pointer->index()](pointer);
+    }
+};
+
+template <class T>
+using IntrVarPtr = std::unique_ptr<T, ::cld::IntrusiveVariantDeleter<T>>;
 
 } // namespace cld

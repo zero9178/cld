@@ -911,7 +911,7 @@ class CodeGenerator final
 
         for (auto& [path, expression] : initializerList.getFields())
         {
-            auto replacement = visit(expression);
+            auto replacement = visit(*expression);
             llvm::Constant** value = [&, &path = path, &expression = expression]() -> llvm::Constant** {
                 Aggregate* current = &constants;
                 const cld::Semantics::Type* currentType = &type;
@@ -945,7 +945,7 @@ class CodeGenerator final
                     }
                     current = &cld::get<Aggregate>(current->vector[iter]);
                 }
-                if (cld::Semantics::isStringLiteralExpr(expression))
+                if (cld::Semantics::isStringLiteralExpr(*expression))
                 {
                     auto& constant = expression->cast<cld::Semantics::Constant>();
                     auto& aggregate = cld::get<Aggregate>(current->vector[path.back()]);
@@ -1997,9 +1997,9 @@ public:
             {
                 visit(*cld::get<std::unique_ptr<cld::Semantics::Declaration>>(iter));
             }
-            else if (std::holds_alternative<std::unique_ptr<cld::Semantics::Statement>>(iter))
+            else if (std::holds_alternative<cld::IntrVarPtr<cld::Semantics::Statement>>(iter))
             {
-                visit(*cld::get<std::unique_ptr<cld::Semantics::Statement>>(iter));
+                visit(*cld::get<cld::IntrVarPtr<cld::Semantics::Statement>>(iter));
             }
         }
         if (m_builder.GetInsertBlock())
@@ -2057,7 +2057,7 @@ public:
                 auto* ptr = llvm::cast<llvm::LoadInst>(value.value)->getPointerOperand();
                 m_builder.CreateMemCpy(m_returnSlot, m_returnSlot->getAlign(), ptr,
                                        llvm::cast<llvm::LoadInst>(value.value)->getAlign(),
-                                       (*returnStatement.getExpression())->getType().getSizeOf(m_programInterface));
+                                       returnStatement.getExpression()->getType().getSizeOf(m_programInterface));
                 llvm::cast<llvm::LoadInst>(value.value)->eraseFromParent();
             }
             auto ret = createLoad(m_returnSlot, false);
@@ -2082,7 +2082,9 @@ public:
                     visit(*iter);
                 }
             },
-            [&](const cld::Semantics::ExpressionBase& expression) { visitVoidExpression(expression); });
+            [&](const cld::IntrVarPtr<cld::Semantics::ExpressionBase>& expression) {
+                visitVoidExpression(*expression);
+            });
         auto* controlling = llvm::BasicBlock::Create(m_module.getContext(), "for.controlling", m_currentFunction);
         if (m_builder.GetInsertBlock())
         {
@@ -3017,7 +3019,7 @@ public:
             [](const cld::Semantics::SizeofOperator::TypeVariant& typeVariant) -> const cld::Semantics::Type& {
                 return typeVariant.type;
             },
-            [](const std::unique_ptr<cld::Semantics::ExpressionBase>& expression) -> const cld::Semantics::Type& {
+            [](const cld::IntrVarPtr<cld::Semantics::ExpressionBase>& expression) -> const cld::Semantics::Type& {
                 return expression->getType();
             });
         auto& elementType = [&]() -> decltype(auto) {
@@ -3291,7 +3293,7 @@ public:
     {
         for (auto& iter : commaExpression.getCommaExpressions())
         {
-            visitVoidExpression(iter.first);
+            visitVoidExpression(*iter.first);
         }
         return visit(commaExpression.getLastExpression());
     }
@@ -3305,7 +3307,7 @@ public:
             {
                 case cld::Semantics::BuiltinFunction::VAStart:
                 {
-                    auto list = visit(call.getArgumentExpressions()[0]);
+                    auto list = visit(*call.getArgumentExpressions()[0]);
                     if (llvm::isa<llvm::LoadInst>(list.value))
                     {
                         auto* prev = llvm::cast<llvm::LoadInst>(list.value);
@@ -3317,7 +3319,7 @@ public:
                 }
                 case cld::Semantics::BuiltinFunction::VAEnd:
                 {
-                    auto list = visit(call.getArgumentExpressions()[0]);
+                    auto list = visit(*call.getArgumentExpressions()[0]);
                     if (llvm::isa<llvm::LoadInst>(list.value))
                     {
                         auto* prev = llvm::cast<llvm::LoadInst>(list.value);
@@ -3329,7 +3331,7 @@ public:
                 }
                 case cld::Semantics::BuiltinFunction::VACopy:
                 {
-                    auto list1 = visit(call.getArgumentExpressions()[0]);
+                    auto list1 = visit(*call.getArgumentExpressions()[0]);
                     if (llvm::isa<llvm::LoadInst>(list1.value))
                     {
                         auto* prev = llvm::cast<llvm::LoadInst>(list1.value);
@@ -3337,7 +3339,7 @@ public:
                         prev->eraseFromParent();
                     }
                     list1 = createBitCast(list1, m_builder.getInt8PtrTy());
-                    auto list2 = visit(call.getArgumentExpressions()[1]);
+                    auto list2 = visit(*call.getArgumentExpressions()[1]);
                     if (llvm::isa<llvm::LoadInst>(list2.value))
                     {
                         auto* prev = llvm::cast<llvm::LoadInst>(list2.value);
@@ -3351,7 +3353,7 @@ public:
                 case cld::Semantics::BuiltinFunction::LAbs:
                 case cld::Semantics::BuiltinFunction::Abs:
                 {
-                    auto longLong = visit(call.getArgumentExpressions()[0]);
+                    auto longLong = visit(*call.getArgumentExpressions()[0]);
                     auto* neg = m_builder.CreateNSWNeg(longLong);
                     auto* isNegative =
                         m_builder.CreateICmpSLT(longLong, llvm::ConstantInt::get(longLong.value->getType(), 0));
@@ -3361,7 +3363,7 @@ public:
                 case cld::Semantics::BuiltinFunction::FAbsf:
                 case cld::Semantics::BuiltinFunction::FAbsl:
                 {
-                    auto floatingPoint = visit(call.getArgumentExpressions()[0]);
+                    auto floatingPoint = visit(*call.getArgumentExpressions()[0]);
                     return m_builder.CreateUnaryIntrinsic(llvm::Intrinsic::fabs, floatingPoint);
                 }
                 case cld::Semantics::BuiltinFunction::Inf:
@@ -3379,23 +3381,23 @@ public:
                 case cld::Semantics::BuiltinFunction::ExpectWithProbability:
                 case cld::Semantics::BuiltinFunction::Expect:
                 {
-                    auto ret = visit(call.getArgumentExpressions()[0]);
-                    visitVoidExpression(call.getArgumentExpressions()[1]);
+                    auto ret = visit(*call.getArgumentExpressions()[0]);
+                    visitVoidExpression(*call.getArgumentExpressions()[1]);
                     return ret;
                 }
                 case cld::Semantics::BuiltinFunction::Prefetch:
                 {
-                    auto address = visit(call.getArgumentExpressions()[0]);
+                    auto address = visit(*call.getArgumentExpressions()[0]);
                     llvm::Value* rw = m_builder.getInt32(0);
                     llvm::Value* locality = m_builder.getInt32(3);
                     if (call.getArgumentExpressions().size() > 1)
                     {
-                        auto rwValue = visit(call.getArgumentExpressions()[1]);
+                        auto rwValue = visit(*call.getArgumentExpressions()[1]);
                         rw = m_builder.CreateIntCast(rwValue.value, m_builder.getInt32Ty(), false);
                     }
                     if (call.getArgumentExpressions().size() > 2)
                     {
-                        auto localityValue = visit(call.getArgumentExpressions()[2]);
+                        auto localityValue = visit(*call.getArgumentExpressions()[2]);
                         locality = m_builder.CreateIntCast(localityValue.value, m_builder.getInt32Ty(), false);
                     }
 
@@ -3449,7 +3451,7 @@ public:
         for (auto iter = call.getArgumentExpressions().begin(); iter != call.getArgumentExpressions().end(); iter++)
         {
             const std::size_t currentIndex = iter - call.getArgumentExpressions().begin();
-            auto value = visit(*iter);
+            auto value = visit(**iter);
             if (std::holds_alternative<ABITransformations::Change>(transformation->second.arguments[currentIndex]))
             {
                 llvmFnI++;
@@ -3830,11 +3832,11 @@ public:
     {
         return cld::match(
             initializer,
-            [&](const cld::Semantics::ExpressionValue& expression) -> Value {
+            [&](const cld::IntrVarPtr<cld::Semantics::ExpressionBase>& expression) -> Value {
                 if (std::holds_alternative<Value>(pointer))
                 {
-                    auto value = visit(expression);
-                    if (cld::Semantics::isStringLiteralExpr(expression))
+                    auto value = visit(*expression);
+                    if (cld::Semantics::isStringLiteralExpr(*expression))
                     {
                         m_builder.CreateMemCpy(cld::get<Value>(pointer), cld::get<Value>(pointer).alignment, value,
                                                value.alignment, expression->getType().getSizeOf(m_programInterface));
@@ -3843,13 +3845,13 @@ public:
                     createStore(value, cld::get<Value>(pointer), type.isVolatile());
                     return nullptr;
                 }
-                if (cld::Semantics::isStringLiteralExpr(expression))
+                if (cld::Semantics::isStringLiteralExpr(*expression))
                 {
                     auto& constant = expression->cast<cld::Semantics::Constant>();
                     return getStringLiteralData(visit(expression->getType())->getArrayElementType(),
                                                 constant.getValue());
                 }
-                return visit(expression);
+                return visit(*expression);
             },
             [&](const cld::Semantics::InitializerList& initializerList) -> Value {
                 if (std::holds_alternative<llvm::Type*>(pointer))
@@ -3861,7 +3863,7 @@ public:
                                        type.isVolatile());
                 for (auto& [path, expression] : initializerList.getFields())
                 {
-                    auto subValue = visit(expression);
+                    auto subValue = visit(*expression);
                     auto currentPointer = value;
                     const cld::Semantics::Type* currentType = &type;
                     std::optional<std::pair<std::uint32_t, std::uint32_t>> bitFieldBounds;
@@ -3893,7 +3895,7 @@ public:
                     }
                     if (!bitFieldBounds)
                     {
-                        if (cld::Semantics::isStringLiteralExpr(expression))
+                        if (cld::Semantics::isStringLiteralExpr(*expression))
                         {
                             m_builder.CreateMemCpy(currentPointer, currentPointer.alignment, subValue,
                                                    subValue.alignment,

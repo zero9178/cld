@@ -14,7 +14,6 @@
 cld::Semantics::Type cld::Semantics::PrimitiveType::createPtrdiffT(bool isConst, bool isVolatile,
                                                                    const LanguageOptions& options)
 {
-    InstrusiveVariantStorage<Statement> statement(std::in_place_type<ExpressionStatement>, 0, std::nullopt);
     switch (options.ptrdiffType)
     {
         case LanguageOptions::PtrdiffType ::Int: return PrimitiveType::createInt(isConst, isVolatile, options);
@@ -966,7 +965,7 @@ cld::Lexer::CTokenIterator cld::Semantics::UnaryOperator::end() const
 cld::Lexer::CTokenIterator cld::Semantics::SizeofOperator::end() const
 {
     return cld::match(
-        m_variant, [](const std::unique_ptr<ExpressionBase>& expression) { return expression->end(); },
+        m_variant, [](const IntrVarPtr<ExpressionBase>& expression) { return expression->end(); },
         [](const TypeVariant& typeVariant) { return typeVariant.closeParentheses + 1; });
 }
 
@@ -1041,8 +1040,6 @@ cld::Lexer::CTokenIterator cld::Semantics::CompoundLiteral::end() const
 {
     return m_initEnd;
 }
-
-cld::Semantics::Statement::~Statement() = default;
 
 const cld::Semantics::Statement& cld::Semantics::IfStatement::getTrueBranch() const
 {
@@ -1128,8 +1125,6 @@ std::size_t std::hash<cld::Semantics::Type>::operator()(const cld::Semantics::Ty
 {
     return cld::hashCombine(type.isConst(), type.isVolatile(), type.getVariant());
 }
-
-cld::Semantics::ExpressionBase::~ExpressionBase() = default;
 
 cld::Lexer::CTokenIterator cld::Semantics::ExpressionBase::begin() const
 {
