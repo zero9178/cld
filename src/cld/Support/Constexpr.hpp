@@ -73,8 +73,8 @@ struct IsUniquePtr : std::false_type
 {
 };
 
-template <class T>
-struct IsUniquePtr<std::unique_ptr<T>> : std::true_type
+template <class T, class Del>
+struct IsUniquePtr<std::unique_ptr<T, Del>> : std::true_type
 {
 };
 

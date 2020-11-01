@@ -617,6 +617,15 @@ CREATE_ERROR(EXPECTED_A_VALUE_OF_0_OR_1_AS_SECOND_ARGUMENT_TO_BUILTIN_PREFETCH,
 CREATE_ERROR(EXPECTED_A_VALUE_OF_0_TO_3_AS_THIRD_ARGUMENT_TO_BUILTIN_PREFETCH,
              "Expected a value of 0 to 3 as third argument to __builtin_prefetch", Annotate<0, 1>);
 
+// __builtin_expect_with_probability
+
+CREATE_ERROR(EXPECTED_ARITHMETIC_CONSTANT_EXPRESSION_AS_THIRD_ARGUMENT_TO_BUILTIN_EXPECT_WITH_PROBABILITY,
+             "Expected arithmetic constant expression as third argument to __builtin_expect_with_probability",
+             Underline<0>);
+
+CREATE_ERROR(EXPECTED_A_VALUE_OF_0_TO_1_AS_THIRd_ARGUMENT_TO_BUILTIN_EXPECT_WITH_PROBABILITY,
+             "Expected a value of 0 to 1 as third argument to __builtin_expect_with_probability", Annotate<0, 1>);
+
 // Size of
 
 CREATE_ERROR(INCOMPLETE_TYPE_N_IN_SIZE_OF, "Incomplete type %full0 in 'sizeof'", Underline<1>);

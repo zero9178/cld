@@ -2207,9 +2207,14 @@ public:
         Inff,
         Infl,
         SyncSynchronize,
+        ReturnAddress,
+        ExtractReturnAddr,
+        FRobReturnAddr,
+        FrameAddress,
         Expect,
         ExpectWithProbability,
         Prefetch,
+        ClearCache,
         Trap,
         Unreachable
     };

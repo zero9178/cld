@@ -1070,6 +1070,56 @@ std::unique_ptr<cld::Semantics::CallExpression>
         node.getOpenParentheses(), std::move(arguments), node.getCloseParentheses());
 }
 
+std::unique_ptr<cld::Semantics::CallExpression>
+    cld::Semantics::SemanticAnalysis::visitExpectWithProbability(const Syntax::PostFixExpressionFunctionCall& node,
+                                                                 IntrVarPtr<ExpressionBase>&& function)
+{
+    std::vector<IntrVarPtr<ExpressionBase>> arguments;
+    auto& ft = cld::get<FunctionType>(function->getType().getVariant());
+    if (node.getOptionalAssignmentExpressions().size() < 3)
+    {
+        auto& decl = function->cast<DeclarationRead>();
+        log(Errors::Semantics::NOT_ENOUGH_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_N_GOT_N.args(
+            decl, m_sourceInterface, *decl.getIdentifierToken(), 3, node.getOptionalAssignmentExpressions().size()));
+    }
+    else if (node.getOptionalAssignmentExpressions().size() > 3)
+    {
+        auto& decl = function->cast<DeclarationRead>();
+        log(Errors::Semantics::TOO_MANY_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_N_GOT_N.args(
+            decl, m_sourceInterface, *decl.getIdentifierToken(), 3, node.getOptionalAssignmentExpressions().size(),
+            llvm::ArrayRef(node.getOptionalAssignmentExpressions()).drop_front(3)));
+    }
+    else
+    {
+        arguments.push_back(
+            checkFunctionArg(1, ft.getArguments()[0].first, visit(node.getOptionalAssignmentExpressions()[0])));
+        arguments.push_back(
+            checkFunctionArg(2, ft.getArguments()[1].first, visit(node.getOptionalAssignmentExpressions()[1])));
+        arguments.push_back(
+            checkFunctionArg(3, ft.getArguments()[2].first, visit(node.getOptionalAssignmentExpressions()[2])));
+        if (arguments.back() && !arguments.back()->isUndefined())
+        {
+            auto constant = evaluateConstantExpression(*arguments.back(), Arithmetic);
+            if (!constant || !isArithmetic(arguments.back()->getType()))
+            {
+                log(Errors::Semantics::
+                        EXPECTED_ARITHMETIC_CONSTANT_EXPRESSION_AS_THIRD_ARGUMENT_TO_BUILTIN_EXPECT_WITH_PROBABILITY
+                            .args(*arguments.back(), m_sourceInterface, *arguments.back()));
+            }
+            else if (constant->toDouble() < 0 || constant->toDouble() > 1)
+            {
+                log(Errors::Semantics::EXPECTED_A_VALUE_OF_0_TO_1_AS_THIRd_ARGUMENT_TO_BUILTIN_EXPECT_WITH_PROBABILITY
+                        .args(*arguments.back(), m_sourceInterface, *arguments.back(), *constant));
+            }
+        }
+    }
+    return std::make_unique<CallExpression>(
+        PrimitiveType::createVoid(false, false),
+        std::make_unique<Conversion>(PointerType::create(false, false, false, function->getType()), Conversion::LValue,
+                                     std::move(function)),
+        node.getOpenParentheses(), std::move(arguments), node.getCloseParentheses());
+}
+
 cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::checkFunctionArg(std::size_t i, Type paramType,
                                                        IntrVarPtr<ExpressionBase>&& expression)
@@ -1140,6 +1190,10 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     if (isBuiltinKind(*function, BuiltinFunction::Prefetch))
     {
         return visitPrefetch(node, std::move(function));
+    }
+    if (isBuiltinKind(*function, BuiltinFunction::ExpectWithProbability))
+    {
+        return visitExpectWithProbability(node, std::move(function));
     }
     if (!isBuiltinFunction(*function))
     {

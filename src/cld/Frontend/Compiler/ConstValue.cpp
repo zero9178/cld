@@ -475,6 +475,15 @@ std::uint64_t cld::Semantics::ConstValue::toUInt() const
         [](AddressConstant) -> std::uint64_t { CLD_UNREACHABLE; });
 }
 
+double cld::Semantics::ConstValue::toDouble() const
+{
+    return match(
+        m_value, [](VoidStar) -> double { CLD_UNREACHABLE; },
+        [](const llvm::APFloat& floating) -> double { return floating.convertToDouble(); },
+        [](const llvm::APSInt& integer) -> double { return integer.roundToDouble(); },
+        [](std::monostate) -> double { CLD_UNREACHABLE; }, [](AddressConstant) -> double { CLD_UNREACHABLE; });
+}
+
 std::string cld::Semantics::ConstValue::toString() const
 {
     return match(

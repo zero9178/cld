@@ -277,6 +277,9 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
                                                      loc->getText().size() + 1),
                                    cld::to_string(loc->getText()), loc, loc + 1));
     getCurrentScope().declarations.insert({"__func__", DeclarationInScope{loc, funcName.get()}});
+    // GCC Extensions
+    getCurrentScope().declarations.insert({"__FUNCTION__", DeclarationInScope{loc, funcName.get()}});
+    getCurrentScope().declarations.insert({"__PRETTY_FUNCTION__", DeclarationInScope{loc, funcName.get()}});
 
     auto functionScope = pushFunctionScope(*ptr);
 
@@ -1636,6 +1639,7 @@ enum class Types
 {
     Void,
     Int,
+    UnsignedInt,
     Long,
     LongLong,
     Float,
@@ -1688,7 +1692,13 @@ constexpr Types extractType(std::u32string_view& text)
     std::optional<Types> result = std::nullopt;
     do
     {
-        if (text.substr(0, 4) == U"void")
+        if (text.substr(0, 5) == U"void*")
+        {
+            CLD_ASSERT(!result);
+            result = Types::VoidStar;
+            text.remove_prefix(5);
+        }
+        else if (text.substr(0, 4) == U"void")
         {
             CLD_ASSERT(!result);
             result = Types::Void;
@@ -1699,12 +1709,6 @@ constexpr Types extractType(std::u32string_view& text)
             CLD_ASSERT(!result);
             result = Types::VAList;
             text.remove_prefix(7);
-        }
-        else if (text.substr(0, 5) == U"void*")
-        {
-            CLD_ASSERT(!result);
-            result = Types::VoidStar;
-            text.remove_prefix(5);
         }
         else if (text.substr(0, 11) == U"const void*")
         {
@@ -1723,6 +1727,12 @@ constexpr Types extractType(std::u32string_view& text)
             CLD_ASSERT(!result);
             result = Types::Int;
             text.remove_prefix(3);
+        }
+        else if (text.substr(0, 12) == U"unsigned int")
+        {
+            CLD_ASSERT(!result);
+            result = Types::UnsignedInt;
+            text.remove_prefix(12);
         }
         else if (text.substr(0, 6) == U"double")
         {
@@ -1832,12 +1842,12 @@ constexpr auto createBuiltin(cld::Semantics::BuiltinFunction::Kind kind)
 
 #define DECL_BUILTIN(string, value)                            \
     constexpr auto value##Text = ::ctll::fixed_string{string}; \
-    constexpr auto value##Builtin = createBuiltin<value##Text>(cld::Semantics::BuiltinFunction::Kind::value)
+    constexpr auto value##Builtin = createBuiltin<value##Text>(::cld::Semantics::BuiltinFunction::Kind::value)
 
 #define DEF_BUILTIN(value)                                                                                         \
     do                                                                                                             \
     {                                                                                                              \
-        constexpr auto u8array = Constexpr::utf32ToUtf8<value##Builtin.name.size()>(value##Builtin.name);          \
+        constexpr static auto u8array = Constexpr::utf32ToUtf8<value##Builtin.name.size()>(value##Builtin.name);   \
         if (name == std::string_view(u8array.data(), u8array.size()))                                              \
         {                                                                                                          \
             std::vector<std::pair<Type, std::string_view>> parameters;                                             \
@@ -1852,7 +1862,7 @@ constexpr auto createBuiltin(cld::Semantics::BuiltinFunction::Kind kind)
                               .insert({std::string_view(u8array.data(), u8array.size()),                           \
                                        {FunctionType::create(typeEnumToType(value##Builtin.returnType),            \
                                                              std::move(parameters), value##Builtin.vararg, false), \
-                                        value##Builtin.kind}})                                                     \
+                                        ::cld::Semantics::BuiltinFunction::Kind::value}})                          \
                               .first;                                                                              \
             auto iter = m_scopes[0]                                                                                \
                             .declarations                                                                          \
@@ -1877,8 +1887,13 @@ DECL_BUILTIN("float __builtin_inff()", Inff);
 DECL_BUILTIN("long double __builtin_infl()", Infl);
 DECL_BUILTIN("void __sync_synchronize()", SyncSynchronize);
 DECL_BUILTIN("long __builtin_expect(long,long)", Expect);
+DECL_BUILTIN("void* __builtin_return_address(unsigned int)", ReturnAddress);
+DECL_BUILTIN("void* __builtin_extract_return_addr(void*)", ExtractReturnAddr);
+DECL_BUILTIN("void* __builtin_frob_return_addr(void*)", FRobReturnAddr);
+DECL_BUILTIN("void* __builtin_frame_address(unsigned int)", FrameAddress);
 DECL_BUILTIN("long __builtin_expect_with_probability(long,long,double)", ExpectWithProbability);
 DECL_BUILTIN("void __builtin_prefetch(const void*,...)", Prefetch);
+DECL_BUILTIN("void __builtin___clear_cache(void*,void*)", ClearCache);
 DECL_BUILTIN("void __builtin_trap()", Trap);
 DECL_BUILTIN("void __builtin_unreachable()", Unreachable);
 
@@ -1890,6 +1905,8 @@ const cld::Semantics::ProgramInterface::DeclarationInScope::Variant* CLD_NULLABL
         {
             case Types::Void: return PrimitiveType::createVoid(false, false);
             case Types::Int: return PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions());
+            case Types::UnsignedInt:
+                return PrimitiveType::createUnsignedInt(false, false, m_sourceInterface.getLanguageOptions());
             case Types::Long: return PrimitiveType::createLong(false, false, m_sourceInterface.getLanguageOptions());
             case Types::LongLong: return PrimitiveType::createLongLong(false, false);
             case Types::Float: return PrimitiveType::createFloat(false, false);
@@ -1917,9 +1934,14 @@ const cld::Semantics::ProgramInterface::DeclarationInScope::Variant* CLD_NULLABL
     DEF_BUILTIN(Inff);
     DEF_BUILTIN(Infl);
     DEF_BUILTIN(SyncSynchronize);
+    DEF_BUILTIN(ReturnAddress);
+    DEF_BUILTIN(ExtractReturnAddr);
+    DEF_BUILTIN(FRobReturnAddr);
+    DEF_BUILTIN(FrameAddress);
     DEF_BUILTIN(Expect);
     DEF_BUILTIN(ExpectWithProbability);
     DEF_BUILTIN(Prefetch);
+    DEF_BUILTIN(ClearCache);
     DEF_BUILTIN(Trap);
     DEF_BUILTIN(Unreachable);
     return nullptr;

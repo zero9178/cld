@@ -291,6 +291,9 @@ private:
     std::unique_ptr<CallExpression> visitPrefetch(const Syntax::PostFixExpressionFunctionCall& node,
                                                   IntrVarPtr<ExpressionBase>&& function);
 
+    std::unique_ptr<CallExpression> visitExpectWithProbability(const Syntax::PostFixExpressionFunctionCall& node,
+                                                               IntrVarPtr<ExpressionBase>&& function);
+
     IntrVarPtr<ExpressionBase> checkFunctionArg(std::size_t i, Type paramType, IntrVarPtr<ExpressionBase>&& expression);
 
 public:

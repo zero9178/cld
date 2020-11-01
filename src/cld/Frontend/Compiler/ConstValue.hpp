@@ -101,6 +101,8 @@ public:
 
     std::uint64_t toUInt() const;
 
+    double toDouble() const;
+
     std::string toString() const;
 };
 } // namespace cld::Semantics

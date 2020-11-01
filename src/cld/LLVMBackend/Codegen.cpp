@@ -3378,12 +3378,37 @@ public:
                 }
                 case cld::Semantics::BuiltinFunction::SyncSynchronize:
                     return m_builder.CreateFence(llvm::AtomicOrdering::SequentiallyConsistent);
+                case cld::Semantics::BuiltinFunction::ReturnAddress:
+                    return m_builder.CreateIntrinsic(llvm::Intrinsic::returnaddress, {},
+                                                     {visit(*call.getArgumentExpressions()[0])});
+                case cld::Semantics::BuiltinFunction::ExtractReturnAddr:
+                    // TODO:
+                    return visit(*call.getArgumentExpressions()[0]);
+                case cld::Semantics::BuiltinFunction::FRobReturnAddr:
+                    // TODO:
+                    return visit(*call.getArgumentExpressions()[0]);
+                case cld::Semantics::BuiltinFunction::FrameAddress:
+                    return m_builder.CreateIntrinsic(llvm::Intrinsic::frameaddress, {},
+                                                     {visit(*call.getArgumentExpressions()[0])});
                 case cld::Semantics::BuiltinFunction::ExpectWithProbability:
+                {
+                    auto ret = visit(*call.getArgumentExpressions()[0]);
+                    auto expected = visit(*call.getArgumentExpressions()[1]);
+                    auto probability = visit(*call.getArgumentExpressions()[2]);
+                    return m_builder.CreateIntrinsic(llvm::Intrinsic::expect_with_probability, {ret.value->getType()},
+                                                     {ret, expected, probability});
+                }
                 case cld::Semantics::BuiltinFunction::Expect:
                 {
                     auto ret = visit(*call.getArgumentExpressions()[0]);
-                    visitVoidExpression(*call.getArgumentExpressions()[1]);
-                    return ret;
+                    auto expected = visit(*call.getArgumentExpressions()[1]);
+                    return m_builder.CreateIntrinsic(llvm::Intrinsic::expect, {ret.value->getType()}, {ret, expected});
+                }
+                case cld::Semantics::BuiltinFunction::ClearCache:
+                {
+                    auto first = visit(*call.getArgumentExpressions()[0]);
+                    auto second = visit(*call.getArgumentExpressions()[1]);
+                    return m_builder.CreateIntrinsic(llvm::Intrinsic::clear_cache, {}, {first, second});
                 }
                 case cld::Semantics::BuiltinFunction::Prefetch:
                 {
