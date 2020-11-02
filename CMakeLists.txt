@@ -206,7 +206,7 @@ add_subdirectory(src/cld/Support)
 add_subdirectory(src/cld/Frontend)
 add_subdirectory(src/cld/LLVMBackend)
 
-llvm_map_components_to_libnames(llvm_all ${LLVM_TARGETS_TO_BUILD})
+llvm_map_components_to_libnames(llvm_all ${LLVM_TARGETS_TO_BUILD} ipo)
 
 message(STATUS "${llvm_all}")
 
