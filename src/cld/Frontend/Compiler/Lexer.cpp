@@ -2311,7 +2311,7 @@ std::optional<std::pair<CToken::ValueType, CToken::Type>>
         suffixBegin = std::find_if(suffixBegin, end, searchFunction);
         if (prev == suffixBegin)
         {
-            auto result = findUTF8StartByte(std::make_reverse_iterator(begin), std::make_reverse_iterator(prev));
+            auto result = findUTF8StartByte(std::make_reverse_iterator(prev), std::make_reverse_iterator(begin));
             context.report(cld::Errors::Lexer::EXPECTED_DIGITS_AFTER_EXPONENT,
                            context.token.getCharSpaceOffset() + context.token.getCharSpaceLength(),
                            context.token.getCharSpaceOffset() + result.base() - begin - 1, context.token);

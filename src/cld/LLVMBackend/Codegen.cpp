@@ -1287,7 +1287,10 @@ public:
 
     ~CodeGenerator()
     {
-        m_debugInfo.finalize();
+        if (m_options.debugEmission != cld::CGLLVM::DebugEmission::None)
+        {
+            m_debugInfo.finalize();
+        }
     }
 
     llvm::Type* visit(const cld::Semantics::Type& type)

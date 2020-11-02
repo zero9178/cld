@@ -68,7 +68,7 @@ CLD_CLI_OPT(G0, ("-g0"))("No debug info");
 
 CLD_CLI_OPT(G1, ("-g1", "-gline-tables-only", "-gmlt"))("Lines only");
 
-CLD_CLI_OPT(G2, ("-g2", "-g"))("Generated debugging info");
+CLD_CLI_OPT(G2, ("-g2", "-g", "--debug"))("Generated debugging info");
 
 CLD_CLI_OPT(G3, ("-g3"))("Generated extded debugging info");
 
@@ -454,12 +454,15 @@ std::optional<cld::fs::path> compileCFile(Action action, cld::fs::path cSourceFi
     {
         codegenOptions.reloc = llvm::Reloc::Model::PIC_;
     }
-    switch (cli.template get<OPT>()->value_or(0))
+    if (cli.template get<OPT>())
     {
-        case 0: codegenOptions.ol = llvm::CodeGenOpt::None; break;
-        case 1: codegenOptions.ol = llvm::CodeGenOpt::Less; break;
-        case 2: codegenOptions.ol = llvm::CodeGenOpt::Default; break;
-        default: codegenOptions.ol = llvm::CodeGenOpt::Aggressive; break;
+        switch (cli.template get<OPT>()->value_or(1))
+        {
+            case 0: codegenOptions.ol = llvm::CodeGenOpt::None; break;
+            case 1: codegenOptions.ol = llvm::CodeGenOpt::Less; break;
+            case 2: codegenOptions.ol = llvm::CodeGenOpt::Default; break;
+            default: codegenOptions.ol = llvm::CodeGenOpt::Aggressive; break;
+        }
     }
     codegenOptions.emitAllDecls = cli.template get<EMIT_ALL_DECLS>();
     auto* debugOption = cli.template lastSpecified<G0, G1, G2, G3>();
