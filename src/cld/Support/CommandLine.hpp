@@ -2,6 +2,11 @@
 
 #include <llvm/ADT/ArrayRef.h>
 
+#include <cld/Frontend/Compiler/Message.hpp>
+#include <cld/Support/Constexpr.hpp>
+#include <cld/Support/Text.hpp>
+#include <cld/Support/Util.hpp>
+
 #include <optional>
 #include <string_view>
 #include <tuple>
@@ -10,10 +15,6 @@
 #include <vector>
 
 #include <ctre.hpp>
-
-#include "Constexpr.hpp"
-#include "Text.hpp"
-#include "Util.hpp"
 
 namespace cld
 {
@@ -469,290 +470,351 @@ struct ValueType<bool>
     using type = bool;
 };
 
-template <auto* cliOption, std::size_t i, class Storage>
-static bool checkAlternative(llvm::MutableArrayRef<std::string_view>& commandLine, Storage& storage)
+template <class T>
+class SmallFunction;
+
+template <class Ret, class... Params>
+class SmallFunction<Ret(Params...)>
 {
-    auto thisElement = [](auto& storage) -> typename ValueType<Storage>::type& {
-        if constexpr (cliOption->getMultiArg() == CLIMultiArg::List)
-        {
-            if constexpr (!containsNegate<*cliOption>())
-            {
-                return storage.back();
-            }
-            CLD_UNREACHABLE;
-        }
-        else if constexpr (std::is_same_v<Storage, bool>)
-        {
-            return storage;
-        }
-        else
-        {
-            return *storage;
-        }
-    };
+    alignas(std::max_align_t) std::byte m_storage[32];
+    Ret (*m_call)(std::byte*, Params...) = nullptr;
 
-    constexpr auto alternative = std::get<i>(cliOption->getAlternatives());
-    constexpr static auto array = detail::CommandLine::tupleToArray(alternative);
-    auto storageCopy = [&] {
-        if constexpr (cliOption->getMultiArg() == CLIMultiArg::List)
+    template <class F>
+    static Ret call(std::byte* storage, Params... args)
+    {
+        return (*reinterpret_cast<F*>(storage))(std::forward<Params>(args)...);
+    }
+
+public:
+    SmallFunction() = default;
+
+    template <class F>
+    SmallFunction(F&& f) : m_call(call<std::remove_reference_t<F>>)
+    {
+        static_assert(std::is_trivially_destructible_v<
+                          std::remove_reference_t<F>> && sizeof(std::remove_reference_t<F>) <= sizeof(m_storage));
+        constexpr std::size_t alignOfLambda = alignof(std::remove_reference_t<F>);
+        static_assert(alignOfLambda <= alignof(std::max_align_t));
+        new (m_storage) std::remove_reference_t<F>(std::forward<F>(f));
+    }
+
+    template <class... Args>
+    Ret operator()(Args&&... args)
+    {
+        CLD_ASSERT(m_call);
+        return (*m_call)(m_storage, std::forward<Args>(args)...);
+    }
+};
+
+template <class T>
+struct tupleSizeOr1
+{
+    constexpr static std::size_t value = 1;
+};
+
+template <class... Args>
+struct tupleSizeOr1<std::tuple<Args...>>
+{
+    constexpr static std::size_t value = sizeof...(Args);
+};
+
+template <auto* cliOption, std::size_t i, std::size_t index>
+constexpr auto arg = std::get<index>(std::get<i>(cliOption->getAlternatives()));
+
+template <auto* cliOption, std::size_t size, class Storage>
+class Mutator
+{
+    MaxVector<SmallFunction<void()>, size * 3> m_queue;
+    std::size_t m_currentIndex{};
+    std::size_t m_currentPos{};
+    llvm::MutableArrayRef<std::string_view>& m_commandLine;
+    Storage& m_storage;
+    bool m_removeFromStorage{};
+    bool m_firstArg = true;
+
+    template <std::size_t i, std::size_t index>
+    constexpr static bool isLast()
+    {
+        using Tuple = std::decay_t<decltype(cliOption->getAlternatives())>;
+        using TupleArg = std::tuple_element_t<i, Tuple>;
+        return index + 1 == std::tuple_size_v<TupleArg>;
+    }
+
+public:
+    Mutator(llvm::MutableArrayRef<std::string_view>& commandLine, Storage& storage)
+        : m_commandLine(commandLine), m_storage(storage)
+    {
+        if constexpr (std::is_same_v<bool, Storage>)
         {
-            return 0;
+            m_queue.push_back([this] { m_storage = true; });
+        }
+    }
+
+    bool tryConsume(std::string_view text)
+    {
+        if (m_currentIndex >= m_commandLine.size())
+        {
+            return false;
+        }
+        if (m_commandLine[m_currentIndex].substr(m_currentPos, text.size()) != text)
+        {
+            return false;
+        }
+        m_queue.push_back([this, size = text.size()] { m_commandLine.front().remove_prefix(size); });
+        m_currentPos += text.size();
+        return true;
+    }
+
+    bool tryNegate(std::string_view text)
+    {
+        if (!tryConsume(text))
+        {
+            return true;
+        }
+        if constexpr (cliOption->getMultiArg() == CLIMultiArg::Overwrite)
+        {
+            m_queue.push_back([this] { m_storage = {}; });
+        }
+        else if constexpr (cliOption->getMultiArg() == CLIMultiArg::List)
+        {
+            m_removeFromStorage = true;
+        }
+        return true;
+    }
+
+    template <std::size_t i, std::size_t index>
+    bool tryParseArg()
+    {
+        if (m_currentIndex >= m_commandLine.size() || m_commandLine[m_currentIndex].size() <= m_currentPos)
+        {
+            return false;
+        }
+        std::string_view text;
+        if constexpr (isLast<i, index>())
+        {
+            text = m_commandLine[m_currentIndex].substr(m_currentPos);
+            m_queue.push_back([this, size = text.size()] { m_commandLine.front().remove_prefix(size); });
+            m_currentPos += text.size();
+        }
+        else if constexpr (std::is_same_v<std::decay_t<decltype(arg<cliOption, i, index + 1>)>, Whitespace>)
+        {
+            text = m_commandLine[m_currentIndex].substr(m_currentPos);
+            m_queue.push_back([this, size = text.size()] { m_commandLine.front().remove_prefix(size); });
+            m_currentPos += text.size();
+        }
+        else if constexpr (std::is_same_v<std::decay_t<decltype(arg<cliOption, i, index + 1>)>, Text>)
+        {
+            constexpr auto utf32 = arg<cliOption, i, index + 1>.value;
+            constexpr auto utf8Array = Constexpr::utf32ToUtf8<utf32.size() * 4>(utf32);
+            auto end = m_commandLine[m_currentIndex].find_first_of({utf8Array.data(), utf8Array.size()}, m_currentPos);
+
+            text = m_commandLine[m_currentIndex].substr(m_currentPos, end - m_currentPos);
+            m_queue.push_back([this, size = text.size()] { m_commandLine.front().remove_prefix(size); });
+            m_currentPos += text.size();
         }
         else
         {
-            return storage;
+            static_assert(always_false<std::integral_constant<std::size_t, i>>);
         }
-    }();
-    if constexpr (cliOption->getMultiArg() == CLIMultiArg::List)
-    {
-        if constexpr (!containsNegate<*cliOption>())
-        {
-            storage.emplace_back();
-        }
-    }
-    else if constexpr (std::is_same_v<bool, Storage>)
-    {
-        storage = true;
-    }
-    else
-    {
-        storage.emplace();
-    }
-    bool insert = true;
-    (void)insert;
-    auto copy = commandLine;
-    std::vector<std::string_view> contents(commandLine.begin(),
-                                           commandLine.begin() + std::min(array.size(), commandLine.size()));
-    bool success = YComb{[&, &storage = storage](auto&& self, auto indexT) -> bool {
-        constexpr std::size_t index = decltype(indexT)::value;
-        constexpr auto curr = array[index];
-        if constexpr (std::holds_alternative<detail::CommandLine::Text>(curr))
-        {
-            if (commandLine.empty())
+
+        constexpr std::size_t storageIndex = indexOf(cliOption->getArgNames(), arg<cliOption, i, index>.value);
+        constexpr bool isTupleVector = IsTuple<std::decay_t<typename ValueType<Storage>::type>>{};
+        using ArgTypeT = typename std::conditional_t<
+            isTupleVector, std::tuple_element<storageIndex, std::decay_t<typename ValueType<Storage>::type>>,
+            std::decay<typename ValueType<Storage>::type>>::type;
+        using ArgType =
+            typename std::conditional_t<IsOptional<ArgTypeT>{}, ValueType<ArgTypeT>, type_identity<ArgTypeT>>::type;
+        auto assign = [=](auto&& value) {
+            if constexpr (cliOption->getMultiArg() == CLIMultiArg::List)
             {
-                return false;
-            }
-            constexpr auto utf32 = cld::get<detail::CommandLine::Text>(curr).value;
-            constexpr auto utf8Array = Constexpr::utf32ToUtf8<utf32.size() * 4>(utf32);
-            if (commandLine.front().substr(0, utf8Array.size()) == std::string_view(utf8Array.data(), utf8Array.size()))
-            {
-                commandLine.front().remove_prefix(utf8Array.size());
-            }
-            else
-            {
-                return false;
-            }
-        }
-        else if constexpr (std::holds_alternative<detail::CommandLine::NegationOption>(curr))
-        {
-            if (commandLine.empty())
-            {
-                return true;
-            }
-            constexpr auto utf32 = cld::get<detail::CommandLine::NegationOption>(curr).value;
-            constexpr auto utf8Array = Constexpr::utf32ToUtf8<utf32.size() * 4>(utf32);
-            if (commandLine.front().substr(0, utf8Array.size()) == std::string_view(utf8Array.data(), utf8Array.size()))
-            {
-                commandLine.front().remove_prefix(utf8Array.size());
-                if constexpr (cliOption->getMultiArg() == CLIMultiArg::Overwrite)
+                if constexpr (containsNegate<*cliOption>())
                 {
-                    if constexpr (std::is_same_v<bool, Storage>)
+                    if (m_removeFromStorage)
                     {
-                        storage = false;
+                        m_queue.push_back([this, value] { m_storage.erase(value); });
                     }
                     else
                     {
-                        storage.reset();
-                    }
-                }
-                else if constexpr (cliOption->getMultiArg() == CLIMultiArg::List)
-                {
-                    static_assert(
-                        []() -> bool {
-                            int argCount = 0;
-                            for (std::size_t j = 0; j < array.size(); j++)
-                            {
-                                if (std::holds_alternative<Arg>(array[j]))
-                                {
-                                    argCount++;
-                                }
-                            }
-                            return argCount == 1;
-                        }(),
-                        "Using a negate construct with multi arg option 'List' requires precisely one argument in the alternative");
-                    insert = false;
-                }
-            }
-        }
-        else if constexpr (std::holds_alternative<detail::CommandLine::Arg>(curr))
-        {
-            constexpr std::size_t storageIndex =
-                indexOf(cliOption->getArgNames(), cld::get<detail::CommandLine::Arg>(curr).value);
-            using ArgTypeT = typename std::conditional_t<
-                IsTuple<std::decay_t<typename ValueType<Storage>::type>>{},
-                std::tuple_element<storageIndex, std::decay_t<typename ValueType<Storage>::type>>,
-                std::decay<typename ValueType<Storage>::type>>::type;
-            using ArgType =
-                typename std::conditional_t<IsOptional<ArgTypeT>{}, ValueType<ArgTypeT>, type_identity<ArgTypeT>>::type;
-            std::string_view text;
-            if (commandLine.empty() || commandLine.front().empty())
-            {
-                return false;
-            }
-            if constexpr (index + 1 == array.size())
-            {
-                text = commandLine.front();
-                commandLine.front().remove_prefix(commandLine.front().size());
-            }
-            else if constexpr (std::holds_alternative<detail::CommandLine::Whitespace>(array[index + 1]))
-            {
-                text = commandLine.front();
-                commandLine.front().remove_prefix(commandLine.front().size());
-            }
-            else if constexpr (std::holds_alternative<detail::CommandLine::Text>(array[index + 1]))
-            {
-                auto end = std::find_if(commandLine.front().begin(), commandLine.front().end(),
-                                        [separator = cld::get<detail::CommandLine::Text>(array[index + 1]).value[0]](
-                                            char c) { return c == (char)separator; });
-                text = commandLine.front().substr(0, end - commandLine.front().begin());
-                commandLine.front().remove_prefix(text.size());
-            }
-            else
-            {
-                CLD_UNREACHABLE;
-            }
-            if constexpr (std::is_same_v<std::string, ArgType> || std::is_same_v<std::string_view, ArgType>)
-            {
-                if constexpr (cliOption->getMultiArg() == CLIMultiArg::List && containsNegate<*cliOption>())
-                {
-                    if (insert)
-                    {
-                        storage.insert(text);
-                    }
-                    else
-                    {
-                        storage.erase(text);
+                        m_queue.push_back([this, value] { m_storage.insert(value); });
                     }
                 }
                 else
                 {
-                    auto& element = [&]() -> decltype(auto) {
-                        if constexpr (IsTuple<std::decay_t<typename ValueType<Storage>::type>>{})
-                        {
-                            // MSVC
 #if defined(_MSC_VER) && !defined(__clang__)
-                            constexpr std::size_t index = decltype(indexT)::value;
-                            constexpr auto curr = array[index];
+                    constexpr bool isTupleVector = IsTuple<std::decay_t<typename ValueType<Storage>::type>>{};
+#endif
+                    if constexpr (isTupleVector)
+                    {
+                        if (m_firstArg)
+                        {
+                            m_queue.push_back([this] { m_storage.emplace_back(); });
+                        }
+                        m_queue.push_back([=] {
+#if defined(_MSC_VER) && !defined(__clang__)
                             constexpr std::size_t storageIndex =
-                                indexOf(cliOption->getArgNames(), cld::get<detail::CommandLine::Arg>(curr).value);
+                                indexOf(cliOption->getArgNames(), arg<cliOption, i, index>.value);
 #endif
-                            return std::get<storageIndex>(thisElement(storage));
-                        }
-                        else
-                        {
-                            return thisElement(storage);
-                        }
-                    }();
-                    element = text;
+                            std::get<storageIndex>(m_storage.back()) = value;
+                        });
+                    }
+                    else
+                    {
+                        m_queue.push_back([this, value] {
+                            m_storage.emplace_back();
+                            m_storage.back() = value;
+                        });
+                    }
                 }
             }
-            else if constexpr (std::is_integral_v<ArgType>)
+            else
             {
-                auto& element = [&]() -> decltype(auto) {
-                    if constexpr (IsTuple<std::decay_t<typename ValueType<Storage>::type>>{})
-                    {
-                        // MSVC
-#if defined(_MSC_VER) && !defined(__clang__)
-                        constexpr std::size_t index = decltype(indexT)::value;
-                        constexpr auto curr = array[index];
-                        constexpr std::size_t storageIndex =
-                            indexOf(cliOption->getArgNames(), cld::get<detail::CommandLine::Arg>(curr).value);
-#endif
-                        return std::get<storageIndex>(thisElement(storage));
-                    }
-                    else
-                    {
-                        return thisElement(storage);
-                    }
-                }();
-                element = 0;
-                if constexpr (IsOptional<std::decay_t<decltype(element)>>{})
-                {
-                    if constexpr (std::is_signed_v<ArgType>)
-                    {
-                        *element = std::stoll(cld::to_string(text));
-                    }
-                    else
-                    {
-                        *element = std::stoull(cld::to_string(text));
-                    }
-                }
-                else
-                {
-                    if constexpr (std::is_signed_v<ArgType>)
-                    {
-                        element = std::stoll(cld::to_string(text));
-                    }
-                    else
-                    {
-                        element = std::stoull(cld::to_string(text));
-                    }
-                }
+                m_queue.push_back([this, value] { m_storage = value; });
             }
-        }
-        else if constexpr (std::holds_alternative<detail::CommandLine::Whitespace>(curr))
+        };
+        if constexpr (std::is_same_v<std::string, ArgType> || std::is_same_v<std::string_view, ArgType>)
         {
-            if (!commandLine.empty() && !commandLine.front().empty())
+            assign(text);
+        }
+        else if constexpr (std::is_integral_v<ArgType>)
+        {
+            if constexpr (std::is_signed_v<ArgType>)
             {
-                return false;
+                assign(std::stoll(cld::to_string(text)));
             }
-            if (!commandLine.empty())
+            else
             {
-                commandLine = commandLine.drop_front();
+                assign(std::stoull(cld::to_string(text)));
             }
         }
 
-        if constexpr (index + 1 != array.size())
+        if (m_firstArg)
+        {
+            m_firstArg = false;
+        }
+        return true;
+    }
+
+    bool tryWhitespace()
+    {
+        if (m_currentIndex < m_commandLine.size() && m_currentPos < m_commandLine[m_currentIndex].size())
+        {
+            return false;
+        }
+        if (m_currentIndex < m_commandLine.size())
+        {
+            m_queue.push_back([this] { m_commandLine = m_commandLine.drop_front(); });
+            m_currentIndex++;
+            m_currentPos = 0;
+        }
+        return true;
+    }
+
+    bool tryEnd()
+    {
+        if (m_currentIndex >= m_commandLine.size())
+        {
+            return true;
+        }
+        if (m_commandLine[m_currentIndex].size() <= m_currentPos)
+        {
+            m_queue.push_back([this] { m_commandLine = m_commandLine.drop_front(); });
+            m_currentIndex++;
+            m_currentPos = 0;
+            return true;
+        }
+        return false;
+    }
+
+    void exec()
+    {
+        for (auto& iter : m_queue)
+        {
+            iter();
+        }
+    }
+};
+
+template <auto* cliOption, std::size_t i, std::size_t index, class Storage, std::size_t size>
+bool evaluateArg(Mutator<cliOption, size, Storage>& mutator)
+{
+    using ArgType = std::decay_t<decltype(arg<cliOption, i, index>)>;
+    if constexpr (std::is_same_v<ArgType, Text>)
+    {
+        constexpr auto utf32 = arg<cliOption, i, index>.value;
+        constexpr auto utf8Array = Constexpr::utf32ToUtf8<utf32.size() * 4>(utf32);
+        if (!mutator.tryConsume({utf8Array.data(), utf8Array.size()}))
+        {
+            return false;
+        }
+    }
+    else if constexpr (std::is_same_v<ArgType, NegationOption>)
+    {
+        constexpr auto utf32 = arg<cliOption, i, index>.value;
+        constexpr auto utf8Array = Constexpr::utf32ToUtf8<utf32.size() * 4>(utf32);
+        if (!mutator.tryNegate({utf8Array.data(), utf8Array.size()}))
+        {
+            return false;
+        }
+    }
+    else if constexpr (std::is_same_v<ArgType, Arg>)
+    {
+        if (!mutator.template tryParseArg<i, index>())
+        {
+            return false;
+        }
+    }
+    else if constexpr (std::is_same_v<ArgType, Whitespace>)
+    {
+        if (!mutator.tryWhitespace())
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+struct Failure
+{
+    std::size_t failedIndex;
+    std::optional<cld::Message> message{};
+};
+
+template <auto* cliOption, std::size_t i, class Storage>
+std::optional<Failure> checkAlternative2(llvm::MutableArrayRef<std::string_view>& commandLine, Storage& storage)
+{
+    using AlternativeType = std::tuple_element_t<i, std::decay_t<decltype(cliOption->getAlternatives())>>;
+    Mutator<cliOption, std::tuple_size_v<AlternativeType>, Storage> mutator(commandLine, storage);
+    auto failure = YComb{[&](auto&& self, auto indexT) -> std::optional<std::size_t> {
+        constexpr std::size_t index = std::decay_t<decltype(indexT)>::value;
+        if (!evaluateArg<cliOption, i, index>(mutator))
+        {
+            return index;
+        }
+        if constexpr (index + 1 < std::tuple_size_v<AlternativeType>)
         {
             return self(std::integral_constant<std::size_t, index + 1>{});
         }
         else
         {
-            if (commandLine.empty())
+            if (!mutator.tryEnd())
             {
-                return true;
+                return index;
             }
-            if (commandLine.front().empty())
-            {
-                commandLine = commandLine.drop_front();
-                return true;
-            }
-            return false;
+            return std::nullopt;
         }
     }}(std::integral_constant<std::size_t, 0>{});
-    if (success)
+    if (failure)
     {
-        return true;
+        return Failure{*failure};
     }
-    // TODO: Undo in the case of CLIMultiArg::List and it containing a NegateOption
-    if constexpr (cliOption->getMultiArg() == CLIMultiArg::List)
-    {
-        if constexpr (!containsNegate<*cliOption>())
-        {
-            storage.pop_back();
-        }
-    }
-    else
-    {
-        storage = storageCopy;
-    }
-    commandLine = copy;
-    std::move(contents.begin(), contents.end(), commandLine.begin());
-    return false;
+
+    mutator.exec();
+    return std::nullopt;
 }
 
 template <auto* cliOption, class Storage>
-static bool checkAllAlternatives(llvm::MutableArrayRef<std::string_view>& commandLine, Storage& storage)
+bool checkAllAlternatives(llvm::MutableArrayRef<std::string_view>& commandLine, Storage& storage)
 {
     using AllAlternatives = std::decay_t<decltype(cliOption->getAlternatives())>;
     return std::apply(
@@ -766,7 +828,7 @@ static bool checkAllAlternatives(llvm::MutableArrayRef<std::string_view>& comman
                 constexpr auto utf8Prefix = Constexpr::utf32ToUtf8<u32prefix.size() * 4>(u32prefix);
                 if (commandLine.front() == std::string_view(utf8Prefix.data(), utf8Prefix.size()))
                 {
-                    return checkAlternative<cliOption, i>(commandLine, storage);
+                    return !checkAlternative2<cliOption, i>(commandLine, storage).has_value();
                 }
                 if constexpr (std::tuple_size_v<Tuple> >= 2)
                 {
@@ -775,7 +837,7 @@ static bool checkAllAlternatives(llvm::MutableArrayRef<std::string_view>& comman
                         if (commandLine.front().substr(0, utf8Prefix.size())
                             == std::string_view(utf8Prefix.data(), utf8Prefix.size()))
                         {
-                            return checkAlternative<cliOption, i>(commandLine, storage);
+                            return !checkAlternative2<cliOption, i>(commandLine, storage).has_value();
                         }
                     }
                 }
@@ -784,18 +846,6 @@ static bool checkAllAlternatives(llvm::MutableArrayRef<std::string_view>& comman
         },
         Constexpr::integerSequenceToTuple(std::make_index_sequence<std::tuple_size_v<AllAlternatives>>{}));
 }
-
-template <class T>
-struct tupleSizeOr1
-{
-    constexpr static std::size_t value = 1;
-};
-
-template <class... Args>
-struct tupleSizeOr1<std::tuple<Args...>>
-{
-    constexpr static std::size_t value = sizeof...(Args);
-};
 
 template <auto& option>
 using OptionStorage =

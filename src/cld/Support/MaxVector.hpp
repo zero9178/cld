@@ -175,11 +175,13 @@ public:
     constexpr void push_back(const T& value) noexcept
     {
         m_array[m_size++] = value;
+        CLD_ASSERT(m_size <= N);
     }
 
     constexpr void push_back(T&& value) noexcept
     {
         m_array[m_size++] = std::move(value);
+        CLD_ASSERT(m_size <= N);
     }
 
     constexpr void pop_back() noexcept
