@@ -205,14 +205,7 @@ endif ()
 add_subdirectory(src/cld/Support)
 add_subdirectory(src/cld/Frontend)
 add_subdirectory(src/cld/LLVMBackend)
-
-llvm_map_components_to_libnames(llvm_all ${LLVM_TARGETS_TO_BUILD} ipo)
-
-message(STATUS "${llvm_all}")
-
-add_library(cldMain src/cld/cldmain.cpp)
-target_link_libraries(cldMain LLVMBackend ${llvm_all})
-target_compile_definitions(cldMain PRIVATE CLD_VERSION="${PROJECT_VERSION}")
+add_subdirectory(src/cld/cldMain)
 
 add_executable(cld src/cld/main.cpp)
 target_link_libraries(cld cldMain)

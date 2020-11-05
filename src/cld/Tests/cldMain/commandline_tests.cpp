@@ -1,6 +1,6 @@
 #include <catch.hpp>
 
-#include <cld/Support/CommandLine.hpp>
+#include <cld/cldMain/CommandLine.hpp>
 
 namespace
 {

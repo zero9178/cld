@@ -560,7 +560,7 @@ public:
         {
             return false;
         }
-        m_queue.push_back([this, size = text.size()] { m_commandLine.front().remove_prefix(size); });
+        m_queue.push_back([this, textSize = text.size()] { m_commandLine.front().remove_prefix(textSize); });
         m_currentPos += text.size();
         return true;
     }
@@ -593,13 +593,13 @@ public:
         if constexpr (isLast<i, index>())
         {
             text = m_commandLine[m_currentIndex].substr(m_currentPos);
-            m_queue.push_back([this, size = text.size()] { m_commandLine.front().remove_prefix(size); });
+            m_queue.push_back([this, textSize = text.size()] { m_commandLine.front().remove_prefix(textSize); });
             m_currentPos += text.size();
         }
         else if constexpr (std::is_same_v<std::decay_t<decltype(arg<cliOption, i, index + 1>)>, Whitespace>)
         {
             text = m_commandLine[m_currentIndex].substr(m_currentPos);
-            m_queue.push_back([this, size = text.size()] { m_commandLine.front().remove_prefix(size); });
+            m_queue.push_back([this, textSize = text.size()] { m_commandLine.front().remove_prefix(textSize); });
             m_currentPos += text.size();
         }
         else if constexpr (std::is_same_v<std::decay_t<decltype(arg<cliOption, i, index + 1>)>, Text>)
@@ -609,7 +609,7 @@ public:
             auto end = m_commandLine[m_currentIndex].find_first_of({utf8Array.data(), utf8Array.size()}, m_currentPos);
 
             text = m_commandLine[m_currentIndex].substr(m_currentPos, end - m_currentPos);
-            m_queue.push_back([this, size = text.size()] { m_commandLine.front().remove_prefix(size); });
+            m_queue.push_back([this, textSize = text.size()] { m_commandLine.front().remove_prefix(textSize); });
             m_currentPos += text.size();
         }
         else

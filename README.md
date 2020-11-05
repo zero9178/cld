@@ -102,7 +102,7 @@ Following CMake targets are then available and must simply be linked against. Th
 * `cld::LLVMBackend`, has a dependency on `cld::Frontend`. This includes the LLVMBackend and allows LLVM IR to be
   generated from the Frontends AST. All headers within cld/LLVMBackend may be used without linker errors
 * `cld::cldMain`, has a dependency on `cld::LLVMBackend`. This includes the main program used by the compiler. Linking
-  against this target allows the usage of the cld/cldmain.hpp header.
+  against this target allows the usage of all headers in cld/cldmain.
 
 Additionally all of the above targets depend on `cld::Support`, allowing all headers in cld/Support to be used.
 

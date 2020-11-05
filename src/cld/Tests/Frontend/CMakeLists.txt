@@ -1,5 +1,5 @@
 
-add_executable(FrontendTests lexer.cpp parser.cpp main.cpp semantics.cpp constantevaluator.cpp preprocessor.cpp preprocessor_parser.cpp diagnostics.cpp commandline.cpp)
+add_executable(FrontendTests lexer_tests.cpp parser_tests.cpp main.cpp semantics_tests.cpp constantevaluator_tests.cpp preprocessor_tests.cpp preprocessor_parser_tests.cpp diagnostics_tests.cpp ../cldMain/commandline_tests.cpp)
 target_link_libraries(FrontendTests Frontend testCommon)
 set_source_files_properties(main.cpp PROPERTIES COMPILE_DEFINITIONS CATCH_CONFIG_RUNNER SKIP_PRECOMPILE_HEADERS ON)
 if (CLD_USE_PCH)

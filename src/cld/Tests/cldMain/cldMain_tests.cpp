@@ -1,7 +1,7 @@
 #include <catch.hpp>
 
 #include <cld/Frontend/Compiler/ErrorMessages.hpp>
-#include <cld/cldmain.hpp>
+#include <cld/cldMain/cldMain.hpp>
 
 #include <TestConfig.hpp>
 

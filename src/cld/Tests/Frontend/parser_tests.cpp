@@ -848,7 +848,8 @@ TEST_CASE("Parse ASM Statement", "[parser]")
                  "      : \"+D\" (Dest), \"+c\" (Count) \n"
                  "      : [Data] \"a\" (Data) \n"
                  "      : \"memory\");\n"
-                 "}",ProducesNoErrors());
+                 "}",
+                 ProducesNoErrors());
 }
 
 #if defined(NDEBUG) || !defined(_WIN32)
@@ -861,9 +862,9 @@ TEST_CASE("Parse ASM Statement", "[parser]")
     #endif
 #endif
 
-#if defined(UNRESTRICTED_STACK) && defined(LLVM_ENABLE_EXCEPTIONS)
 TEST_CASE("Parser limits", "[parser]")
 {
+#if defined(UNRESTRICTED_STACK) && defined(LLVM_ENABLE_EXCEPTIONS)
     SECTION("Parenthese expression")
     {
         auto source = "int main(void){" + std::string(cld::Limits::Parser::MAX_BRACKET_DEPTH + 1, '(');
@@ -882,8 +883,9 @@ TEST_CASE("Parser limits", "[parser]")
         treeProduces(source, ProducesError(cld::Errors::Parser::MAXIMUM_BRACKET_DEPTH_OF_N_EXCEEDED,
                                            cld::Limits::Parser::MAX_BRACKET_DEPTH));
     }
-}
+
 #endif
+}
 
 namespace
 {
