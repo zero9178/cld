@@ -4,7 +4,7 @@
 
 #include <cld/Frontend/Compiler/Message.hpp>
 #include <cld/Support/Constexpr.hpp>
-#include <cld/Support/Text.hpp>
+#include <cld/Support/MaxVector.hpp>
 #include <cld/Support/Util.hpp>
 
 #include <optional>
@@ -13,8 +13,6 @@
 #include <unordered_set>
 #include <variant>
 #include <vector>
-
-#include <ctre.hpp>
 
 namespace cld
 {
@@ -34,14 +32,14 @@ class CommandLineOption : public CommandLineOptionBase
 {
     std::string_view m_firstOptionString;
     std::tuple<Alternatives...> m_alternatives;
-    std::array<std::u32string_view, args> m_argNameToRetTypePos;
+    std::array<std::string_view, args> m_argNameToRetTypePos;
     std::string_view m_description;
     CLIMultiArg m_multiArg;
 
 public:
     constexpr CommandLineOption(type_identity<ReturnType>, std::string_view firstOptionString,
                                 std::tuple<Alternatives...> alternatives,
-                                std::array<std::u32string_view, args> argNameToRetTypePos, std::string_view description,
+                                std::array<std::string_view, args> argNameToRetTypePos, std::string_view description,
                                 CLIMultiArg multiArg)
         : m_firstOptionString(firstOptionString),
           m_alternatives(std::move(alternatives)),
@@ -53,7 +51,7 @@ public:
 
     using value_type = ReturnType;
 
-    constexpr const std::array<std::u32string_view, args>& getArgNames() const
+    constexpr const std::array<std::string_view, args>& getArgNames() const
     {
         return m_argNameToRetTypePos;
     }
@@ -87,12 +85,12 @@ struct Whitespace
 
 struct Arg
 {
-    std::u32string_view value;
+    std::string_view value;
 };
 
 struct Text
 {
-    std::u32string_view value;
+    std::string_view value;
 };
 
 struct Ellipsis
@@ -101,7 +99,7 @@ struct Ellipsis
 
 struct NegationOption
 {
-    std::u32string_view value;
+    std::string_view value;
 };
 
 template <class... Args>
@@ -116,17 +114,17 @@ constexpr std::array<std::variant<Whitespace, Arg, Text, Ellipsis, NegationOptio
         tuple);
 }
 
-constexpr std::optional<std::u32string_view> findArg(std::u32string_view arg)
+constexpr std::optional<std::string_view> findArg(std::string_view arg)
 {
     std::size_t start = 0;
-    for (; start < arg.size() && arg[start] != U'<'; start++)
+    for (; start < arg.size() && arg[start] != '<'; start++)
         ;
     if (start == arg.size())
     {
         return std::nullopt;
     }
     std::size_t end = start + 1;
-    for (; end < arg.size() && arg[end] != U'>'; end++)
+    for (; end < arg.size() && arg[end] != '>'; end++)
         ;
     if (end == arg.size())
     {
@@ -135,30 +133,30 @@ constexpr std::optional<std::u32string_view> findArg(std::u32string_view arg)
     return arg.substr(start, end - start + 1);
 }
 
-constexpr const char32_t* skipWhitespace(std::u32string_view arg)
+constexpr const char* skipWhitespace(std::string_view arg)
 {
-    const char32_t* start = arg.data();
-    while (start != arg.data() + arg.size() && *start == U' ')
+    const char* start = arg.data();
+    while (start != arg.data() + arg.size() && *start == ' ')
     {
         start++;
     }
     return start;
 }
 
-constexpr const char32_t* skipLetters(std::u32string_view arg)
+constexpr const char* skipLetters(std::string_view arg)
 {
-    const char32_t* start = arg.data();
-    while (start != arg.data() + arg.size() && (*start != U'<' && *start != U' ' && *start != U'[' && *start != U'.'))
+    const char* start = arg.data();
+    while (start != arg.data() + arg.size() && (*start != '<' && *start != ' ' && *start != '[' && *start != '.'))
     {
         start++;
     }
     return start;
 }
 
-constexpr const char32_t* findClosingSquareBracket(std::u32string_view arg)
+constexpr const char* findClosingSquareBracket(std::string_view arg)
 {
-    const char32_t* start = arg.data();
-    while (start != arg.data() + arg.size() && *start != U']')
+    const char* start = arg.data();
+    while (start != arg.data() + arg.size() && *start != ']')
     {
         start++;
     }
@@ -175,27 +173,27 @@ constexpr auto parseOption()
     }
     else
     {
-        constexpr std::u32string_view view{(arg.begin() + offset), arg.size() - offset};
-        if constexpr (*(arg.begin() + offset) == U'<')
+        constexpr std::string_view view{(arg.begin() + offset), arg.size() - offset};
+        if constexpr (*(arg.begin() + offset) == '<')
         {
-            constexpr auto optArg = findArg(view);
+            constexpr std::optional<std::string_view> optArg = findArg(view);
             static_assert(optArg, "Failed to parse arg. Did you terminate with '>'?");
-            return std::tuple_cat(std::make_tuple(Arg{{optArg->data() + 1, optArg->size() - 2}}),
+            return std::tuple_cat(std::make_tuple(Arg{optArg->substr(1, optArg->size() - 2)}),
                                   parseOption<arg, optArg->data() + optArg->size() - arg.begin()>());
         }
-        else if constexpr (*(arg.begin() + offset) == U' ')
+        else if constexpr (*(arg.begin() + offset) == ' ')
         {
             constexpr auto nextNonWhitespace = skipWhitespace(view);
             return std::tuple_cat(std::make_tuple(Whitespace{}), parseOption<arg, nextNonWhitespace - arg.begin()>());
         }
-        else if constexpr (*(arg.begin() + offset) == U'[')
+        else if constexpr (*(arg.begin() + offset) == '[')
         {
             constexpr auto closing = findClosingSquareBracket(view);
-            return std::tuple_cat(std::make_tuple(NegationOption{{view.substr(1, closing - view.data() - 1)}}),
+            return std::tuple_cat(std::make_tuple(NegationOption{view.substr(1, closing - view.data() - 1)}),
                                   parseOption<arg, closing - arg.begin() + 1>());
         }
-        else if constexpr (*(arg.begin() + offset) == U'.' && offset + 2 < arg.size()
-                           && *(arg.begin() + offset + 1) == U'.' && *(arg.begin() + offset + 2) == U'.')
+        else if constexpr (*(arg.begin() + offset) == '.' && offset + 2 < arg.size()
+                           && *(arg.begin() + offset + 1) == '.' && *(arg.begin() + offset + 2) == '.')
         {
             return std::tuple_cat(std::make_tuple(Ellipsis{}), parseOption<arg, offset + 3>());
         }
@@ -233,9 +231,9 @@ constexpr auto filterOutArgs(First first, Args&&... args)
 }
 
 template <std::size_t inputSize, std::size_t maxOutputSize = inputSize>
-constexpr auto unique(std::array<std::u32string_view, inputSize> array)
+constexpr auto unique(std::array<std::string_view, inputSize> array)
 {
-    MaxVector<std::u32string_view, maxOutputSize> result;
+    MaxVector<std::string_view, maxOutputSize> result;
     for (std::size_t i = 0; i < inputSize; i++)
     {
         bool contains = false;
@@ -257,10 +255,10 @@ constexpr auto unique(std::array<std::u32string_view, inputSize> array)
 }
 
 template <std::size_t size, class Tuple>
-constexpr std::array<std::pair<std::u32string_view, bool>, size>
-    evaluateOptional(MaxVector<std::u32string_view, size> args, const Tuple& tuple)
+constexpr std::array<std::pair<std::string_view, bool>, size> evaluateOptional(MaxVector<std::string_view, size> args,
+                                                                               const Tuple& tuple)
 {
-    std::array<std::pair<std::u32string_view, bool>, size> result;
+    std::array<std::pair<std::string_view, bool>, size> result;
     for (std::size_t i = 0; i < size; i++)
     {
         result[i].first = args[i];
@@ -354,20 +352,19 @@ struct Pack
             },
             tuple);
         constexpr auto firstString = std::get<0>(std::tuple(args...));
-        constexpr auto u8String = Constexpr::utf32ToUtf8<firstString.size()>({firstString.begin(), firstString.size()});
         // libc++ until either version LLVM 11 or 12 does not support constexpr std::array<T,0>
         if constexpr (std::tuple_size_v<std::decay_t<decltype(allArgsTuple)>> != 0)
         {
             constexpr auto allArgsSVArray = std::apply(
-                [](auto&&... input) { return std::array<std::u32string_view, sizeof...(input)>{input.value...}; },
+                [](auto&&... input) { return std::array<std::string_view, sizeof...(input)>{input.value...}; },
                 allArgsTuple);
             constexpr auto uniqueSet = unique(allArgsSVArray);
             constexpr auto foundOptionals = evaluateOptional<uniqueSet.size()>(uniqueSet, tuple);
-            return std::tuple{tuple, foundOptionals, u8String};
+            return std::tuple{tuple, foundOptionals, firstString};
         }
         else
         {
-            return std::tuple{tuple, std::make_tuple(), u8String};
+            return std::tuple{tuple, std::make_tuple(), firstString};
         }
     }
 };
@@ -379,7 +376,7 @@ type_identity<T> unpack(const std::in_place_type_t<T>&)
 }
 
 template <std::size_t i>
-constexpr bool isOptional(std::u32string_view text, std::array<std::pair<std::u32string_view, bool>, i> array)
+constexpr bool isOptional(std::string_view text, std::array<std::pair<std::string_view, bool>, i> array)
 {
     for (std::size_t i2 = 0; i2 < i; i2++)
     {
@@ -391,7 +388,7 @@ constexpr bool isOptional(std::u32string_view text, std::array<std::pair<std::u3
     return true;
 }
 
-constexpr bool isOptional(std::u32string_view, std::tuple<>)
+constexpr bool isOptional(std::string_view, std::tuple<>)
 {
     return true;
 }
@@ -415,13 +412,10 @@ constexpr auto parseOptions(std::string_view description, CLIMultiArg multiArg =
     constexpr auto value = std::apply(
         [&](auto&&... values) {
             constexpr auto arguments = std::get<1>(parsedTuple<T>);
-            using Tuple =
-                std::tuple<std::conditional_t<isOptional(std::u32string_view(
-                                                             std::decay_t<decltype(values.first)>::pointer->begin(),
-                                                             std::decay_t<decltype(values.first)>::pointer->size()),
-                                                         arguments),
-                                              std::optional<typename decltype(unpack(values.second))::type>,
-                                              typename decltype(unpack(values.second))::type>...>;
+            using Tuple = std::tuple<
+                std::conditional_t<isOptional(std::decay_t<decltype(values.first)>::pointer->view(), arguments),
+                                   std::optional<typename decltype(unpack(values.second))::type>,
+                                   typename decltype(unpack(values.second))::type>...>;
             if constexpr (std::tuple_size_v<Tuple> == 1)
             {
                 return type_identity<std::tuple_element_t<0, Tuple>>{};
@@ -433,20 +427,18 @@ constexpr auto parseOptions(std::string_view description, CLIMultiArg multiArg =
         },
         tuple);
 
-    return CommandLineOption(value, {std::get<2>(parsedTuple<T>).data(), std::get<2>(parsedTuple<T>).size()},
-                             std::get<0>(parsedTuple<T>),
+    return CommandLineOption(value, std::get<2>(parsedTuple<T>).view(), std::get<0>(parsedTuple<T>),
                              std::apply(
                                  [](auto&&... values) {
-                                     return std::array<std::u32string_view, sizeof...(values)>{
-                                         std::u32string_view(std::decay_t<decltype(values.first)>::pointer->begin(),
-                                                             std::decay_t<decltype(values.first)>::pointer->size())...};
+                                     return std::array<std::string_view, sizeof...(values)>{
+                                         std::decay_t<decltype(values.first)>::pointer->view()...};
                                  },
                                  tuple),
                              description, multiArg);
 }
 
 template <std::size_t size>
-constexpr static std::size_t indexOf(std::array<std::u32string_view, size> array, std::u32string_view text)
+constexpr static std::size_t indexOf(std::array<std::string_view, size> array, std::string_view text)
 {
     for (std::size_t i = 0; i < size; i++)
     {
@@ -604,9 +596,8 @@ public:
         }
         else if constexpr (std::is_same_v<std::decay_t<decltype(arg<cliOption, i, index + 1>)>, Text>)
         {
-            constexpr auto utf32 = arg<cliOption, i, index + 1>.value;
-            constexpr auto utf8Array = Constexpr::utf32ToUtf8<utf32.size() * 4>(utf32);
-            auto end = m_commandLine[m_currentIndex].find_first_of({utf8Array.data(), utf8Array.size()}, m_currentPos);
+            auto end = m_commandLine[m_currentIndex].find_first_of(
+                {arg<cliOption, i, index + 1>.value.data(), arg<cliOption, i, index + 1>.value.size()}, m_currentPos);
 
             text = m_commandLine[m_currentIndex].substr(m_currentPos, end - m_currentPos);
             m_queue.push_back([this, textSize = text.size()] { m_commandLine.front().remove_prefix(textSize); });
@@ -679,11 +670,11 @@ public:
         {
             if constexpr (std::is_signed_v<ArgType>)
             {
-                assign(std::stoll(cld::to_string(text)));
+                assign(std::stoll(std::string(text.begin(), text.end())));
             }
             else
             {
-                assign(std::stoull(cld::to_string(text)));
+                assign(std::stoull(std::string(text.begin(), text.end())));
             }
         }
 
@@ -740,18 +731,14 @@ bool evaluateArg(Mutator<cliOption, size, Storage>& mutator)
     using ArgType = std::decay_t<decltype(arg<cliOption, i, index>)>;
     if constexpr (std::is_same_v<ArgType, Text>)
     {
-        constexpr auto utf32 = arg<cliOption, i, index>.value;
-        constexpr auto utf8Array = Constexpr::utf32ToUtf8<utf32.size() * 4>(utf32);
-        if (!mutator.tryConsume({utf8Array.data(), utf8Array.size()}))
+        if (!mutator.tryConsume(arg<cliOption, i, index>.value))
         {
             return false;
         }
     }
     else if constexpr (std::is_same_v<ArgType, NegationOption>)
     {
-        constexpr auto utf32 = arg<cliOption, i, index>.value;
-        constexpr auto utf8Array = Constexpr::utf32ToUtf8<utf32.size() * 4>(utf32);
-        if (!mutator.tryNegate({utf8Array.data(), utf8Array.size()}))
+        if (!mutator.tryNegate(arg<cliOption, i, index>.value))
         {
             return false;
         }
@@ -824,9 +811,7 @@ bool checkAllAlternatives(llvm::MutableArrayRef<std::string_view>& commandLine, 
                 constexpr std::size_t i = Index::value;
                 constexpr auto alternative = std::get<i>(cliOption->getAlternatives());
                 using Tuple = std::decay_t<decltype(alternative)>;
-                constexpr std::u32string_view u32prefix = std::get<0>(alternative).value;
-                constexpr auto utf8Prefix = Constexpr::utf32ToUtf8<u32prefix.size() * 4>(u32prefix);
-                if (commandLine.front() == std::string_view(utf8Prefix.data(), utf8Prefix.size()))
+                if (commandLine.front() == std::get<0>(alternative).value)
                 {
                     return !checkAlternative2<cliOption, i>(commandLine, storage).has_value();
                 }
@@ -834,8 +819,8 @@ bool checkAllAlternatives(llvm::MutableArrayRef<std::string_view>& commandLine, 
                 {
                     if constexpr (!std::is_same_v<std::tuple_element_t<1, Tuple>, detail::CommandLine::Whitespace>)
                     {
-                        if (commandLine.front().substr(0, utf8Prefix.size())
-                            == std::string_view(utf8Prefix.data(), utf8Prefix.size()))
+                        if (commandLine.front().substr(0, std::get<0>(alternative).value.size())
+                            == std::get<0>(alternative).value)
                         {
                             return !checkAlternative2<cliOption, i>(commandLine, storage).has_value();
                         }
@@ -976,7 +961,8 @@ auto parseCommandLine(llvm::MutableArrayRef<std::string_view> commandLine)
 
 #define CLD_MACRO_NULL_SEP(NAME, i, REC, RES) REC RES
 
-#define CLD_MACRO_GEN_STRING(NAME, STRING, INDEX) constexpr static auto NAME##arg##INDEX = ::ctll::fixed_string{STRING};
+#define CLD_MACRO_GEN_STRING(NAME, STRING, INDEX) \
+    constexpr static auto NAME##arg##INDEX = ::cld::Constexpr::basic_fixed_string{STRING};
 
 #define CLD_MACRO_GEN_STRINGS(NAME, ...) \
     P99_FOR(NAME, CLD_MACRO_COUNT_ARGUMENTS(__VA_ARGS__), CLD_MACRO_NULL_SEP, CLD_MACRO_GEN_STRING, __VA_ARGS__)
@@ -997,7 +983,7 @@ auto parseCommandLine(llvm::MutableArrayRef<std::string_view> commandLine)
 #define CLD_MACRO_STRINGIFY_SECOND(x, y) #y
 
 #define CLD_MACRO_GEN_BIND(NAME, STRING, INDEX) \
-    constexpr static auto NAME##bind##INDEX = ::ctll::fixed_string{CLD_MACRO_STRINGIFY_SECOND STRING};
+    constexpr static auto NAME##bind##INDEX = ::cld::Constexpr::basic_fixed_string{CLD_MACRO_STRINGIFY_SECOND STRING};
 
 #define CLD_MACRO_GEN_BINDS(NAME, ...) \
     P99_FOR(NAME, CLD_MACRO_COUNT_ARGUMENTS(__VA_ARGS__), CLD_MACRO_NULL_SEP, CLD_MACRO_GEN_BIND, __VA_ARGS__)

@@ -7,6 +7,8 @@
 #include <tuple>
 #include <variant>
 
+#include "Util.hpp"
+
 namespace cld
 {
 namespace Constexpr
@@ -16,6 +18,52 @@ constexpr static auto integerSequenceToTuple(std::index_sequence<ints...>)
 {
     return std::make_tuple(std::integral_constant<std::size_t, ints>{}...);
 }
+
+template <class T, std::size_t N>
+class basic_fixed_string
+{
+    // Needs to be public due to https://gcc.gnu.org/bugzilla/show_bug.cgi?id=97740
+public:
+    T m_data[N] = {};
+
+    template <class U, std::size_t M>
+    constexpr basic_fixed_string(const U (&input)[M]) noexcept
+    {
+        for (std::size_t i = 0; i < N; i++)
+        {
+            CLD_ASSERT(input[i]);
+            m_data[i] = input[i];
+        }
+    }
+
+    constexpr std::basic_string_view<T> view() const noexcept
+    {
+        return {m_data, N};
+    }
+
+    constexpr std::size_t size() const noexcept
+    {
+        return N;
+    }
+
+    constexpr const T* begin() const noexcept
+    {
+        return m_data;
+    }
+
+    constexpr const T* end() const noexcept
+    {
+        return m_data + N;
+    }
+
+    constexpr T operator[](std::size_t i) const noexcept
+    {
+        return m_data[i];
+    }
+};
+
+template <class U, std::size_t M>
+basic_fixed_string(const U (&input)[M]) -> basic_fixed_string<U, M - 1>;
 
 } // namespace Constexpr
 
