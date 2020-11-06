@@ -1030,6 +1030,14 @@ CREATE_ERROR(CANNOT_COMPILE_TO_OBJECT_FILE_AND_PREPROCESS_AT_THE_SAME_TIME,
 
 CREATE_ERROR(CANNOT_COMPILE_TO_ASSEMBLY_AND_PREPROCESS_AT_THE_SAME_TIME,
              "Cannot compile to assembly and preprocess at the same time");
+
+CREATE_ERROR(EXPECTED_WHITESPACE_AFTER_N, "Expected whitespace after '%0'");
+
+CREATE_ERROR(EXPECTED_N_AFTER_N, "Expected '%0' after '%1'");
+
+CREATE_ERROR(EXPECTED_ARGUMENT_AFTER_N, "Expected argument after '%0'");
+
+CREATE_ERROR(EXPECTED_ARGUMENT_IMMEDIATELY_AFTER_N, "Expected argument immediately after '%0'");
 } // namespace CLI
 } // namespace Errors
 

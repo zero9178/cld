@@ -462,13 +462,13 @@ struct ValueType<bool>
     using type = bool;
 };
 
-template <class T>
+template <class T, std::size_t size = 32>
 class SmallFunction;
 
-template <class Ret, class... Params>
-class SmallFunction<Ret(Params...)>
+template <class Ret, class... Params, std::size_t size>
+class SmallFunction<Ret(Params...), size>
 {
-    alignas(std::max_align_t) std::byte m_storage[32];
+    alignas(std::max_align_t) std::byte m_storage[size];
     Ret (*m_call)(std::byte*, Params...) = nullptr;
 
     template <class F>
@@ -513,10 +513,21 @@ struct tupleSizeOr1<std::tuple<Args...>>
 template <auto* cliOption, std::size_t i, std::size_t index>
 constexpr auto arg = std::get<index>(std::get<i>(cliOption->getAlternatives()));
 
+Message emitConsumeFailure(std::size_t currentIndex, std::size_t currentPos,
+                           llvm::ArrayRef<std::string_view> commandLine, std::string_view text);
+
+Message emitMissingArg(std::size_t currentIndex, std::size_t currentPos, llvm::ArrayRef<std::string_view> commandLine,
+                       bool immediatelyAfter);
+
+Message emitMissingWhitespace(std::size_t currentIndex, std::size_t currentPos,
+                              llvm::ArrayRef<std::string_view> commandLine);
+
+using LazyMessage = SmallFunction<Message(), 64>;
+
 template <auto* cliOption, std::size_t size, class Storage>
 class Mutator
 {
-    MaxVector<SmallFunction<void()>, size * 3> m_queue;
+    MaxVector<SmallFunction<void(), 24>, size * 3> m_queue;
     std::size_t m_currentIndex{};
     std::size_t m_currentPos{};
     llvm::MutableArrayRef<std::string_view>& m_commandLine;
@@ -532,6 +543,26 @@ class Mutator
         return index + 1 == std::tuple_size_v<TupleArg>;
     }
 
+    LazyMessage buildConsumeFailure(std::string_view text)
+    {
+        return [text, currentIndex = m_currentIndex, currentPos = m_currentPos, commandLine = m_commandLine] {
+            return emitConsumeFailure(currentIndex, currentPos, commandLine, text);
+        };
+    }
+
+    LazyMessage buildMissingArg(bool immediatelyAfter)
+    {
+        return [currentIndex = m_currentIndex, currentPos = m_currentPos, commandLine = m_commandLine,
+                immediatelyAfter] { return emitMissingArg(currentIndex, currentPos, commandLine, immediatelyAfter); };
+    }
+
+    LazyMessage buildMissingWhitespace()
+    {
+        return [currentIndex = m_currentIndex, currentPos = m_currentPos, commandLine = m_commandLine] {
+            return emitMissingWhitespace(currentIndex, currentPos, commandLine);
+        };
+    }
+
 public:
     Mutator(llvm::MutableArrayRef<std::string_view>& commandLine, Storage& storage)
         : m_commandLine(commandLine), m_storage(storage)
@@ -542,26 +573,26 @@ public:
         }
     }
 
-    bool tryConsume(std::string_view text)
+    std::optional<LazyMessage> tryConsume(std::string_view text)
     {
         if (m_currentIndex >= m_commandLine.size())
         {
-            return false;
+            return buildConsumeFailure(text);
         }
         if (m_commandLine[m_currentIndex].substr(m_currentPos, text.size()) != text)
         {
-            return false;
+            return buildConsumeFailure(text);
         }
         m_queue.push_back([this, textSize = text.size()] { m_commandLine.front().remove_prefix(textSize); });
         m_currentPos += text.size();
-        return true;
+        return std::nullopt;
     }
 
-    bool tryNegate(std::string_view text)
+    std::optional<LazyMessage> tryNegate(std::string_view text)
     {
-        if (!tryConsume(text))
+        if (tryConsume(text))
         {
-            return true;
+            return std::nullopt;
         }
         if constexpr (cliOption->getMultiArg() == CLIMultiArg::Overwrite)
         {
@@ -571,15 +602,19 @@ public:
         {
             m_removeFromStorage = true;
         }
-        return true;
+        return std::nullopt;
     }
 
     template <std::size_t i, std::size_t index>
-    bool tryParseArg()
+    std::optional<LazyMessage> tryParseArg()
     {
-        if (m_currentIndex >= m_commandLine.size() || m_commandLine[m_currentIndex].size() <= m_currentPos)
+        if (m_currentIndex >= m_commandLine.size())
         {
-            return false;
+            return buildMissingArg(false);
+        }
+        if (m_commandLine[m_currentIndex].size() <= m_currentPos)
+        {
+            return buildMissingArg(true);
         }
         std::string_view text;
         if constexpr (isLast<i, index>())
@@ -682,14 +717,14 @@ public:
         {
             m_firstArg = false;
         }
-        return true;
+        return std::nullopt;
     }
 
-    bool tryWhitespace()
+    std::optional<LazyMessage> tryWhitespace()
     {
         if (m_currentIndex < m_commandLine.size() && m_currentPos < m_commandLine[m_currentIndex].size())
         {
-            return false;
+            return buildMissingWhitespace();
         }
         if (m_currentIndex < m_commandLine.size())
         {
@@ -697,23 +732,12 @@ public:
             m_currentIndex++;
             m_currentPos = 0;
         }
-        return true;
+        return std::nullopt;
     }
 
-    bool tryEnd()
+    std::optional<LazyMessage> tryEnd()
     {
-        if (m_currentIndex >= m_commandLine.size())
-        {
-            return true;
-        }
-        if (m_commandLine[m_currentIndex].size() <= m_currentPos)
-        {
-            m_queue.push_back([this] { m_commandLine = m_commandLine.drop_front(); });
-            m_currentIndex++;
-            m_currentPos = 0;
-            return true;
-        }
-        return false;
+        return tryWhitespace();
     }
 
     void exec()
@@ -726,57 +750,57 @@ public:
 };
 
 template <auto* cliOption, std::size_t i, std::size_t index, class Storage, std::size_t size>
-bool evaluateArg(Mutator<cliOption, size, Storage>& mutator)
+std::optional<LazyMessage> evaluateArg(Mutator<cliOption, size, Storage>& mutator)
 {
     using ArgType = std::decay_t<decltype(arg<cliOption, i, index>)>;
     if constexpr (std::is_same_v<ArgType, Text>)
     {
-        if (!mutator.tryConsume(arg<cliOption, i, index>.value))
+        if (auto opt = mutator.tryConsume(arg<cliOption, i, index>.value))
         {
-            return false;
+            return opt;
         }
     }
     else if constexpr (std::is_same_v<ArgType, NegationOption>)
     {
-        if (!mutator.tryNegate(arg<cliOption, i, index>.value))
+        if (auto opt = mutator.tryNegate(arg<cliOption, i, index>.value))
         {
-            return false;
+            return opt;
         }
     }
     else if constexpr (std::is_same_v<ArgType, Arg>)
     {
-        if (!mutator.template tryParseArg<i, index>())
+        if (auto opt = mutator.template tryParseArg<i, index>())
         {
-            return false;
+            return opt;
         }
     }
     else if constexpr (std::is_same_v<ArgType, Whitespace>)
     {
-        if (!mutator.tryWhitespace())
+        if (auto opt = mutator.tryWhitespace())
         {
-            return false;
+            return opt;
         }
     }
 
-    return true;
+    return std::nullopt;
 }
 
 struct Failure
 {
     std::size_t failedIndex;
-    std::optional<cld::Message> message{};
+    std::optional<LazyMessage> message{};
 };
 
 template <auto* cliOption, std::size_t i, class Storage>
-std::optional<Failure> checkAlternative2(llvm::MutableArrayRef<std::string_view>& commandLine, Storage& storage)
+std::optional<Failure> checkAlternative(llvm::MutableArrayRef<std::string_view>& commandLine, Storage& storage)
 {
     using AlternativeType = std::tuple_element_t<i, std::decay_t<decltype(cliOption->getAlternatives())>>;
     Mutator<cliOption, std::tuple_size_v<AlternativeType>, Storage> mutator(commandLine, storage);
-    auto failure = YComb{[&](auto&& self, auto indexT) -> std::optional<std::size_t> {
+    auto failure = YComb{[&](auto&& self, auto indexT) -> std::optional<Failure> {
         constexpr std::size_t index = std::decay_t<decltype(indexT)>::value;
-        if (!evaluateArg<cliOption, i, index>(mutator))
+        if (auto opt = evaluateArg<cliOption, i, index>(mutator))
         {
-            return index;
+            return Failure{index, std::move(opt)};
         }
         if constexpr (index + 1 < std::tuple_size_v<AlternativeType>)
         {
@@ -784,36 +808,42 @@ std::optional<Failure> checkAlternative2(llvm::MutableArrayRef<std::string_view>
         }
         else
         {
-            if (!mutator.tryEnd())
+            if (auto opt = mutator.tryEnd())
             {
-                return index;
+                return Failure{index, std::move(opt)};
             }
             return std::nullopt;
         }
     }}(std::integral_constant<std::size_t, 0>{});
-    if (failure)
+    if (!failure)
     {
-        return Failure{*failure};
+        mutator.exec();
     }
-
-    mutator.exec();
-    return std::nullopt;
+    return failure;
 }
 
 template <auto* cliOption, class Storage>
-bool checkAllAlternatives(llvm::MutableArrayRef<std::string_view>& commandLine, Storage& storage)
+bool checkAllAlternatives(llvm::raw_ostream* reporter, llvm::MutableArrayRef<std::string_view>& commandLine,
+                          Storage& storage)
 {
     using AllAlternatives = std::decay_t<decltype(cliOption->getAlternatives())>;
     return std::apply(
         [&](auto&&... indices) -> bool {
-            return ([&](auto index) -> bool {
+            MaxVector<Failure, sizeof...(indices)> failures;
+            auto success = ([&](auto index) -> bool {
                 using Index = decltype(index);
                 constexpr std::size_t i = Index::value;
                 constexpr auto alternative = std::get<i>(cliOption->getAlternatives());
                 using Tuple = std::decay_t<decltype(alternative)>;
                 if (commandLine.front() == std::get<0>(alternative).value)
                 {
-                    return !checkAlternative2<cliOption, i>(commandLine, storage).has_value();
+                    auto opt = checkAlternative<cliOption, i>(commandLine, storage);
+                    if (!opt)
+                    {
+                        return true;
+                    }
+                    failures.push_back(std::move(*opt));
+                    return false;
                 }
                 if constexpr (std::tuple_size_v<Tuple> >= 2)
                 {
@@ -822,12 +852,31 @@ bool checkAllAlternatives(llvm::MutableArrayRef<std::string_view>& commandLine, 
                         if (commandLine.front().substr(0, std::get<0>(alternative).value.size())
                             == std::get<0>(alternative).value)
                         {
-                            return !checkAlternative2<cliOption, i>(commandLine, storage).has_value();
+                            auto opt = checkAlternative<cliOption, i>(commandLine, storage);
+                            if (!opt)
+                            {
+                                return true;
+                            }
+                            failures.push_back(std::move(*opt));
+                            return false;
                         }
                     }
                 }
                 return false;
             }(indices) || ...);
+            if (success)
+            {
+                return true;
+            }
+            auto furthest = std::max_element(failures.begin(), failures.end(),
+                                             [](const Failure& lhs, const Failure& rhs)
+
+                                             { return lhs.failedIndex < rhs.failedIndex; });
+            if (furthest != failures.end() && reporter)
+            {
+                (*reporter) << (*furthest->message)();
+            }
+            return false;
         },
         Constexpr::integerSequenceToTuple(std::make_index_sequence<std::tuple_size_v<AllAlternatives>>{}));
 }
@@ -923,7 +972,7 @@ struct InitialStorage
 } // namespace cli
 
 template <auto&... options>
-auto parseCommandLine(llvm::MutableArrayRef<std::string_view> commandLine)
+auto parseCommandLine(llvm::MutableArrayRef<std::string_view> commandLine, llvm::raw_ostream* reporter = nullptr)
 {
     constexpr auto tuple = std::make_tuple(detail::CommandLine::Pointer<&options>{}...);
     auto storage = std::make_tuple(std::tuple{
@@ -938,7 +987,7 @@ auto parseCommandLine(llvm::MutableArrayRef<std::string_view> commandLine)
                     return ([&](auto index) -> bool {
                         constexpr std::size_t i = decltype(index)::value;
                         if (detail::CommandLine::checkAllAlternatives<
-                                std::tuple_element_t<i, decltype(tuple)>::pointer>(commandLine,
+                                std::tuple_element_t<i, decltype(tuple)>::pointer>(reporter, commandLine,
                                                                                    std::get<1>(std::get<i>(storage))))
                         {
                             std::get<2>(std::get<i>(storage)) = counter;

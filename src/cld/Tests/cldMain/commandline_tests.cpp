@@ -1,6 +1,9 @@
 #include <catch.hpp>
 
+#include <cld/Frontend/Compiler/ErrorMessages.hpp>
 #include <cld/cldMain/CommandLine.hpp>
+
+#include "TestConfig.hpp"
 
 namespace
 {
@@ -13,6 +16,8 @@ CLD_CLI_OPT(STRING_VIEW_ARG, ("--prefix=<arg>", "--prefix <arg>"), (std::string_
 CLD_CLI_OPT(OPT, ("-O<level>", "-O", "--optimize", "--optimize=<level>"), (std::uint8_t, level))("Optimization level");
 CLD_CLI_OPT(PIE, ("-f[no-]pie"))("Position independent executable");
 } // namespace
+
+using namespace cld::Errors::CLI;
 
 TEST_CASE("Commandline without args", "[cli]")
 {
@@ -54,9 +59,12 @@ TEST_CASE("Commandline arg types", "[cli]")
     SECTION("Don't match against whitespace")
     {
         std::vector<std::string_view> elements = {"-I", "text"};
-        auto cli = cld::parseCommandLine<INCLUDES>(elements);
+        std::string storage;
+        llvm::raw_string_ostream ss(storage);
+        auto cli = cld::parseCommandLine<INCLUDES>(elements, &ss);
         CHECK(cli.get<INCLUDES>().empty());
         CHECK_THAT(cli.getUnrecognized(), Catch::Equals(std::vector<std::string_view>{"-I", "text"}));
+        CHECK_THAT(storage, ProducesError(EXPECTED_ARGUMENT_IMMEDIATELY_AFTER_N, "'-I'"));
     }
     SECTION("Strings")
     {

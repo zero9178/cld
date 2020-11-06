@@ -1,6 +1,6 @@
 
 
-add_executable(cldMainTests main.cpp cldMain_tests.cpp)
+add_executable(cldMainTests main.cpp cldMain_tests.cpp commandline_tests.cpp)
 target_link_libraries(cldMainTests cldMain testCommon)
 set_source_files_properties(main.cpp PROPERTIES COMPILE_DEFINITIONS CATCH_CONFIG_RUNNER SKIP_PRECOMPILE_HEADERS ON)
 if (CLD_USE_PCH)
