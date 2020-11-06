@@ -1,0 +1,28 @@
+
+#ifndef HANDLE_BUILTIN
+#error HANDLE_BUILTIN must be declared to proceed
+#endif
+
+HANDLE_BUILTIN("void __builtin_va_start(va_list,...)", VAStart);
+HANDLE_BUILTIN("void __builtin_va_end(va_list)", VAEnd);
+HANDLE_BUILTIN("void __builtin_va_copy(va_list,va_list)", VACopy);
+HANDLE_BUILTIN("int __builtin_abs(int)", Abs);
+HANDLE_BUILTIN("long __builtin_labs(long)", LAbs);
+HANDLE_BUILTIN("long long __builtin_llabs(long long)", LLAbs);
+HANDLE_BUILTIN("double __builtin_fabs(double)", FAbs);
+HANDLE_BUILTIN("float __builtin_fabsf(float)", FAbsf);
+HANDLE_BUILTIN("long double __builtin_fabsl(long double)", FAbsl);
+HANDLE_BUILTIN("double __builtin_inf()", Inf);
+HANDLE_BUILTIN("float __builtin_inff()", Inff);
+HANDLE_BUILTIN("long double __builtin_infl()", Infl);
+HANDLE_BUILTIN("void __sync_synchronize()", SyncSynchronize);
+HANDLE_BUILTIN("long __builtin_expect(long,long)", Expect);
+HANDLE_BUILTIN("void* __builtin_return_address(unsigned int)", ReturnAddress);
+HANDLE_BUILTIN("void* __builtin_extract_return_addr(void*)", ExtractReturnAddr);
+HANDLE_BUILTIN("void* __builtin_frob_return_addr(void*)", FRobReturnAddr);
+HANDLE_BUILTIN("void* __builtin_frame_address(unsigned int)", FrameAddress);
+HANDLE_BUILTIN("long __builtin_expect_with_probability(long,long,double)", ExpectWithProbability);
+HANDLE_BUILTIN("void __builtin_prefetch(const void*,...)", Prefetch);
+HANDLE_BUILTIN("void __builtin___clear_cache(void*,void*)", ClearCache);
+HANDLE_BUILTIN("void __builtin_trap()", Trap);
+HANDLE_BUILTIN("void __builtin_unreachable()", Unreachable);

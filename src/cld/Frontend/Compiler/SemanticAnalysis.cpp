@@ -1654,7 +1654,7 @@ template <std::size_t n>
 struct Builtin
 {
     Types returnType;
-    std::u32string_view name;
+    std::string_view name;
     std::array<Types, n> parameterTypes;
     bool vararg;
     cld::Semantics::BuiltinFunction::Kind kind;
@@ -1666,7 +1666,7 @@ template <>
 struct Builtin<0>
 {
     Types returnType;
-    std::u32string_view name;
+    std::string_view name;
     bool vararg;
     cld::Semantics::BuiltinFunction::Kind kind;
 
@@ -1678,63 +1678,63 @@ struct Builtin<0>
 #pragma clang diagnostic pop
 };
 
-constexpr void skipWhitespace(std::u32string_view& text)
+constexpr void skipWhitespace(std::string_view& text)
 {
     std::size_t i = 0;
-    for (; i < text.size() && text[i] == U' '; i++)
+    for (; i < text.size() && text[i] == ' '; i++)
         ;
     text.remove_prefix(i);
 }
 
-constexpr Types extractType(std::u32string_view& text)
+constexpr Types extractType(std::string_view& text)
 {
     skipWhitespace(text);
     std::optional<Types> result = std::nullopt;
     do
     {
-        if (text.substr(0, 5) == U"void*")
+        if (text.substr(0, 5) == "void*")
         {
             CLD_ASSERT(!result);
             result = Types::VoidStar;
             text.remove_prefix(5);
         }
-        else if (text.substr(0, 4) == U"void")
+        else if (text.substr(0, 4) == "void")
         {
             CLD_ASSERT(!result);
             result = Types::Void;
             text.remove_prefix(4);
         }
-        else if (text.substr(0, 7) == U"va_list")
+        else if (text.substr(0, 7) == "va_list")
         {
             CLD_ASSERT(!result);
             result = Types::VAList;
             text.remove_prefix(7);
         }
-        else if (text.substr(0, 11) == U"const void*")
+        else if (text.substr(0, 11) == "const void*")
         {
             CLD_ASSERT(!result);
             result = Types::ConstVoidStar;
             text.remove_prefix(11);
         }
-        else if (text.substr(0, 5) == U"float")
+        else if (text.substr(0, 5) == "float")
         {
             CLD_ASSERT(!result);
             result = Types::Float;
             text.remove_prefix(5);
         }
-        else if (text.substr(0, 3) == U"int")
+        else if (text.substr(0, 3) == "int")
         {
             CLD_ASSERT(!result);
             result = Types::Int;
             text.remove_prefix(3);
         }
-        else if (text.substr(0, 12) == U"unsigned int")
+        else if (text.substr(0, 12) == "unsigned int")
         {
             CLD_ASSERT(!result);
             result = Types::UnsignedInt;
             text.remove_prefix(12);
         }
-        else if (text.substr(0, 6) == U"double")
+        else if (text.substr(0, 6) == "double")
         {
             if (!result)
             {
@@ -1747,7 +1747,7 @@ constexpr Types extractType(std::u32string_view& text)
             }
             text.remove_prefix(6);
         }
-        else if (text.substr(0, 4) == U"long")
+        else if (text.substr(0, 4) == "long")
         {
             if (!result)
             {
@@ -1777,10 +1777,10 @@ constexpr Types extractType(std::u32string_view& text)
     return *result;
 }
 
-constexpr std::size_t figureOutParameterCount(std::u32string_view text)
+constexpr std::size_t figureOutParameterCount(std::string_view text)
 {
     std::size_t i = 0;
-    for (; i < text.size() && text[i] != U'('; i++)
+    for (; i < text.size() && text[i] != '('; i++)
         ;
     text.remove_prefix(i + 1);
     skipWhitespace(text);
@@ -1788,9 +1788,9 @@ constexpr std::size_t figureOutParameterCount(std::u32string_view text)
     while (text[0] != ')')
     {
         i = 0;
-        for (; i < text.size() && text[i] != U')' && text[i] != U','; i++)
+        for (; i < text.size() && text[i] != ')' && text[i] != ','; i++)
             ;
-        if (text.substr(0, i) != U"...")
+        if (text.substr(0, i) != "...")
         {
             count++;
         }
@@ -1808,17 +1808,17 @@ constexpr std::size_t figureOutParameterCount(std::u32string_view text)
 template <auto& str>
 constexpr auto createBuiltin(cld::Semantics::BuiltinFunction::Kind kind)
 {
-    std::u32string_view text(str.begin(), str.size());
+    std::string_view text = str.view();
     auto returnType = extractType(text);
     std::size_t i = 0;
-    for (; i < text.size() && text[i] != U'(' && text[i] != U' '; i++)
+    for (; i < text.size() && text[i] != '(' && text[i] != ' '; i++)
         ;
     auto name = text.substr(0, i);
     text.remove_prefix(name.size());
     skipWhitespace(text);
     CLD_ASSERT(text[0] == '(');
     text.remove_prefix(1);
-    constexpr auto size = figureOutParameterCount({str.begin(), str.size()});
+    constexpr auto size = figureOutParameterCount(str.view());
     if constexpr (size == 0)
     {
         return Builtin<0>{returnType, name, false, kind};
@@ -1833,69 +1833,46 @@ constexpr auto createBuiltin(cld::Semantics::BuiltinFunction::Kind kind)
             skipWhitespace(text);
             text.remove_prefix(1);
         }
-        bool vaArg = text.substr(0, 3) == U"...";
+        bool vaArg = text.substr(0, 3) == "...";
         return Builtin<size>{returnType, name, parameterTypes, vaArg, kind};
     }
 }
 
 } // namespace
 
-#define DECL_BUILTIN(string, value)                            \
-    constexpr auto value##Text = ::ctll::fixed_string{string}; \
+#define DECL_BUILTIN(string, value)                                            \
+    constexpr auto value##Text = ::cld::Constexpr::basic_fixed_string{string}; \
     constexpr auto value##Builtin = createBuiltin<value##Text>(::cld::Semantics::BuiltinFunction::Kind::value)
 
-#define DEF_BUILTIN(value)                                                                                         \
-    do                                                                                                             \
-    {                                                                                                              \
-        constexpr static auto u8array = Constexpr::utf32ToUtf8<value##Builtin.name.size()>(value##Builtin.name);   \
-        if (name == std::string_view(u8array.data(), u8array.size()))                                              \
-        {                                                                                                          \
-            std::vector<std::pair<Type, std::string_view>> parameters;                                             \
-            if constexpr (value##Builtin.size != 0)                                                                \
-            {                                                                                                      \
-                for (auto& iter : value##Builtin.parameterTypes)                                                   \
-                {                                                                                                  \
-                    parameters.emplace_back(adjustParameterType(typeEnumToType(iter)), "");                        \
-                }                                                                                                  \
-            }                                                                                                      \
-            auto result = m_usedBuiltins                                                                           \
-                              .insert({std::string_view(u8array.data(), u8array.size()),                           \
-                                       {FunctionType::create(typeEnumToType(value##Builtin.returnType),            \
-                                                             std::move(parameters), value##Builtin.vararg, false), \
-                                        ::cld::Semantics::BuiltinFunction::Kind::value}})                          \
-                              .first;                                                                              \
-            auto iter = m_scopes[0]                                                                                \
-                            .declarations                                                                          \
-                            .insert({std::string_view(u8array.data(), u8array.size()),                             \
-                                     DeclarationInScope{nullptr, &result->second}})                                \
-                            .first;                                                                                \
-            return &iter->second.declared;                                                                         \
-        }                                                                                                          \
+#define DEF_BUILTIN(value)                                                                                            \
+    do                                                                                                                \
+    {                                                                                                                 \
+        if (name == value##Builtin.name)                                                                              \
+        {                                                                                                             \
+            std::vector<std::pair<Type, std::string_view>> parameters;                                                \
+            if constexpr (value##Builtin.size != 0)                                                                   \
+            {                                                                                                         \
+                for (auto& iter : value##Builtin.parameterTypes)                                                      \
+                {                                                                                                     \
+                    parameters.emplace_back(adjustParameterType(typeEnumToType(iter)), "");                           \
+                }                                                                                                     \
+            }                                                                                                         \
+            auto result = m_usedBuiltins                                                                              \
+                              .insert({value##Builtin.name,                                                           \
+                                       {FunctionType::create(typeEnumToType(value##Builtin.returnType),               \
+                                                             std::move(parameters), value##Builtin.vararg, false),    \
+                                        ::cld::Semantics::BuiltinFunction::Kind::value}})                             \
+                              .first;                                                                                 \
+            auto iter = m_scopes[0]                                                                                   \
+                            .declarations.insert({value##Builtin.name, DeclarationInScope{nullptr, &result->second}}) \
+                            .first;                                                                                   \
+            return &iter->second.declared;                                                                            \
+        }                                                                                                             \
     } while (0)
 
-DECL_BUILTIN("void __builtin_va_start(va_list,...)", VAStart);
-DECL_BUILTIN("void __builtin_va_end(va_list)", VAEnd);
-DECL_BUILTIN("void __builtin_va_copy(va_list,va_list)", VACopy);
-DECL_BUILTIN("int __builtin_abs(int)", Abs);
-DECL_BUILTIN("long __builtin_labs(long)", LAbs);
-DECL_BUILTIN("long long __builtin_llabs(long long)", LLAbs);
-DECL_BUILTIN("double __builtin_fabs(double)", FAbs);
-DECL_BUILTIN("float __builtin_fabsf(float)", FAbsf);
-DECL_BUILTIN("long double __builtin_fabsl(long double)", FAbsl);
-DECL_BUILTIN("double __builtin_inf()", Inf);
-DECL_BUILTIN("float __builtin_inff()", Inff);
-DECL_BUILTIN("long double __builtin_infl()", Infl);
-DECL_BUILTIN("void __sync_synchronize()", SyncSynchronize);
-DECL_BUILTIN("long __builtin_expect(long,long)", Expect);
-DECL_BUILTIN("void* __builtin_return_address(unsigned int)", ReturnAddress);
-DECL_BUILTIN("void* __builtin_extract_return_addr(void*)", ExtractReturnAddr);
-DECL_BUILTIN("void* __builtin_frob_return_addr(void*)", FRobReturnAddr);
-DECL_BUILTIN("void* __builtin_frame_address(unsigned int)", FrameAddress);
-DECL_BUILTIN("long __builtin_expect_with_probability(long,long,double)", ExpectWithProbability);
-DECL_BUILTIN("void __builtin_prefetch(const void*,...)", Prefetch);
-DECL_BUILTIN("void __builtin___clear_cache(void*,void*)", ClearCache);
-DECL_BUILTIN("void __builtin_trap()", Trap);
-DECL_BUILTIN("void __builtin_unreachable()", Unreachable);
+#define HANDLE_BUILTIN(a, b) DECL_BUILTIN(a, b)
+#include "Builtins.def"
+#undef HANDLE_BUILTIN
 
 const cld::Semantics::ProgramInterface::DeclarationInScope::Variant* CLD_NULLABLE
     cld::Semantics::SemanticAnalysis::getBuiltinFuncDecl(std::string_view name)
@@ -1921,29 +1898,9 @@ const cld::Semantics::ProgramInterface::DeclarationInScope::Variant* CLD_NULLABL
         }
         CLD_UNREACHABLE;
     };
-    DEF_BUILTIN(VAStart);
-    DEF_BUILTIN(VAEnd);
-    DEF_BUILTIN(VACopy);
-    DEF_BUILTIN(Abs);
-    DEF_BUILTIN(LAbs);
-    DEF_BUILTIN(LLAbs);
-    DEF_BUILTIN(FAbs);
-    DEF_BUILTIN(FAbsf);
-    DEF_BUILTIN(FAbsl);
-    DEF_BUILTIN(Inf);
-    DEF_BUILTIN(Inff);
-    DEF_BUILTIN(Infl);
-    DEF_BUILTIN(SyncSynchronize);
-    DEF_BUILTIN(ReturnAddress);
-    DEF_BUILTIN(ExtractReturnAddr);
-    DEF_BUILTIN(FRobReturnAddr);
-    DEF_BUILTIN(FrameAddress);
-    DEF_BUILTIN(Expect);
-    DEF_BUILTIN(ExpectWithProbability);
-    DEF_BUILTIN(Prefetch);
-    DEF_BUILTIN(ClearCache);
-    DEF_BUILTIN(Trap);
-    DEF_BUILTIN(Unreachable);
+#define HANDLE_BUILTIN(a, b) DEF_BUILTIN(b)
+#include "Builtins.def"
+#undef HANDLE_BUILTIN
     return nullptr;
 }
 

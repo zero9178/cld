@@ -2370,7 +2370,7 @@ std::optional<std::pair<CToken::ValueType, CToken::Type>>
         std::string number(begin, suffixBegin);
         llvm::APInt test;
         llvm::StringRef(number).getAsInteger(0, test);
-        if (test.getActiveBits() > (unsignedConsidered ? 64 : 63))
+        if (test.getActiveBits() > (unsignedConsidered ? 64u : 63u))
         {
             context.report(cld::Errors::Lexer::INTEGER_VALUE_TOO_BIG_TO_BE_REPRESENTABLE, beginLocation, context.token);
             return {};
