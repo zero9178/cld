@@ -14,6 +14,8 @@ CLD_CLI_OPT(INCLUDES, ("-I<dir>", "--include-directory <dir>", "--include-direct
 CLD_CLI_OPT(STRING_ARG, ("--prefix=<arg>", "--prefix <arg>"), (std::string, arg))("A std::string arg");
 CLD_CLI_OPT(STRING_VIEW_ARG, ("--prefix=<arg>", "--prefix <arg>"), (std::string_view, arg))("A std::string_view arg");
 CLD_CLI_OPT(OPT, ("-O<level>", "-O", "--optimize", "--optimize=<level>"), (std::uint8_t, level))("Optimization level");
+CLD_CLI_OPT(OPT_CHAR, ("-O<level>", "-O", "--optimize", "--optimize=<level>"), (cld::cli::Char, level))
+("Optimization level");
 CLD_CLI_OPT(PIE, ("-f[no-]pie"))("Position independent executable");
 } // namespace
 
@@ -64,7 +66,7 @@ TEST_CASE("Commandline arg types", "[cli]")
         auto cli = cld::parseCommandLine<INCLUDES>(elements, &ss);
         CHECK(cli.get<INCLUDES>().empty());
         CHECK_THAT(cli.getUnrecognized(), Catch::Equals(std::vector<std::string_view>{"-I", "text"}));
-        CHECK_THAT(storage, ProducesError(EXPECTED_ARGUMENT_IMMEDIATELY_AFTER_N, "'-I'"));
+        CHECK_THAT(storage, ProducesError(EXPECTED_ARGUMENT_IMMEDIATELY_AFTER_N, "-I"));
     }
     SECTION("Strings")
     {
@@ -85,10 +87,43 @@ TEST_CASE("Commandline arg types", "[cli]")
     }
     SECTION("Integral types")
     {
-        std::vector<std::string_view> elements = {"-O3"};
-        auto cli = cld::parseCommandLine<OPT>(elements);
-        REQUIRE(cli.get<OPT>());
-        CHECK(*cli.get<OPT>() == 3);
+        SECTION("Success")
+        {
+            std::vector<std::string_view> elements = {"-O3"};
+            auto cli = cld::parseCommandLine<OPT>(elements);
+            REQUIRE(cli.get<OPT>());  // check that OPT occured
+            REQUIRE(*cli.get<OPT>()); // check that OPT with a value occured
+            CHECK(**cli.get<OPT>() == 3);
+        }
+        SECTION("Failure")
+        {
+            std::vector<std::string_view> elements = {"-O3t"};
+            std::string storage;
+            llvm::raw_string_ostream ss(storage);
+            auto cli = cld::parseCommandLine<OPT>(elements, &ss);
+            CHECK_FALSE(cli.get<OPT>());
+            CHECK_THAT(storage, ProducesError(ERRORS_PARSING_INTEGER_ARGUMENT_IN_N, "-O3t"));
+        }
+    }
+    SECTION("Char")
+    {
+        SECTION("Success")
+        {
+            std::vector<std::string_view> elements = {"-O〺"};
+            auto cli = cld::parseCommandLine<OPT_CHAR>(elements);
+            REQUIRE(cli.get<OPT_CHAR>());
+            REQUIRE(*cli.get<OPT_CHAR>());
+            CHECK(static_cast<std::uint32_t>(**cli.get<OPT_CHAR>()) == U'〺');
+        }
+        SECTION("Failure")
+        {
+            std::vector<std::string_view> elements = {"-O\xE0\x80\x80"};
+            std::string storage;
+            llvm::raw_string_ostream ss(storage);
+            auto cli = cld::parseCommandLine<OPT_CHAR>(elements, &ss);
+            CHECK_FALSE(cli.get<OPT_CHAR>());
+            CHECK_THAT(storage, ProducesError(ERRORS_PARSING_INVALID_UTF8_IN_N, "-O\xE0\x80\x80"));
+        }
     }
 }
 

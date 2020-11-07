@@ -5,6 +5,7 @@
 #include <cld/Frontend/Compiler/Message.hpp>
 #include <cld/Support/Constexpr.hpp>
 #include <cld/Support/MaxVector.hpp>
+#include <cld/Support/Text.hpp>
 #include <cld/Support/Util.hpp>
 
 #include <optional>
@@ -76,6 +77,13 @@ public:
         return {m_firstOptionString.data(), m_firstOptionString.size()};
     }
 };
+
+namespace cli
+{
+enum class Char : std::uint32_t
+{
+};
+} // namespace cli
 
 namespace detail::CommandLine
 {
@@ -522,6 +530,11 @@ Message emitMissingArg(std::size_t currentIndex, std::size_t currentPos, llvm::A
 Message emitMissingWhitespace(std::size_t currentIndex, std::size_t currentPos,
                               llvm::ArrayRef<std::string_view> commandLine);
 
+Message emitFailedInteger(std::size_t currentIndex, std::size_t currentPos,
+                          llvm::ArrayRef<std::string_view> commandLine);
+
+Message emitInvalidUTF8(std::size_t currentIndex, std::size_t currentPos, llvm::ArrayRef<std::string_view> commandLine);
+
 using LazyMessage = SmallFunction<Message(), 64>;
 
 template <auto* cliOption, std::size_t size, class Storage>
@@ -560,6 +573,20 @@ class Mutator
     {
         return [currentIndex = m_currentIndex, currentPos = m_currentPos, commandLine = m_commandLine] {
             return emitMissingWhitespace(currentIndex, currentPos, commandLine);
+        };
+    }
+
+    LazyMessage buildFailedInteger()
+    {
+        return [currentIndex = m_currentIndex, currentPos = m_currentPos, commandLine = m_commandLine] {
+            return emitFailedInteger(currentIndex, currentPos, commandLine);
+        };
+    }
+
+    LazyMessage buildInvalidUTF8()
+    {
+        return [currentIndex = m_currentIndex, currentPos = m_currentPos, commandLine = m_commandLine] {
+            return emitInvalidUTF8(currentIndex, currentPos, commandLine);
         };
     }
 
@@ -616,8 +643,25 @@ public:
         {
             return buildMissingArg(true);
         }
+
+        constexpr std::size_t storageIndex = indexOf(cliOption->getArgNames(), arg<cliOption, i, index>.value);
+        constexpr bool isTupleVector = IsTuple<std::decay_t<typename ValueType<Storage>::type>>{};
+        using ArgTypeT = typename std::conditional_t<
+            isTupleVector, std::tuple_element<storageIndex, std::decay_t<typename ValueType<Storage>::type>>,
+            std::decay<typename ValueType<Storage>::type>>::type;
+        using ArgType =
+            typename std::conditional_t<IsOptional<ArgTypeT>{}, ValueType<ArgTypeT>, type_identity<ArgTypeT>>::type;
+
         std::string_view text;
-        if constexpr (isLast<i, index>())
+        if constexpr (std::is_same_v<cli::Char, ArgType>)
+        {
+            auto utf8Size = getNumBytesForUTF8(m_commandLine[m_currentIndex].begin() + m_currentPos,
+                                               m_commandLine[m_currentIndex].end());
+            text = m_commandLine[m_currentIndex].substr(m_currentPos, utf8Size);
+            m_queue.push_back([this, textSize = text.size()] { m_commandLine.front().remove_prefix(textSize); });
+            m_currentPos += text.size();
+        }
+        else if constexpr (isLast<i, index>())
         {
             text = m_commandLine[m_currentIndex].substr(m_currentPos);
             m_queue.push_back([this, textSize = text.size()] { m_commandLine.front().remove_prefix(textSize); });
@@ -643,13 +687,6 @@ public:
             static_assert(always_false<std::integral_constant<std::size_t, i>>);
         }
 
-        constexpr std::size_t storageIndex = indexOf(cliOption->getArgNames(), arg<cliOption, i, index>.value);
-        constexpr bool isTupleVector = IsTuple<std::decay_t<typename ValueType<Storage>::type>>{};
-        using ArgTypeT = typename std::conditional_t<
-            isTupleVector, std::tuple_element<storageIndex, std::decay_t<typename ValueType<Storage>::type>>,
-            std::decay<typename ValueType<Storage>::type>>::type;
-        using ArgType =
-            typename std::conditional_t<IsOptional<ArgTypeT>{}, ValueType<ArgTypeT>, type_identity<ArgTypeT>>::type;
         auto assign = [=](auto&& value) {
             if constexpr (cliOption->getMultiArg() == CLIMultiArg::List)
             {
@@ -701,15 +738,42 @@ public:
         {
             assign(text);
         }
+        else if constexpr (std::is_same_v<cli::Char, ArgType>)
+        {
+            const char* start = text.data();
+            llvm::UTF32 codepoint;
+            auto result = llvm::convertUTF8Sequence(reinterpret_cast<const llvm::UTF8**>(&start),
+                                                    reinterpret_cast<const llvm::UTF8*>(text.data() + text.size()),
+                                                    &codepoint, llvm::strictConversion);
+            if (result != llvm::conversionOK)
+            {
+                return buildInvalidUTF8();
+            }
+            assign(cli::Char(codepoint));
+        }
         else if constexpr (std::is_integral_v<ArgType>)
         {
             if constexpr (std::is_signed_v<ArgType>)
             {
-                assign(std::stoll(std::string(text.begin(), text.end())));
+                auto nts = std::string(text.begin(), text.end());
+                char* end = nullptr;
+                auto integer = std::strtoll(nts.data(), &end, 10);
+                if (end != nts.data() + nts.size() || errno == ERANGE)
+                {
+                    return buildFailedInteger();
+                }
+                assign(integer);
             }
             else
             {
-                assign(std::stoull(std::string(text.begin(), text.end())));
+                auto nts = std::string(text.begin(), text.end());
+                char* end = nullptr;
+                auto integer = std::strtoull(nts.data(), &end, 10);
+                if (end != nts.data() + nts.size() || errno == ERANGE)
+                {
+                    return buildFailedInteger();
+                }
+                assign(integer);
             }
         }
 

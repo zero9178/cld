@@ -1038,6 +1038,10 @@ CREATE_ERROR(EXPECTED_N_AFTER_N, "Expected '%0' after '%1'");
 CREATE_ERROR(EXPECTED_ARGUMENT_AFTER_N, "Expected argument after '%0'");
 
 CREATE_ERROR(EXPECTED_ARGUMENT_IMMEDIATELY_AFTER_N, "Expected argument immediately after '%0'");
+
+CREATE_ERROR(ERRORS_PARSING_INTEGER_ARGUMENT_IN_N, "Errors parsing integer argument in '%0'");
+
+CREATE_ERROR(ERRORS_PARSING_INVALID_UTF8_IN_N, "Errors parsing invalid utf8 in '%0'");
 } // namespace CLI
 } // namespace Errors
 
