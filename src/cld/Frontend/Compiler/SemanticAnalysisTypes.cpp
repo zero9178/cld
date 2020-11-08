@@ -648,7 +648,7 @@ cld::Semantics::Type
                 {
                     return UnionType::create(isConst, isVolatile, name, static_cast<std::size_t>(*unionTag));
                 }
-                m_unionDefinitions.push_back({UnionDecl{}, m_currentScope});
+                m_unionDefinitions.push_back({UnionDecl{}, m_currentScope, structOrUnion->begin()});
                 auto [prev, notRedefined] = getCurrentScope().types.insert(
                     {name, TagTypeInScope{structOrUnion->getIdentifierLoc(), UnionTag{m_unionDefinitions.size() - 1}}});
                 if (!notRedefined)
@@ -668,7 +668,7 @@ cld::Semantics::Type
             {
                 return StructType::create(isConst, isVolatile, name, static_cast<std::size_t>(*structTag));
             }
-            m_structDefinitions.push_back({StructDecl{}, m_currentScope});
+            m_structDefinitions.push_back({StructDecl{}, m_currentScope, structOrUnion->begin()});
             auto [prev, notRedefined] = getCurrentScope().types.insert(
                 {name, TagTypeInScope{structOrUnion->getIdentifierLoc(), StructTag{m_structDefinitions.size() - 1}}});
             if (!notRedefined)
@@ -694,7 +694,7 @@ cld::Semantics::Type
                     return UnionType::create(isConst, isVolatile, "", result->second);
                 }
                 structOrUnionID = m_unionDefinitions.size();
-                m_unionDefinitions.push_back({UnionDecl{}, m_currentScope});
+                m_unionDefinitions.push_back({UnionDecl{}, m_currentScope, structOrUnion->begin()});
             }
             else
             {
@@ -703,7 +703,7 @@ cld::Semantics::Type
                     return StructType::create(isConst, isVolatile, "", result->second);
                 }
                 structOrUnionID = m_structDefinitions.size();
-                m_structDefinitions.push_back({StructDecl{}, m_currentScope});
+                m_structDefinitions.push_back({StructDecl{}, m_currentScope, structOrUnion->begin()});
             }
         }
         else
@@ -740,7 +740,7 @@ cld::Semantics::Type
                 else
                 {
                     structOrUnionID = m_unionDefinitions.size();
-                    m_unionDefinitions.push_back({UnionDecl{}, m_currentScope});
+                    m_unionDefinitions.push_back({UnionDecl{}, m_currentScope, structOrUnion->begin()});
                 }
             }
             else
@@ -774,7 +774,7 @@ cld::Semantics::Type
                 else
                 {
                     structOrUnionID = m_structDefinitions.size();
-                    m_structDefinitions.push_back({StructDecl{}, m_currentScope});
+                    m_structDefinitions.push_back({StructDecl{}, m_currentScope, structOrUnion->begin()});
                 }
             }
         }

@@ -616,6 +616,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     {
         if (isUnion(*currentType))
         {
+            // TODO: This is almost definitely wrong
             currentType = result->second.type.get();
             continue;
         }
@@ -654,6 +655,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             {
                 if (isUnion(*currentType))
                 {
+                    // TODO: This is almost definitely wrong
                     currentType = result->second.type.get();
                     continue;
                 }

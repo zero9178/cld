@@ -1960,7 +1960,7 @@ void cld::Semantics::SemanticAnalysis::createBuiltins()
                 std::vector<MemoryLayout>{{*unsignedInt, 0}, {*unsignedInt, 4}, {*voidStar, 8}, {*voidStar, 16}};
             m_structDefinitions.push_back({StructDefinition("__va_list_tag", std::move(fields), std::move(fieldLayout),
                                                             std::move(memLayout), 24, 8),
-                                           0});
+                                           0, nullptr});
             auto elementType = StructType::create(false, false, "__va_list_tag", m_structDefinitions.size() - 1);
             getCurrentScope().types.emplace("__va_list_tag",
                                             TagTypeInScope{nullptr, StructTag{m_structDefinitions.size() - 1}});

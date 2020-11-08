@@ -61,12 +61,14 @@ public:
     {
         std::variant<StructDefinition, StructDecl> type;
         std::size_t scope;
+        const Lexer::CToken* structToken;
     };
 
     struct UnionInfo
     {
         std::variant<UnionDefinition, UnionDecl> type;
         std::size_t scope;
+        const Lexer::CToken* unionToken;
     };
 
 protected:
@@ -133,6 +135,11 @@ public:
         return m_structDefinitions[id].scope;
     }
 
+    const Lexer::CToken* getStructLoc(std::size_t id) const
+    {
+        return m_structDefinitions[id].structToken;
+    }
+
     EnumDefinition* CLD_NULLABLE getEnumDefinition(std::size_t id)
     {
         return &m_enumDefinitions[id];
@@ -156,6 +163,11 @@ public:
     std::size_t getUnionScope(std::size_t id) const
     {
         return m_unionDefinitions[id].scope;
+    }
+
+    const Lexer::CToken* getUnionLoc(std::size_t id) const
+    {
+        return m_unionDefinitions[id].unionToken;
     }
 
     const FieldMap& getFields(const Type& recordType) const;

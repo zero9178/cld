@@ -51,6 +51,7 @@ Things that are currently still Work in Progress are:
 * Find sysroots for the target similar to clang
 * Improve kind of broken preprocessor tokens to text conversion
 * Implement more and more GCC Extensions and builtins
+* Generating complete debug info
 
 ## Building
 

@@ -1223,8 +1223,8 @@ class CodeGenerator final
 
     std::optional<llvm::DIBuilder> m_debugInfo;
     std::vector<llvm::DIFile*> m_fileIdToFile;
-    llvm::DILocalScope* m_currentDebugScope = nullptr;
-    std::vector<llvm::DILocalScope*> m_scopeIdToScope{m_programInterface.getScopes().size()};
+    llvm::DIScope* m_currentDebugScope = nullptr;
+    std::vector<llvm::DIScope*> m_scopeIdToScope{m_programInterface.getScopes().size()};
 
     llvm::DIFile* getFile(cld::Lexer::CTokenIterator iter) const
     {
@@ -1571,8 +1571,66 @@ public:
                     return result->second;
                 }
                 auto* structDef = m_programInterface.getStructDefinition(structType.getId());
-                (void)structDef;
-                CLD_UNREACHABLE;
+                if (!structDef)
+                {
+                    auto* structFwdDecl = m_debugInfo->createForwardDecl(
+                        llvm::dwarf::DW_TAG_structure_type, structType.getName(),
+                        m_scopeIdToScope[m_programInterface.getStructScope(structType.getId())],
+                        getFile(m_programInterface.getStructLoc(structType.getId())),
+                        getLine(m_programInterface.getStructLoc(structType.getId())));
+                    m_debugTypes.emplace(structType, structFwdDecl);
+                    return structFwdDecl;
+                }
+                auto* structFwdDecl = m_debugInfo->createReplaceableCompositeType(
+                    llvm::dwarf::DW_TAG_structure_type, structType.getName(),
+                    m_scopeIdToScope[m_programInterface.getStructScope(structType.getId())],
+                    getFile(m_programInterface.getStructLoc(structType.getId())),
+                    getLine(m_programInterface.getStructLoc(structType.getId())));
+                m_debugTypes.emplace(structType, structFwdDecl);
+                std::vector<llvm::Metadata*> elements;
+                for (auto& iter : structDef->getFields())
+                {
+                    auto* subType = visitDebug(*iter.second.type);
+                    std::size_t offset = 0;
+                    const cld::Semantics::Type* currentType = &type;
+                    for (auto index : iter.second.indices)
+                    {
+                        if (cld::Semantics::isStruct(*currentType))
+                        {
+                            const auto& memoryLayout = m_programInterface.getMemoryLayout(*currentType);
+                            offset += memoryLayout[index].offset;
+                            currentType = &memoryLayout[index].type;
+                        }
+                        else
+                        {
+                            currentType = m_programInterface.getFieldLayout(*currentType)[index].type.get();
+                        }
+                    }
+                    if (!iter.second.bitFieldBounds)
+                    {
+                        elements.push_back(m_debugInfo->createMemberType(
+                            structFwdDecl, iter.first, getFile(iter.second.nameToken), getLine(iter.second.nameToken),
+                            iter.second.type->getSizeOf(m_programInterface) * 8,
+                            iter.second.type->getAlignOf(m_programInterface) * 8, offset * 8,
+                            llvm::DINode::DIFlags::FlagZero, subType));
+                        continue;
+                    }
+                    elements.push_back(m_debugInfo->createBitFieldMemberType(
+                        structFwdDecl, iter.first, getFile(iter.second.nameToken), getLine(iter.second.nameToken),
+                        iter.second.bitFieldBounds->second - iter.second.bitFieldBounds->first,
+                        8 * offset + iter.second.bitFieldBounds->first, 8 * offset, llvm::DINode::DIFlags::FlagZero,
+                        subType));
+                }
+                auto* debugStructDef = llvm::DICompositeType::getDistinct(
+                    m_module.getContext(), llvm::dwarf::DW_TAG_structure_type, structType.getName(),
+                    getFile(m_programInterface.getStructLoc(structType.getId())),
+                    getLine(m_programInterface.getStructLoc(structType.getId())),
+                    m_scopeIdToScope[m_programInterface.getStructScope(structType.getId())], nullptr,
+                    structType.getSizeOf(m_programInterface) * 8, structType.getAlignOf(m_programInterface) * 8, 0,
+                    llvm::DINode::DIFlags::FlagZero, m_debugInfo->getOrCreateArray(elements), 0, nullptr);
+                structFwdDecl->replaceAllUsesWith(debugStructDef);
+                m_debugTypes.insert_or_assign(structType, debugStructDef);
+                return debugStructDef;
             });
         if (type.isVolatile())
         {
@@ -1850,17 +1908,11 @@ public:
         m_currentFunction = function;
         cld::ValueReset currentFunctionReset(m_currentFunction, nullptr);
 
-        std::optional<cld::ValueReset<llvm::DILocalScope*>> subProgramReset;
+        std::optional<cld::ValueReset<llvm::DIScope*>> subProgramReset;
         if (m_options.debugEmission != cld::CGLLVM::DebugEmission::None)
         {
-            std::vector<llvm::Metadata*> parameters;
-            for (auto& [type, name] : ft.getArguments())
-            {
-                (void)name;
-                // TODO parameters.push_back(visitDebug(cld::Semantics::adjustParameterType(type)));
-                (void)type;
-            }
-            auto* subRoutineType = m_debugInfo->createSubroutineType(m_debugInfo->getOrCreateTypeArray(parameters));
+            auto tempParams = llvm::MDNode::getTemporary(m_module.getContext(), {});
+            auto* subRoutineType = m_debugInfo->createSubroutineType(tempParams.get());
             llvm::DISubprogram::DISPFlags spFlags = llvm::DISubprogram::SPFlagDefinition;
             if (functionDefinition.getNameToken()->getText() == "main")
             {
@@ -1875,6 +1927,27 @@ public:
             subProgramReset.emplace(m_currentDebugScope, nullptr);
             m_currentFunction->setSubprogram(subProgram);
             m_scopeIdToScope[functionDefinition.getCompoundStatement().getScope()] = m_currentDebugScope = subProgram;
+
+            std::vector<llvm::Metadata*> parameters;
+            if (m_options.debugEmission > cld::CGLLVM::DebugEmission::Line)
+            {
+                if (cld::Semantics::isVoid(ft.getReturnType()))
+                {
+                    parameters.push_back(nullptr);
+                }
+                else
+                {
+                    parameters.push_back(visitDebug(ft.getReturnType()));
+                }
+                for (auto& [type, name] : ft.getArguments())
+                {
+                    (void)name;
+                    parameters.push_back(visitDebug(cld::Semantics::adjustParameterType(type)));
+                }
+            }
+            auto* typeArray = llvm::MDTuple::get(m_module.getContext(), parameters);
+            m_debugInfo->replaceTemporary(std::move(tempParams), typeArray);
+
             m_builder.SetCurrentDebugLocation({});
         }
 
@@ -2004,7 +2077,7 @@ public:
 
     void visit(const cld::Semantics::CompoundStatement& compoundStatement)
     {
-        std::optional<cld::ValueReset<llvm::DILocalScope*>> reset;
+        std::optional<cld::ValueReset<llvm::DIScope*>> reset;
         if (m_options.debugEmission != cld::CGLLVM::DebugEmission::None)
         {
             if (!m_scopeIdToScope[compoundStatement.getScope()])
@@ -2112,7 +2185,7 @@ public:
 
     void visit(const cld::Semantics::ForStatement& forStatement)
     {
-        std::optional<cld::ValueReset<llvm::DILocalScope*>> reset;
+        std::optional<cld::ValueReset<llvm::DIScope*>> reset;
         cld::match(
             forStatement.getInitial(), [](std::monostate) {},
             [&](const std::vector<std::unique_ptr<cld::Semantics::Declaration>>& declaration) {

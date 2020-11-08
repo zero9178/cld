@@ -17,10 +17,10 @@ namespace CGLLVM
 {
 enum class DebugEmission
 {
-    None,
-    Line,
-    Default,
-    Extended
+    None = 0,
+    Line = 1,
+    Default = 2,
+    Extended = 3
 };
 
 struct Options
