@@ -262,7 +262,7 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
             (storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Static ? Linkage::Internal :
                                                                                               Linkage::External) :
             Linkage::External,
-        inlineKind, CompoundStatement(m_currentScope, {}))));
+        inlineKind, CompoundStatement(m_currentScope, loc, {}, loc))));
     // We are currently in block scope. Functions are always at file scope though so we can't use getCurrentScope
     auto [prev, notRedefinition] =
         m_scopes[0].declarations.insert({loc->getText(), DeclarationInScope{loc, ptr.get()}});
@@ -293,10 +293,10 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
                                                      PrimitiveType::createChar(false, false, getLanguageOptions()),
                                                      loc->getText().size() + 1),
                                    cld::to_string(loc->getText()), loc, loc + 1));
-    getCurrentScope().declarations.insert({"__func__", DeclarationInScope{loc, funcName.get()}});
+    getCurrentScope().declarations.insert({"__func__", DeclarationInScope{nullptr, funcName.get()}});
     // GCC Extensions
-    getCurrentScope().declarations.insert({"__FUNCTION__", DeclarationInScope{loc, funcName.get()}});
-    getCurrentScope().declarations.insert({"__PRETTY_FUNCTION__", DeclarationInScope{loc, funcName.get()}});
+    getCurrentScope().declarations.insert({"__FUNCTION__", DeclarationInScope{nullptr, funcName.get()}});
+    getCurrentScope().declarations.insert({"__PRETTY_FUNCTION__", DeclarationInScope{nullptr, funcName.get()}});
 
     auto functionScope = pushFunctionScope(*ptr);
 
@@ -771,7 +771,7 @@ std::unique_ptr<cld::Semantics::CompoundStatement>
         auto tmp = visit(iter);
         result.insert(result.end(), std::move_iterator(tmp.begin()), std::move_iterator(tmp.end()));
     }
-    return std::make_unique<CompoundStatement>(m_currentScope, std::move(result));
+    return std::make_unique<CompoundStatement>(m_currentScope, node.begin(), std::move(result), node.end() - 1);
 }
 
 std::vector<cld::Semantics::CompoundStatement::Variant>
@@ -810,7 +810,7 @@ cld::IntrVarPtr<cld::Semantics::Statement> cld::Semantics::SemanticAnalysis::vis
 bool cld::Semantics::SemanticAnalysis::isTypedef(std::string_view name) const
 {
     auto curr = m_currentScope;
-    while (curr >= 0)
+    while (curr != static_cast<std::size_t>(-1))
     {
         auto result = m_scopes[curr].declarations.find(name);
         if (result != m_scopes[curr].declarations.end() && std::holds_alternative<Type>(result->second.declared))
@@ -826,7 +826,7 @@ bool cld::Semantics::SemanticAnalysis::isTypedef(std::string_view name) const
 bool cld::Semantics::SemanticAnalysis::isTypedefInScope(std::string_view name) const
 {
     auto curr = m_currentScope;
-    while (curr >= 0)
+    while (curr != static_cast<std::size_t>(-1))
     {
         auto result = m_scopes[curr].declarations.find(name);
         if (result != m_scopes[curr].declarations.end())
@@ -1958,8 +1958,9 @@ void cld::Semantics::SemanticAnalysis::createBuiltins()
                 {unsignedInt, 0, {}}, {unsignedInt, 1, {}}, {voidStar, 2, {}}, {voidStar, 3, {}}};
             auto memLayout =
                 std::vector<MemoryLayout>{{*unsignedInt, 0}, {*unsignedInt, 4}, {*voidStar, 8}, {*voidStar, 16}};
-            m_structDefinitions.emplace_back(StructDefinition("__va_list_tag", std::move(fields),
-                                                              std::move(fieldLayout), std::move(memLayout), 24, 8));
+            m_structDefinitions.push_back({StructDefinition("__va_list_tag", std::move(fields), std::move(fieldLayout),
+                                                            std::move(memLayout), 24, 8),
+                                           0});
             auto elementType = StructType::create(false, false, "__va_list_tag", m_structDefinitions.size() - 1);
             getCurrentScope().types.emplace("__va_list_tag",
                                             TagTypeInScope{nullptr, StructTag{m_structDefinitions.size() - 1}});
@@ -1992,9 +1993,8 @@ void cld::Semantics::SemanticAnalysis::diagnoseUnusedLocals()
     {
         cld::match(
             declInScope.declared,
-            [this, &declInScope = declInScope, &name = name](Declaration* declaration) {
-                if (declaration->isUsed() || declaration->getLinkage() == Linkage::External || name == "__func__"
-                    || name == "__FUNCTION__" || name == "__PRETTY_FUNCTION__")
+            [this, &declInScope = declInScope](Declaration* declaration) {
+                if (declaration->isUsed() || declaration->getLinkage() == Linkage::External || !declInScope.identifier)
                 {
                     return;
                 }

@@ -342,7 +342,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                     type = FunctionType::create(std::move(type), {}, false, true);
                     return;
                 }
-                std::unordered_map<std::string_view, std::uint64_t> paramNames;
+                std::unordered_map<std::string_view, std::size_t> paramNames;
                 std::vector<std::pair<Type, std::string_view>> parameters;
                 std::unordered_map<std::string_view, Lexer::CTokenIterator> seenParameters;
                 for (auto& iter : identifiers.getIdentifiers())
@@ -648,7 +648,7 @@ cld::Semantics::Type
                 {
                     return UnionType::create(isConst, isVolatile, name, static_cast<std::size_t>(*unionTag));
                 }
-                m_unionDefinitions.emplace_back(UnionDecl{});
+                m_unionDefinitions.push_back({UnionDecl{}, m_currentScope});
                 auto [prev, notRedefined] = getCurrentScope().types.insert(
                     {name, TagTypeInScope{structOrUnion->getIdentifierLoc(), UnionTag{m_unionDefinitions.size() - 1}}});
                 if (!notRedefined)
@@ -668,7 +668,7 @@ cld::Semantics::Type
             {
                 return StructType::create(isConst, isVolatile, name, static_cast<std::size_t>(*structTag));
             }
-            m_structDefinitions.emplace_back(StructDecl{});
+            m_structDefinitions.push_back({StructDecl{}, m_currentScope});
             auto [prev, notRedefined] = getCurrentScope().types.insert(
                 {name, TagTypeInScope{structOrUnion->getIdentifierLoc(), StructTag{m_structDefinitions.size() - 1}}});
             if (!notRedefined)
@@ -694,7 +694,7 @@ cld::Semantics::Type
                     return UnionType::create(isConst, isVolatile, "", result->second);
                 }
                 structOrUnionID = m_unionDefinitions.size();
-                m_unionDefinitions.emplace_back(UnionDecl{});
+                m_unionDefinitions.push_back({UnionDecl{}, m_currentScope});
             }
             else
             {
@@ -703,7 +703,7 @@ cld::Semantics::Type
                     return StructType::create(isConst, isVolatile, "", result->second);
                 }
                 structOrUnionID = m_structDefinitions.size();
-                m_structDefinitions.emplace_back(StructDecl{});
+                m_structDefinitions.push_back({StructDecl{}, m_currentScope});
             }
         }
         else
@@ -740,7 +740,7 @@ cld::Semantics::Type
                 else
                 {
                     structOrUnionID = m_unionDefinitions.size();
-                    m_unionDefinitions.emplace_back(UnionDecl{});
+                    m_unionDefinitions.push_back({UnionDecl{}, m_currentScope});
                 }
             }
             else
@@ -774,14 +774,14 @@ cld::Semantics::Type
                 else
                 {
                     structOrUnionID = m_structDefinitions.size();
-                    m_structDefinitions.emplace_back(StructDecl{});
+                    m_structDefinitions.push_back({StructDecl{}, m_currentScope});
                 }
             }
         }
 
         FieldMap fields;
         std::vector<FieldInLayout> fieldLayout;
-        std::unordered_set<std::uint64_t> zeroBitFields;
+        std::unordered_set<std::size_t> zeroBitFields;
         for (auto iter = structOrUnion->getStructDeclarations().begin();
              iter != structOrUnion->getStructDeclarations().end(); iter++)
         {
@@ -1082,7 +1082,7 @@ cld::Semantics::Type
                     {
                         lastWasZero = true;
                     }
-                    std::size_t size = iter->second.type->getSizeOf(*this);
+                    std::uint64_t size = iter->second.type->getSizeOf(*this);
                     if (!lastWasZero && storageLeft > iter->second.bitFieldBounds->second
                         && (!m_sourceInterface.getLanguageOptions().discreteBitfields || prevSize == size))
                     {
@@ -1168,7 +1168,7 @@ cld::Semantics::Type
         {
             if (structOrUnionID)
             {
-                m_unionDefinitions[*structOrUnionID].emplace<UnionDefinition>(
+                m_unionDefinitions[*structOrUnionID].type.emplace<UnionDefinition>(
                     name, std::move(fields), std::move(fieldLayout), currentSize, currentAlignment);
                 return UnionType::create(isConst, isVolatile, name, *structOrUnionID);
             }
@@ -1176,7 +1176,7 @@ cld::Semantics::Type
         }
         if (structOrUnionID)
         {
-            m_structDefinitions[*structOrUnionID].emplace<StructDefinition>(
+            m_structDefinitions[*structOrUnionID].type.emplace<StructDefinition>(
                 name, std::move(fields), std::move(fieldLayout), std::move(memoryLayout), currentSize,
                 currentAlignment);
             return StructType::create(isConst, isVolatile, name, *structOrUnionID);

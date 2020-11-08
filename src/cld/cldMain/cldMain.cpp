@@ -493,6 +493,7 @@ std::optional<cld::fs::path> compileCFile(Action action, cld::fs::path cSourceFi
     {
         llvm::errs().flush();
         module.print(llvm::outs(), nullptr);
+        std::terminate();
     }
 #endif
     std::string outputFile;

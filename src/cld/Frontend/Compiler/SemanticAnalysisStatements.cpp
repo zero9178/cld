@@ -142,12 +142,12 @@ std::unique_ptr<cld::Semantics::ForStatement> cld::Semantics::SemanticAnalysis::
         iteration = visit(*node.getPost());
     }
 
-    auto forStatement =
-        std::make_unique<ForStatement>(m_currentScope, ForStatement::Variant{}, nullptr, nullptr, nullptr);
+    auto forStatement = std::make_unique<ForStatement>(m_currentScope, node.begin(), ForStatement::Variant{}, nullptr,
+                                                       nullptr, nullptr);
     auto loopGuard = pushLoop(forStatement.get());
     auto statement = visit(node.getStatement());
-    *forStatement = ForStatement(m_currentScope, std::move(initial), std::move(controlling), std::move(iteration),
-                                 std::move(statement));
+    *forStatement = ForStatement(m_currentScope, node.begin(), std::move(initial), std::move(controlling),
+                                 std::move(iteration), std::move(statement));
     return forStatement;
 }
 
@@ -399,9 +399,9 @@ void cld::Semantics::SemanticAnalysis::resolveGotos()
 
         // The current scope always needs to be checked as different declarations might be visible at the point of both
         // the label and the goto even if they're in the same scope
-        std::unordered_set<std::int64_t> scopes;
+        std::unordered_set<std::size_t> scopes;
         auto curr = m_scopes[m_currentScope].previousScope;
-        while (curr >= 0)
+        while (curr != static_cast<std::size_t>(-1))
         {
             scopes.insert(curr);
             curr = m_scopes[curr].previousScope;

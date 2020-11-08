@@ -8,6 +8,10 @@
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Target/TargetOptions.h>
 
+#ifndef NDEBUG
+    #include <llvm/IR/Verifier.h>
+#endif
+
 #include <cld/Frontend/Compiler/Program.hpp>
 #include <cld/Frontend/Compiler/SemanticUtil.hpp>
 #include <cld/Support/Filesystem.hpp>
@@ -146,12 +150,9 @@ class CodeGenerator final
     llvm::Function* m_currentFunction = nullptr;
     const ABITransformations* m_currentFunctionABI = nullptr;
     llvm::AllocaInst* m_returnSlot = nullptr;
-    llvm::DIBuilder m_debugInfo{m_module};
     std::unordered_map<std::shared_ptr<const cld::Semantics::ExpressionBase>, llvm::Value*> m_valSizes;
     std::unordered_map<const cld::Semantics::Declaration * CLD_NON_NULL, llvm::AllocaInst*> m_stackSaves;
     std::unordered_map<std::string_view, llvm::GlobalVariable*> m_cGlobalVariables;
-    std::vector<llvm::DIFile*> m_fileIdToFile;
-    std::vector<llvm::DILocalScope*> m_debugScopes;
 
     llvm::Value* toBool(llvm::Value* value)
     {
@@ -1220,6 +1221,11 @@ class CodeGenerator final
         return m_builder.CreateTrunc(value.value, m_builder.getInt1Ty());
     }
 
+    std::optional<llvm::DIBuilder> m_debugInfo;
+    std::vector<llvm::DIFile*> m_fileIdToFile;
+    llvm::DILocalScope* m_currentDebugScope = nullptr;
+    std::vector<llvm::DILocalScope*> m_scopeIdToScope{m_programInterface.getScopes().size()};
+
     llvm::DIFile* getFile(cld::Lexer::CTokenIterator iter) const
     {
         return m_fileIdToFile[iter->getFileId()];
@@ -1235,9 +1241,10 @@ class CodeGenerator final
         return iter->getLine(m_sourceInterface);
     }
 
-    llvm::DILocation* getLocation(cld::Lexer::CTokenIterator iter)
+    llvm::DILocation* getLocation(cld::Lexer::CTokenIterator iter) const
     {
-        return llvm::DILocation::get(m_module.getContext(), getLine(iter), getColumn(iter), m_debugScopes.back());
+        CLD_ASSERT(m_currentDebugScope);
+        return llvm::DILocation::get(m_module.getContext(), getLine(iter), getColumn(iter), m_currentDebugScope);
     }
 
 public:
@@ -1256,13 +1263,14 @@ public:
         {
             return;
         }
+        m_debugInfo.emplace(m_module);
         llvm::DIFile* mainFile;
         for (auto& iter : m_sourceInterface.getFiles())
         {
             auto path = cld::fs::u8path(iter.path);
             auto dir = path;
             dir.remove_filename();
-            auto* file = m_debugInfo.createFile(path.filename().u8string(), dir.u8string());
+            auto* file = m_debugInfo->createFile(path.filename().u8string(), dir.u8string());
             if (path == fullPath)
             {
                 mainFile = file;
@@ -1281,15 +1289,15 @@ public:
             case cld::CGLLVM::DebugEmission::Default:
             case cld::CGLLVM::DebugEmission::Extended: kind = llvm::DICompileUnit::FullDebug; break;
         }
-        m_debugInfo.createCompileUnit(llvm::dwarf::DW_LANG_C99, mainFile, "cld", options.ol != llvm::CodeGenOpt::None,
-                                      "", 0, {}, kind);
+        m_debugInfo->createCompileUnit(llvm::dwarf::DW_LANG_C99, mainFile, "cld", options.ol != llvm::CodeGenOpt::None,
+                                       "", 0, {}, kind);
     }
 
     ~CodeGenerator()
     {
         if (m_options.debugEmission != cld::CGLLVM::DebugEmission::None)
         {
-            m_debugInfo.finalize();
+            m_debugInfo->finalize();
         }
     }
 
@@ -1530,27 +1538,27 @@ public:
                         encoding = llvm::dwarf::DW_ATE_unsigned;
                         break;
                 }
-                return m_debugInfo.createBasicType(name, primitive.getBitCount(), encoding);
+                return m_debugInfo->createBasicType(name, primitive.getBitCount(), encoding);
             },
             [&](const cld::Semantics::PointerType& pointerType) -> llvm::DIType* {
                 auto* element = visitDebug(pointerType.getElementType());
                 auto* pointer =
-                    m_debugInfo.createPointerType(element, m_programInterface.getLanguageOptions().sizeOfVoidStar);
+                    m_debugInfo->createPointerType(element, m_programInterface.getLanguageOptions().sizeOfVoidStar);
                 if (pointerType.isRestricted())
                 {
-                    pointer = m_debugInfo.createQualifiedType(llvm::dwarf::DW_TAG_restrict_type, pointer);
+                    pointer = m_debugInfo->createQualifiedType(llvm::dwarf::DW_TAG_restrict_type, pointer);
                 }
                 return pointer;
             },
             [&](const cld::Semantics::ArrayType& arrayType) -> llvm::DIType* {
                 auto* element = visitDebug(arrayType.getType());
-                return m_debugInfo.createArrayType(arrayType.getSize(),
-                                                   arrayType.getType().getAlignOf(m_programInterface) * 8, element, {});
+                return m_debugInfo->createArrayType(
+                    arrayType.getSize(), arrayType.getType().getAlignOf(m_programInterface) * 8, element, {});
             },
             [&](const cld::Semantics::AbstractArrayType& arrayType) -> llvm::DIType* {
                 auto* element = visitDebug(arrayType.getType());
-                return m_debugInfo.createArrayType(1, arrayType.getType().getAlignOf(m_programInterface) * 8, element,
-                                                   {});
+                return m_debugInfo->createArrayType(1, arrayType.getType().getAlignOf(m_programInterface) * 8, element,
+                                                    {});
             },
             [&](const cld::Semantics::ValArrayType&) -> llvm::DIType* {
                 // TODO:
@@ -1568,18 +1576,18 @@ public:
             });
         if (type.isVolatile())
         {
-            result = m_debugInfo.createQualifiedType(llvm::dwarf::DW_TAG_volatile_type, result);
+            result = m_debugInfo->createQualifiedType(llvm::dwarf::DW_TAG_volatile_type, result);
         }
         if (type.isConst())
         {
-            result = m_debugInfo.createQualifiedType(llvm::dwarf::DW_TAG_const_type, result);
+            result = m_debugInfo->createQualifiedType(llvm::dwarf::DW_TAG_const_type, result);
         }
         if (!type.isTypedef())
         {
             return result;
         }
         // TODO:
-        // return m_debugInfo.createTypedef(result,type.getName(),);
+        // return m_debugInfo->createTypedef(result,type.getName(),);
         return result;
     }
 
@@ -1842,6 +1850,7 @@ public:
         m_currentFunction = function;
         cld::ValueReset currentFunctionReset(m_currentFunction, nullptr);
 
+        std::optional<cld::ValueReset<llvm::DILocalScope*>> subProgramReset;
         if (m_options.debugEmission != cld::CGLLVM::DebugEmission::None)
         {
             std::vector<llvm::Metadata*> parameters;
@@ -1851,22 +1860,22 @@ public:
                 // TODO parameters.push_back(visitDebug(cld::Semantics::adjustParameterType(type)));
                 (void)type;
             }
-            auto* subRoutineType =
-                m_debugInfo.createSubroutineType(llvm::MDTuple::get(m_module.getContext(), parameters));
+            auto* subRoutineType = m_debugInfo->createSubroutineType(m_debugInfo->getOrCreateTypeArray(parameters));
             llvm::DISubprogram::DISPFlags spFlags = llvm::DISubprogram::SPFlagDefinition;
             if (functionDefinition.getNameToken()->getText() == "main")
             {
                 spFlags |= llvm::DISubprogram::SPFlagMainSubprogram;
             }
-            auto* subProgram = m_debugInfo.createFunction(
+            auto* subProgram = m_debugInfo->createFunction(
                 getFile(functionDefinition.getNameToken()), functionDefinition.getNameToken()->getText(),
                 functionDefinition.getNameToken()->getText(), getFile(functionDefinition.getNameToken()),
-                getLine(functionDefinition.getNameToken()), subRoutineType, getLine(functionDefinition.getNameToken()),
+                getLine(functionDefinition.getNameToken()), subRoutineType,
+                getLine(functionDefinition.getCompoundStatement().getOpenBrace()),
                 ft.isKandR() ? llvm::DINode::FlagZero : llvm::DINode::FlagPrototyped, spFlags);
-            m_debugScopes = {subProgram};
-            cld::ValueReset subProgramReset(m_debugScopes, {});
+            subProgramReset.emplace(m_currentDebugScope, nullptr);
             m_currentFunction->setSubprogram(subProgram);
-            m_builder.SetCurrentDebugLocation(getLocation(functionDefinition.getNameToken()));
+            m_scopeIdToScope[functionDefinition.getCompoundStatement().getScope()] = m_currentDebugScope = subProgram;
+            m_builder.SetCurrentDebugLocation({});
         }
 
         applyFunctionAttributes(*m_currentFunction, m_currentFunction->getFunctionType(), ft,
@@ -1980,10 +1989,36 @@ public:
                 m_builder.CreateUnreachable();
             }
         }
+        if (m_options.debugEmission != cld::CGLLVM::DebugEmission::None)
+        {
+            m_debugInfo->finalizeSubprogram(m_currentFunction->getSubprogram());
+        }
+#ifndef NDEBUG
+        if (llvm::verifyFunction(*m_currentFunction, &llvm::errs()))
+        {
+            m_currentFunction->print(llvm::errs(), nullptr, false, true);
+            std::terminate();
+        }
+#endif
     }
 
     void visit(const cld::Semantics::CompoundStatement& compoundStatement)
     {
+        std::optional<cld::ValueReset<llvm::DILocalScope*>> reset;
+        if (m_options.debugEmission != cld::CGLLVM::DebugEmission::None)
+        {
+            if (!m_scopeIdToScope[compoundStatement.getScope()])
+            {
+                auto* parent =
+                    m_scopeIdToScope[m_programInterface.getScopes()[compoundStatement.getScope()].previousScope];
+                CLD_ASSERT(parent);
+                m_scopeIdToScope[compoundStatement.getScope()] = m_debugInfo->createLexicalBlock(
+                    parent, getFile(compoundStatement.getOpenBrace()), getLine(compoundStatement.getOpenBrace()),
+                    getColumn(compoundStatement.getOpenBrace()));
+            }
+            reset.emplace(m_currentDebugScope, m_currentDebugScope);
+            m_currentDebugScope = m_scopeIdToScope[compoundStatement.getScope()];
+        }
         for (auto& iter : compoundStatement.getCompoundItems())
         {
             if (std::holds_alternative<std::shared_ptr<const cld::Semantics::ExpressionBase>>(iter))
@@ -2077,9 +2112,24 @@ public:
 
     void visit(const cld::Semantics::ForStatement& forStatement)
     {
+        std::optional<cld::ValueReset<llvm::DILocalScope*>> reset;
         cld::match(
             forStatement.getInitial(), [](std::monostate) {},
             [&](const std::vector<std::unique_ptr<cld::Semantics::Declaration>>& declaration) {
+                if (m_options.debugEmission != cld::CGLLVM::DebugEmission::None)
+                {
+                    if (!m_scopeIdToScope[forStatement.getScope()])
+                    {
+                        auto* parent =
+                            m_scopeIdToScope[m_programInterface.getScopes()[forStatement.getScope()].previousScope];
+                        CLD_ASSERT(parent);
+                        m_scopeIdToScope[forStatement.getScope()] = llvm::DILexicalBlock::get(
+                            m_module.getContext(), parent, getFile(forStatement.getForToken()),
+                            getLine(forStatement.getForToken()), getColumn(forStatement.getForToken()));
+                    }
+                    reset.emplace(m_currentDebugScope, m_currentDebugScope);
+                    m_currentDebugScope = m_scopeIdToScope[forStatement.getScope()];
+                }
                 for (auto& iter : declaration)
                 {
                     visit(*iter);
@@ -2352,17 +2402,17 @@ public:
         // Unlike in loops and other constructs a label can be anywhere in the whole function and the goto
         // can be anywhere in the whole function. Therefore we must find the first scope that both are part of.
         // That scope is the exclusive end of all scopes whose declarations must be destructed
-        std::unordered_set<std::int64_t> labelScopes;
+        std::unordered_set<std::size_t> labelScopes;
         {
             auto currScope = gotoStatement.getLabel()->getScope();
-            while (currScope >= 0)
+            while (currScope != static_cast<std::size_t>(-1))
             {
                 labelScopes.insert(currScope);
                 currScope = m_programInterface.getScopes()[currScope].previousScope;
             }
         }
         auto commonScope = gotoStatement.getScope();
-        while (commonScope >= 0 && labelScopes.count(commonScope) == 0)
+        while (commonScope != static_cast<std::size_t>(-1) && labelScopes.count(commonScope) == 0)
         {
             commonScope = m_programInterface.getScopes()[commonScope].previousScope;
         }
@@ -2404,7 +2454,7 @@ public:
 
     Value visit(const cld::Semantics::ExpressionBase& expression)
     {
-        if (!m_debugScopes.empty())
+        if (m_currentDebugScope)
         {
             m_builder.SetCurrentDebugLocation(getLocation(expression.begin()));
         }

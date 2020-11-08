@@ -51,13 +51,13 @@ cld::Semantics::Type cld::Semantics::PrimitiveType::createSizeT(bool isConst, bo
 }
 
 cld::Semantics::ArrayType::ArrayType(bool isRestricted, bool isStatic, std::shared_ptr<cld::Semantics::Type>&& type,
-                                     std::size_t size)
+                                     std::uint64_t size)
     : m_type(std::move(type)), m_size(size), m_restricted(isRestricted), m_static(isStatic)
 {
 }
 
 cld::Semantics::Type cld::Semantics::ArrayType::create(bool isConst, bool isVolatile, bool isRestricted, bool isStatic,
-                                                       cld::Semantics::Type type, std::size_t size)
+                                                       cld::Semantics::Type type, std::uint64_t size)
 {
     return cld::Semantics::Type(isConst, isVolatile,
                                 ArrayType(isRestricted, isStatic, std::make_shared<Type>(std::move(type)), size));
@@ -74,22 +74,22 @@ bool cld::Semantics::ArrayType::operator!=(const cld::Semantics::ArrayType& rhs)
     return !(rhs == *this);
 }
 
-std::size_t cld::Semantics::ArrayType::getSizeOf(const ProgramInterface& program) const
+std::uint64_t cld::Semantics::ArrayType::getSizeOf(const ProgramInterface& program) const
 {
     return m_type->getSizeOf(program) * m_size;
 }
 
-std::size_t cld::Semantics::ArrayType::getAlignOf(const ProgramInterface& program) const
+std::uint64_t cld::Semantics::ArrayType::getAlignOf(const ProgramInterface& program) const
 {
     return m_type->getAlignOf(program);
 }
 
-std::size_t cld::Semantics::AbstractArrayType::getAlignOf(const ProgramInterface& program) const
+std::uint64_t cld::Semantics::AbstractArrayType::getAlignOf(const ProgramInterface& program) const
 {
     return m_type->getAlignOf(program);
 }
 
-std::size_t cld::Semantics::ValArrayType::getAlignOf(const ProgramInterface& program) const
+std::uint64_t cld::Semantics::ValArrayType::getAlignOf(const ProgramInterface& program) const
 {
     return m_type->getAlignOf(program);
 }
@@ -115,7 +115,7 @@ bool cld::Semantics::Type::operator!=(const cld::Semantics::Type& rhs) const
     return !(rhs == *this);
 }
 
-std::size_t cld::Semantics::Type::getSizeOf(const ProgramInterface& program) const
+std::uint64_t cld::Semantics::Type::getSizeOf(const ProgramInterface& program) const
 {
     return cld::match(m_type, [&](auto&& value) -> std::size_t {
         if constexpr (std::is_same_v<std::monostate, std::decay_t<decltype(value)>>)
@@ -129,7 +129,7 @@ std::size_t cld::Semantics::Type::getSizeOf(const ProgramInterface& program) con
     });
 }
 
-std::size_t cld::Semantics::Type::getAlignOf(const ProgramInterface& program) const
+std::uint64_t cld::Semantics::Type::getAlignOf(const ProgramInterface& program) const
 {
     return cld::match(m_type, [&](auto&& value) -> std::size_t {
         if constexpr (std::is_same_v<std::monostate, std::decay_t<decltype(value)>>)
@@ -165,32 +165,32 @@ bool cld::Semantics::PointerType::operator!=(const cld::Semantics::PointerType& 
     return !(rhs == *this);
 }
 
-std::size_t cld::Semantics::PointerType::getSizeOf(const ProgramInterface& program) const
+std::uint64_t cld::Semantics::PointerType::getSizeOf(const ProgramInterface& program) const
 {
     return program.getLanguageOptions().sizeOfVoidStar;
 }
 
-std::size_t cld::Semantics::PointerType::getAlignOf(const ProgramInterface& program) const
+std::uint64_t cld::Semantics::PointerType::getAlignOf(const ProgramInterface& program) const
 {
     return program.getLanguageOptions().sizeOfVoidStar;
 }
 
-cld::Semantics::EnumType::EnumType(std::string_view name, std::uint64_t id) : m_name(name), m_id(id) {}
+cld::Semantics::EnumType::EnumType(std::string_view name, std::size_t id) : m_name(name), m_id(id) {}
 
 cld::Semantics::Type cld::Semantics::EnumType::create(bool isConst, bool isVolatile, std::string_view name,
-                                                      std::uint64_t id)
+                                                      std::size_t id)
 {
     return cld::Semantics::Type(isConst, isVolatile, EnumType(name, id));
 }
 
-std::size_t cld::Semantics::EnumType::getSizeOf(const ProgramInterface& program) const
+std::uint64_t cld::Semantics::EnumType::getSizeOf(const ProgramInterface& program) const
 {
     auto* def = program.getEnumDefinition(m_id);
     CLD_ASSERT(def);
     return def->getType().getSizeOf(program);
 }
 
-std::size_t cld::Semantics::EnumType::getAlignOf(const ProgramInterface& program) const
+std::uint64_t cld::Semantics::EnumType::getAlignOf(const ProgramInterface& program) const
 {
     auto* def = program.getEnumDefinition(m_id);
     CLD_ASSERT(def);
@@ -415,44 +415,44 @@ cld::Lexer::CTokenIterator cld::Semantics::declaratorToLoc(const cld::Syntax::De
         });
 }
 
-cld::Semantics::StructType::StructType(std::string_view name, int64_t id) : m_name(name), m_id(id) {}
+cld::Semantics::StructType::StructType(std::string_view name, std::size_t id) : m_name(name), m_id(id) {}
 
 cld::Semantics::Type cld::Semantics::StructType::create(bool isConst, bool isVolatile, std::string_view name,
-                                                        int64_t id)
+                                                        std::size_t id)
 {
     return cld::Semantics::Type(isConst, isVolatile, StructType(name, id));
 }
 
-std::size_t cld::Semantics::StructType::getSizeOf(const ProgramInterface& program) const
+std::uint64_t cld::Semantics::StructType::getSizeOf(const ProgramInterface& program) const
 {
     auto* def = program.getStructDefinition(m_id);
     CLD_ASSERT(def);
     return def->getSizeOf();
 }
 
-std::size_t cld::Semantics::StructType::getAlignOf(const ProgramInterface& program) const
+std::uint64_t cld::Semantics::StructType::getAlignOf(const ProgramInterface& program) const
 {
     auto* def = program.getStructDefinition(m_id);
     CLD_ASSERT(def);
     return def->getAlignOf();
 }
 
-cld::Semantics::UnionType::UnionType(std::string_view name, std::uint64_t id) : m_name(name), m_id(id) {}
+cld::Semantics::UnionType::UnionType(std::string_view name, std::size_t id) : m_name(name), m_id(id) {}
 
 cld::Semantics::Type cld::Semantics::UnionType::create(bool isConst, bool isVolatile, std::string_view name,
-                                                       std::uint64_t id)
+                                                       std::size_t id)
 {
     return cld::Semantics::Type(isConst, isVolatile, UnionType(name, id));
 }
 
-std::size_t cld::Semantics::UnionType::getSizeOf(const ProgramInterface& program) const
+std::uint64_t cld::Semantics::UnionType::getSizeOf(const ProgramInterface& program) const
 {
     auto* def = program.getUnionDefinition(m_id);
     CLD_ASSERT(def);
     return def->getSizeOf();
 }
 
-std::size_t cld::Semantics::UnionType::getAlignOf(const ProgramInterface& program) const
+std::uint64_t cld::Semantics::UnionType::getAlignOf(const ProgramInterface& program) const
 {
     auto* def = program.getUnionDefinition(m_id);
     CLD_ASSERT(def);

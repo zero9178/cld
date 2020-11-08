@@ -1082,6 +1082,27 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
                       "};",
                       ProducesError(BITFIELD_WITH_SIZE_ZERO_MAY_NOT_HAVE_A_NAME));
     }
+    SECTION("Scope")
+    {
+        SEMA_PRODUCES("struct R;\n"
+                      "\n"
+                      "void foo(struct R* r) {\n"
+                      "  struct R {\n"
+                      "    int i;\n"
+                      "    float f;\n"
+                      "  };\n"
+                      "  r->i += 5;\n"
+                      "}",
+                      ProducesError(STRUCT_N_IS_AN_INCOMPLETE_TYPE, "R"));
+        SEMA_PRODUCES("void foo(struct R* r) {\n"
+                      "  struct R {\n"
+                      "    int i;\n"
+                      "    float f;\n"
+                      "  };\n"
+                      "  r->i += 5;\n"
+                      "}",
+                      ProducesNoErrors());
+    }
     SEMA_PRODUCES("struct A {\n"
                   " struct B {\n"
                   "     int r;\n"

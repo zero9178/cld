@@ -124,12 +124,12 @@ public:
 
     [[nodiscard]] std::uint8_t getByteCount() const;
 
-    [[nodiscard]] std::size_t getSizeOf(const ProgramInterface&) const
+    [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface&) const
     {
         return getByteCount();
     }
 
-    [[nodiscard]] std::size_t getAlignOf(const ProgramInterface&) const
+    [[nodiscard]] std::uint64_t getAlignOf(const ProgramInterface&) const
     {
         return getByteCount();
     }
@@ -152,22 +152,22 @@ public:
 class ArrayType final
 {
     std::shared_ptr<const Type> m_type;
-    std::size_t m_size;
+    std::uint64_t m_size;
     bool m_restricted : 1;
     bool m_static : 1;
 
-    ArrayType(bool isRestricted, bool isStatic, std::shared_ptr<Type>&& type, std::size_t size);
+    ArrayType(bool isRestricted, bool isStatic, std::shared_ptr<Type>&& type, std::uint64_t size);
 
 public:
     [[nodiscard]] static Type create(bool isConst, bool isVolatile, bool isRestricted, bool isStatic, Type type,
-                                     std::size_t size);
+                                     std::uint64_t size);
 
     [[nodiscard]] const Type& getType() const
     {
         return *m_type;
     }
 
-    [[nodiscard]] std::size_t getSize() const
+    [[nodiscard]] std::uint64_t getSize() const
     {
         return m_size;
     }
@@ -182,9 +182,9 @@ public:
         return m_static;
     }
 
-    [[nodiscard]] std::size_t getSizeOf(const ProgramInterface& program) const;
+    [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface& program) const;
 
-    [[nodiscard]] std::size_t getAlignOf(const ProgramInterface& program) const;
+    [[nodiscard]] std::uint64_t getAlignOf(const ProgramInterface& program) const;
 
     [[nodiscard]] bool operator==(const ArrayType& rhs) const;
 
@@ -211,12 +211,12 @@ public:
         return m_restricted;
     }
 
-    [[nodiscard]] std::size_t getSizeOf(const ProgramInterface&) const
+    [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface&) const
     {
         CLD_UNREACHABLE;
     }
 
-    [[nodiscard]] std::size_t getAlignOf(const ProgramInterface& program) const;
+    [[nodiscard]] std::uint64_t getAlignOf(const ProgramInterface& program) const;
 
     [[nodiscard]] bool operator==(const AbstractArrayType& rhs) const;
 
@@ -260,12 +260,12 @@ public:
         return m_expression;
     }
 
-    [[nodiscard]] std::size_t getSizeOf(const ProgramInterface&) const
+    [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface&) const
     {
         CLD_UNREACHABLE;
     }
 
-    [[nodiscard]] std::size_t getAlignOf(const ProgramInterface& program) const;
+    [[nodiscard]] std::uint64_t getAlignOf(const ProgramInterface& program) const;
 
     [[nodiscard]] bool operator==(const ValArrayType& rhs) const;
 
@@ -313,12 +313,12 @@ public:
         return m_isKandR;
     }
 
-    [[nodiscard]] std::size_t getSizeOf(const ProgramInterface&) const
+    [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface&) const
     {
         CLD_UNREACHABLE;
     }
 
-    [[nodiscard]] std::size_t getAlignOf(const ProgramInterface&) const
+    [[nodiscard]] std::uint64_t getAlignOf(const ProgramInterface&) const
     {
         CLD_UNREACHABLE;
     }
@@ -331,12 +331,12 @@ public:
 class StructType final
 {
     std::string_view m_name;
-    std::uint64_t m_id;
+    std::size_t m_id;
 
-    StructType(std::string_view name, std::int64_t id);
+    StructType(std::string_view name, std::size_t id);
 
 public:
-    [[nodiscard]] static Type create(bool isConst, bool isVolatile, std::string_view name, std::int64_t id);
+    [[nodiscard]] static Type create(bool isConst, bool isVolatile, std::string_view name, std::size_t id);
 
     [[nodiscard]] std::string_view getName() const
     {
@@ -348,14 +348,14 @@ public:
         return m_name.empty();
     }
 
-    [[nodiscard]] std::uint64_t getId() const
+    [[nodiscard]] std::size_t getId() const
     {
         return m_id;
     }
 
-    [[nodiscard]] std::size_t getSizeOf(const ProgramInterface& program) const;
+    [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface& program) const;
 
-    [[nodiscard]] std::size_t getAlignOf(const ProgramInterface& program) const;
+    [[nodiscard]] std::uint64_t getAlignOf(const ProgramInterface& program) const;
 
     [[nodiscard]] bool operator==(const StructType& rhs) const
     {
@@ -371,12 +371,12 @@ public:
 class UnionType final
 {
     std::string_view m_name;
-    std::uint64_t m_id;
+    std::size_t m_id;
 
     UnionType(std::string_view name, std::uint64_t id);
 
 public:
-    static Type create(bool isConst, bool isVolatile, std::string_view name, std::uint64_t id);
+    static Type create(bool isConst, bool isVolatile, std::string_view name, std::size_t id);
 
     [[nodiscard]] std::string_view getName() const
     {
@@ -388,14 +388,14 @@ public:
         return m_name.empty();
     }
 
-    [[nodiscard]] std::uint64_t getId() const
+    [[nodiscard]] std::size_t getId() const
     {
         return m_id;
     }
 
-    [[nodiscard]] std::size_t getSizeOf(const ProgramInterface& program) const;
+    [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface& program) const;
 
-    [[nodiscard]] std::size_t getAlignOf(const ProgramInterface& program) const;
+    [[nodiscard]] std::uint64_t getAlignOf(const ProgramInterface& program) const;
 
     [[nodiscard]] bool operator==(const UnionType& rhs) const
     {
@@ -411,12 +411,12 @@ public:
 class EnumType final
 {
     std::string_view m_name;
-    std::uint64_t m_id;
+    std::size_t m_id;
 
-    EnumType(std::string_view name, std::uint64_t id);
+    EnumType(std::string_view name, std::size_t id);
 
 public:
-    static Type create(bool isConst, bool isVolatile, std::string_view name, std::uint64_t id);
+    static Type create(bool isConst, bool isVolatile, std::string_view name, std::size_t id);
 
     [[nodiscard]] std::string_view getName() const
     {
@@ -428,14 +428,14 @@ public:
         return m_name.empty();
     }
 
-    [[nodiscard]] std::uint64_t getId() const
+    [[nodiscard]] std::size_t getId() const
     {
         return m_id;
     }
 
-    [[nodiscard]] std::size_t getSizeOf(const ProgramInterface& program) const;
+    [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface& program) const;
 
-    [[nodiscard]] std::size_t getAlignOf(const ProgramInterface& program) const;
+    [[nodiscard]] std::uint64_t getAlignOf(const ProgramInterface& program) const;
 
     [[nodiscard]] bool operator==(const EnumType& rhs) const
     {
@@ -468,9 +468,9 @@ public:
         return m_restricted;
     }
 
-    [[nodiscard]] std::size_t getSizeOf(const ProgramInterface& program) const;
+    [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface& program) const;
 
-    [[nodiscard]] std::size_t getAlignOf(const ProgramInterface& program) const;
+    [[nodiscard]] std::uint64_t getAlignOf(const ProgramInterface& program) const;
 
     [[nodiscard]] bool operator==(const PointerType& rhs) const;
 
@@ -540,9 +540,9 @@ public:
     }
 
     // Likely replaced with an interface soon?
-    [[nodiscard]] std::size_t getSizeOf(const ProgramInterface& program) const;
+    [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface& program) const;
 
-    [[nodiscard]] std::size_t getAlignOf(const ProgramInterface& program) const;
+    [[nodiscard]] std::uint64_t getAlignOf(const ProgramInterface& program) const;
 };
 
 enum class ValueCategory : std::uint8_t
@@ -1410,11 +1410,11 @@ class Statement : public AbstractIntrusiveVariant<ForStatement, ReturnStatement,
                                                   BreakStatement, ContinueStatement, SwitchStatement, DefaultStatement,
                                                   CaseStatement, GotoStatement, LabelStatement, GNUASMStatement>
 {
-    std::int64_t m_scope;
+    std::size_t m_scope;
 
 protected:
     template <class T>
-    Statement(std::int64_t scope, std::in_place_type_t<T>)
+    Statement(std::size_t scope, std::in_place_type_t<T>)
         : AbstractIntrusiveVariant(std::in_place_type<T>), m_scope(scope)
     {
     }
@@ -1425,7 +1425,7 @@ public:
      * (Currently only Compound statement and for loop with declaration) it's the scope it started
      * @return Scope of the statement
      */
-    [[nodiscard]] std::int64_t getScope() const
+    [[nodiscard]] std::size_t getScope() const
     {
         return m_scope;
     }
@@ -1452,7 +1452,7 @@ class ExpressionStatement final : public Statement
     IntrVarPtr<ExpressionBase> m_expression;
 
 public:
-    explicit ExpressionStatement(std::int64_t scope, IntrVarPtr<ExpressionBase>&& expression)
+    explicit ExpressionStatement(std::size_t scope, IntrVarPtr<ExpressionBase>&& expression)
         : Statement(scope, std::in_place_type<ExpressionStatement>), m_expression(std::move(expression))
     {
     }
@@ -1468,7 +1468,7 @@ class GotoStatement final : public Statement
     const LabelStatement* m_label;
 
 public:
-    explicit GotoStatement(std::int64_t scope, const LabelStatement* label)
+    explicit GotoStatement(std::size_t scope, const LabelStatement* label)
         : Statement(scope, std::in_place_type<GotoStatement>), m_label(label)
     {
     }
@@ -1487,7 +1487,7 @@ class BreakStatement final : public Statement
     BreakableStatements m_statement;
 
 public:
-    explicit BreakStatement(std::int64_t scope, BreakableStatements statements)
+    explicit BreakStatement(std::size_t scope, BreakableStatements statements)
         : Statement(scope, std::in_place_type<BreakStatement>), m_statement(statements)
     {
     }
@@ -1506,7 +1506,7 @@ class ContinueStatement final : public Statement
     LoopStatements m_loopStatement;
 
 public:
-    explicit ContinueStatement(std::int64_t scope, LoopStatements loopStatement)
+    explicit ContinueStatement(std::size_t scope, LoopStatements loopStatement)
         : Statement(scope, std::in_place_type<ContinueStatement>), m_loopStatement(loopStatement)
     {
     }
@@ -1524,7 +1524,7 @@ class IfStatement final : public Statement
     IntrVarPtr<Statement> m_falseBranch;
 
 public:
-    IfStatement(std::int64_t scope, IntrVarPtr<ExpressionBase>&& expression, IntrVarPtr<Statement>&& trueBranch,
+    IfStatement(std::size_t scope, IntrVarPtr<ExpressionBase>&& expression, IntrVarPtr<Statement>&& trueBranch,
                 IntrVarPtr<Statement>&& falseBranch)
         : Statement(scope, std::in_place_type<IfStatement>),
           m_expression(std::move(expression)),
@@ -1553,11 +1553,17 @@ public:
         std::variant<IntrVarPtr<Statement>, std::unique_ptr<Declaration>, std::shared_ptr<const ExpressionBase>>;
 
 private:
+    Lexer::CTokenIterator m_openBrace;
     std::vector<Variant> m_compoundItems;
+    Lexer::CTokenIterator m_closeBrace;
 
 public:
-    CompoundStatement(std::int64_t scope, std::vector<Variant>&& compoundItems)
-        : Statement(scope, std::in_place_type<CompoundStatement>), m_compoundItems(std::move(compoundItems))
+    CompoundStatement(std::size_t scope, Lexer::CTokenIterator openBrace, std::vector<Variant>&& compoundItems,
+                      Lexer::CTokenIterator closeBrace)
+        : Statement(scope, std::in_place_type<CompoundStatement>),
+          m_openBrace(openBrace),
+          m_compoundItems(std::move(compoundItems)),
+          m_closeBrace(closeBrace)
     {
     }
 
@@ -1572,6 +1578,16 @@ public:
         m_compoundItems.insert(m_compoundItems.begin(), std::move(variant));
     }
 
+    [[nodiscard]] Lexer::CTokenIterator getOpenBrace() const
+    {
+        return m_openBrace;
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator getCloseBrace() const
+    {
+        return m_closeBrace;
+    }
+
     [[nodiscard]] const std::vector<Variant>& getCompoundItems() const
     {
         return m_compoundItems;
@@ -1584,20 +1600,28 @@ public:
     using Variant = std::variant<std::monostate, IntrVarPtr<ExpressionBase>, std::vector<std::unique_ptr<Declaration>>>;
 
 private:
+    Lexer::CTokenIterator m_forToken;
     Variant m_initial;
     IntrVarPtr<ExpressionBase> m_controlling;
     IntrVarPtr<ExpressionBase> m_iteration;
     IntrVarPtr<Statement> m_statement;
 
 public:
-    ForStatement(std::int64_t scope, Variant&& initial, IntrVarPtr<ExpressionBase>&& controlling,
-                 IntrVarPtr<ExpressionBase>&& iteration, IntrVarPtr<Statement>&& statement)
+    ForStatement(std::size_t scope, Lexer::CTokenIterator forToken, Variant&& initial,
+                 IntrVarPtr<ExpressionBase>&& controlling, IntrVarPtr<ExpressionBase>&& iteration,
+                 IntrVarPtr<Statement>&& statement)
         : Statement(scope, std::in_place_type<ForStatement>),
+          m_forToken(forToken),
           m_initial(std::move(initial)),
           m_controlling(std::move(controlling)),
           m_iteration(std::move(iteration)),
           m_statement(std::move(statement))
     {
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator getForToken() const
+    {
+        return m_forToken;
     }
 
     [[nodiscard]] const Variant& getInitial() const
@@ -1624,7 +1648,7 @@ class HeadWhileStatement final : public Statement
     IntrVarPtr<Statement> m_statement;
 
 public:
-    HeadWhileStatement(std::int64_t scope, IntrVarPtr<ExpressionBase>&& expression, IntrVarPtr<Statement>&& statement)
+    HeadWhileStatement(std::size_t scope, IntrVarPtr<ExpressionBase>&& expression, IntrVarPtr<Statement>&& statement)
         : Statement(scope, std::in_place_type<HeadWhileStatement>),
           m_expression(std::move(expression)),
           m_statement(std::move(statement))
@@ -1645,7 +1669,7 @@ class FootWhileStatement final : public Statement
     IntrVarPtr<ExpressionBase> m_expression;
 
 public:
-    FootWhileStatement(std::int64_t scope, IntrVarPtr<Statement>&& statement, IntrVarPtr<ExpressionBase>&& expression)
+    FootWhileStatement(std::size_t scope, IntrVarPtr<Statement>&& statement, IntrVarPtr<ExpressionBase>&& expression)
         : Statement(scope, std::in_place_type<FootWhileStatement>),
           m_statement(std::move(statement)),
           m_expression(std::move(expression))
@@ -1668,7 +1692,7 @@ class SwitchStatement final : public Statement
     const DefaultStatement* CLD_NULLABLE m_default;
 
 public:
-    SwitchStatement(std::int64_t scope, IntrVarPtr<ExpressionBase>&& expression, IntrVarPtr<Statement>&& statement,
+    SwitchStatement(std::size_t scope, IntrVarPtr<ExpressionBase>&& expression, IntrVarPtr<Statement>&& statement,
                     std::map<llvm::APSInt, const CaseStatement* CLD_NON_NULL> cases = {},
                     const DefaultStatement* CLD_NULLABLE defaultStmt = nullptr)
         : Statement(scope, std::in_place_type<SwitchStatement>),
@@ -1710,7 +1734,7 @@ class DefaultStatement final : public Statement
     const SwitchStatement* CLD_NON_NULL m_switchStmt;
 
 public:
-    DefaultStatement(std::int64_t scope, Lexer::CTokenIterator defaultToken, Lexer::CTokenIterator colonToken,
+    DefaultStatement(std::size_t scope, Lexer::CTokenIterator defaultToken, Lexer::CTokenIterator colonToken,
                      IntrVarPtr<Statement>&& statement, const SwitchStatement& switchStmt)
         : Statement(scope, std::in_place_type<DefaultStatement>),
           m_defaultToken(defaultToken),
@@ -1747,7 +1771,7 @@ class CaseStatement final : public Statement
     const SwitchStatement* CLD_NON_NULL m_switchStmt;
 
 public:
-    CaseStatement(std::int64_t scope, Lexer::CTokenIterator caseToken, llvm::APSInt constant,
+    CaseStatement(std::size_t scope, Lexer::CTokenIterator caseToken, llvm::APSInt constant,
                   Lexer::CTokenIterator colonToken, IntrVarPtr<Statement>&& statement,
                   const SwitchStatement& switchStmt)
         : Statement(scope, std::in_place_type<CaseStatement>),
@@ -1789,7 +1813,7 @@ class LabelStatement final : public Statement
     IntrVarPtr<Statement> m_statement;
 
 public:
-    LabelStatement(std::int64_t scope, Lexer::CTokenIterator identifier, std::size_t sizeOfCurrentScope,
+    LabelStatement(std::size_t scope, Lexer::CTokenIterator identifier, std::size_t sizeOfCurrentScope,
                    IntrVarPtr<Statement>&& statement)
         : Statement(scope, std::in_place_type<LabelStatement>),
           m_identifier(identifier),

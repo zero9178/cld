@@ -43,8 +43,8 @@ public:
 
     struct Scope
     {
-        std::int64_t previousScope;
-        std::vector<std::int64_t> subScopes;
+        std::size_t previousScope;
+        std::vector<std::size_t> subScopes;
         tsl::ordered_map<std::string_view, DeclarationInScope> declarations;
         std::unordered_map<std::string_view, TagTypeInScope> types;
     };
@@ -57,10 +57,22 @@ public:
     {
     };
 
+    struct StructInfo
+    {
+        std::variant<StructDefinition, StructDecl> type;
+        std::size_t scope;
+    };
+
+    struct UnionInfo
+    {
+        std::variant<UnionDefinition, UnionDecl> type;
+        std::size_t scope;
+    };
+
 protected:
-    std::vector<Scope> m_scopes = {Scope{-1, {}, {}, {}}};
-    std::vector<std::variant<StructDefinition, StructDecl>> m_structDefinitions;
-    std::vector<std::variant<UnionDefinition, UnionDecl>> m_unionDefinitions;
+    std::vector<Scope> m_scopes = {Scope{static_cast<std::size_t>(-1), {}, {}, {}}};
+    std::vector<StructInfo> m_structDefinitions;
+    std::vector<UnionInfo> m_unionDefinitions;
     std::vector<EnumDefinition> m_enumDefinitions;
     std::unordered_map<std::string_view, BuiltinFunction> m_usedBuiltins;
 
@@ -88,10 +100,10 @@ public:
     [[nodiscard]] virtual const LanguageOptions& getLanguageOptions() const = 0;
 
     template <class T>
-    [[nodiscard]] const T* CLD_NULLABLE lookupType(std::string_view name, std::int64_t scope) const
+    [[nodiscard]] const T* CLD_NULLABLE lookupType(std::string_view name, std::size_t scope) const
     {
         auto curr = scope;
-        while (curr >= 0)
+        while (curr != static_cast<std::size_t>(-1))
         {
             auto result = m_scopes[curr].types.find(name);
             if (result != m_scopes[curr].types.end())
@@ -106,34 +118,44 @@ public:
         return nullptr;
     }
 
-    StructDefinition* CLD_NULLABLE getStructDefinition(std::uint64_t id)
+    StructDefinition* CLD_NULLABLE getStructDefinition(std::size_t id)
     {
-        return std::get_if<StructDefinition>(&m_structDefinitions[id]);
+        return std::get_if<StructDefinition>(&m_structDefinitions[id].type);
     }
 
-    const StructDefinition* CLD_NULLABLE getStructDefinition(std::uint64_t id) const
+    const StructDefinition* CLD_NULLABLE getStructDefinition(std::size_t id) const
     {
-        return std::get_if<StructDefinition>(&m_structDefinitions[id]);
+        return std::get_if<StructDefinition>(&m_structDefinitions[id].type);
     }
 
-    EnumDefinition* CLD_NULLABLE getEnumDefinition(std::uint64_t id)
+    std::size_t getStructScope(std::size_t id) const
+    {
+        return m_structDefinitions[id].scope;
+    }
+
+    EnumDefinition* CLD_NULLABLE getEnumDefinition(std::size_t id)
     {
         return &m_enumDefinitions[id];
     }
 
-    const EnumDefinition* CLD_NULLABLE getEnumDefinition(std::uint64_t id) const
+    const EnumDefinition* CLD_NULLABLE getEnumDefinition(std::size_t id) const
     {
         return &m_enumDefinitions[id];
     }
 
-    UnionDefinition* CLD_NULLABLE getUnionDefinition(std::uint64_t id)
+    UnionDefinition* CLD_NULLABLE getUnionDefinition(std::size_t id)
     {
-        return std::get_if<UnionDefinition>(&m_unionDefinitions[id]);
+        return std::get_if<UnionDefinition>(&m_unionDefinitions[id].type);
     }
 
-    const UnionDefinition* CLD_NULLABLE getUnionDefinition(std::uint64_t id) const
+    const UnionDefinition* CLD_NULLABLE getUnionDefinition(std::size_t id) const
     {
-        return std::get_if<UnionDefinition>(&m_unionDefinitions[id]);
+        return std::get_if<UnionDefinition>(&m_unionDefinitions[id].type);
+    }
+
+    std::size_t getUnionScope(std::size_t id) const
+    {
+        return m_unionDefinitions[id].scope;
     }
 
     const FieldMap& getFields(const Type& recordType) const;
