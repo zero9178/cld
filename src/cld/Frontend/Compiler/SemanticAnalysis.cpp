@@ -61,16 +61,33 @@ cld::Semantics::TranslationUnit cld::Semantics::SemanticAnalysis::visit(const Sy
     for (auto& [name, declared] : m_scopes[0].declarations)
     {
         (void)name;
-        if (!std::holds_alternative<Declaration*>(declared.declared))
+        if (std::holds_alternative<Declaration*>(declared.declared))
         {
-            continue;
+            auto* decl = cld::get<Declaration*>(declared.declared);
+            if (decl->isInline() && decl->getLinkage() == Linkage::External)
+            {
+                log(Errors::Semantics::NO_DEFINITION_FOR_INLINE_FUNCTION_N_FOUND.args(
+                    *decl->getNameToken(), m_sourceInterface, *decl->getNameToken()));
+            }
         }
-        auto* decl = cld::get<Declaration*>(declared.declared);
-        if (decl->isInline() && decl->getLinkage() == Linkage::External)
-        {
-            log(Errors::Semantics::NO_DEFINITION_FOR_INLINE_FUNCTION_N_FOUND.args(
-                *decl->getNameToken(), m_sourceInterface, *decl->getNameToken()));
-        }
+        cld::match(
+            declared.declared, [](const auto&) {},
+            [&declared = declared, this](Declaration* declaration) {
+                if (declaration->isUsed() || declaration->getLinkage() == Linkage::External)
+                {
+                    return;
+                }
+                log(Warnings::Semantics::UNUSED_VARIABLE_N.args(*declared.identifier, m_sourceInterface,
+                                                                *declared.identifier));
+            },
+            [&declared = declared, this](FunctionDefinition* functionDefinition) {
+                if (functionDefinition->isUsed() || functionDefinition->getLinkage() == Linkage::External)
+                {
+                    return;
+                }
+                log(Warnings::Semantics::UNUSED_FUNCTION_N.args(*declared.identifier, m_sourceInterface,
+                                                                *declared.identifier));
+            });
     }
     return TranslationUnit(std::move(globals));
 }
@@ -1967,4 +1984,24 @@ bool cld::Semantics::SemanticAnalysis::extensionsEnabled(const cld::Lexer::CToke
 {
     return m_extensionsEnabled || m_sourceInterface.getLanguageOptions().extension == LanguageOptions::Extension::GNU
            || (token && m_sourceInterface.getFiles()[token->getFileId()].systemHeader);
+}
+
+void cld::Semantics::SemanticAnalysis::diagnoseUnusedLocals()
+{
+    for (auto& [name, declInScope] : getCurrentScope().declarations)
+    {
+        cld::match(
+            declInScope.declared,
+            [this, &declInScope = declInScope, &name = name](Declaration* declaration) {
+                if (declaration->isUsed() || declaration->getLinkage() == Linkage::External || name == "__func__"
+                    || name == "__FUNCTION__" || name == "__PRETTY_FUNCTION__")
+                {
+                    return;
+                }
+                log(Warnings::Semantics::UNUSED_VARIABLE_N.args(*declInScope.identifier, m_sourceInterface,
+                                                                *declInScope.identifier));
+            },
+            [](FunctionDefinition*) {}, [](BuiltinFunction*) {}, [](const Type&) {},
+            [](const std::pair<ConstValue, Type>&) {});
+    }
 }

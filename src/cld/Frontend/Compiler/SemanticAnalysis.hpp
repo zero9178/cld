@@ -78,12 +78,17 @@ class SemanticAnalysis final : public ProgramInterface
         return nullptr;
     }
 
-    [[nodiscard]] ValueReset<std::int64_t> pushScope()
+    void diagnoseUnusedLocals();
+
+    [[nodiscard]] auto pushScope()
     {
         m_scopes[m_currentScope].subScopes.push_back(m_scopes.size());
         m_scopes.push_back({m_currentScope, {}, {}, {}});
         m_currentScope = m_scopes.size() - 1;
-        return cld::ValueReset(m_currentScope, m_scopes.back().previousScope);
+        return cld::ScopeExit([&, prev = m_scopes.back().previousScope] {
+            diagnoseUnusedLocals();
+            m_currentScope = prev;
+        });
     }
 
     [[nodiscard]] auto pushLoop(LoopStatements loop)

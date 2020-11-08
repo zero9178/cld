@@ -812,7 +812,7 @@ CREATE_ERROR(CANNOT_RETURN_FUNCTION_POINTER_WITH_VOID_POINTER_RETURN_TYPE,
 // Statements in general
 
 CREATE_ERROR(CONTROLLING_EXPRESSION_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE,
-             "Controlling expression must be ans arithmetic or pointer type", AnnotateExpr<0>);
+             "Controlling expression must be an arithmetic or pointer type", AnnotateExpr<0>);
 
 // For Statement
 
@@ -1054,6 +1054,10 @@ CREATE_WARNING(VALUE_OF_N_IS_TO_LARGE_FOR_INTEGER_TYPE_N, "overflow",
 
 CREATE_WARNING(SECOND_ARGUMENT_OF_VA_START_SHOULD_BE_THE_LAST_PARAMETER, "varargs",
                "Second argument of 'va_start' should be the last parameter", Underline<0>);
+
+CREATE_WARNING(UNUSED_VARIABLE_N, "unused-variable", "Unused variable %0", PointAt<0>);
+
+CREATE_WARNING(UNUSED_FUNCTION_N, "unused-function", "Unused function %0", PointAt<0>);
 } // namespace Semantics
 namespace Lexer
 {

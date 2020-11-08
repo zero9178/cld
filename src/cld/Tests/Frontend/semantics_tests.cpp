@@ -516,6 +516,8 @@ TEST_CASE("Semantics declarations", "[semantics]")
                   "float i;",
                   ProducesError(REDEFINITION_OF_SYMBOL_N, "'i'") && ProducesNote(PREVIOUSLY_DECLARED_HERE));
     SEMA_PRODUCES("inline int f;", ProducesError(INLINE_ONLY_ALLOWED_FOR_FUNCTIONS));
+    SEMA_PRODUCES("static int i;", ProducesWarning(UNUSED_VARIABLE_N, "'i'"));
+    SEMA_PRODUCES("int i;", !ProducesWarning(UNUSED_VARIABLE_N, "'i'"));
 }
 
 TEST_CASE("Semantics primitive declarations", "[semantics]")
@@ -1326,6 +1328,8 @@ TEST_CASE("Semantics function definitions")
     SEMA_PRODUCES("typedef int foo(){}", ProducesError(ONLY_STATIC_OR_EXTERN_ALLOWED_IN_FUNCTION_DEFINITION));
     SEMA_PRODUCES("int foo{}", ProducesError(FUNCTION_DEFINITION_MUST_HAVE_FUNCTION_TYPE));
     SEMA_PRODUCES("struct R foo(void){}", ProducesError(RETURN_TYPE_OF_FUNCTION_DEFINITION_MUST_BE_A_COMPLETE_TYPE));
+    SEMA_PRODUCES("static int i(void){}", ProducesWarning(UNUSED_FUNCTION_N, "'i'"));
+    SEMA_PRODUCES("int i(void){}", !ProducesWarning(UNUSED_FUNCTION_N, "'i'"));
 }
 
 TEST_CASE("Semantics type compatibility", "[semantics]")
