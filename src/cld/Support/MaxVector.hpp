@@ -10,7 +10,7 @@ namespace cld
 template <class T, std::size_t N>
 class MaxVector
 {
-    std::array<T, N> m_array = {};
+    std::array<T, N> m_array{};
     suitableUInt<N> m_size{};
 
 public:

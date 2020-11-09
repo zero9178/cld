@@ -893,7 +893,7 @@ bool checkAllAlternatives(llvm::raw_ostream* reporter, llvm::MutableArrayRef<std
     using AllAlternatives = std::decay_t<decltype(cliOption->getAlternatives())>;
     return std::apply(
         [&](auto&&... indices) -> bool {
-            MaxVector<Failure, sizeof...(indices)> failures;
+            MaxVector<Failure, std::tuple_size_v<AllAlternatives>> failures;
             auto success = ([&](auto index) -> bool {
                 using Index = decltype(index);
                 constexpr std::size_t i = Index::value;
