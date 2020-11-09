@@ -269,6 +269,9 @@ CREATE_ERROR(FUNCTION_RETURN_TYPE_MUST_NOT_BE_AN_ARRAY, "Function return type mu
 CREATE_ERROR(FUNCTION_PROTOTYPE_MUST_NOT_HAVE_AN_INITIALIZER, "Function prototype must not have an initializer",
              Underline<0>);
 
+CREATE_ERROR(FUNCTION_PROTOTYPE_AT_BLOCK_SCOPE_MAY_ONLY_BE_EXTERN,
+             "Function prototype at block scope may only be extern", Underline<0>);
+
 CREATE_ERROR(STATIC_ONLY_ALLOWED_IN_OUTERMOST_ARRAY, "'static' only allowed in outermost array", Underline<0>);
 
 CREATE_ERROR(ARRAY_QUALIFIERS_ONLY_ALLOWED_IN_OUTERMOST_ARRAY, "Array qualifiers only allowed in outermost array",

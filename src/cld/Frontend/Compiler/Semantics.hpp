@@ -1969,18 +1969,27 @@ class EnumDefinition
 {
     std::string_view m_name;
     Type m_type;
+    std::vector<std::pair<std::string_view, llvm::APSInt>> m_values;
 
 public:
-    EnumDefinition(std::string_view name, Type type) : m_name(name), m_type(std::move(type)) {}
+    EnumDefinition(std::string_view name, Type type, std::vector<std::pair<std::string_view, llvm::APSInt>> values)
+        : m_name(name), m_type(std::move(type)), m_values(std::move(values))
+    {
+    }
 
-    std::string_view getName() const
+    [[nodiscard]] std::string_view getName() const
     {
         return m_name;
     }
 
-    const Type& getType() const
+    [[nodiscard]] const Type& getType() const
     {
         return m_type;
+    }
+
+    [[nodiscard]] const std::vector<std::pair<std::string_view, llvm::APSInt>>& getValues() const
+    {
+        return m_values;
     }
 };
 

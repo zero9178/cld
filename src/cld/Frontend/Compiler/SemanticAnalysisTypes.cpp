@@ -1209,6 +1209,7 @@ cld::Semantics::Type
     // TODO: Type depending on values as an extension
     const ConstValue one = {llvm::APSInt(llvm::APInt(m_sourceInterface.getLanguageOptions().sizeOfInt * 8, 1), false)};
     ConstValue nextValue = {llvm::APSInt(m_sourceInterface.getLanguageOptions().sizeOfInt * 8, false)};
+    std::vector<std::pair<std::string_view, llvm::APSInt>> values;
     for (auto& [loc, maybeExpression] : enumDef.getValues())
     {
         ConstValue value;
@@ -1252,6 +1253,7 @@ cld::Semantics::Type
         if (validValue)
         {
             nextValue = value.plus(one, m_sourceInterface.getLanguageOptions());
+            values.emplace_back(loc->getText(), cld::get<llvm::APSInt>(value.getValue()));
         }
         auto [prev, notRedefined] = getCurrentScope().declarations.insert(
             {loc->getText(),
@@ -1292,8 +1294,10 @@ cld::Semantics::Type
     {
         m_anonymousTagToID.emplace(enumDecl->begin(), m_enumDefinitions.size());
     }
-    m_enumDefinitions.emplace_back(name,
-                                   PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions()));
+    m_enumDefinitions.push_back(
+        {EnumDefinition(name, PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions()),
+                        std::move(values)),
+         m_currentScope, enumDef.begin()});
     return EnumType::create(isConst, isVolatile, name, m_enumDefinitions.size() - 1);
 }
 

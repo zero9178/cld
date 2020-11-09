@@ -114,7 +114,9 @@ class CodeGenerator final
     using TypeVariantKey = std::variant<cld::Semantics::StructType, cld::Semantics::UnionType>;
 
     std::unordered_map<TypeVariantKey, llvm::Type*> m_types;
-    std::unordered_map<TypeVariantKey, llvm::DIType*> m_debugTypes;
+    std::unordered_map<std::variant<cld::Semantics::StructType, cld::Semantics::UnionType, cld::Semantics::EnumType>,
+                       llvm::DIType*>
+        m_debugTypes;
 
     struct ABITransformations
     {
@@ -1132,7 +1134,7 @@ class CodeGenerator final
         }}(type, llvmType, constants);
     }
 
-    void runDestructors(std::int64_t from, std::int64_t toExclusive)
+    void runDestructors(std::size_t from, std::size_t toExclusive)
     {
         while (from > 0 && from != toExclusive)
         {
@@ -1160,7 +1162,7 @@ class CodeGenerator final
         }
     }
 
-    void runDestructors(std::int64_t scope)
+    void runDestructors(std::size_t scope)
     {
         runDestructors(scope, m_programInterface.getScopes()[scope].previousScope);
     }
@@ -1226,22 +1228,34 @@ class CodeGenerator final
     llvm::DIScope* m_currentDebugScope = nullptr;
     std::vector<llvm::DIScope*> m_scopeIdToScope{m_programInterface.getScopes().size()};
 
-    llvm::DIFile* getFile(cld::Lexer::CTokenIterator iter) const
+    llvm::DIFile* getFile(const cld::Lexer::CToken* CLD_NULLABLE iter) const
     {
+        if (!iter)
+        {
+            return m_currentDebugScope->getFile();
+        }
         return m_fileIdToFile[iter->getFileId()];
     }
 
-    unsigned getLine(cld::Lexer::CTokenIterator iter) const
+    unsigned getLine(const cld::Lexer::CToken* CLD_NULLABLE iter) const
     {
+        if (!iter)
+        {
+            return 0;
+        }
         return iter->getLine(m_sourceInterface);
     }
 
-    unsigned getColumn(cld::Lexer::CTokenIterator iter) const
+    unsigned getColumn(const cld::Lexer::CToken* CLD_NULLABLE iter) const
     {
+        if (!iter)
+        {
+            return 0;
+        }
         return iter->getLine(m_sourceInterface);
     }
 
-    llvm::DILocation* getLocation(cld::Lexer::CTokenIterator iter) const
+    llvm::DILocation* getLocation(const cld::Lexer::CToken* CLD_NULLABLE iter) const
     {
         CLD_ASSERT(m_currentDebugScope);
         return llvm::DILocation::get(m_module.getContext(), getLine(iter), getColumn(iter), m_currentDebugScope);
@@ -1289,8 +1303,8 @@ public:
             case cld::CGLLVM::DebugEmission::Default:
             case cld::CGLLVM::DebugEmission::Extended: kind = llvm::DICompileUnit::FullDebug; break;
         }
-        m_debugInfo->createCompileUnit(llvm::dwarf::DW_LANG_C99, mainFile, "cld", options.ol != llvm::CodeGenOpt::None,
-                                       "", 0, {}, kind);
+        m_currentDebugScope = m_debugInfo->createCompileUnit(llvm::dwarf::DW_LANG_C99, mainFile, "cld",
+                                                             options.ol != llvm::CodeGenOpt::None, "", 0, {}, kind);
     }
 
     ~CodeGenerator()
@@ -1465,7 +1479,7 @@ public:
     llvm::DIType* visitDebug(const cld::Semantics::Type& type)
     {
         auto* result = cld::match(
-            type.getVariant(), [](const auto&) -> llvm::DIType* { CLD_UNREACHABLE; },
+            type.getVariant(), [](std::monostate) -> llvm::DIType* { CLD_UNREACHABLE; },
             [&](const cld::Semantics::PrimitiveType& primitive) -> llvm::DIType* {
                 std::string_view name;
                 unsigned encoding = 0;
@@ -1553,12 +1567,16 @@ public:
             [&](const cld::Semantics::ArrayType& arrayType) -> llvm::DIType* {
                 auto* element = visitDebug(arrayType.getType());
                 return m_debugInfo->createArrayType(
-                    arrayType.getSize(), arrayType.getType().getAlignOf(m_programInterface) * 8, element, {});
+                    arrayType.getSizeOf(m_programInterface) * 8, arrayType.getType().getAlignOf(m_programInterface) * 8,
+                    element,
+                    m_debugInfo->getOrCreateArray(llvm::DISubrange::get(m_module.getContext(), arrayType.getSize())));
             },
             [&](const cld::Semantics::AbstractArrayType& arrayType) -> llvm::DIType* {
                 auto* element = visitDebug(arrayType.getType());
-                return m_debugInfo->createArrayType(1, arrayType.getType().getAlignOf(m_programInterface) * 8, element,
-                                                    {});
+                return m_debugInfo->createArrayType(
+                    arrayType.getType().getSizeOf(m_programInterface) * 8,
+                    arrayType.getType().getAlignOf(m_programInterface) * 8, element,
+                    m_debugInfo->getOrCreateArray(llvm::DISubrange::get(m_module.getContext(), 1)));
             },
             [&](const cld::Semantics::ValArrayType&) -> llvm::DIType* {
                 // TODO:
@@ -1631,6 +1649,115 @@ public:
                 structFwdDecl->replaceAllUsesWith(debugStructDef);
                 m_debugTypes.insert_or_assign(structType, debugStructDef);
                 return debugStructDef;
+            },
+            [&](const cld::Semantics::UnionType& unionType) -> llvm::DIType* {
+                auto result = m_debugTypes.find(unionType);
+                if (result != m_debugTypes.end())
+                {
+                    return result->second;
+                }
+                auto* unionDefinition = m_programInterface.getUnionDefinition(unionType.getId());
+                if (!unionDefinition)
+                {
+                    auto* structFwdDecl = m_debugInfo->createForwardDecl(
+                        llvm::dwarf::DW_TAG_union_type, unionType.getName(),
+                        m_scopeIdToScope[m_programInterface.getUnionScope(unionType.getId())],
+                        getFile(m_programInterface.getUnionLoc(unionType.getId())),
+                        getLine(m_programInterface.getUnionLoc(unionType.getId())));
+                    m_debugTypes.emplace(unionType, structFwdDecl);
+                    return structFwdDecl;
+                }
+                auto* unionFwdDecl = m_debugInfo->createReplaceableCompositeType(
+                    llvm::dwarf::DW_TAG_union_type, unionType.getName(),
+                    m_scopeIdToScope[m_programInterface.getUnionScope(unionType.getId())],
+                    getFile(m_programInterface.getUnionLoc(unionType.getId())),
+                    getLine(m_programInterface.getUnionLoc(unionType.getId())));
+                m_debugTypes.emplace(unionType, unionFwdDecl);
+                std::vector<llvm::Metadata*> elements;
+                for (auto& iter : unionDefinition->getFields())
+                {
+                    auto* subType = visitDebug(*iter.second.type);
+                    std::size_t offset = 0;
+                    const cld::Semantics::Type* currentType = &type;
+                    for (auto index : iter.second.indices)
+                    {
+                        if (cld::Semantics::isStruct(*currentType))
+                        {
+                            const auto& memoryLayout = m_programInterface.getMemoryLayout(*currentType);
+                            offset += memoryLayout[index].offset;
+                            currentType = &memoryLayout[index].type;
+                        }
+                        else
+                        {
+                            currentType = m_programInterface.getFieldLayout(*currentType)[index].type.get();
+                        }
+                    }
+                    if (!iter.second.bitFieldBounds)
+                    {
+                        elements.push_back(m_debugInfo->createMemberType(
+                            unionFwdDecl, iter.first, getFile(iter.second.nameToken), getLine(iter.second.nameToken),
+                            iter.second.type->getSizeOf(m_programInterface) * 8,
+                            iter.second.type->getAlignOf(m_programInterface) * 8, offset * 8,
+                            llvm::DINode::DIFlags::FlagZero, subType));
+                        continue;
+                    }
+                    elements.push_back(m_debugInfo->createBitFieldMemberType(
+                        unionFwdDecl, iter.first, getFile(iter.second.nameToken), getLine(iter.second.nameToken),
+                        iter.second.bitFieldBounds->second - iter.second.bitFieldBounds->first,
+                        8 * offset + iter.second.bitFieldBounds->first, 8 * offset, llvm::DINode::DIFlags::FlagZero,
+                        subType));
+                }
+                auto* debugUnionDef = llvm::DICompositeType::getDistinct(
+                    m_module.getContext(), llvm::dwarf::DW_TAG_union_type, unionType.getName(),
+                    getFile(m_programInterface.getStructLoc(unionType.getId())),
+                    getLine(m_programInterface.getStructLoc(unionType.getId())),
+                    m_scopeIdToScope[m_programInterface.getStructScope(unionType.getId())], nullptr,
+                    unionType.getSizeOf(m_programInterface) * 8, unionType.getAlignOf(m_programInterface) * 8, 0,
+                    llvm::DINode::DIFlags::FlagZero, m_debugInfo->getOrCreateArray(elements), 0, nullptr);
+                unionFwdDecl->replaceAllUsesWith(debugUnionDef);
+                m_debugTypes.insert_or_assign(unionType, debugUnionDef);
+                return debugUnionDef;
+            },
+            [&](const cld::Semantics::FunctionType& functionType) -> llvm::DIType* {
+                std::vector<llvm::Metadata*> parameters;
+                if (cld::Semantics::isVoid(functionType.getReturnType()))
+                {
+                    parameters.push_back(nullptr);
+                }
+                else
+                {
+                    parameters.push_back(visitDebug(functionType.getReturnType()));
+                }
+                for (auto& [type, name] : functionType.getArguments())
+                {
+                    (void)name;
+                    parameters.push_back(visitDebug(type));
+                }
+                return m_debugInfo->createSubroutineType(m_debugInfo->getOrCreateTypeArray(parameters));
+            },
+            [&](const cld::Semantics::EnumType& enumType) -> llvm::DIType* {
+                auto result = m_debugTypes.find(enumType);
+                if (result != m_debugTypes.end())
+                {
+                    return result->second;
+                }
+                auto* enumDef = m_programInterface.getEnumDefinition(enumType.getId());
+                CLD_ASSERT(enumDef); // Currently not possible
+                std::vector<llvm::Metadata*> enumerators;
+                for (auto& [name, value] : enumDef->getValues())
+                {
+                    enumerators.push_back(
+                        m_debugInfo->createEnumerator(name, value.getSExtValue(), value.isUnsigned()));
+                }
+                auto* underlying = visitDebug(enumDef->getType());
+                auto* debugEnumDef = m_debugInfo->createEnumerationType(
+                    m_scopeIdToScope[m_programInterface.getEnumScope(enumType.getId())], enumType.getName(),
+                    getFile(m_programInterface.getEnumLoc(enumType.getId())),
+                    getLine(m_programInterface.getEnumLoc(enumType.getId())),
+                    enumType.getSizeOf(m_programInterface) * 8, enumType.getAlignOf(m_programInterface) * 8,
+                    m_debugInfo->getOrCreateArray(enumerators), underlying);
+                m_debugTypes.insert_or_assign(enumType, debugEnumDef);
+                return debugEnumDef;
             });
         if (type.isVolatile())
         {
@@ -1845,6 +1972,18 @@ public:
             {
                 var->setAlignment(llvm::Align(declaration.getType().getAlignOf(m_programInterface)));
             }
+            if (m_options.debugEmission > cld::CGLLVM::DebugEmission::Line)
+            {
+                auto* local = m_debugInfo->createAutoVariable(
+                    m_currentDebugScope, declaration.getNameToken()->getText(), getFile(declaration.getNameToken()),
+                    getLine(declaration.getNameToken()), visitDebug(declaration.getType()), true,
+                    llvm::DINode::FlagZero, var->getAlign().value() * 8);
+                if (m_builder.GetInsertBlock())
+                {
+                    m_debugInfo->insertDeclare(var, local, m_debugInfo->createExpression(),
+                                               getLocation(declaration.getNameToken()), m_builder.GetInsertBlock());
+                }
+            }
         }
 
         m_lvalues.emplace(&declaration, var);
@@ -1924,8 +2063,8 @@ public:
                 getLine(functionDefinition.getNameToken()), subRoutineType,
                 getLine(functionDefinition.getCompoundStatement().getOpenBrace()),
                 ft.isKandR() ? llvm::DINode::FlagZero : llvm::DINode::FlagPrototyped, spFlags);
-            subProgramReset.emplace(m_currentDebugScope, nullptr);
             m_currentFunction->setSubprogram(subProgram);
+            subProgramReset.emplace(m_currentDebugScope, m_currentDebugScope);
             m_scopeIdToScope[functionDefinition.getCompoundStatement().getScope()] = m_currentDebugScope = subProgram;
 
             std::vector<llvm::Metadata*> parameters;
@@ -2527,7 +2666,7 @@ public:
 
     Value visit(const cld::Semantics::ExpressionBase& expression)
     {
-        if (m_currentDebugScope)
+        if (m_currentDebugScope && !llvm::isa<llvm::DICompileUnit>(m_currentDebugScope))
         {
             m_builder.SetCurrentDebugLocation(getLocation(expression.begin()));
         }

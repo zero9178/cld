@@ -400,7 +400,17 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                     *initializer, m_sourceInterface, *initializer));
             }
             Linkage linkage = Linkage::External;
-            if (storageClassSpecifier && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Static)
+            // C99 6.7.1§5:
+            // The declaration of an identifier for a function that has block scope shall have no explicit
+            // storage-class specifier other than extern.
+            if (m_currentScope != 0 && storageClassSpecifier
+                && storageClassSpecifier->getSpecifier() != Syntax::StorageClassSpecifier::Extern)
+            {
+                log(Errors::Semantics::FUNCTION_PROTOTYPE_AT_BLOCK_SCOPE_MAY_ONLY_BE_EXTERN.args(
+                    *storageClassSpecifier, m_sourceInterface, *storageClassSpecifier));
+            }
+            else if (storageClassSpecifier
+                     && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Static)
             {
                 linkage = Linkage::Internal;
             }

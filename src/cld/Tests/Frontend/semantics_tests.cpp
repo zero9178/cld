@@ -867,6 +867,10 @@ TEST_CASE("Semantics function prototypes", "[semantics]")
                   false, false));
     }
     SEMA_PRODUCES("int f(int) = 5;", ProducesError(FUNCTION_PROTOTYPE_MUST_NOT_HAVE_AN_INITIALIZER));
+    SEMA_PRODUCES("int f(void) {\n"
+                  "static int foo(void);\n"
+                  "}",
+                  ProducesError(FUNCTION_PROTOTYPE_AT_BLOCK_SCOPE_MAY_ONLY_BE_EXTERN));
     SEMA_PRODUCES("static inline int f(int);", ProducesNoErrors());
     SEMA_PRODUCES("int f(extern int a);",
                   ProducesError(NO_STORAGE_CLASS_SPECIFIER_ALLOWED_IN_PARAMETER_BESIDES_REGISTER));

@@ -71,11 +71,18 @@ public:
         const Lexer::CToken* unionToken;
     };
 
+    struct EnumInfo
+    {
+        EnumDefinition type;
+        std::size_t scope;
+        const Lexer::CToken* enumToken;
+    };
+
 protected:
     std::vector<Scope> m_scopes = {Scope{static_cast<std::size_t>(-1), {}, {}, {}}};
     std::vector<StructInfo> m_structDefinitions;
     std::vector<UnionInfo> m_unionDefinitions;
-    std::vector<EnumDefinition> m_enumDefinitions;
+    std::vector<EnumInfo> m_enumDefinitions;
     std::unordered_map<std::string_view, BuiltinFunction> m_usedBuiltins;
 
 public:
@@ -135,19 +142,29 @@ public:
         return m_structDefinitions[id].scope;
     }
 
-    const Lexer::CToken* getStructLoc(std::size_t id) const
+    const Lexer::CToken* CLD_NULLABLE getStructLoc(std::size_t id) const
     {
         return m_structDefinitions[id].structToken;
     }
 
     EnumDefinition* CLD_NULLABLE getEnumDefinition(std::size_t id)
     {
-        return &m_enumDefinitions[id];
+        return &m_enumDefinitions[id].type;
     }
 
     const EnumDefinition* CLD_NULLABLE getEnumDefinition(std::size_t id) const
     {
-        return &m_enumDefinitions[id];
+        return &m_enumDefinitions[id].type;
+    }
+
+    std::size_t getEnumScope(std::size_t id) const
+    {
+        return m_enumDefinitions[id].scope;
+    }
+
+    const Lexer::CToken* CLD_NULLABLE getEnumLoc(std::size_t id) const
+    {
+        return m_enumDefinitions[id].enumToken;
     }
 
     UnionDefinition* CLD_NULLABLE getUnionDefinition(std::size_t id)
@@ -165,7 +182,7 @@ public:
         return m_unionDefinitions[id].scope;
     }
 
-    const Lexer::CToken* getUnionLoc(std::size_t id) const
+    const Lexer::CToken* CLD_NULLABLE getUnionLoc(std::size_t id) const
     {
         return m_unionDefinitions[id].unionToken;
     }
