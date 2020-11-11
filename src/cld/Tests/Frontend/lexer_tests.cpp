@@ -195,6 +195,14 @@ TEST_CASE("Lexing Identifiers", "[lexer]")
         CHECK(result.data()[8].getTokenType() == cld::Lexer::TokenType::RestrictKeyword);
         CHECK(result.data()[9].getTokenType() == cld::Lexer::TokenType::InlineKeyword);
     }
+    SECTION("int128")
+    {
+        auto result = lexes("__int128 __int128_t __uint128_t", x64linux);
+        REQUIRE(result.data().size() == 3);
+        CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Int128Keyword);
+        CHECK(result.data()[1].getTokenType() == cld::Lexer::TokenType::Int128Keyword);
+        CHECK(result.data()[2].getTokenType() == cld::Lexer::TokenType::UInt128Keyword);
+    }
 }
 
 TEST_CASE("Lexing backslashes", "[lexer]")

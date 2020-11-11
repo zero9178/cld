@@ -67,7 +67,7 @@ TEST_CASE("Parse specifier qualifier list", "[parser]")
 
 TEST_CASE("Parse external declaration", "[parser]")
 {
-    treeProduces("typedef int __int128 __attribute__ ((__mode__ (TI)));", ProducesNoErrors());
+    treeProduces("typedef int largeInt __attribute__ ((__mode__ (TI)));", ProducesNoErrors());
     treeProduces(
         "void *__attribute__((__cdecl__)) bsearch(const void *_Key,const void *_Base,long _NumOfElements,long _SizeOfElements,int (__attribute__((__cdecl__)) *_PtFuncCompare)(const void *,const void *));",
         ProducesNoErrors());

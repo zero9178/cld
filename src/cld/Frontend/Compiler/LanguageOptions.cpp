@@ -38,6 +38,11 @@ cld::LanguageOptions cld::LanguageOptions::native(Language language)
 #endif
         underlyingType<ptrdiff_t>(),
         underlyingType<size_t>(),
+#ifdef __SIZEOF_INT128__
+        true,
+#else
+        false,
+#endif
     };
     temp.enabledWarnings = cld::diag::getAllWarnings();
     return temp;
@@ -140,6 +145,10 @@ cld::LanguageOptions cld::LanguageOptions::fromTriple(Triple triple, Language la
     else
     {
         options.sizeTType = UnderlyingType ::UnsignedLong;
+    }
+    if (options.sizeOfVoidStar >= 8)
+    {
+        options.int128Enabled = true;
     }
     if (triple.getArchitecture() == Architecture::x86_64 && triple.getPlatform() != Platform::Windows)
     {

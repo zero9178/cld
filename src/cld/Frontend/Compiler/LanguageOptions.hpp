@@ -54,6 +54,7 @@ struct LanguageOptions
     bool discreteBitfields;
     UnderlyingType ptrdiffType;
     UnderlyingType sizeTType;
+    bool int128Enabled;
 
     std::unordered_set<std::string_view> enabledWarnings{};
     bool freeStanding{};
