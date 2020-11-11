@@ -41,6 +41,7 @@ class ProgramInterface;
 class PrimitiveType final
 {
     std::uint8_t m_bitCount;
+    std::uint8_t m_alignOf : 5;
     bool m_isFloatingPoint : 1;
     bool m_isSigned : 1;
 
@@ -68,11 +69,11 @@ public:
 private:
     Kind m_kind;
 
-    PrimitiveType(bool isFloatingPoint, bool isSigned, std::uint8_t bitCount, Kind kind);
+    PrimitiveType(bool isFloatingPoint, bool isSigned, std::uint8_t bitCount, std::uint8_t alignOf, Kind kind);
 
 public:
-    [[nodiscard]] static cld::Semantics::Type create(bool isConst, bool isVolatile, bool isFloatingPoint, bool isSigned,
-                                                     std::uint8_t bitCount, Kind kind);
+    [[nodiscard]] static Type create(bool isConst, bool isVolatile, bool isFloatingPoint, bool isSigned,
+                                     std::uint8_t bitCount, std::uint8_t alignOf, Kind kind);
 
     [[nodiscard]] static Type createChar(bool isConst, bool isVolatile, const LanguageOptions& options);
 
@@ -94,13 +95,13 @@ public:
 
     [[nodiscard]] static Type createUnsignedLong(bool isConst, bool isVolatile, const LanguageOptions& options);
 
-    [[nodiscard]] static Type createLongLong(bool isConst, bool isVolatile);
+    [[nodiscard]] static Type createLongLong(bool isConst, bool isVolatile, const LanguageOptions& options);
 
-    [[nodiscard]] static Type createUnsignedLongLong(bool isConst, bool isVolatile);
+    [[nodiscard]] static Type createUnsignedLongLong(bool isConst, bool isVolatile, const LanguageOptions& options);
 
     [[nodiscard]] static Type createFloat(bool isConst, bool isVolatile);
 
-    [[nodiscard]] static Type createDouble(bool isConst, bool isVolatile);
+    [[nodiscard]] static Type createDouble(bool isConst, bool isVolatile, const LanguageOptions& options);
 
     [[nodiscard]] static Type createLongDouble(bool isConst, bool isVolatile, const LanguageOptions& options);
 
@@ -111,6 +112,10 @@ public:
     [[nodiscard]] static Type createSizeT(bool isConst, bool isVolatile, const LanguageOptions& options);
 
     [[nodiscard]] static Type createWcharT(bool isConst, bool isVolatile, const LanguageOptions& options);
+
+    [[nodiscard]] static Type fromUnderlyingType(bool isConst, bool isVolatile,
+                                                 LanguageOptions::UnderlyingType underlyingType,
+                                                 const LanguageOptions& options);
 
     [[nodiscard]] bool isFloatingPoint() const
     {
@@ -131,7 +136,7 @@ public:
 
     [[nodiscard]] std::uint64_t getAlignOf(const ProgramInterface&) const
     {
-        return getByteCount();
+        return m_alignOf;
     }
 
     [[nodiscard]] std::uint8_t getBitCount() const
@@ -577,12 +582,12 @@ public:
     // if I mark it as such but Microsoft instead punishes me by deleting it.
 
     ExpressionBase(ExpressionBase&&)
-#if !defined(_MSC_VER) || defined(__clang__)
+#if !defined(_MSC_VER) || defined(__clang__) || _MSC_VER >= 1928
         noexcept
 #endif
         = default;
     ExpressionBase& operator=(ExpressionBase&&)
-#if !defined(_MSC_VER) || defined(__clang__)
+#if !defined(_MSC_VER) || defined(__clang__) || _MSC_VER >= 1928
         noexcept
 #endif
         = default;

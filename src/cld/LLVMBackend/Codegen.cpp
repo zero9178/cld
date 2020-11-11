@@ -838,16 +838,8 @@ class CodeGenerator final
         }
 
         auto& str = cld::get<cld::Lexer::NonCharString>(value);
-        std::uint8_t size = 0;
-        switch (m_sourceInterface.getLanguageOptions().wcharUnderlyingType)
-        {
-            case cld::LanguageOptions::WideCharType ::UnsignedShort:
-                size = m_sourceInterface.getLanguageOptions().sizeOfShort;
-                break;
-            case cld::LanguageOptions::WideCharType ::Int:
-                size = m_sourceInterface.getLanguageOptions().sizeOfInt;
-                break;
-        }
+        std::uint8_t size =
+            m_sourceInterface.getLanguageOptions().sizeOf(m_sourceInterface.getLanguageOptions().wcharUnderlyingType);
         switch (size)
         {
             case 2:

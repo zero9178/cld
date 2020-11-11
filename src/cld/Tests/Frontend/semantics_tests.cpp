@@ -563,15 +563,17 @@ TEST_CASE("Semantics primitive declarations", "[semantics]")
         {cld::Semantics::PrimitiveType::createLong(isConst, isVolatile, options), {"long", "signed"}},
         {cld::Semantics::PrimitiveType::createUnsignedLong(isConst, isVolatile, options), {"long", "unsigned"}},
         {cld::Semantics::PrimitiveType::createUnsignedLong(isConst, isVolatile, options), {"long", "unsigned", "int"}},
-        {cld::Semantics::PrimitiveType::createLongLong(isConst, isVolatile), {"long", "long"}},
-        {cld::Semantics::PrimitiveType::createLongLong(isConst, isVolatile), {"long", "long", "int"}},
-        {cld::Semantics::PrimitiveType::createLongLong(isConst, isVolatile), {"long", "long", "int", "signed"}},
-        {cld::Semantics::PrimitiveType::createLongLong(isConst, isVolatile), {"long", "long", "signed"}},
-        {cld::Semantics::PrimitiveType::createUnsignedLongLong(isConst, isVolatile),
+        {cld::Semantics::PrimitiveType::createLongLong(isConst, isVolatile, options), {"long", "long"}},
+        {cld::Semantics::PrimitiveType::createLongLong(isConst, isVolatile, options), {"long", "long", "int"}},
+        {cld::Semantics::PrimitiveType::createLongLong(isConst, isVolatile, options),
+         {"long", "long", "int", "signed"}},
+        {cld::Semantics::PrimitiveType::createLongLong(isConst, isVolatile, options), {"long", "long", "signed"}},
+        {cld::Semantics::PrimitiveType::createUnsignedLongLong(isConst, isVolatile, options),
          {"long", "long", "int", "unsigned"}},
-        {cld::Semantics::PrimitiveType::createUnsignedLongLong(isConst, isVolatile), {"long", "long", "unsigned"}},
+        {cld::Semantics::PrimitiveType::createUnsignedLongLong(isConst, isVolatile, options),
+         {"long", "long", "unsigned"}},
         {cld::Semantics::PrimitiveType::createFloat(isConst, isVolatile), {"float"}},
-        {cld::Semantics::PrimitiveType::createDouble(isConst, isVolatile), {"double"}},
+        {cld::Semantics::PrimitiveType::createDouble(isConst, isVolatile, options), {"double"}},
         {cld::Semantics::PrimitiveType::createLongDouble(isConst, isVolatile, options), {"long", "double"}},
         {cld::Semantics::PrimitiveType::createUnderlineBool(isConst, isVolatile), {"_Bool"}},
     };
@@ -1590,7 +1592,9 @@ TEST_CASE("Semantics composite type", "[semantics]")
                    {cld::Semantics::PointerType::create(
                         false, false, false,
                         cld::Semantics::ArrayType::create(
-                            false, false, false, false, cld::Semantics::PrimitiveType::createDouble(false, false), 3)),
+                            false, false, false, false,
+                            cld::Semantics::PrimitiveType::createDouble(false, false, cld::LanguageOptions::native()),
+                            3)),
                     ""}},
                   false, false));
     }
@@ -1620,10 +1624,11 @@ TEST_CASE("Semantics type printing", "[semantics]")
         CHECK(toStr(PrimitiveType::createLong(false, false, cld::LanguageOptions::native())) == "long");
         CHECK(toStr(PrimitiveType::createUnsignedLong(false, false, cld::LanguageOptions::native()))
               == "unsigned long");
-        CHECK(toStr(PrimitiveType::createLongLong(false, false)) == "long long");
-        CHECK(toStr(PrimitiveType::createUnsignedLongLong(false, false)) == "unsigned long long");
+        CHECK(toStr(PrimitiveType::createLongLong(false, false, cld::LanguageOptions::native())) == "long long");
+        CHECK(toStr(PrimitiveType::createUnsignedLongLong(false, false, cld::LanguageOptions::native()))
+              == "unsigned long long");
         CHECK(toStr(PrimitiveType::createFloat(false, false)) == "float");
-        CHECK(toStr(PrimitiveType::createDouble(false, false)) == "double");
+        CHECK(toStr(PrimitiveType::createDouble(false, false, cld::LanguageOptions::native())) == "double");
         CHECK(toStr(PrimitiveType::createUnderlineBool(false, false)) == "_Bool");
         CHECK(toStr(PrimitiveType::createLongDouble(false, false, cld::LanguageOptions::native())) == "long double");
     }
@@ -1763,10 +1768,10 @@ TEST_CASE("Semantics primary expressions", "[semantics]")
                 {"5u", PrimitiveType::createUnsignedInt(false, false, options)},
                 {"5l", PrimitiveType::createLong(false, false, options)},
                 {"5ul", PrimitiveType::createUnsignedLong(false, false, options)},
-                {"5LL", PrimitiveType::createLongLong(false, false)},
-                {"5uLL", PrimitiveType::createUnsignedLongLong(false, false)},
+                {"5LL", PrimitiveType::createLongLong(false, false, options)},
+                {"5uLL", PrimitiveType::createUnsignedLongLong(false, false, options)},
                 {"5.0f", PrimitiveType::createFloat(false, false)},
-                {"5.0", PrimitiveType::createDouble(false, false)},
+                {"5.0", PrimitiveType::createDouble(false, false, options)},
                 {"5.0L", PrimitiveType::createLongDouble(false, false, options)},
                 {"\"txt\"",
                  ArrayType::create(false, false, false, false, PrimitiveType::createChar(false, false, options), 4)},
@@ -2728,7 +2733,7 @@ TEST_CASE("Semantics shift expression", "[semantics]")
         auto& exp = generateExpression("void foo(void) {\n"
                                        " 5uLL << 1;\n"
                                        "}");
-        CHECK(exp.getType() == PrimitiveType::createUnsignedLongLong(false, false));
+        CHECK(exp.getType() == PrimitiveType::createUnsignedLongLong(false, false, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
         REQUIRE(exp.is<BinaryOperator>());
         CHECK(exp.cast<BinaryOperator>().getKind() == BinaryOperator::LeftShift);
@@ -2746,7 +2751,7 @@ TEST_CASE("Semantics shift expression", "[semantics]")
         auto& exp = generateExpression("void foo(void) {\n"
                                        " 5uLL >> 1;\n"
                                        "}");
-        CHECK(exp.getType() == PrimitiveType::createUnsignedLongLong(false, false));
+        CHECK(exp.getType() == PrimitiveType::createUnsignedLongLong(false, false, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
         REQUIRE(exp.is<BinaryOperator>());
         CHECK(exp.cast<BinaryOperator>().getKind() == BinaryOperator::RightShift);
@@ -3036,7 +3041,7 @@ TEST_CASE("Semantics bit operators", "[semantics]")
         auto& exp = generateExpression("void foo(void) {\n"
                                        " 5 & 1uLL;\n"
                                        "}");
-        CHECK(exp.getType() == PrimitiveType::createUnsignedLongLong(false, false));
+        CHECK(exp.getType() == PrimitiveType::createUnsignedLongLong(false, false, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
         REQUIRE(exp.is<BinaryOperator>());
         CHECK(exp.cast<BinaryOperator>().getKind() == BinaryOperator::BitAnd);
@@ -3054,7 +3059,7 @@ TEST_CASE("Semantics bit operators", "[semantics]")
         auto& exp = generateExpression("void foo(void) {\n"
                                        " 5 | 1uLL;\n"
                                        "}");
-        CHECK(exp.getType() == PrimitiveType::createUnsignedLongLong(false, false));
+        CHECK(exp.getType() == PrimitiveType::createUnsignedLongLong(false, false, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
         REQUIRE(exp.is<BinaryOperator>());
         CHECK(exp.cast<BinaryOperator>().getKind() == BinaryOperator::BitOr);
@@ -3072,7 +3077,7 @@ TEST_CASE("Semantics bit operators", "[semantics]")
         auto& exp = generateExpression("void foo(void) {\n"
                                        " 5 ^ 1uLL;\n"
                                        "}");
-        CHECK(exp.getType() == PrimitiveType::createUnsignedLongLong(false, false));
+        CHECK(exp.getType() == PrimitiveType::createUnsignedLongLong(false, false, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
         REQUIRE(exp.is<BinaryOperator>());
         CHECK(exp.cast<BinaryOperator>().getKind() == BinaryOperator::BitXor);
@@ -3142,7 +3147,7 @@ TEST_CASE("Semantics conditional expression", "[semantics]")
         auto& exp = generateExpression("void foo(void) {\n"
                                        "1 ? 5.0 : 3uLL;\n"
                                        "}");
-        CHECK(exp.getType() == PrimitiveType::createDouble(false, false));
+        CHECK(exp.getType() == PrimitiveType::createDouble(false, false, cld::LanguageOptions::native()));
     }
     SECTION("Void")
     {
@@ -3544,14 +3549,15 @@ TEST_CASE("Semantics function call expression", "[semantics]")
                                        "void foo(unsigned short i) {\n"
                                        "bar(5.0f,i);\n"
                                        "}");
-        CHECK(exp.getType() == PrimitiveType::createDouble(false, false));
+        CHECK(exp.getType() == PrimitiveType::createDouble(false, false, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
         REQUIRE(exp.is<CallExpression>());
         auto& call = exp.cast<CallExpression>();
         REQUIRE(call.getArgumentExpressions().size() == 2);
         REQUIRE(call.getArgumentExpressions()[0]->is<Conversion>());
         CHECK(call.getArgumentExpressions()[0]->cast<Conversion>().getKind() == Conversion::DefaultArgumentPromotion);
-        CHECK(call.getArgumentExpressions()[0]->getType() == PrimitiveType::createDouble(false, false));
+        CHECK(call.getArgumentExpressions()[0]->getType()
+              == PrimitiveType::createDouble(false, false, cld::LanguageOptions::native()));
         REQUIRE(call.getArgumentExpressions()[1]->is<Conversion>());
         CHECK(call.getArgumentExpressions()[1]->cast<Conversion>().getKind() == Conversion::IntegerPromotion);
         CHECK(call.getArgumentExpressions()[1]->getType()
@@ -3564,7 +3570,7 @@ TEST_CASE("Semantics function call expression", "[semantics]")
                                        "void foo(unsigned short i) {\n"
                                        "bar(5.0f,i);\n"
                                        "}");
-        CHECK(exp.getType() == PrimitiveType::createDouble(false, false));
+        CHECK(exp.getType() == PrimitiveType::createDouble(false, false, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
         REQUIRE(exp.is<CallExpression>());
         auto& call = exp.cast<CallExpression>();

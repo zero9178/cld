@@ -291,7 +291,7 @@ public:
     InstrusiveVariantStorageMove() = default;
 
     InstrusiveVariantStorageMove(InstrusiveVariantStorageMove&& rhs)
-#if !defined(_MSC_VER) || defined(__clang__)
+#if !defined(_MSC_VER) || defined(__clang__) || _MSC_VER >= 1928
         noexcept((std::is_nothrow_move_constructible_v<SubClasses> && ...))
 #endif
     {

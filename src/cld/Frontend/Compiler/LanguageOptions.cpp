@@ -13,10 +13,13 @@ cld::LanguageOptions cld::LanguageOptions::native(Language language)
         language,
         sizeof(bool),
         std::is_signed_v<char>,
-        sizeof(wchar_t) == 2 ? WideCharType::UnsignedShort : WideCharType ::Int,
+        // wchar_t is a builtin type in C++, can't use underlyingType<wchar_t>
+        sizeof(wchar_t) == 2 ? UnderlyingType::UnsignedShort : UnderlyingType ::Int,
         sizeof(short),
         sizeof(int),
         sizeof(long),
+        alignof(long long),
+        alignof(double),
         []() -> std::uint8_t {
             switch (std::numeric_limits<long double>::digits)
             {
@@ -26,46 +29,15 @@ cld::LanguageOptions cld::LanguageOptions::native(Language language)
                 default: CLD_UNREACHABLE;
             }
         }(),
+        alignof(long double),
         sizeof(void*),
 #ifdef _WIN32
         1,
 #else
         0,
 #endif
-        [] {
-            static_assert(
-                std::is_same_v<long long,
-                               ptrdiff_t> || std::is_same_v<int, ptrdiff_t> || std::is_same_v<long, ptrdiff_t>);
-            if constexpr (std::is_same_v<int, ptrdiff_t>)
-            {
-                return PtrdiffType::Int;
-            }
-            else if constexpr (std::is_same_v<long, ptrdiff_t>)
-            {
-                return PtrdiffType::Long;
-            }
-            else
-            {
-                return PtrdiffType::LongLong;
-            }
-        }(),
-        [] {
-            static_assert(std::is_same_v<
-                              unsigned long long,
-                              size_t> || std::is_same_v<unsigned int, size_t> || std::is_same_v<unsigned long, size_t>);
-            if constexpr (std::is_same_v<unsigned int, size_t>)
-            {
-                return SizeTType::UnsignedInt;
-            }
-            else if constexpr (std::is_same_v<unsigned long, size_t>)
-            {
-                return SizeTType::UnsignedLong;
-            }
-            else
-            {
-                return SizeTType::UnsignedLongLong;
-            }
-        }(),
+        underlyingType<ptrdiff_t>(),
+        underlyingType<size_t>(),
     };
     temp.enabledWarnings = cld::diag::getAllWarnings();
     return temp;
@@ -73,18 +45,18 @@ cld::LanguageOptions cld::LanguageOptions::native(Language language)
 
 cld::LanguageOptions cld::LanguageOptions::fromTriple(Triple triple, Language language)
 {
-    LanguageOptions options;
+    LanguageOptions options = native(language);
     options.enabledWarnings = cld::diag::getAllWarnings();
     options.language = language;
     options.sizeOfUnderlineBool = 1;
     options.charIsSigned = true;
     if (triple.getPlatform() == Platform::Windows)
     {
-        options.wcharUnderlyingType = WideCharType::UnsignedShort;
+        options.wcharUnderlyingType = UnderlyingType::UnsignedShort;
     }
     else
     {
-        options.wcharUnderlyingType = WideCharType::Int;
+        options.wcharUnderlyingType = UnderlyingType::Int;
     }
     options.sizeOfShort = 2;
     options.sizeOfInt = 4;
@@ -96,12 +68,44 @@ cld::LanguageOptions cld::LanguageOptions::fromTriple(Triple triple, Language la
     {
         options.sizeOfLong = 8;
     }
+    if (triple.getArchitecture() == Architecture::x86)
+    {
+        if (triple.getPlatform() == Platform::Windows)
+        {
+            options.alignOfDouble = 8;
+        }
+        else
+        {
+            options.alignOfDouble = 4;
+        }
+    }
+    else
+    {
+        options.alignOfDouble = 8;
+    }
+    if (triple.getArchitecture() == Architecture::x86)
+    {
+        options.alignOfLongLong = 4;
+    }
+    else
+    {
+        options.alignOfLongLong = 8;
+    }
     if (triple.getEnvironment() == Environment::MSVC)
     {
+        options.alignOfLongDouble = 8;
         options.sizeOfLongDoubleBits = 64;
     }
     else
     {
+        if (triple.getArchitecture() == Architecture::x86)
+        {
+            options.alignOfLongDouble = 4;
+        }
+        else
+        {
+            options.alignOfLongDouble = 16;
+        }
         options.sizeOfLongDoubleBits = 80;
     }
     if (triple.getArchitecture() == Architecture::x86)
@@ -115,27 +119,27 @@ cld::LanguageOptions cld::LanguageOptions::fromTriple(Triple triple, Language la
     options.discreteBitfields = triple.getPlatform() == Platform::Windows;
     if (triple.getArchitecture() == Architecture::x86)
     {
-        options.ptrdiffType = PtrdiffType ::Int;
+        options.ptrdiffType = UnderlyingType::Int;
     }
     else if (triple.getPlatform() == Platform::Windows)
     {
-        options.ptrdiffType = PtrdiffType ::LongLong;
+        options.ptrdiffType = UnderlyingType ::LongLong;
     }
     else
     {
-        options.ptrdiffType = PtrdiffType ::Long;
+        options.ptrdiffType = UnderlyingType ::Long;
     }
     if (triple.getArchitecture() == Architecture::x86)
     {
-        options.sizeTType = SizeTType ::UnsignedInt;
+        options.sizeTType = UnderlyingType ::UnsignedInt;
     }
     else if (triple.getPlatform() == Platform::Windows)
     {
-        options.sizeTType = SizeTType ::UnsignedLongLong;
+        options.sizeTType = UnderlyingType ::UnsignedLongLong;
     }
     else
     {
-        options.sizeTType = SizeTType ::UnsignedLong;
+        options.sizeTType = UnderlyingType ::UnsignedLong;
     }
     if (triple.getArchitecture() == Architecture::x86_64 && triple.getPlatform() != Platform::Windows)
     {
@@ -147,4 +151,64 @@ cld::LanguageOptions cld::LanguageOptions::fromTriple(Triple triple, Language la
         options.vaListKind = BuiltInVaList ::CharPtr;
     }
     return options;
+}
+
+bool cld::LanguageOptions::isSigned(cld::LanguageOptions::UnderlyingType type)
+{
+    switch (type)
+    {
+        case UnderlyingType::UnsignedShort:
+        case UnderlyingType::UnsignedInt:
+        case UnderlyingType::UnsignedLong:
+        case UnderlyingType::UnsignedLongLong: return false;
+        case UnderlyingType::Int:
+        case UnderlyingType::Long:
+        case UnderlyingType::LongLong: return true;
+    }
+    CLD_UNREACHABLE;
+}
+
+std::uint8_t cld::LanguageOptions::sizeOf(cld::LanguageOptions::UnderlyingType type) const
+{
+    switch (type)
+    {
+        case UnderlyingType::UnsignedShort: return sizeOfShort;
+        case UnderlyingType::Int:
+        case UnderlyingType::UnsignedInt: return sizeOfInt;
+        case UnderlyingType::Long:
+        case UnderlyingType::UnsignedLong: return sizeOfLong;
+        case UnderlyingType::LongLong:
+        case UnderlyingType::UnsignedLongLong: return 8;
+    }
+    CLD_UNREACHABLE;
+}
+
+std::uint8_t cld::LanguageOptions::alignOf(cld::LanguageOptions::UnderlyingType type) const
+{
+    switch (type)
+    {
+        case UnderlyingType::UnsignedShort: return sizeOfShort;
+        case UnderlyingType::Int:
+        case UnderlyingType::UnsignedInt: return sizeOfInt;
+        case UnderlyingType::Long:
+        case UnderlyingType::UnsignedLong: return sizeOfLong;
+        case UnderlyingType::LongLong:
+        case UnderlyingType::UnsignedLongLong: return alignOfLongLong;
+    }
+    CLD_UNREACHABLE;
+}
+
+std::string_view cld::LanguageOptions::string(cld::LanguageOptions::UnderlyingType type)
+{
+    switch (type)
+    {
+        case UnderlyingType::UnsignedShort: return "unsigned short";
+        case UnderlyingType::Int: return "int";
+        case UnderlyingType::UnsignedInt: return "unsigned int";
+        case UnderlyingType::Long: return "long";
+        case UnderlyingType::UnsignedLong: return "unsigned long";
+        case UnderlyingType::LongLong: return "long long";
+        case UnderlyingType::UnsignedLongLong: return "unsigned long long";
+    }
+    CLD_UNREACHABLE;
 }

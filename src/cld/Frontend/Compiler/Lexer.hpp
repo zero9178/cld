@@ -314,6 +314,21 @@ public:
         LongDouble
     };
 
+    static Type fromUnderlyingType(LanguageOptions::UnderlyingType underlyingType)
+    {
+        switch (underlyingType)
+        {
+            case LanguageOptions::UnderlyingType::UnsignedShort: return UnsignedShort;
+            case LanguageOptions::UnderlyingType::Int: return Int;
+            case LanguageOptions::UnderlyingType::UnsignedInt: return UnsignedInt;
+            case LanguageOptions::UnderlyingType::Long: return Long;
+            case LanguageOptions::UnderlyingType::UnsignedLong: return UnsignedLong;
+            case LanguageOptions::UnderlyingType::LongLong: return LongLong;
+            case LanguageOptions::UnderlyingType::UnsignedLongLong: return UnsignedLongLong;
+        }
+        CLD_UNREACHABLE;
+    }
+
 private:
     Type m_type;
 

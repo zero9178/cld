@@ -11,43 +11,45 @@
 #include "SemanticUtil.hpp"
 #include "Syntax.hpp"
 
+cld::Semantics::Type
+    cld::Semantics::PrimitiveType::fromUnderlyingType(bool isConst, bool isVolatile,
+                                                      cld::LanguageOptions::UnderlyingType underlyingType,
+                                                      const cld::LanguageOptions& options)
+{
+    switch (underlyingType)
+    {
+        case cld::LanguageOptions::UnderlyingType::UnsignedShort:
+            return PrimitiveType::createUnsignedShort(isConst, isVolatile, options);
+        case cld::LanguageOptions::UnderlyingType::Int: return PrimitiveType::createInt(isConst, isVolatile, options);
+        case cld::LanguageOptions::UnderlyingType::UnsignedInt:
+            return PrimitiveType::createUnsignedInt(isConst, isVolatile, options);
+        case cld::LanguageOptions::UnderlyingType::Long: return PrimitiveType::createLong(isConst, isVolatile, options);
+        case cld::LanguageOptions::UnderlyingType::UnsignedLong:
+            return PrimitiveType::createUnsignedLong(isConst, isVolatile, options);
+        case cld::LanguageOptions::UnderlyingType::LongLong:
+            return PrimitiveType::createLongLong(isConst, isVolatile, options);
+        case cld::LanguageOptions::UnderlyingType::UnsignedLongLong:
+            return PrimitiveType::createUnsignedLongLong(isConst, isVolatile, options);
+    }
+    CLD_UNREACHABLE;
+}
+
 cld::Semantics::Type cld::Semantics::PrimitiveType::createPtrdiffT(bool isConst, bool isVolatile,
                                                                    const LanguageOptions& options)
 {
-    switch (options.ptrdiffType)
-    {
-        case LanguageOptions::PtrdiffType ::Int: return PrimitiveType::createInt(isConst, isVolatile, options);
-        case LanguageOptions::PtrdiffType ::Long: return PrimitiveType::createLong(isConst, isVolatile, options);
-        case LanguageOptions::PtrdiffType ::LongLong: return PrimitiveType::createLongLong(isConst, isVolatile);
-    }
-    CLD_UNREACHABLE;
+    return fromUnderlyingType(isConst, isVolatile, options.ptrdiffType, options);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createWcharT(bool isConst, bool isVolatile,
                                                                  const LanguageOptions& options)
 {
-    switch (options.wcharUnderlyingType)
-    {
-        case LanguageOptions::WideCharType ::Int: return PrimitiveType::createInt(isConst, isVolatile, options);
-        case LanguageOptions::WideCharType ::UnsignedShort:
-            return PrimitiveType::createUnsignedShort(isConst, isVolatile, options);
-    }
-    CLD_UNREACHABLE;
+    return fromUnderlyingType(isConst, isVolatile, options.wcharUnderlyingType, options);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createSizeT(bool isConst, bool isVolatile,
                                                                 const LanguageOptions& options)
 {
-    switch (options.sizeTType)
-    {
-        case LanguageOptions::SizeTType ::UnsignedInt:
-            return PrimitiveType::createUnsignedInt(isConst, isVolatile, options);
-        case LanguageOptions::SizeTType ::UnsignedLong:
-            return PrimitiveType::createUnsignedLong(isConst, isVolatile, options);
-        case LanguageOptions::SizeTType ::UnsignedLongLong:
-            return PrimitiveType::createUnsignedLongLong(isConst, isVolatile);
-    }
-    CLD_UNREACHABLE;
+    return fromUnderlyingType(isConst, isVolatile, options.sizeTType, options);
 }
 
 cld::Semantics::ArrayType::ArrayType(bool isRestricted, bool isStatic, std::shared_ptr<cld::Semantics::Type>&& type,
@@ -197,25 +199,22 @@ std::uint64_t cld::Semantics::EnumType::getAlignOf(const ProgramInterface& progr
     return def->getType().getAlignOf(program);
 }
 
-cld::Semantics::PrimitiveType::PrimitiveType(bool isFloatingPoint, bool isSigned, std::uint8_t bitCount, Kind kind)
-    : m_bitCount(bitCount), m_isFloatingPoint(isFloatingPoint), m_isSigned(isSigned), m_kind(kind)
+cld::Semantics::PrimitiveType::PrimitiveType(bool isFloatingPoint, bool isSigned, std::uint8_t bitCount,
+                                             std::uint8_t alignOf, Kind kind)
+    : m_bitCount(bitCount), m_alignOf(alignOf), m_isFloatingPoint(isFloatingPoint), m_isSigned(isSigned), m_kind(kind)
 {
 }
 
 std::uint8_t cld::Semantics::PrimitiveType::getByteCount() const
 {
-    auto value = roundUpTo(m_bitCount, 8);
-    std::uint8_t temp = (value / 8) - 1;
-    temp |= temp >> 1;
-    temp |= temp >> 2;
-    temp |= temp >> 4;
-    return (temp + 1);
+    return roundUpTo(m_bitCount, m_alignOf * 8) / 8;
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::create(bool isConst, bool isVolatile, bool isFloatingPoint,
-                                                           bool isSigned, std::uint8_t bitCount, Kind kind)
+                                                           bool isSigned, std::uint8_t bitCount, std::uint8_t alignOf,
+                                                           Kind kind)
 {
-    return cld::Semantics::Type(isConst, isVolatile, PrimitiveType(isFloatingPoint, isSigned, bitCount, kind));
+    return cld::Semantics::Type(isConst, isVolatile, PrimitiveType(isFloatingPoint, isSigned, bitCount, alignOf, kind));
 }
 
 bool cld::Semantics::PrimitiveType::operator==(const cld::Semantics::PrimitiveType& rhs) const
@@ -236,89 +235,93 @@ bool cld::Semantics::PrimitiveType::operator!=(const cld::Semantics::PrimitiveTy
 cld::Semantics::Type cld::Semantics::PrimitiveType::createChar(bool isConst, bool isVolatile,
                                                                const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, options.charIsSigned, 8, Kind::Char);
+    return create(isConst, isVolatile, false, options.charIsSigned, 8, 1, Kind::Char);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createSignedChar(bool isConst, bool isVolatile)
 {
-    return create(isConst, isVolatile, false, true, 8, Kind::SignedChar);
+    return create(isConst, isVolatile, false, true, 8, 1, Kind::SignedChar);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createUnsignedChar(bool isConst, bool isVolatile)
 {
-    return create(isConst, isVolatile, false, false, 8, Kind::UnsignedChar);
+    return create(isConst, isVolatile, false, false, 8, 1, Kind::UnsignedChar);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createUnderlineBool(bool isConst, bool isVolatile)
 {
-    return create(isConst, isVolatile, false, false, 1, Kind::Bool);
+    return create(isConst, isVolatile, false, false, 1, 1, Kind::Bool);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createShort(bool isConst, bool isVolatile,
                                                                 const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, true, options.sizeOfShort * 8, Kind::Short);
+    return create(isConst, isVolatile, false, true, options.sizeOfShort * 8, options.sizeOfShort, Kind::Short);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createUnsignedShort(bool isConst, bool isVolatile,
                                                                         const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, false, options.sizeOfShort * 8, Kind::UnsignedShort);
+    return create(isConst, isVolatile, false, false, options.sizeOfShort * 8, options.sizeOfShort, Kind::UnsignedShort);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createInt(bool isConst, bool isVolatile,
                                                               const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, true, options.sizeOfInt * 8, Kind::Int);
+    return create(isConst, isVolatile, false, true, options.sizeOfInt * 8, options.sizeOfInt, Kind::Int);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createUnsignedInt(bool isConst, bool isVolatile,
                                                                       const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, false, options.sizeOfInt * 8, Kind::UnsignedInt);
+    return create(isConst, isVolatile, false, false, options.sizeOfInt * 8, options.sizeOfInt, Kind::UnsignedInt);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createLong(bool isConst, bool isVolatile,
                                                                const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, true, options.sizeOfLong * 8, Kind::Long);
+    return create(isConst, isVolatile, false, true, options.sizeOfLong * 8, options.sizeOfLong, Kind::Long);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createUnsignedLong(bool isConst, bool isVolatile,
                                                                        const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, false, options.sizeOfLong * 8, Kind::UnsignedLong);
+    return create(isConst, isVolatile, false, false, options.sizeOfLong * 8, options.sizeOfLong, Kind::UnsignedLong);
 }
 
-cld::Semantics::Type cld::Semantics::PrimitiveType::createLongLong(bool isConst, bool isVolatile)
+cld::Semantics::Type cld::Semantics::PrimitiveType::createLongLong(bool isConst, bool isVolatile,
+                                                                   const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, true, 64, Kind::LongLong);
+    return create(isConst, isVolatile, false, true, 64, options.alignOfLongLong, Kind::LongLong);
 }
 
-cld::Semantics::Type cld::Semantics::PrimitiveType::createUnsignedLongLong(bool isConst, bool isVolatile)
+cld::Semantics::Type cld::Semantics::PrimitiveType::createUnsignedLongLong(bool isConst, bool isVolatile,
+                                                                           const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, false, false, 64, Kind::UnsignedLongLong);
+    return create(isConst, isVolatile, false, false, 64, options.alignOfLongLong, Kind::UnsignedLongLong);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createFloat(bool isConst, bool isVolatile)
 {
-    return create(isConst, isVolatile, true, true, 32, Kind::Float);
+    return create(isConst, isVolatile, true, true, 32, 4, Kind::Float);
 }
 
-cld::Semantics::Type cld::Semantics::PrimitiveType::createDouble(bool isConst, bool isVolatile)
+cld::Semantics::Type cld::Semantics::PrimitiveType::createDouble(bool isConst, bool isVolatile,
+                                                                 const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, true, true, 64, Kind::Double);
+    return create(isConst, isVolatile, true, true, 64, options.alignOfDouble, Kind::Double);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createLongDouble(bool isConst, bool isVolatile,
                                                                      const LanguageOptions& options)
 {
-    return create(isConst, isVolatile, true, true, options.sizeOfLongDoubleBits, Kind::LongDouble);
+    return create(isConst, isVolatile, true, true, options.sizeOfLongDoubleBits, options.alignOfLongDouble,
+                  Kind::LongDouble);
 }
 
 cld::Semantics::Type cld::Semantics::PrimitiveType::createVoid(bool isConst, bool isVolatile)
 {
-    return create(isConst, isVolatile, false, true, 0, Kind::Void);
+    return create(isConst, isVolatile, false, true, 0, 0, Kind::Void);
 }
 
 cld::Semantics::ValArrayType::ValArrayType(bool isRestricted, bool isStatic,

@@ -1987,15 +1987,8 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view cha
         std::uint8_t size = 1;
         if (wide)
         {
-            switch (context.sourceInterface.getLanguageOptions().wcharUnderlyingType)
-            {
-                case cld::LanguageOptions::WideCharType ::Int:
-                    size = context.sourceInterface.getLanguageOptions().sizeOfInt;
-                    break;
-                case cld::LanguageOptions::WideCharType ::UnsignedShort:
-                    size = context.sourceInterface.getLanguageOptions().sizeOfShort;
-                    break;
-            }
+            size = context.sourceInterface.getLanguageOptions().sizeOf(
+                context.sourceInterface.getLanguageOptions().wcharUnderlyingType);
         }
         return 0xFFFFFFFFu >> (32 - 8 * size);
     }();
@@ -2684,17 +2677,13 @@ std::vector<cld::Lexer::CToken> cld::Lexer::toCTokens(PPTokenIterator begin, PPT
                 {
                     result.emplace_back(
                         TokenType::Literal, iter->getOffset(), iter->getLength(), iter->getFileId(), iter->getMacroId(),
-                        llvm::APSInt(llvm::APInt((sourceInterface.getLanguageOptions().wcharUnderlyingType
-                                                          == LanguageOptions::WideCharType::UnsignedShort ?
-                                                      sourceInterface.getLanguageOptions().sizeOfShort :
-                                                      sourceInterface.getLanguageOptions().sizeOfInt)
-                                                     * 8,
-                                                 chars[0]),
-                                     sourceInterface.getLanguageOptions().wcharUnderlyingType
-                                         == LanguageOptions::WideCharType::UnsignedShort),
-                        sourceInterface.getLanguageOptions().wcharUnderlyingType == LanguageOptions::WideCharType::Int ?
-                            CToken::Int :
-                            CToken::UnsignedShort);
+                        llvm::APSInt(
+                            llvm::APInt(sourceInterface.getLanguageOptions().sizeOf(
+                                            sourceInterface.getLanguageOptions().wcharUnderlyingType)
+                                            * 8,
+                                        chars[0]),
+                            !LanguageOptions::isSigned(sourceInterface.getLanguageOptions().wcharUnderlyingType)),
+                        CToken::fromUnderlyingType(sourceInterface.getLanguageOptions().wcharUnderlyingType));
                 }
                 else
                 {
@@ -2748,22 +2737,14 @@ std::optional<cld::Lexer::CToken> cld::Lexer::parseStringLiteral(const PPToken& 
                       ppToken.getMacroId(), std::string(utf8.data(), dest));
     }
 
-    std::uint8_t size = 0;
-    switch (sourceInterface.getLanguageOptions().wcharUnderlyingType)
-    {
-        case LanguageOptions::WideCharType ::UnsignedShort:
-            size = sourceInterface.getLanguageOptions().sizeOfShort;
-            break;
-        case LanguageOptions::WideCharType ::Int: size = sourceInterface.getLanguageOptions().sizeOfInt; break;
-    }
-
+    std::uint8_t size =
+        sourceInterface.getLanguageOptions().sizeOf(sourceInterface.getLanguageOptions().wcharUnderlyingType);
     switch (size)
     {
         case 4:
         {
             return CToken(TokenType::StringLiteral, ppToken.getOffset(), ppToken.getLength(), ppToken.getFileId(),
                           ppToken.getMacroId(), NonCharString{chars, NonCharString::Wide});
-            break;
         }
         case 2:
         {

@@ -115,12 +115,12 @@ public:
     SourceObject(const SourceObject&) = delete;
     SourceObject& operator=(const SourceObject&) = delete;
     SourceObject(SourceObject&&)
-#if !defined(_MSC_VER) || defined(__clang__)
+#if !defined(_MSC_VER) || defined(__clang__) || _MSC_VER >= 1928
         noexcept
 #endif
         = default;
     SourceObject& operator=(SourceObject&&)
-#if !defined(_MSC_VER) || defined(__clang__)
+#if !defined(_MSC_VER) || defined(__clang__) || _MSC_VER >= 1928
         noexcept
 #endif
         = default;

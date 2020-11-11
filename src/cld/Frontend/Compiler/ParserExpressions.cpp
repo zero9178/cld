@@ -1231,16 +1231,8 @@ cld::Syntax::PrimaryExpressionConstant cld::Parser::parseStringLiteral(Lexer::CT
                 return match(
                     literal, [&str](const std::string& lhs) -> stringVariant { return lhs + str; },
                     [&str, &context](Lexer::NonCharString lhs) -> stringVariant {
-                        std::uint8_t size;
-                        switch (context.getSourceInterface().getLanguageOptions().wcharUnderlyingType)
-                        {
-                            case LanguageOptions::WideCharType::UnsignedShort:
-                                size = context.getSourceInterface().getLanguageOptions().sizeOfShort;
-                                break;
-                            case LanguageOptions::WideCharType::Int:
-                                size = context.getSourceInterface().getLanguageOptions().sizeOfInt;
-                                break;
-                        }
+                        std::uint8_t size = context.getSourceInterface().getLanguageOptions().sizeOf(
+                            context.getSourceInterface().getLanguageOptions().wcharUnderlyingType);
                         switch (size)
                         {
                             case 2:
@@ -1286,16 +1278,8 @@ cld::Syntax::PrimaryExpressionConstant cld::Parser::parseStringLiteral(Lexer::CT
                 return match(
                     literal,
                     [&str, &context](const std::string& lhs) -> stringVariant {
-                        std::uint8_t size;
-                        switch (context.getSourceInterface().getLanguageOptions().wcharUnderlyingType)
-                        {
-                            case LanguageOptions::WideCharType::UnsignedShort:
-                                size = context.getSourceInterface().getLanguageOptions().sizeOfShort;
-                                break;
-                            case LanguageOptions::WideCharType::Int:
-                                size = context.getSourceInterface().getLanguageOptions().sizeOfInt;
-                                break;
-                        }
+                        std::uint8_t size = context.getSourceInterface().getLanguageOptions().sizeOf(
+                            context.getSourceInterface().getLanguageOptions().wcharUnderlyingType);
                         switch (size)
                         {
                             case 2:

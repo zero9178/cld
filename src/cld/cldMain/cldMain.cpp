@@ -209,39 +209,16 @@ cld::PP::Options getTargetSpecificPreprocessorOptions(const cld::LanguageOptions
     result.additionalMacros.emplace_back("__LONG_MAX__",
                                          cld::to_string(safeShiftLeft(1uLL, (8 * languageOptions.sizeOfLong - 1)) - 1));
     result.additionalMacros.emplace_back("__LONG_LONG_MAX__", cld::to_string(safeShiftLeft(1ull, (8 * 8 - 1)) - 1));
-    std::size_t wcharSize;
-    bool wcharSigned;
-    switch (languageOptions.wcharUnderlyingType)
-    {
-        case cld::LanguageOptions::WideCharType::UnsignedShort:
-            wcharSigned = false;
-            wcharSize = languageOptions.sizeOfShort;
-            break;
-        case cld::LanguageOptions::WideCharType::Int:
-            wcharSigned = true;
-            wcharSize = languageOptions.sizeOfInt;
-            break;
-    }
+    std::size_t wcharSize = languageOptions.sizeOf(languageOptions.wcharUnderlyingType);
+    bool wcharSigned = cld::LanguageOptions::isSigned(languageOptions.wcharUnderlyingType);
     result.additionalMacros.emplace_back("__WCHAR_MAX__",
                                          cld::to_string(safeShiftLeft(1uLL, (8 * wcharSize - wcharSigned)) - 1));
     result.additionalMacros.emplace_back("__INTMAX_MAX__", "__LONG_LONG_MAX__");
     result.additionalMacros.emplace_back("__UINTMAX_MAX__", cld::to_string(~0ull));
 
-    std::size_t sizeTSize;
-    switch (languageOptions.sizeTType)
-    {
-        case cld::LanguageOptions::SizeTType::UnsignedInt: sizeTSize = languageOptions.sizeOfInt; break;
-        case cld::LanguageOptions::SizeTType::UnsignedLong: sizeTSize = languageOptions.sizeOfLong; break;
-        case cld::LanguageOptions::SizeTType::UnsignedLongLong: sizeTSize = 8; break;
-    }
+    std::size_t sizeTSize = languageOptions.sizeOf(languageOptions.sizeTType);
     result.additionalMacros.emplace_back("__SIZE_MAX__", cld::to_string(safeShiftLeft(1ull, (8 * sizeTSize)) - 1));
-    std::size_t ptrDiffSize;
-    switch (languageOptions.ptrdiffType)
-    {
-        case cld::LanguageOptions::PtrdiffType::Int: ptrDiffSize = languageOptions.sizeOfInt; break;
-        case cld::LanguageOptions::PtrdiffType::Long: ptrDiffSize = languageOptions.sizeOfLong; break;
-        case cld::LanguageOptions::PtrdiffType::LongLong: ptrDiffSize = 8; break;
-    }
+    std::size_t ptrDiffSize = languageOptions.sizeOf(languageOptions.ptrdiffType);
     result.additionalMacros.emplace_back("__PTRDIFF_MAX___",
                                          cld::to_string(safeShiftLeft(1ull, (8 * ptrDiffSize - 1)) - 1));
     result.additionalMacros.emplace_back(
@@ -281,41 +258,14 @@ cld::PP::Options getTargetSpecificPreprocessorOptions(const cld::LanguageOptions
     result.additionalMacros.emplace_back("__UINTMAX_TYPE__", "unsigned long long");
     result.additionalMacros.emplace_back("__UINTMAX_C_SUFFIX__", "ULL");
     result.additionalMacros.emplace_back("__UINTMAX_WIDTH__", "64");
-    switch (languageOptions.ptrdiffType)
-    {
-        case cld::LanguageOptions::PtrdiffType::Int:
-            result.additionalMacros.emplace_back("__PTRDIFF_TYPE__", "int");
-            break;
-        case cld::LanguageOptions::PtrdiffType::Long:
-            result.additionalMacros.emplace_back("__PTRDIFF_TYPE__", "long");
-            break;
-        case cld::LanguageOptions::PtrdiffType::LongLong:
-            result.additionalMacros.emplace_back("__PTRDIFF_TYPE__", "long long");
-            break;
-    }
+    result.additionalMacros.emplace_back("__PTRDIFF_TYPE__",
+                                         cld::to_string(cld::LanguageOptions::string(languageOptions.ptrdiffType)));
     result.additionalMacros.emplace_back("__PTRDIFF_WIDTH__", cld::to_string(ptrDiffSize * 8));
-    switch (languageOptions.sizeTType)
-    {
-        case cld::LanguageOptions::SizeTType::UnsignedInt:
-            result.additionalMacros.emplace_back("__SIZE_TYPE__", "unsigned int");
-            break;
-        case cld::LanguageOptions::SizeTType::UnsignedLong:
-            result.additionalMacros.emplace_back("__SIZE_TYPE__", "unsigned long");
-            break;
-        case cld::LanguageOptions::SizeTType::UnsignedLongLong:
-            result.additionalMacros.emplace_back("__SIZE_TYPE__", "unsigned long long");
-            break;
-    }
+    result.additionalMacros.emplace_back("__SIZE_TYPE__",
+                                         cld::to_string(cld::LanguageOptions::string(languageOptions.sizeTType)));
     result.additionalMacros.emplace_back("__SIZE_WIDTH__", cld::to_string(sizeTSize * 8));
-    switch (languageOptions.wcharUnderlyingType)
-    {
-        case cld::LanguageOptions::WideCharType::UnsignedShort:
-            result.additionalMacros.emplace_back("__WCHAR_TYPE__", "unsigned short");
-            break;
-        case cld::LanguageOptions::WideCharType::Int:
-            result.additionalMacros.emplace_back("__WCHAR_TYPE__", "int");
-            break;
-    }
+    result.additionalMacros.emplace_back(
+        "__WCHAR_TYPE__", cld::to_string(cld::LanguageOptions::string(languageOptions.wcharUnderlyingType)));
     result.additionalMacros.emplace_back("__WCHAR_WIDTH__", cld::to_string(wcharSize * 8));
 
     result.additionalMacros.emplace_back("__POINTER__WIDTH__", cld::to_string(8 * languageOptions.sizeOfVoidStar));
@@ -324,11 +274,9 @@ cld::PP::Options getTargetSpecificPreprocessorOptions(const cld::LanguageOptions
         result.additionalMacros.emplace_back("__CHAR_UNSIGNED__", "1");
     }
 
-    switch (languageOptions.wcharUnderlyingType)
+    if (!cld::LanguageOptions::isSigned(languageOptions.wcharUnderlyingType))
     {
-        case cld::LanguageOptions::WideCharType::UnsignedShort:
-            result.additionalMacros.emplace_back("__WCHAR_UNSIGNED__", "1");
-        default: break;
+        result.additionalMacros.emplace_back("__WCHAR_UNSIGNED__", "1");
     }
 
     result.additionalMacros.emplace_back("__FINITE_MATH_ONLY__", "0");

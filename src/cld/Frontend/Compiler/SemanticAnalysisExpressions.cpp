@@ -431,17 +431,20 @@ std::unique_ptr<cld::Semantics::Constant>
                     PrimitiveType::createUnsignedLong(false, false, m_sourceInterface.getLanguageOptions()),
                     node.getValue(), node.begin(), node.end());
             case Lexer::CToken::Type::LongLong:
-                return std::make_unique<Constant>(PrimitiveType::createLongLong(false, false), node.getValue(),
-                                                  node.begin(), node.end());
+                return std::make_unique<Constant>(
+                    PrimitiveType::createLongLong(false, false, m_sourceInterface.getLanguageOptions()),
+                    node.getValue(), node.begin(), node.end());
             case Lexer::CToken::Type::UnsignedLongLong:
-                return std::make_unique<Constant>(PrimitiveType::createUnsignedLongLong(false, false), node.getValue(),
-                                                  node.begin(), node.end());
+                return std::make_unique<Constant>(
+                    PrimitiveType::createUnsignedLongLong(false, false, m_sourceInterface.getLanguageOptions()),
+                    node.getValue(), node.begin(), node.end());
             case Lexer::CToken::Type::Float:
                 return std::make_unique<Constant>(PrimitiveType::createFloat(false, false), node.getValue(),
                                                   node.begin(), node.end());
             case Lexer::CToken::Type::Double:
-                return std::make_unique<Constant>(PrimitiveType::createDouble(false, false), node.getValue(),
-                                                  node.begin(), node.end());
+                return std::make_unique<Constant>(
+                    PrimitiveType::createDouble(false, false, m_sourceInterface.getLanguageOptions()), node.getValue(),
+                    node.begin(), node.end());
             case Lexer::CToken::Type::LongDouble:
                 return std::make_unique<Constant>(
                     PrimitiveType::createLongDouble(false, false, m_sourceInterface.getLanguageOptions()),
@@ -462,24 +465,11 @@ std::unique_ptr<cld::Semantics::Constant>
         auto& string = cld::get<Lexer::NonCharString>(node.getValue());
         if (string.type == Lexer::NonCharString::Wide)
         {
-            switch (m_sourceInterface.getLanguageOptions().wcharUnderlyingType)
-            {
-                case LanguageOptions::WideCharType::UnsignedShort:
-                    return std::make_unique<Constant>(
-                        ArrayType::create(
-                            false, false, false, false,
-                            PrimitiveType::createUnsignedShort(false, false, m_sourceInterface.getLanguageOptions()),
-                            string.characters.size() + 1),
-                        node.getValue(), node.begin(), node.end());
-                case LanguageOptions::WideCharType::Int:
-                    return std::make_unique<Constant>(
-                        ArrayType::create(
-                            false, false, false, false,
-                            PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions()),
-                            string.characters.size() + 1),
-                        node.getValue(), node.begin(), node.end());
-            }
-            CLD_UNREACHABLE;
+            return std::make_unique<Constant>(
+                ArrayType::create(false, false, false, false,
+                                  PrimitiveType::createWcharT(false, false, m_sourceInterface.getLanguageOptions()),
+                                  string.characters.size() + 1),
+                node.getValue(), node.begin(), node.end());
         }
     }
     CLD_UNREACHABLE;
@@ -1622,12 +1612,14 @@ std::unique_ptr<cld::Semantics::Constant>
     CLD_ASSERT(m_definedCallback);
     if (m_definedCallback(node.getIdentifier()))
     {
-        return std::make_unique<Constant>(PrimitiveType::createLongLong(false, false),
-                                          llvm::APSInt(llvm::APInt(64, 1), false), node.begin(), node.end());
+        return std::make_unique<Constant>(
+            PrimitiveType::createLongLong(false, false, m_sourceInterface.getLanguageOptions()),
+            llvm::APSInt(llvm::APInt(64, 1), false), node.begin(), node.end());
     }
 
-    return std::make_unique<Constant>(PrimitiveType::createLongLong(false, false), llvm::APSInt(64, false),
-                                      node.begin(), node.end());
+    return std::make_unique<Constant>(
+        PrimitiveType::createLongLong(false, false, m_sourceInterface.getLanguageOptions()), llvm::APSInt(64, false),
+        node.begin(), node.end());
 }
 
 cld::IntrVarPtr<cld::Semantics::ExpressionBase>
@@ -2466,8 +2458,9 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     {
         return std::move(expression);
     }
-    return std::make_unique<Conversion>(PrimitiveType::createDouble(false, false), Conversion::DefaultArgumentPromotion,
-                                        std::move(expression));
+    return std::make_unique<Conversion>(
+        PrimitiveType::createDouble(false, false, m_sourceInterface.getLanguageOptions()),
+        Conversion::DefaultArgumentPromotion, std::move(expression));
 }
 
 cld::IntrVarPtr<cld::Semantics::ExpressionBase>
@@ -2526,7 +2519,9 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(IntrVarPtr<Expressio
         switch (biggest)
         {
             case PrimitiveType::Kind::Float: type = PrimitiveType::createFloat(false, false); break;
-            case PrimitiveType::Kind::Double: type = PrimitiveType::createDouble(false, false); break;
+            case PrimitiveType::Kind::Double:
+                type = PrimitiveType::createDouble(false, false, m_sourceInterface.getLanguageOptions());
+                break;
             case PrimitiveType::Kind::LongDouble:
                 type = PrimitiveType::createLongDouble(false, false, m_sourceInterface.getLanguageOptions());
                 break;
@@ -2570,7 +2565,9 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(Type& lhs, IntrVarPt
         switch (biggest)
         {
             case PrimitiveType::Kind::Float: type = PrimitiveType::createFloat(false, false); break;
-            case PrimitiveType::Kind::Double: type = PrimitiveType::createDouble(false, false); break;
+            case PrimitiveType::Kind::Double:
+                type = PrimitiveType::createDouble(false, false, m_sourceInterface.getLanguageOptions());
+                break;
             case PrimitiveType::Kind::LongDouble:
                 type = PrimitiveType::createLongDouble(false, false, m_sourceInterface.getLanguageOptions());
                 break;

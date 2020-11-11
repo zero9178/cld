@@ -1059,7 +1059,8 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::defaultArgumentPromotion(
     {
         if (prim.getBitCount() == 32)
         {
-            return PrimitiveType::createDouble(type.isConst(), type.isVolatile());
+            return PrimitiveType::createDouble(type.isConst(), type.isVolatile(),
+                                               m_sourceInterface.getLanguageOptions());
         }
         return type;
     }
@@ -1912,9 +1913,11 @@ const cld::Semantics::ProgramInterface::DeclarationInScope::Variant* CLD_NULLABL
             case Types::UnsignedInt:
                 return PrimitiveType::createUnsignedInt(false, false, m_sourceInterface.getLanguageOptions());
             case Types::Long: return PrimitiveType::createLong(false, false, m_sourceInterface.getLanguageOptions());
-            case Types::LongLong: return PrimitiveType::createLongLong(false, false);
+            case Types::LongLong:
+                return PrimitiveType::createLongLong(false, false, m_sourceInterface.getLanguageOptions());
             case Types::Float: return PrimitiveType::createFloat(false, false);
-            case Types::Double: return PrimitiveType::createDouble(false, false);
+            case Types::Double:
+                return PrimitiveType::createDouble(false, false, m_sourceInterface.getLanguageOptions());
             case Types::LongDouble:
                 return PrimitiveType::createLongDouble(false, false, m_sourceInterface.getLanguageOptions());
             case Types::VAList: return *getTypedef("__builtin_va_list");
