@@ -135,6 +135,8 @@ enum class TokenType : std::uint8_t
     TOKEN_MAX_VALUE = Miscellaneous,
 };
 
+bool isText(TokenType tokenType);
+
 using TokenIterator = const TokenBase* CLD_NON_NULL;
 using CTokenIterator = const CToken* CLD_NON_NULL;
 using PPTokenIterator = const PPToken* CLD_NON_NULL;
@@ -142,6 +144,9 @@ using PPTokenIterator = const PPToken* CLD_NON_NULL;
 PPSourceObject tokenize(std::string source, LanguageOptions languageOptions = LanguageOptions::native(),
                         llvm::raw_ostream* reporter = &llvm::errs(), bool* errorsOccured = nullptr,
                         std::string_view sourcePath = "<stdin>");
+
+CSourceObject toCTokens(PPSourceObject&& sourceObject, llvm::raw_ostream* reporter = &llvm::errs(),
+                        bool* errorsOccurred = nullptr);
 
 CSourceObject toCTokens(const PPSourceObject& sourceObject, llvm::raw_ostream* reporter = &llvm::errs(),
                         bool* errorsOccurred = nullptr);

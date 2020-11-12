@@ -1640,6 +1640,7 @@ cld::PPSourceObject cld::Lexer::tokenize(std::string source, LanguageOptions lan
             source.erase(pos, 1);
         }
     }
+    source.shrink_to_fit();
 
     StateMachine stateMachine;
     std::uint64_t offset = 0;
@@ -1653,6 +1654,7 @@ cld::PPSourceObject cld::Lexer::tokenize(std::string source, LanguageOptions lan
         }
     }
     starts.push_back(offset + 1);
+    starts.shrink_to_fit();
     offset = 0;
 
     std::string charactersSpace;
@@ -1693,6 +1695,7 @@ cld::PPSourceObject cld::Lexer::tokenize(std::string source, LanguageOptions lan
         }
         characterToSourceSpace.emplace_back(charactersSpace.size(), 0, 0);
     }
+    charactersSpace.shrink_to_fit();
 
     Context context(source, characterToSourceSpace, charactersSpace, offset, starts, reporter, sourcePath,
                     languageOptions);
@@ -1860,6 +1863,7 @@ cld::PPSourceObject cld::Lexer::tokenize(std::string source, LanguageOptions lan
         while (cld::match(stateMachine, visitor))
             ;
     }
+    characterToSourceSpace.shrink_to_fit();
 
     if (errorsOccured)
     {
@@ -2338,17 +2342,18 @@ std::optional<std::pair<CToken::ValueType, CToken::Type>>
         }
     }
 
-    auto suffix = std::string(suffixBegin, std::distance(suffixBegin, end));
-    std::unordered_set<std::string_view> set;
-    if (!isFloat)
-    {
-        set = {"u",  "U",  "ul",  "Ul",  "uL",  "UL",  "uLL", "ULL", "ull", "Ull", "lu", "lU",
-               "Lu", "LU", "LLu", "LLU", "llu", "llU", "l",   "L",   "ll",  "LL",  ""};
-    }
-    else
-    {
-        set = {"f", "l", "F", "L", ""};
-    }
+    auto suffix = std::string_view(suffixBegin, std::distance(suffixBegin, end));
+    const std::unordered_set<std::string_view>& set = [=]() -> decltype(auto) {
+        if (!isFloat)
+        {
+            static const std::unordered_set<std::string_view> result{"u",   "U",   "ul", "Ul", "uL", "UL", "uLL", "ULL",
+                                                                     "ull", "Ull", "lu", "lU", "Lu", "LU", "LLu", "LLU",
+                                                                     "llu", "llU", "l",  "L",  "ll", "LL", ""};
+            return result;
+        }
+        static const std::unordered_set<std::string_view> result{"f", "l", "F", "L", ""};
+        return result;
+    }();
     if (set.count(suffix) == 0)
     {
         auto arrowBegin = beginLocation + std::distance(begin, suffixBegin);
@@ -2365,17 +2370,14 @@ std::optional<std::pair<CToken::ValueType, CToken::Type>>
     {
         bool unsignedConsidered =
             isHexOrOctal || std::any_of(suffix.begin(), suffix.end(), [](char c) { return c == 'u' || c == 'U'; });
-        std::string number(begin, suffixBegin);
         llvm::APInt test;
-        llvm::StringRef(number).getAsInteger(0, test);
+        llvm::StringRef(begin, suffixBegin - begin).getAsInteger(0, test);
         if (test.getActiveBits() > (unsignedConsidered ? 64u : 63u))
         {
             context.report(cld::Errors::Lexer::INTEGER_VALUE_TOO_BIG_TO_BE_REPRESENTABLE, beginLocation, context.token);
             return {};
         }
-        char* endPtr;
-        auto integer = std::strtoull(number.data(), &endPtr, 0);
-        CLD_ASSERT(*endPtr == '\0');
+        auto integer = test.getZExtValue();
         if (suffix.empty())
         {
             switch (context.sourceInterface.getLanguageOptions().sizeOfInt)
@@ -2570,12 +2572,24 @@ std::optional<std::pair<CToken::ValueType, CToken::Type>>
 }
 } // namespace
 
+cld::CSourceObject cld::Lexer::toCTokens(PPSourceObject&& sourceObject, llvm::raw_ostream* reporter,
+                                         bool* errorsOccurred)
+{
+    auto tokens = toCTokens(sourceObject.data().data(), sourceObject.data().data() + sourceObject.data().size(),
+                            sourceObject, reporter, errorsOccurred);
+    tokens.shrink_to_fit();
+    return CSourceObject(std::move(tokens), std::move(sourceObject.getFiles()), sourceObject.getLanguageOptions(),
+                         std::move(sourceObject.getSubstitutions()));
+}
+
 cld::CSourceObject cld::Lexer::toCTokens(const PPSourceObject& sourceObject, llvm::raw_ostream* reporter,
                                          bool* errorsOccurred)
 {
-    return CSourceObject(toCTokens(sourceObject.data().data(), sourceObject.data().data() + sourceObject.data().size(),
-                                   sourceObject, reporter, errorsOccurred),
-                         sourceObject.getFiles(), sourceObject.getLanguageOptions(), sourceObject.getSubstitutions());
+    auto tokens = toCTokens(sourceObject.data().data(), sourceObject.data().data() + sourceObject.data().size(),
+                            sourceObject, reporter, errorsOccurred);
+    tokens.shrink_to_fit();
+    return CSourceObject(std::move(tokens), sourceObject.getFiles(), sourceObject.getLanguageOptions(),
+                         sourceObject.getSubstitutions());
 }
 
 std::vector<cld::Lexer::CToken> cld::Lexer::toCTokens(PPTokenIterator begin, PPTokenIterator end,
@@ -2587,6 +2601,7 @@ std::vector<cld::Lexer::CToken> cld::Lexer::toCTokens(PPTokenIterator begin, PPT
         *errorsOccurred = false;
     }
     std::vector<CToken> result;
+    result.reserve(end - begin);
     for (const auto* iter = begin; iter != end; iter++)
     {
         switch (iter->getTokenType())
@@ -2978,6 +2993,7 @@ std::string_view cld::Lexer::tokenValue(cld::Lexer::TokenType tokenType)
 std::string cld::Lexer::normalizeSpelling(std::string_view tokenSpelling)
 {
     std::string result;
+    result.reserve(tokenSpelling.size());
     for (auto& iter : ctre::range<pattern>(tokenSpelling))
     {
         auto view = iter.view();
@@ -2999,99 +3015,25 @@ std::string cld::Lexer::normalizeSpelling(std::string_view tokenSpelling)
 
 bool cld::Lexer::needsWhitespaceInBetween(TokenType left, TokenType right) noexcept
 {
+    if (isText(left))
+    {
+        switch (right)
+        {
+            case TokenType::Backslash:
+            case TokenType::StringLiteral:
+            case TokenType::Literal:
+            case TokenType::PPNumber: return true;
+            default:
+                if (isText(right))
+                {
+                    return true;
+                }
+                break;
+        }
+        return false;
+    }
     switch (left)
     {
-        case TokenType::Identifier:
-        case TokenType::VoidKeyword:
-        case TokenType::CharKeyword:
-        case TokenType::ShortKeyword:
-        case TokenType::IntKeyword:
-        case TokenType::LongKeyword:
-        case TokenType::FloatKeyword:
-        case TokenType::DoubleKeyword:
-        case TokenType::SignedKeyword:
-        case TokenType::UnsignedKeyword:
-        case TokenType::TypedefKeyword:
-        case TokenType::ExternKeyword:
-        case TokenType::StaticKeyword:
-        case TokenType::AutoKeyword:
-        case TokenType::RegisterKeyword:
-        case TokenType::ConstKeyword:
-        case TokenType::RestrictKeyword:
-        case TokenType::SizeofKeyword:
-        case TokenType::VolatileKeyword:
-        case TokenType::InlineKeyword:
-        case TokenType::ReturnKeyword:
-        case TokenType::BreakKeyword:
-        case TokenType::ContinueKeyword:
-        case TokenType::DoKeyword:
-        case TokenType::ElseKeyword:
-        case TokenType::ForKeyword:
-        case TokenType::IfKeyword:
-        case TokenType::WhileKeyword:
-        case TokenType::StructKeyword:
-        case TokenType::SwitchKeyword:
-        case TokenType::CaseKeyword:
-        case TokenType::DefaultKeyword:
-        case TokenType::UnionKeyword:
-        case TokenType::EnumKeyword:
-        case TokenType::GotoKeyword:
-        case TokenType::UnderlineBool:
-        case TokenType::GNUASM:
-        case TokenType::GNUExtension:
-        case TokenType::GNUTypeOf:
-        case TokenType::Int128Keyword:
-        case TokenType::GNUAttribute:
-            switch (right)
-            {
-                case TokenType::Backslash:
-                case TokenType::Identifier:
-                case TokenType::VoidKeyword:
-                case TokenType::CharKeyword:
-                case TokenType::ShortKeyword:
-                case TokenType::IntKeyword:
-                case TokenType::LongKeyword:
-                case TokenType::FloatKeyword:
-                case TokenType::DoubleKeyword:
-                case TokenType::SignedKeyword:
-                case TokenType::UnsignedKeyword:
-                case TokenType::TypedefKeyword:
-                case TokenType::ExternKeyword:
-                case TokenType::StaticKeyword:
-                case TokenType::AutoKeyword:
-                case TokenType::RegisterKeyword:
-                case TokenType::ConstKeyword:
-                case TokenType::RestrictKeyword:
-                case TokenType::SizeofKeyword:
-                case TokenType::VolatileKeyword:
-                case TokenType::InlineKeyword:
-                case TokenType::ReturnKeyword:
-                case TokenType::BreakKeyword:
-                case TokenType::ContinueKeyword:
-                case TokenType::DoKeyword:
-                case TokenType::ElseKeyword:
-                case TokenType::ForKeyword:
-                case TokenType::IfKeyword:
-                case TokenType::WhileKeyword:
-                case TokenType::StructKeyword:
-                case TokenType::SwitchKeyword:
-                case TokenType::CaseKeyword:
-                case TokenType::DefaultKeyword:
-                case TokenType::UnionKeyword:
-                case TokenType::EnumKeyword:
-                case TokenType::GotoKeyword:
-                case TokenType::UnderlineBool:
-                case TokenType::GNUAttribute:
-                case TokenType::GNUASM:
-                case TokenType::GNUExtension:
-                case TokenType::GNUTypeOf:
-                case TokenType::Int128Keyword:
-                case TokenType::StringLiteral:
-                case TokenType::Literal:
-                case TokenType::PPNumber: return true;
-                default: break;
-            }
-            break;
         case TokenType::Minus:
             switch (right)
             {
@@ -3255,47 +3197,6 @@ bool cld::Lexer::needsWhitespaceInBetween(TokenType left, TokenType right) noexc
         case TokenType::PPNumber:
             switch (right)
             {
-                case TokenType::Identifier:
-                case TokenType::VoidKeyword:
-                case TokenType::CharKeyword:
-                case TokenType::ShortKeyword:
-                case TokenType::IntKeyword:
-                case TokenType::LongKeyword:
-                case TokenType::FloatKeyword:
-                case TokenType::DoubleKeyword:
-                case TokenType::SignedKeyword:
-                case TokenType::UnsignedKeyword:
-                case TokenType::TypedefKeyword:
-                case TokenType::ExternKeyword:
-                case TokenType::StaticKeyword:
-                case TokenType::AutoKeyword:
-                case TokenType::RegisterKeyword:
-                case TokenType::ConstKeyword:
-                case TokenType::RestrictKeyword:
-                case TokenType::SizeofKeyword:
-                case TokenType::VolatileKeyword:
-                case TokenType::InlineKeyword:
-                case TokenType::ReturnKeyword:
-                case TokenType::BreakKeyword:
-                case TokenType::ContinueKeyword:
-                case TokenType::DoKeyword:
-                case TokenType::ElseKeyword:
-                case TokenType::ForKeyword:
-                case TokenType::IfKeyword:
-                case TokenType::WhileKeyword:
-                case TokenType::StructKeyword:
-                case TokenType::SwitchKeyword:
-                case TokenType::CaseKeyword:
-                case TokenType::DefaultKeyword:
-                case TokenType::UnionKeyword:
-                case TokenType::EnumKeyword:
-                case TokenType::GotoKeyword:
-                case TokenType::UnderlineBool:
-                case TokenType::GNUAttribute:
-                case TokenType::GNUASM:
-                case TokenType::GNUExtension:
-                case TokenType::GNUTypeOf:
-                case TokenType::Int128Keyword:
                 case TokenType::Plus:
                 case TokenType::Minus:
                 case TokenType::Increment:
@@ -3304,7 +3205,12 @@ bool cld::Lexer::needsWhitespaceInBetween(TokenType left, TokenType right) noexc
                 case TokenType::MinusAssign:
                 case TokenType::Arrow:
                 case TokenType::PPNumber: return true;
-                default: break;
+                default:
+                    if (isText(right))
+                    {
+                        return true;
+                    }
+                    break;
             }
             break;
         case TokenType::Backslash:
@@ -3327,4 +3233,53 @@ bool cld::Lexer::needsWhitespaceInBetween(TokenType left, TokenType right) noexc
         default: break;
     }
     return false;
+}
+
+bool cld::Lexer::isText(TokenType tokenType)
+{
+    switch (tokenType)
+    {
+        case TokenType::Identifier:
+        case TokenType::VoidKeyword:
+        case TokenType::CharKeyword:
+        case TokenType::ShortKeyword:
+        case TokenType::IntKeyword:
+        case TokenType::LongKeyword:
+        case TokenType::FloatKeyword:
+        case TokenType::DoubleKeyword:
+        case TokenType::SignedKeyword:
+        case TokenType::UnsignedKeyword:
+        case TokenType::TypedefKeyword:
+        case TokenType::ExternKeyword:
+        case TokenType::StaticKeyword:
+        case TokenType::AutoKeyword:
+        case TokenType::RegisterKeyword:
+        case TokenType::ConstKeyword:
+        case TokenType::RestrictKeyword:
+        case TokenType::SizeofKeyword:
+        case TokenType::VolatileKeyword:
+        case TokenType::InlineKeyword:
+        case TokenType::ReturnKeyword:
+        case TokenType::BreakKeyword:
+        case TokenType::ContinueKeyword:
+        case TokenType::DoKeyword:
+        case TokenType::ElseKeyword:
+        case TokenType::ForKeyword:
+        case TokenType::IfKeyword:
+        case TokenType::WhileKeyword:
+        case TokenType::StructKeyword:
+        case TokenType::SwitchKeyword:
+        case TokenType::CaseKeyword:
+        case TokenType::DefaultKeyword:
+        case TokenType::UnionKeyword:
+        case TokenType::EnumKeyword:
+        case TokenType::GotoKeyword:
+        case TokenType::UnderlineBool:
+        case TokenType::GNUAttribute:
+        case TokenType::GNUASM:
+        case TokenType::GNUExtension:
+        case TokenType::GNUTypeOf:
+        case TokenType::Int128Keyword: return true;
+        default: return false;
+    }
 }

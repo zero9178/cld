@@ -161,12 +161,30 @@ public:
         return m_tokens;
     }
 
+    void shrinkFiles()
+    {
+        for (auto& iter : m_files)
+        {
+            if (iter.ppTokens.empty())
+            {
+                continue;
+            }
+            iter.ppTokens = {iter.ppTokens.back()};
+            iter.ppTokens.shrink_to_fit();
+        }
+    }
+
     [[nodiscard]] const LanguageOptions& getLanguageOptions() const noexcept override
     {
         return m_languageOptions;
     }
 
     [[nodiscard]] llvm::ArrayRef<Source::PPRecord> getSubstitutions() const noexcept override
+    {
+        return m_substitutions;
+    }
+
+    [[nodiscard]] std::vector<Source::PPRecord>& getSubstitutions() noexcept
     {
         return m_substitutions;
     }

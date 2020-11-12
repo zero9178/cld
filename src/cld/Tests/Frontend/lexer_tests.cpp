@@ -56,7 +56,7 @@ namespace
     auto result = cld::Lexer::tokenize(std::move(code), options, &ss, &errors);
     UNSCOPED_INFO(buffer);
     REQUIRE_FALSE(errors);
-    auto tokens = cld::Lexer::toCTokens(result, &ss, &errors);
+    auto tokens = cld::Lexer::toCTokens(std::move(result), &ss, &errors);
     UNSCOPED_INFO(buffer);
     REQUIRE_FALSE(errors);
     return tokens;

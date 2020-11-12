@@ -251,6 +251,10 @@ cld::PP::Options getTargetSpecificPreprocessorOptions(const cld::LanguageOptions
     result.additionalMacros.emplace_back("__SIZEOF_PTRDIFF_T__", cld::to_string(ptrDiffSize));
     result.additionalMacros.emplace_back("__SIZEOF_SIZE_T__", cld::to_string(sizeTSize));
     result.additionalMacros.emplace_back("__SIZEOF_WCHAR_T__", cld::to_string(wcharSize));
+    if (languageOptions.int128Enabled)
+    {
+        result.additionalMacros.emplace_back("__SIZEOF_INT128__", "128");
+    }
 
     result.additionalMacros.emplace_back("__INTMAX_TYPE__", "long long");
     result.additionalMacros.emplace_back("__INTMAX_C_SUFFIX__", "LL");
@@ -375,21 +379,23 @@ std::optional<cld::fs::path> compileCFile(Action action, cld::fs::path cSourceFi
         outputFile.close();
         return cld::fs::u8path(*cli.template get<OUTPUT_FILE>());
     }
-    auto ctokens = cld::Lexer::toCTokens(pptokens, reporter, &errors);
+    auto ctokens = cld::Lexer::toCTokens(std::move(pptokens), reporter, &errors);
     if (errors)
     {
         return {};
     }
-    auto tree = cld::Parser::buildTree(ctokens, reporter, &errors);
+    ctokens.shrinkFiles();
+    std::optional<cld::Syntax::TranslationUnit> tree = cld::Parser::buildTree(ctokens, reporter, &errors);
     if (errors)
     {
         return {};
     }
-    auto program = cld::Semantics::analyse(tree, std::move(ctokens), reporter, &errors);
+    auto program = cld::Semantics::analyse(*tree, std::move(ctokens), reporter, &errors);
     if (errors)
     {
         return {};
     }
+    tree.reset();
 
     cld::CGLLVM::Options codegenOptions;
     llvm::LLVMContext context;

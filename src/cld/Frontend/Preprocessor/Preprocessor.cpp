@@ -55,12 +55,10 @@ class Preprocessor final : private cld::PPSourceInterface
 
     struct IncludeGuardOpt
     {
-        cld::fs::path path;
-        std::string_view macroName;
-        bool macroNeedsToBeDefined;
+        std::vector<std::pair<std::string_view, bool>> neededMacroValues;
     };
 
-    std::vector<IncludeGuardOpt> m_includeGuardOptCache;
+    std::unordered_map<std::string, IncludeGuardOpt> m_includeGuardOptCache;
 
     void pushLine(llvm::ArrayRef<cld::Lexer::PPToken> tokens)
     {
@@ -200,6 +198,7 @@ class Preprocessor final : private cld::PPSourceInterface
                                                m_disabledMacros[copy.front().getMacroId()].end());
             }
             m_substitutions.push_back({});
+            // CLD_ASSERT(i == m_substitutions.size() - 1);
             for (auto& token : copy)
             {
                 token.setMacroId(i);
@@ -648,6 +647,7 @@ class Preprocessor final : private cld::PPSourceInterface
             m_disabledMacros[i].insert(m_disabledMacros[iter->getMacroId()].begin(),
                                        m_disabledMacros[iter->getMacroId()].end());
             m_substitutions.push_back({});
+            // CLD_ASSERT(i == m_substitutions.size() - 1);
             iter = std::find_if(iter + 1, tokens.data() + tokens.size(),
                                 [&line](const cld::Lexer::PPToken& token) {
                                     if (token.getTokenType() == cld::Lexer::TokenType::Newline)
@@ -883,102 +883,57 @@ class Preprocessor final : private cld::PPSourceInterface
         }
         for (auto iter = ctokens.begin(); iter != ctokens.end(); iter++)
         {
-            switch (iter->getTokenType())
+            if (iter->getTokenType() == cld::Lexer::TokenType::Literal)
             {
-                case cld::Lexer::TokenType::Literal:
+                switch (iter->getType())
                 {
-                    switch (iter->getType())
-                    {
-                        case cld::Lexer::CToken::Type::Int:
-                        case cld::Lexer::CToken::Type::Long:
-                        case cld::Lexer::CToken::Type::LongLong:
-                            iter->setType(cld::Lexer::CToken::Type::LongLong);
-                            break;
-                        case cld::Lexer::CToken::Type::UnsignedInt:
-                        case cld::Lexer::CToken::Type::UnsignedLong:
-                        case cld::Lexer::CToken::Type::UnsignedLongLong:
-                            iter->setType(cld::Lexer::CToken::Type::UnsignedLongLong);
-                            break;
-                        default: break;
-                    }
-                    if (!std::holds_alternative<llvm::APSInt>(iter->getValue()))
-                    {
+                    case cld::Lexer::CToken::Type::Int:
+                    case cld::Lexer::CToken::Type::Long:
+                    case cld::Lexer::CToken::Type::LongLong: iter->setType(cld::Lexer::CToken::Type::LongLong); break;
+                    case cld::Lexer::CToken::Type::UnsignedInt:
+                    case cld::Lexer::CToken::Type::UnsignedLong:
+                    case cld::Lexer::CToken::Type::UnsignedLongLong:
+                        iter->setType(cld::Lexer::CToken::Type::UnsignedLongLong);
                         break;
-                    }
-                    auto integer = cld::get<llvm::APSInt>(iter->getValue());
-                    integer = integer.extOrTrunc(64);
-                    iter->setValue(integer);
-                    break;
+                    default: break;
                 }
-                case cld::Lexer::TokenType::Identifier:
-                case cld::Lexer::TokenType::VoidKeyword:
-                case cld::Lexer::TokenType::CharKeyword:
-                case cld::Lexer::TokenType::ShortKeyword:
-                case cld::Lexer::TokenType::IntKeyword:
-                case cld::Lexer::TokenType::Int128Keyword:
-                case cld::Lexer::TokenType::LongKeyword:
-                case cld::Lexer::TokenType::FloatKeyword:
-                case cld::Lexer::TokenType::DoubleKeyword:
-                case cld::Lexer::TokenType::SignedKeyword:
-                case cld::Lexer::TokenType::UnsignedKeyword:
-                case cld::Lexer::TokenType::TypedefKeyword:
-                case cld::Lexer::TokenType::ExternKeyword:
-                case cld::Lexer::TokenType::StaticKeyword:
-                case cld::Lexer::TokenType::AutoKeyword:
-                case cld::Lexer::TokenType::RegisterKeyword:
-                case cld::Lexer::TokenType::ConstKeyword:
-                case cld::Lexer::TokenType::RestrictKeyword:
-                case cld::Lexer::TokenType::SizeofKeyword:
-                case cld::Lexer::TokenType::VolatileKeyword:
-                case cld::Lexer::TokenType::InlineKeyword:
-                case cld::Lexer::TokenType::ReturnKeyword:
-                case cld::Lexer::TokenType::BreakKeyword:
-                case cld::Lexer::TokenType::ContinueKeyword:
-                case cld::Lexer::TokenType::DoKeyword:
-                case cld::Lexer::TokenType::ElseKeyword:
-                case cld::Lexer::TokenType::ForKeyword:
-                case cld::Lexer::TokenType::IfKeyword:
-                case cld::Lexer::TokenType::WhileKeyword:
-                case cld::Lexer::TokenType::StructKeyword:
-                case cld::Lexer::TokenType::SwitchKeyword:
-                case cld::Lexer::TokenType::CaseKeyword:
-                case cld::Lexer::TokenType::DefaultKeyword:
-                case cld::Lexer::TokenType::UnionKeyword:
-                case cld::Lexer::TokenType::EnumKeyword:
-                case cld::Lexer::TokenType::GotoKeyword:
-                case cld::Lexer::TokenType::UnderlineBool:
+                if (!std::holds_alternative<llvm::APSInt>(iter->getValue()))
                 {
-                    if (iter->getTokenType() == cld::Lexer::TokenType::Identifier
-                        && cld::get<std::string>(iter->getValue()) == "defined")
-                    {
-                        // Neither defined nor the identifier following it (with optionally an opening parentheses
-                        // in between) should be converted to 0
-                        if (iter + 1 == ctokens.end())
-                        {
-                            break;
-                        }
-                        if ((iter + 1)->getTokenType() == cld::Lexer::TokenType::Identifier)
-                        {
-                            iter++;
-                        }
-                        else if ((iter + 1)->getTokenType() == cld::Lexer::TokenType::OpenParentheses)
-                        {
-                            if (iter + 2 != ctokens.end()
-                                && (iter + 2)->getTokenType() == cld::Lexer::TokenType::Identifier)
-                            {
-                                iter += 2;
-                            }
-                        }
-                        break;
-                    }
-                    bool hasLeadingWhitespace = iter->hasLeadingWhitespace();
-                    *iter = cld::Lexer::CToken(cld::Lexer::TokenType::Literal, iter->getOffset(), iter->getLength(),
-                                               iter->getFileId(), iter->getMacroId(), llvm::APSInt(64, false),
-                                               cld::Lexer::CToken::Type::LongLong);
-                    iter->setLeadingWhitespace(hasLeadingWhitespace);
-                    break;
+                    continue;
                 }
-                default: break;
+                auto integer = cld::get<llvm::APSInt>(iter->getValue());
+                integer = integer.extOrTrunc(64);
+                iter->setValue(integer);
+            }
+            else if (cld::Lexer::isText(iter->getTokenType()))
+            {
+                if (iter->getTokenType() == cld::Lexer::TokenType::Identifier && iter->getText() == "defined")
+                {
+                    // Neither defined nor the identifier following it (with optionally an opening parentheses
+                    // in between) should be converted to 0
+                    if (iter + 1 == ctokens.end())
+                    {
+                        continue;
+                    }
+                    if ((iter + 1)->getTokenType() == cld::Lexer::TokenType::Identifier)
+                    {
+                        iter++;
+                    }
+                    else if ((iter + 1)->getTokenType() == cld::Lexer::TokenType::OpenParentheses)
+                    {
+                        if (iter + 2 != ctokens.end()
+                            && (iter + 2)->getTokenType() == cld::Lexer::TokenType::Identifier)
+                        {
+                            iter += 2;
+                        }
+                    }
+                    continue;
+                }
+                bool hasLeadingWhitespace = iter->hasLeadingWhitespace();
+                *iter = cld::Lexer::CToken(cld::Lexer::TokenType::Literal, iter->getOffset(), iter->getLength(),
+                                           iter->getFileId(), iter->getMacroId(), llvm::APSInt(64, false),
+                                           cld::Lexer::CToken::Type::LongLong);
+                iter->setLeadingWhitespace(hasLeadingWhitespace);
             }
         }
         if (ctokens.empty())
@@ -1155,13 +1110,13 @@ public:
         return m_intervalMaps;
     }
 
-    static const cld::PP::IfSection* isOneBigIfSection(const cld::PP::File& file)
+    static std::optional<std::vector<const cld::PP::IfSection*>> isOnlyIfSections(const cld::PP::File& file)
     {
         // TODO: Maybe support includes if the includes themselves are one big if section as well?
-        const cld::PP::IfSection* result = nullptr;
+        std::vector<const cld::PP::IfSection*> result;
         if (file.groups.size() != 1)
         {
-            return result;
+            return std::nullopt;
         }
         for (auto& iter : file.groups[0].groupPart)
         {
@@ -1171,23 +1126,19 @@ public:
             }
             if (std::holds_alternative<cld::PP::IfSection>(iter))
             {
-                if (result)
-                {
-                    return nullptr;
-                }
-                result = &cld::get<cld::PP::IfSection>(iter);
+                result.push_back(&cld::get<cld::PP::IfSection>(iter));
                 continue;
             }
             if (!std::holds_alternative<cld::PP::TextBlock>(iter))
             {
-                return nullptr;
+                return std::nullopt;
             }
             if (std::any_of(cld::get<cld::PP::TextBlock>(iter).tokens.begin(),
                             cld::get<cld::PP::TextBlock>(iter).tokens.end(), [](const cld::Lexer::PPToken& ppToken) {
                                 return ppToken.getTokenType() != cld::Lexer::TokenType::Newline;
                             }))
             {
-                return nullptr;
+                return std::nullopt;
             }
         }
         return result;
@@ -1225,22 +1176,35 @@ public:
             m_errorsOccurred = true;
             return;
         }
-        if (auto* ifSection = isOneBigIfSection(tree))
+        if (auto ifSections = isOnlyIfSections(tree))
         {
-            if (ifSection->elifGroups.empty() && !ifSection->optionalElseGroup
-                && (std::holds_alternative<cld::PP::IfGroup::IfDefTag>(ifSection->ifGroup.ifs)
-                    || std::holds_alternative<cld::PP::IfGroup::IfnDefTag>(ifSection->ifGroup.ifs))
-                && cld::fs::exists(path)
-                && std::none_of(m_includeGuardOptCache.begin(), m_includeGuardOptCache.end(),
-                                [&](const IncludeGuardOpt& opt) { return cld::fs::equivalent(opt.path, path); }))
+            if (cld::fs::exists(path) && m_includeGuardOptCache.count(path.u8string()) == 0)
             {
-                m_includeGuardOptCache.push_back(
-                    {path,
-                     cld::match(
-                         ifSection->ifGroup.ifs,
-                         [](const llvm::ArrayRef<cld::Lexer::PPToken>&) -> std::string_view { CLD_UNREACHABLE; },
-                         [](const auto& value) { return value.identifier; }),
-                     std::holds_alternative<cld::PP::IfGroup::IfDefTag>(ifSection->ifGroup.ifs)});
+                bool allSimpleIfs = true;
+                std::vector<std::pair<std::string_view, bool>> neededMacros;
+                for (auto& iter : *ifSections)
+                {
+                    if (iter->elifGroups.empty() && !iter->optionalElseGroup
+                        && (std::holds_alternative<cld::PP::IfGroup::IfDefTag>(iter->ifGroup.ifs)
+                            || std::holds_alternative<cld::PP::IfGroup::IfnDefTag>(iter->ifGroup.ifs)))
+                    {
+                        neededMacros.emplace_back(
+                            cld::match(
+                                iter->ifGroup.ifs,
+                                [](const llvm::ArrayRef<cld::Lexer::PPToken>&) -> std::string_view { CLD_UNREACHABLE; },
+                                [](const auto& value) { return value.identifier; }),
+                            std::holds_alternative<cld::PP::IfGroup::IfDefTag>(iter->ifGroup.ifs));
+                    }
+                    else
+                    {
+                        allSimpleIfs = false;
+                        break;
+                    }
+                }
+                if (allSimpleIfs)
+                {
+                    m_includeGuardOptCache[path.u8string()] = {std::move(neededMacros)};
+                }
             }
         }
         visit(tree);
@@ -1460,9 +1424,15 @@ public:
                 if (result.is_open())
                 {
                     resultPath = std::move(filename);
-                    systemHeader = std::unordered_set<std::string_view>(m_ppOptions.systemDirectories.begin(),
-                                                                        m_ppOptions.systemDirectories.end())
-                                       .count(*iter);
+                    systemHeader = std::any_of(
+                        m_ppOptions.systemDirectories.begin(), m_ppOptions.systemDirectories.end(),
+                        [iter](std::string_view path) { return cld::fs::equivalent(cld::fs::u8path(path), *iter); });
+                    if (!systemHeader && isQuoted && m_files[m_currentFile].systemHeader)
+                    {
+                        auto dir = cld::fs::u8path(m_files[m_currentFile].path);
+                        dir.remove_filename();
+                        systemHeader = *iter == dir.u8string();
+                    }
                     break;
                 }
             }
@@ -1476,11 +1446,10 @@ public:
         }
         resultPath = cld::fs::absolute(resultPath);
         resultPath = resultPath.lexically_normal();
-        auto cachedResult =
-            std::find_if(m_includeGuardOptCache.begin(), m_includeGuardOptCache.end(),
-                         [&](const IncludeGuardOpt& opt) { return cld::fs::equivalent(opt.path, resultPath); });
+        auto cachedResult = m_includeGuardOptCache.find(resultPath.u8string());
         if (cachedResult != m_includeGuardOptCache.end()
-            && static_cast<bool>(m_defines.count(cachedResult->macroName)) != cachedResult->macroNeedsToBeDefined)
+            && std::all_of(cachedResult->second.neededMacroValues.begin(), cachedResult->second.neededMacroValues.end(),
+                           [&](auto&& pair) { return m_defines.count(pair.first) != pair.second; }))
         {
             return;
         }
