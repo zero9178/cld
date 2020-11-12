@@ -1985,6 +1985,15 @@ void cld::Semantics::SemanticAnalysis::createBuiltins()
         }
         default: CLD_UNREACHABLE;
     }
+    if (m_sourceInterface.getLanguageOptions().int128Enabled)
+    {
+        auto type = PrimitiveType::createInt128(false, false);
+        type.setName("__int128_t");
+        getCurrentScope().declarations.emplace("__int128_t", DeclarationInScope{nullptr, std::move(type)});
+        type = PrimitiveType::createUnsignedInt128(false, false);
+        type.setName("__uint128_t");
+        getCurrentScope().declarations.emplace("__uint128_t", DeclarationInScope{nullptr, std::move(type)});
+    }
 }
 
 cld::ValueReset<bool> cld::Semantics::SemanticAnalysis::enableExtensions(bool extensions)

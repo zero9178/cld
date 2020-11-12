@@ -197,11 +197,12 @@ TEST_CASE("Lexing Identifiers", "[lexer]")
     }
     SECTION("int128")
     {
-        auto result = lexes("__int128 __int128_t __uint128_t", x64linux);
-        REQUIRE(result.data().size() == 3);
+        auto result = lexes("__int128", x64linux);
+        REQUIRE(result.data().size() == 1);
         CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Int128Keyword);
-        CHECK(result.data()[1].getTokenType() == cld::Lexer::TokenType::Int128Keyword);
-        CHECK(result.data()[2].getTokenType() == cld::Lexer::TokenType::UInt128Keyword);
+        result = lexes("__int128", x86linux);
+        REQUIRE(result.data().size() == 1);
+        CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Identifier);
     }
 }
 

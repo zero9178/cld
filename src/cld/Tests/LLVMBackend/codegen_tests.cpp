@@ -1936,6 +1936,18 @@ TEST_CASE("LLVM codegen binary expressions", "[LLVM]")
                 std::array<float, 2> a = {1, 2};
                 CHECK(cld::Tests::computeInJIT<float(float*, int)>(std::move(module), "add", a.data(), 1) == 2);
             }
+            SECTION("With int128")
+            {
+                auto program = generateProgram("float add(float* r,int f) {\n"
+                                               "__int128 t = f;\n"
+                                               "return *(t + r);\n"
+                                               "}");
+                cld::CGLLVM::generateLLVM(*module, program);
+                CAPTURE(*module);
+                REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+                std::array<float, 2> a = {1, 2};
+                CHECK(cld::Tests::computeInJIT<float(float*, int)>(std::move(module), "add", a.data(), 1) == 2);
+            }
         }
     }
     SECTION("Subtraction")

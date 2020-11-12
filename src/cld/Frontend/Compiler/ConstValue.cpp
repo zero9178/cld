@@ -451,39 +451,6 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::toBool(const LanguageOpti
     return {llvm::APSInt(llvm::APInt(1, static_cast<bool>(*this)), false)};
 }
 
-std::int64_t cld::Semantics::ConstValue::toInt() const
-{
-    return match(
-        m_value, [](VoidStar pointer) -> std::int64_t { return pointer.address; },
-        [](const llvm::APFloat& floating) -> std::int64_t {
-            return static_cast<std::int64_t>(floating.convertToDouble());
-        },
-        [](const llvm::APSInt& integer) -> std::int64_t { return integer.getSExtValue(); },
-        [](std::monostate) -> std::int64_t { CLD_UNREACHABLE; },
-        [](AddressConstant) -> std::int64_t { CLD_UNREACHABLE; });
-}
-
-std::uint64_t cld::Semantics::ConstValue::toUInt() const
-{
-    return match(
-        m_value, [](VoidStar pointer) -> std::uint64_t { return pointer.address; },
-        [](const llvm::APFloat& floating) -> std::uint64_t {
-            return static_cast<std::uint64_t>(floating.convertToDouble());
-        },
-        [](const llvm::APSInt& integer) -> std::uint64_t { return integer.getZExtValue(); },
-        [](std::monostate) -> std::uint64_t { CLD_UNREACHABLE; },
-        [](AddressConstant) -> std::uint64_t { CLD_UNREACHABLE; });
-}
-
-double cld::Semantics::ConstValue::toDouble() const
-{
-    return match(
-        m_value, [](VoidStar) -> double { CLD_UNREACHABLE; },
-        [](const llvm::APFloat& floating) -> double { return floating.convertToDouble(); },
-        [](const llvm::APSInt& integer) -> double { return integer.roundToDouble(); },
-        [](std::monostate) -> double { CLD_UNREACHABLE; }, [](AddressConstant) -> double { CLD_UNREACHABLE; });
-}
-
 std::string cld::Semantics::ConstValue::toString() const
 {
     return match(
@@ -578,6 +545,16 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::notEqual(const cld::Seman
                                                                 const LanguageOptions& options) const
 {
     return equal(rhs, options).logicalNegate(options);
+}
+
+const llvm::APSInt& cld::Semantics::ConstValue::getInteger() const
+{
+    return cld::get<llvm::APSInt>(m_value);
+}
+
+const llvm::APFloat& cld::Semantics::ConstValue::getFloating() const
+{
+    return cld::get<llvm::APFloat>(m_value);
 }
 
 std::string cld::diag::StringConverter<cld::Semantics::ConstValue>::inFormat(const Semantics::ConstValue& arg,

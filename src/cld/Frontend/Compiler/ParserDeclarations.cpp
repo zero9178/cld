@@ -499,6 +499,7 @@ std::optional<cld::Syntax::DeclarationSpecifier>
             case Lexer::TokenType::CharKeyword:
             case Lexer::TokenType::ShortKeyword:
             case Lexer::TokenType::IntKeyword:
+            case Lexer::TokenType::Int128Keyword:
             case Lexer::TokenType::UnderlineBool:
             case Lexer::TokenType::LongKeyword:
             case Lexer::TokenType::FloatKeyword:
@@ -556,6 +557,9 @@ std::optional<cld::Syntax::DeclarationSpecifier>
             case Lexer::TokenType::UnsignedKeyword:
                 return Syntax::DeclarationSpecifier{
                     TypeSpecifier(start, begin, TypeSpecifier::PrimitiveTypeSpecifier::Unsigned)};
+            case Lexer::TokenType::Int128Keyword:
+                return Syntax::DeclarationSpecifier{
+                    TypeSpecifier(start, begin, TypeSpecifier::PrimitiveTypeSpecifier::Int128)};
             case Lexer::TokenType::UnionKeyword:
             case Lexer::TokenType::StructKeyword:
             case Lexer::TokenType::GNUExtension:
@@ -809,6 +813,7 @@ std::optional<cld::Syntax::SpecifierQualifier>
             case Lexer::TokenType::CharKeyword:
             case Lexer::TokenType::ShortKeyword:
             case Lexer::TokenType::IntKeyword:
+            case Lexer::TokenType::Int128Keyword:
             case Lexer::TokenType::LongKeyword:
             case Lexer::TokenType::FloatKeyword:
             case Lexer::TokenType::UnderlineBool:
@@ -855,6 +860,9 @@ std::optional<cld::Syntax::SpecifierQualifier>
             case Lexer::TokenType::UnsignedKeyword:
                 return Syntax::SpecifierQualifier{
                     TypeSpecifier(start, begin, TypeSpecifier::PrimitiveTypeSpecifier::Unsigned)};
+            case Lexer::TokenType::Int128Keyword:
+                return Syntax::SpecifierQualifier{
+                    TypeSpecifier(start, begin, TypeSpecifier::PrimitiveTypeSpecifier::Int128)};
             case Lexer::TokenType::UnionKeyword:
             case Lexer::TokenType::StructKeyword:
             case Lexer::TokenType::GNUExtension:
@@ -2668,6 +2676,7 @@ std::optional<cld::Syntax::GNUAttributes> cld::Parser::parseGNUAttributes(Lexer:
                 case Lexer::TokenType::CharKeyword:
                 case Lexer::TokenType::ShortKeyword:
                 case Lexer::TokenType::IntKeyword:
+                case Lexer::TokenType::Int128Keyword:
                 case Lexer::TokenType::LongKeyword:
                 case Lexer::TokenType::FloatKeyword:
                 case Lexer::TokenType::DoubleKeyword:
@@ -2700,6 +2709,9 @@ std::optional<cld::Syntax::GNUAttributes> cld::Parser::parseGNUAttributes(Lexer:
                 case Lexer::TokenType::GotoKeyword:
                 case Lexer::TokenType::UnderlineBool:
                 case Lexer::TokenType::GNUAttribute:
+                case Lexer::TokenType::GNUTypeOf:
+                case Lexer::TokenType::GNUASM:
+                case Lexer::TokenType::GNUExtension:
                 {
                     attributeName = begin++;
                     break;

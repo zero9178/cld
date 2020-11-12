@@ -915,6 +915,7 @@ class Preprocessor final : private cld::PPSourceInterface
                 case cld::Lexer::TokenType::CharKeyword:
                 case cld::Lexer::TokenType::ShortKeyword:
                 case cld::Lexer::TokenType::IntKeyword:
+                case cld::Lexer::TokenType::Int128Keyword:
                 case cld::Lexer::TokenType::LongKeyword:
                 case cld::Lexer::TokenType::FloatKeyword:
                 case cld::Lexer::TokenType::DoubleKeyword:

@@ -63,7 +63,9 @@ public:
         Float,
         Double,
         LongDouble,
-        Void
+        Void,
+        Int128,
+        UnsignedInt128
     };
 
 private:
@@ -106,6 +108,10 @@ public:
     [[nodiscard]] static Type createLongDouble(bool isConst, bool isVolatile, const LanguageOptions& options);
 
     [[nodiscard]] static Type createVoid(bool isConst, bool isVolatile);
+
+    [[nodiscard]] static Type createInt128(bool isConst, bool isVolatile);
+
+    [[nodiscard]] static Type createUnsignedInt128(bool isConst, bool isVolatile);
 
     [[nodiscard]] static Type createPtrdiffT(bool isConst, bool isVolatile, const LanguageOptions& options);
 

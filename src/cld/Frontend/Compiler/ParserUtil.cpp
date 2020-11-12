@@ -93,6 +93,7 @@ bool cld::Parser::firstIsInDeclarationSpecifier(const Lexer::CToken& token, cons
         case Lexer::TokenType::CharKeyword:
         case Lexer::TokenType::ShortKeyword:
         case Lexer::TokenType::IntKeyword:
+        case Lexer::TokenType::Int128Keyword:
         case Lexer::TokenType::LongKeyword:
         case Lexer::TokenType::FloatKeyword:
         case Lexer::TokenType::UnderlineBool:
@@ -121,6 +122,7 @@ bool cld::Parser::firstIsInSpecifierQualifier(const Lexer::CToken& token, const 
         case Lexer::TokenType::CharKeyword:
         case Lexer::TokenType::ShortKeyword:
         case Lexer::TokenType::IntKeyword:
+        case Lexer::TokenType::Int128Keyword:
         case Lexer::TokenType::LongKeyword:
         case Lexer::TokenType::FloatKeyword:
         case Lexer::TokenType::UnderlineBool:

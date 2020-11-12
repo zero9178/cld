@@ -773,7 +773,7 @@ class CodeGenerator final
         {
             for (std::uint64_t value = alignment.value(); value > 0; value >>= 1)
             {
-                if (integer.getZExtValue() % value == 0)
+                if (integer.urem(value) == 0)
                 {
                     return llvm::Align(value);
                 }
@@ -1330,6 +1330,8 @@ public:
                         return m_builder.getIntNTy(m_sourceInterface.getLanguageOptions().sizeOfLong * 8);
                     case cld::Semantics::PrimitiveType::UnsignedLongLong:
                     case cld::Semantics::PrimitiveType::LongLong: return m_builder.getInt64Ty();
+                    case cld::Semantics::PrimitiveType::Int128:
+                    case cld::Semantics::PrimitiveType::UnsignedInt128: return m_builder.getInt128Ty();
                     case cld::Semantics::PrimitiveType::Float: return m_builder.getFloatTy();
                     case cld::Semantics::PrimitiveType::Double: return m_builder.getDoubleTy();
                     case cld::Semantics::PrimitiveType::LongDouble:
@@ -1541,6 +1543,14 @@ public:
                         break;
                     case cld::Semantics::PrimitiveType::Void:
                         name = "void";
+                        encoding = llvm::dwarf::DW_ATE_unsigned;
+                        break;
+                    case cld::Semantics::PrimitiveType::Int128:
+                        name = "__int128";
+                        encoding = llvm::dwarf::DW_ATE_signed;
+                        break;
+                    case cld::Semantics::PrimitiveType::UnsignedInt128:
+                        name = "unsigned __int128";
                         encoding = llvm::dwarf::DW_ATE_unsigned;
                         break;
                 }

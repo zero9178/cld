@@ -147,6 +147,10 @@ TEST_CASE("Parser typedef scoping and resolution", "[parser]")
     treeProduces("typedef int aa;"
                  "enum {aa,};",
                  ProducesNoErrors());
+    SECTION("Builtin typedef")
+    {
+        treeProduces("void foo(__builtin_va_list i);", ProducesNoErrors());
+    }
 }
 
 TEST_CASE("Parse Declaration Specifiers", "[parser]")

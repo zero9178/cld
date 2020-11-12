@@ -100,6 +100,10 @@ bool cld::Parser::Context::isBuiltin(std::string_view name) const
     {
         return true;
     }
+    if (m_sourceInterface.getLanguageOptions().int128Enabled && (name == "__int128_t" || name == "__uint128_t"))
+    {
+        return true;
+    }
     return false;
 }
 

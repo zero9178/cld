@@ -324,6 +324,16 @@ cld::Semantics::Type cld::Semantics::PrimitiveType::createVoid(bool isConst, boo
     return create(isConst, isVolatile, false, true, 0, 0, Kind::Void);
 }
 
+cld::Semantics::Type cld::Semantics::PrimitiveType::createInt128(bool isConst, bool isVolatile)
+{
+    return create(isConst, isVolatile, false, true, 128, 16, Kind::Int128);
+}
+
+cld::Semantics::Type cld::Semantics::PrimitiveType::createUnsignedInt128(bool isConst, bool isVolatile)
+{
+    return create(isConst, isVolatile, false, false, 128, 16, Kind::UnsignedInt128);
+}
+
 cld::Semantics::ValArrayType::ValArrayType(bool isRestricted, bool isStatic,
                                            std::shared_ptr<cld::Semantics::Type>&& type,
                                            std::shared_ptr<const ExpressionBase>&& expression)
@@ -667,6 +677,8 @@ std::string typeToString(const cld::Semantics::Type& arg)
                     case PrimitiveType::Kind::Double: qualifiersAndSpecifiers += "double"; break;
                     case PrimitiveType::Kind::LongDouble: qualifiersAndSpecifiers += "long double"; break;
                     case PrimitiveType::Kind::Void: qualifiersAndSpecifiers += "void"; break;
+                    case PrimitiveType::Int128: qualifiersAndSpecifiers += "__int128"; break;
+                    case PrimitiveType::UnsignedInt128: qualifiersAndSpecifiers += "unsigned __int128"; break;
                 }
                 return {};
             },

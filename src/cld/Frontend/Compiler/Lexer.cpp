@@ -41,8 +41,7 @@ bool isKeyword(std::string_view characters, const cld::LanguageOptions& language
            || characters == "__signed"
            || (languageOptions.extension == cld::LanguageOptions::Extension::GNU
                && (characters == "asm" || characters == "typeof"))
-           || (languageOptions.int128Enabled
-               && (characters == "__int128" || characters == "__int128_t" || characters == "__uint128_t"));
+           || (languageOptions.int128Enabled && characters == "__int128");
 }
 
 TokenType charactersToKeyword(std::string_view characters)
@@ -204,13 +203,9 @@ TokenType charactersToKeyword(std::string_view characters)
     {
         return TokenType::GNUASM;
     }
-    if (characters == "__int128" || characters == "__int128_t")
+    if (characters == "__int128")
     {
         return TokenType::Int128Keyword;
-    }
-    if (characters == "__uint128_t")
-    {
-        return TokenType::UInt128Keyword;
     }
     CLD_UNREACHABLE;
 }
@@ -2873,7 +2868,6 @@ std::string_view cld::Lexer::tokenName(cld::Lexer::TokenType tokenType)
         case TokenType::GNUASM: return "'asm'";
         case TokenType::GNUTypeOf: return "'typeof'";
         case TokenType::Int128Keyword: return "'__int128'";
-        case TokenType::UInt128Keyword: return "'__uint128_t'";
     }
     CLD_UNREACHABLE;
 }
@@ -2977,7 +2971,6 @@ std::string_view cld::Lexer::tokenValue(cld::Lexer::TokenType tokenType)
         case TokenType::GNUASM: return "asm";
         case TokenType::GNUTypeOf: return "typeof";
         case TokenType::Int128Keyword: return "__int128";
-        case TokenType::UInt128Keyword: return "__uint128_t";
     }
     CLD_UNREACHABLE;
 }
@@ -3048,7 +3041,6 @@ bool cld::Lexer::needsWhitespaceInBetween(TokenType left, TokenType right) noexc
         case TokenType::GNUExtension:
         case TokenType::GNUTypeOf:
         case TokenType::Int128Keyword:
-        case TokenType::UInt128Keyword:
         case TokenType::GNUAttribute:
             switch (right)
             {
@@ -3094,7 +3086,6 @@ bool cld::Lexer::needsWhitespaceInBetween(TokenType left, TokenType right) noexc
                 case TokenType::GNUExtension:
                 case TokenType::GNUTypeOf:
                 case TokenType::Int128Keyword:
-                case TokenType::UInt128Keyword:
                 case TokenType::StringLiteral:
                 case TokenType::Literal:
                 case TokenType::PPNumber: return true;
@@ -3305,7 +3296,6 @@ bool cld::Lexer::needsWhitespaceInBetween(TokenType left, TokenType right) noexc
                 case TokenType::GNUExtension:
                 case TokenType::GNUTypeOf:
                 case TokenType::Int128Keyword:
-                case TokenType::UInt128Keyword:
                 case TokenType::Plus:
                 case TokenType::Minus:
                 case TokenType::Increment:

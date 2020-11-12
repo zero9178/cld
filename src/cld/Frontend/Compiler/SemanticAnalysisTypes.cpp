@@ -963,10 +963,10 @@ cld::Semantics::Type
                         continue;
                     }
                     CLD_ASSERT(std::holds_alternative<PrimitiveType>(expr->getType().getVariant()));
-                    if (cld::get<PrimitiveType>(expr->getType().getVariant()).isSigned() && result->toInt() < 0)
+                    if (result->getInteger().isNegative())
                     {
                         log(Errors::Semantics::BITFIELD_MUST_BE_OF_SIZE_ZERO_OR_GREATER.args(*size, m_sourceInterface,
-                                                                                             *size, result->toInt()));
+                                                                                             *size, *result));
                         continue;
                     }
                     if (!hadValidType)
@@ -974,22 +974,22 @@ cld::Semantics::Type
                         continue;
                     }
                     auto objectWidth = cld::get<PrimitiveType>(type.getVariant()).getBitCount();
-                    if (result->toUInt() > objectWidth)
+                    if (result->getInteger() > objectWidth)
                     {
                         log(Errors::Semantics::BITFIELD_MUST_NOT_HAVE_A_GREATER_WIDTH_THAN_THE_TYPE.args(
-                            *size, m_sourceInterface, specifiers, objectWidth, *size, result->toUInt()));
+                            *size, m_sourceInterface, specifiers, objectWidth, *size, *result));
                     }
-                    if (result->toUInt() == 0 && declarator)
+                    if (result->getInteger() == 0 && declarator)
                     {
                         log(Errors::Semantics::BITFIELD_WITH_SIZE_ZERO_MAY_NOT_HAVE_A_NAME.args(
                             *declarator, m_sourceInterface, *declarator));
                     }
-                    if (result->toUInt() == 0)
+                    if (result->getInteger() == 0)
                     {
                         zeroBitFields.emplace(fields.size());
                         continue;
                     }
-                    value.emplace(0, result->toUInt());
+                    value.emplace(0, result->getInteger().getZExtValue());
                 }
                 const auto* token = declarator ? declaratorToLoc(*declarator) : nullptr;
                 if (token)
@@ -1333,6 +1333,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitiveTypeSpecifiersTo
                 case PrimitiveTypeSpecifier::Char: tokenType = Lexer::TokenType::CharKeyword; break;
                 case PrimitiveTypeSpecifier::Short: tokenType = Lexer::TokenType::ShortKeyword; break;
                 case PrimitiveTypeSpecifier::Int: tokenType = Lexer::TokenType::IntKeyword; break;
+                case PrimitiveTypeSpecifier::Int128: tokenType = Lexer::TokenType::Int128Keyword; break;
                 case PrimitiveTypeSpecifier::Long: tokenType = Lexer::TokenType::LongKeyword; break;
                 case PrimitiveTypeSpecifier::Float: tokenType = Lexer::TokenType::FloatKeyword; break;
                 case PrimitiveTypeSpecifier::Double: tokenType = Lexer::TokenType::DoubleKeyword; break;
@@ -1345,101 +1346,137 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitiveTypeSpecifiersTo
         }
     };
 
-    using BitSet = Bitset2::bitset2<11>;
-    const auto table = [&]() -> std::unordered_map<BitSet, std::pair<BitSet, Type>> {
+    constexpr auto clz = [](std::size_t value) {
+        std::size_t i = 0;
+        for (; value != 0; value >>= 1, i++)
+            ;
+        return i;
+    };
+
+    using BitSet = Bitset2::bitset2<clz(PrimitiveTypeSpecifier::MAX_VALUE)>;
+    static const auto table = []() -> std::unordered_map<BitSet, std::pair<BitSet, PrimitiveType::Kind>> {
         using Tuple = std::tuple<std::underlying_type_t<PrimitiveTypeSpecifier>,
-                                 std::underlying_type_t<PrimitiveTypeSpecifier>, Type>;
+                                 std::underlying_type_t<PrimitiveTypeSpecifier>, PrimitiveType::Kind>;
         std::vector<Tuple> temp = {
-            {PrimitiveTypeSpecifier::Void, 0, PrimitiveType::createVoid(isConst, isVolatile)},
+            {PrimitiveTypeSpecifier::Void, 0, PrimitiveType::Void},
             {PrimitiveTypeSpecifier::Char, PrimitiveTypeSpecifier::Signed | PrimitiveTypeSpecifier::Unsigned,
-             PrimitiveType::createChar(isConst, isVolatile, m_sourceInterface.getLanguageOptions())},
-            {PrimitiveTypeSpecifier::Char + PrimitiveTypeSpecifier::Signed, 0,
-             PrimitiveType::createSignedChar(isConst, isVolatile)},
-            {PrimitiveTypeSpecifier::Char + PrimitiveTypeSpecifier::Unsigned, 0,
-             PrimitiveType::createUnsignedChar(isConst, isVolatile)},
-            {PrimitiveTypeSpecifier::Float, 0, PrimitiveType::createFloat(isConst, isVolatile)},
-            {PrimitiveTypeSpecifier::Bool, 0, PrimitiveType::createUnderlineBool(isConst, isVolatile)},
-            {PrimitiveTypeSpecifier::Double, PrimitiveTypeSpecifier::Long,
-             PrimitiveType::createDouble(isConst, isVolatile, m_sourceInterface.getLanguageOptions())},
-            {PrimitiveTypeSpecifier::Double + PrimitiveTypeSpecifier::Long, 0,
-             PrimitiveType::createLongDouble(isConst, isVolatile, m_sourceInterface.getLanguageOptions())},
+             PrimitiveType::Char},
+            {PrimitiveTypeSpecifier::Char + PrimitiveTypeSpecifier::Signed, 0, PrimitiveType::SignedChar},
+            {PrimitiveTypeSpecifier::Char + PrimitiveTypeSpecifier::Unsigned, 0, PrimitiveType::UnsignedChar},
+            {PrimitiveTypeSpecifier::Float, 0, PrimitiveType::Float},
+            {PrimitiveTypeSpecifier::Bool, 0, PrimitiveType::Bool},
+            {PrimitiveTypeSpecifier::Double, PrimitiveTypeSpecifier::Long, PrimitiveType::Double},
+            {PrimitiveTypeSpecifier::Double + PrimitiveTypeSpecifier::Long, 0, PrimitiveType::LongDouble},
             {PrimitiveTypeSpecifier::Int,
              PrimitiveTypeSpecifier::Long | PrimitiveTypeSpecifier::Short | PrimitiveTypeSpecifier::Signed
                  | PrimitiveTypeSpecifier::Unsigned,
-             PrimitiveType::createInt(isConst, isVolatile, m_sourceInterface.getLanguageOptions())},
+             PrimitiveType::Int},
             {PrimitiveTypeSpecifier::Int + PrimitiveTypeSpecifier::Long,
              PrimitiveTypeSpecifier::Long | PrimitiveTypeSpecifier::Signed | PrimitiveTypeSpecifier::Unsigned,
-             PrimitiveType::createLong(isConst, isVolatile, m_sourceInterface.getLanguageOptions())},
+             PrimitiveType::Long},
             {PrimitiveTypeSpecifier::Int + PrimitiveTypeSpecifier::Long + PrimitiveTypeSpecifier::Long,
-             PrimitiveTypeSpecifier::Signed | PrimitiveTypeSpecifier::Unsigned,
-             PrimitiveType::createLongLong(isConst, isVolatile, m_sourceInterface.getLanguageOptions())},
+             PrimitiveTypeSpecifier::Signed | PrimitiveTypeSpecifier::Unsigned, PrimitiveType::LongLong},
             {PrimitiveTypeSpecifier::Int + PrimitiveTypeSpecifier::Long + PrimitiveTypeSpecifier::Long
                  + PrimitiveTypeSpecifier::Signed,
-             0, PrimitiveType::createLongLong(isConst, isVolatile, m_sourceInterface.getLanguageOptions())},
+             0, PrimitiveType::LongLong},
             {PrimitiveTypeSpecifier::Int + PrimitiveTypeSpecifier::Long + PrimitiveTypeSpecifier::Long
                  + PrimitiveTypeSpecifier::Unsigned,
-             0, PrimitiveType::createUnsignedLongLong(isConst, isVolatile, m_sourceInterface.getLanguageOptions())},
+             0, PrimitiveType::UnsignedLongLong},
             {PrimitiveTypeSpecifier::Int + PrimitiveTypeSpecifier::Long + PrimitiveTypeSpecifier::Signed,
-             PrimitiveTypeSpecifier::Long,
-             PrimitiveType::createLong(isConst, isVolatile, m_sourceInterface.getLanguageOptions())},
+             PrimitiveTypeSpecifier::Long, PrimitiveType::Long},
             {PrimitiveTypeSpecifier::Int + PrimitiveTypeSpecifier::Long + PrimitiveTypeSpecifier::Unsigned,
-             PrimitiveTypeSpecifier::Long,
-             PrimitiveType::createUnsignedLong(isConst, isVolatile, m_sourceInterface.getLanguageOptions())},
+             PrimitiveTypeSpecifier::Long, PrimitiveType::UnsignedLong},
             {PrimitiveTypeSpecifier::Int + PrimitiveTypeSpecifier::Short,
-             PrimitiveTypeSpecifier::Signed | PrimitiveTypeSpecifier::Unsigned,
-             PrimitiveType::createShort(isConst, isVolatile, m_sourceInterface.getLanguageOptions())},
+             PrimitiveTypeSpecifier::Signed | PrimitiveTypeSpecifier::Unsigned, PrimitiveType::Short},
             {PrimitiveTypeSpecifier::Int + PrimitiveTypeSpecifier::Short + PrimitiveTypeSpecifier::Signed, 0,
-             PrimitiveType::createShort(isConst, isVolatile, m_sourceInterface.getLanguageOptions())},
+             PrimitiveType::Short},
             {PrimitiveTypeSpecifier::Int + PrimitiveTypeSpecifier::Short + PrimitiveTypeSpecifier::Unsigned, 0,
-             PrimitiveType::createUnsignedShort(isConst, isVolatile, m_sourceInterface.getLanguageOptions())},
+             PrimitiveType::UnsignedShort},
             {PrimitiveTypeSpecifier::Int + PrimitiveTypeSpecifier::Signed,
-             PrimitiveTypeSpecifier ::Long | PrimitiveTypeSpecifier::Short,
-             PrimitiveType::createInt(isConst, isVolatile, m_sourceInterface.getLanguageOptions())},
+             PrimitiveTypeSpecifier ::Long | PrimitiveTypeSpecifier::Short, PrimitiveType::Int},
             {PrimitiveTypeSpecifier::Int + PrimitiveTypeSpecifier::Unsigned,
-             PrimitiveTypeSpecifier ::Long | PrimitiveTypeSpecifier::Short,
-             PrimitiveType::createUnsignedInt(isConst, isVolatile, m_sourceInterface.getLanguageOptions())},
+             PrimitiveTypeSpecifier ::Long | PrimitiveTypeSpecifier::Short, PrimitiveType::UnsignedInt},
             {PrimitiveTypeSpecifier::Short,
              PrimitiveTypeSpecifier ::Int | PrimitiveTypeSpecifier::Signed | PrimitiveTypeSpecifier::Unsigned,
-             PrimitiveType::createShort(isConst, isVolatile, m_sourceInterface.getLanguageOptions())},
+             PrimitiveType::Short},
             {PrimitiveTypeSpecifier::Short + PrimitiveTypeSpecifier::Signed, PrimitiveTypeSpecifier ::Int,
-             PrimitiveType::createShort(isConst, isVolatile, m_sourceInterface.getLanguageOptions())},
+             PrimitiveType::Short},
             {PrimitiveTypeSpecifier::Short + PrimitiveTypeSpecifier::Unsigned, PrimitiveTypeSpecifier ::Int,
-             PrimitiveType::createUnsignedShort(isConst, isVolatile, m_sourceInterface.getLanguageOptions())},
+             PrimitiveType::UnsignedShort},
             {PrimitiveTypeSpecifier::Long,
              PrimitiveTypeSpecifier::Int | PrimitiveTypeSpecifier::Long | PrimitiveTypeSpecifier::Signed
                  | PrimitiveTypeSpecifier::Unsigned | PrimitiveTypeSpecifier::Double,
-             PrimitiveType::createLong(isConst, isVolatile, m_sourceInterface.getLanguageOptions())},
+             PrimitiveType::Long},
             {PrimitiveTypeSpecifier::Long + PrimitiveTypeSpecifier::Signed,
-             PrimitiveTypeSpecifier::Int | PrimitiveTypeSpecifier::Long,
-             PrimitiveType::createLong(isConst, isVolatile, m_sourceInterface.getLanguageOptions())},
+             PrimitiveTypeSpecifier::Int | PrimitiveTypeSpecifier::Long, PrimitiveType::Long},
             {PrimitiveTypeSpecifier::Long + PrimitiveTypeSpecifier::Unsigned,
-             PrimitiveTypeSpecifier::Int | PrimitiveTypeSpecifier::Long,
-             PrimitiveType::createUnsignedLong(isConst, isVolatile, m_sourceInterface.getLanguageOptions())},
+             PrimitiveTypeSpecifier::Int | PrimitiveTypeSpecifier::Long, PrimitiveType::UnsignedLong},
             {PrimitiveTypeSpecifier::Long + PrimitiveTypeSpecifier::Long,
              PrimitiveTypeSpecifier::Int | PrimitiveTypeSpecifier::Signed | PrimitiveTypeSpecifier::Unsigned,
-             PrimitiveType::createLongLong(isConst, isVolatile, m_sourceInterface.getLanguageOptions())},
+             PrimitiveType::LongLong},
             {PrimitiveTypeSpecifier::Long + PrimitiveTypeSpecifier::Long + PrimitiveTypeSpecifier::Signed,
-             PrimitiveTypeSpecifier::Int,
-             PrimitiveType::createLongLong(isConst, isVolatile, m_sourceInterface.getLanguageOptions())},
+             PrimitiveTypeSpecifier::Int, PrimitiveType::LongLong},
             {PrimitiveTypeSpecifier::Long + PrimitiveTypeSpecifier::Long + PrimitiveTypeSpecifier::Unsigned,
-             PrimitiveTypeSpecifier::Int,
-             PrimitiveType::createUnsignedLongLong(isConst, isVolatile, m_sourceInterface.getLanguageOptions())},
+             PrimitiveTypeSpecifier::Int, PrimitiveType::UnsignedLongLong},
             {PrimitiveTypeSpecifier::Signed,
              PrimitiveTypeSpecifier::Short | PrimitiveTypeSpecifier::Int | PrimitiveTypeSpecifier::Char
-                 | PrimitiveTypeSpecifier::Long,
-             PrimitiveType::createInt(isConst, isVolatile, m_sourceInterface.getLanguageOptions())},
+                 | PrimitiveTypeSpecifier::Long | PrimitiveTypeSpecifier::Int128,
+             PrimitiveType::Int},
             {PrimitiveTypeSpecifier::Unsigned,
              PrimitiveTypeSpecifier::Short | PrimitiveTypeSpecifier::Int | PrimitiveTypeSpecifier::Char
-                 | PrimitiveTypeSpecifier::Long,
-             PrimitiveType::createUnsignedInt(isConst, isVolatile, m_sourceInterface.getLanguageOptions())},
+                 | PrimitiveTypeSpecifier::Long | PrimitiveTypeSpecifier::Int128,
+             PrimitiveType::UnsignedInt},
+            {PrimitiveTypeSpecifier::Int128, PrimitiveTypeSpecifier::Signed | PrimitiveTypeSpecifier::Unsigned,
+             PrimitiveType::Int128},
+            {PrimitiveTypeSpecifier::Int128 + PrimitiveTypeSpecifier::Signed, 0, PrimitiveType::Int128},
+            {PrimitiveTypeSpecifier::Int128 + PrimitiveTypeSpecifier::Unsigned, 0, PrimitiveType::UnsignedInt128},
         };
-        std::unordered_map<BitSet, std::pair<BitSet, Type>> result;
+        std::unordered_map<BitSet, std::pair<BitSet, PrimitiveType::Kind>> result;
         for (auto& [state, next, type] : temp)
         {
-            result.insert({BitSet(state), {BitSet(next), std::move(type)}});
+            auto [prev, inserted] = result.insert({BitSet(state), {BitSet(next), std::move(type)}});
+            (void)prev;
+            CLD_ASSERT(inserted);
         }
         return result;
     }();
+
+    auto primKindToType = [isConst, isVolatile, this](PrimitiveType::Kind kind) -> Type {
+        switch (kind)
+        {
+            case PrimitiveType::Char:
+                return PrimitiveType::createChar(isConst, isVolatile, m_sourceInterface.getLanguageOptions());
+            case PrimitiveType::SignedChar: return PrimitiveType::createSignedChar(isConst, isVolatile);
+            case PrimitiveType::UnsignedChar: return PrimitiveType::createUnsignedChar(isConst, isVolatile);
+            case PrimitiveType::Bool: return PrimitiveType::createUnderlineBool(isConst, isVolatile);
+            case PrimitiveType::Short:
+                return PrimitiveType::createShort(isConst, isVolatile, m_sourceInterface.getLanguageOptions());
+            case PrimitiveType::UnsignedShort:
+                return PrimitiveType::createUnsignedShort(isConst, isVolatile, m_sourceInterface.getLanguageOptions());
+            case PrimitiveType::Int:
+                return PrimitiveType::createInt(isConst, isVolatile, m_sourceInterface.getLanguageOptions());
+            case PrimitiveType::UnsignedInt:
+                return PrimitiveType::createUnsignedInt(isConst, isVolatile, m_sourceInterface.getLanguageOptions());
+            case PrimitiveType::Long:
+                return PrimitiveType::createLong(isConst, isVolatile, m_sourceInterface.getLanguageOptions());
+            case PrimitiveType::UnsignedLong:
+                return PrimitiveType::createUnsignedLong(isConst, isVolatile, m_sourceInterface.getLanguageOptions());
+            case PrimitiveType::LongLong:
+                return PrimitiveType::createLongLong(isConst, isVolatile, m_sourceInterface.getLanguageOptions());
+            case PrimitiveType::UnsignedLongLong:
+                return PrimitiveType::createUnsignedLongLong(isConst, isVolatile,
+                                                             m_sourceInterface.getLanguageOptions());
+            case PrimitiveType::Float: return PrimitiveType::createFloat(isConst, isVolatile);
+            case PrimitiveType::Double:
+                return PrimitiveType::createDouble(isConst, isVolatile, m_sourceInterface.getLanguageOptions());
+            case PrimitiveType::LongDouble:
+                return PrimitiveType::createLongDouble(isConst, isVolatile, m_sourceInterface.getLanguageOptions());
+            case PrimitiveType::Void: return PrimitiveType::createVoid(isConst, isVolatile);
+            case PrimitiveType::Int128: return PrimitiveType::createInt128(isConst, isVolatile);
+            case PrimitiveType::UnsignedInt128: return PrimitiveType::createUnsignedInt128(isConst, isVolatile);
+        }
+        CLD_UNREACHABLE;
+    };
 
     auto primTypeSpecToString = [](PrimitiveTypeSpecifier spec) -> std::string_view {
         switch (spec)
@@ -1448,6 +1485,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitiveTypeSpecifiersTo
             case Syntax::TypeSpecifier::Char: return "char";
             case Syntax::TypeSpecifier::Short: return "short";
             case Syntax::TypeSpecifier::Int: return "int";
+            case Syntax::TypeSpecifier::Int128: return "__int128";
             case Syntax::TypeSpecifier::Long: return "long";
             case Syntax::TypeSpecifier::Float: return "float";
             case Syntax::TypeSpecifier::Double: return "double";
@@ -1470,7 +1508,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitiveTypeSpecifiersTo
             excessSpecifiersError(text + "'", iter);
             auto result = table.find(type);
             CLD_ASSERT(result != table.end());
-            return result->second.second;
+            return primKindToType(result->second.second);
         }
         auto result = table.find(type);
         CLD_ASSERT(result != table.end());
@@ -1482,11 +1520,11 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitiveTypeSpecifiersTo
             continue;
         }
         excessSpecifiersError(text + "'", iter);
-        return result->second.second;
+        return primKindToType(result->second.second);
     }
     auto result = table.find(type);
     CLD_ASSERT(result != table.end());
-    return result->second.second;
+    return primKindToType(result->second.second);
 }
 
 template <class T>
@@ -1563,7 +1601,7 @@ void cld::Semantics::SemanticAnalysis::handleArray(cld::Semantics::Type& type,
     }
     if (cld::get<PrimitiveType>(expr->getType().getVariant()).isSigned())
     {
-        if (extensionsEnabled(expr->begin()) ? result->toInt() < 0 : result->toInt() <= 0)
+        if (extensionsEnabled(expr->begin()) ? result->getInteger() < 0 : result->getInteger() <= 0)
         {
             log(Errors::Semantics::ARRAY_SIZE_MUST_BE_GREATER_THAN_ZERO.args(*assignmentExpression, m_sourceInterface,
                                                                              *assignmentExpression, *result));
@@ -1571,14 +1609,13 @@ void cld::Semantics::SemanticAnalysis::handleArray(cld::Semantics::Type& type,
             return;
         }
     }
-    else if (result->toUInt() == 0 && !extensionsEnabled(expr->begin()))
+    else if (result->getInteger() == 0 && !extensionsEnabled(expr->begin()))
     {
-        log(Errors::Semantics::ARRAY_SIZE_MUST_BE_GREATER_THAN_ZERO.args(
-            *assignmentExpression, m_sourceInterface, *assignmentExpression,
-            cld::get<llvm::APSInt>(result->getValue()).toString(10)));
+        log(Errors::Semantics::ARRAY_SIZE_MUST_BE_GREATER_THAN_ZERO.args(*assignmentExpression, m_sourceInterface,
+                                                                         *assignmentExpression, *result));
         type = Type{};
         return;
     }
-    auto size = result->toUInt();
+    auto size = result->getInteger().getZExtValue();
     type = ArrayType::create(isConst, isVolatile, restricted, isStatic, std::move(type), size);
 }

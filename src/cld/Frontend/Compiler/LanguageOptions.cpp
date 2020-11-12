@@ -146,10 +146,7 @@ cld::LanguageOptions cld::LanguageOptions::fromTriple(Triple triple, Language la
     {
         options.sizeTType = UnderlyingType ::UnsignedLong;
     }
-    if (options.sizeOfVoidStar >= 8)
-    {
-        options.int128Enabled = true;
-    }
+    options.int128Enabled = options.sizeOfVoidStar >= 8;
     if (triple.getArchitecture() == Architecture::x86_64 && triple.getPlatform() != Platform::Windows)
     {
         options.vaListKind = BuiltInVaList::x86_64ABI;

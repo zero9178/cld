@@ -112,7 +112,7 @@ bool cld::Semantics::SemanticAnalysis::doAssignmentLikeConstraints(
             notICE();
             return false;
         }
-        if (constant->toUInt() != 0)
+        if (constant->getInteger() != 0)
         {
             notNull(*constant);
             return false;
@@ -688,13 +688,13 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                     PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()), node);
             }
             auto size = getArrayElementType(*currentType).getSizeOf(*this);
-            if (cld::get<llvm::APSInt>(constant->getValue()).isSigned())
+            if (constant->getInteger().isSigned())
             {
-                currentOffset += size * constant->toInt();
+                currentOffset += size * constant->getInteger().getSExtValue();
             }
             else
             {
-                currentOffset += size * constant->toUInt();
+                currentOffset += size * constant->getInteger().getZExtValue();
             }
             range = llvm::ArrayRef(node.getMemberName(), subscript.closeBracket + 1);
         }
@@ -1027,7 +1027,7 @@ std::unique_ptr<cld::Semantics::CallExpression>
                     log(Errors::Semantics::EXPECTED_INTEGER_CONSTANT_EXPRESSION_AS_SECOND_ARGUMENT_TO_BUILTIN_PREFETCH
                             .args(*expression, m_sourceInterface, *expression));
                 }
-                else if (constant->toInt() != 0 && constant->toInt() != 1)
+                else if (constant->getInteger() != 0 && constant->getInteger() != 1)
                 {
                     log(Errors::Semantics::EXPECTED_A_VALUE_OF_0_OR_1_AS_SECOND_ARGUMENT_TO_BUILTIN_PREFETCH.args(
                         *expression, m_sourceInterface, *expression, *constant));
@@ -1046,7 +1046,7 @@ std::unique_ptr<cld::Semantics::CallExpression>
                     log(Errors::Semantics::EXPECTED_INTEGER_CONSTANT_EXPRESSION_AS_THIRD_ARGUMENT_TO_BUILTIN_PREFETCH
                             .args(*expression, m_sourceInterface, *expression));
                 }
-                else if (constant->toInt() < 0 || constant->toInt() > 3)
+                else if (constant->getInteger() < 0 || constant->getInteger() > 3)
                 {
                     log(Errors::Semantics::EXPECTED_A_VALUE_OF_0_TO_3_AS_THIRD_ARGUMENT_TO_BUILTIN_PREFETCH.args(
                         *expression, m_sourceInterface, *expression, *constant));
@@ -1098,9 +1098,10 @@ std::unique_ptr<cld::Semantics::CallExpression>
                         EXPECTED_ARITHMETIC_CONSTANT_EXPRESSION_AS_THIRD_ARGUMENT_TO_BUILTIN_EXPECT_WITH_PROBABILITY
                             .args(*arguments.back(), m_sourceInterface, *arguments.back()));
             }
-            else if (constant->toDouble() < 0 || constant->toDouble() > 1)
+            else if (constant->getFloating() < llvm::APFloat(constant->getFloating().getSemantics(), 0)
+                     || constant->getFloating() > llvm::APFloat(constant->getFloating().getSemantics(), 1))
             {
-                log(Errors::Semantics::EXPECTED_A_VALUE_OF_0_TO_1_AS_THIRd_ARGUMENT_TO_BUILTIN_EXPECT_WITH_PROBABILITY
+                log(Errors::Semantics::EXPECTED_A_VALUE_OF_0_TO_1_AS_THIRD_ARGUMENT_TO_BUILTIN_EXPECT_WITH_PROBABILITY
                         .args(*arguments.back(), m_sourceInterface, *arguments.back(), *constant));
             }
         }
@@ -2069,7 +2070,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             if (std::holds_alternative<PointerType>(rhsValue->getType().getVariant()) && isInteger(value->getType()))
             {
                 auto constant = evaluateConstantExpression(*value);
-                if (!constant || constant->toUInt() != 0)
+                if (!constant || constant->getInteger() != 0)
                 {
                     log(Errors::Semantics::EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_ARITHMETIC_TYPE.args(
                         *rhsValue, m_sourceInterface, *token, *rhsValue));
@@ -2094,7 +2095,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                 }
                 else
                 {
-                    if (constant->toUInt() != 0)
+                    if (constant->getInteger() != 0)
                     {
                         log(Errors::Semantics::EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_NULL.args(
                             *rhsValue, m_sourceInterface, *token, *rhsValue, *constant));
@@ -2295,7 +2296,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         if (std::holds_alternative<PointerType>(third->getType().getVariant()) && isInteger(second->getType()))
         {
             auto constant = evaluateConstantExpression(*second);
-            if (!constant || constant->toUInt() != 0)
+            if (!constant || constant->getInteger() != 0)
             {
                 log(Errors::Semantics::EXPECTED_THIRD_OPERAND_OF_CONDITIONAL_EXPRESSION_TO_BE_AN_ARITHMETIC_TYPE.args(
                     *third, m_sourceInterface, *third, *node.getOptionalQuestionMark(), *node.getOptionalColon()));
@@ -2328,7 +2329,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                 log(Errors::Semantics::EXPECTED_THIRD_OPERAND_OF_CONDITIONAL_EXPRESSION_TO_BE_NULL_2.args(
                     *third, m_sourceInterface, *third, *node.getOptionalQuestionMark(), *node.getOptionalColon()));
             }
-            else if (constant->toUInt() != 0)
+            else if (constant->getInteger() != 0)
             {
                 log(Errors::Semantics::EXPECTED_THIRD_OPERAND_OF_CONDITIONAL_EXPRESSION_TO_BE_NULL.args(
                     *third, m_sourceInterface, *third, *constant, *node.getOptionalQuestionMark(),
@@ -3009,24 +3010,24 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
                         finishRest(iter + 1, node.getNonCommaExpressionsAndBlocks().end());
                         return std::make_unique<ErrorExpression>(node);
                     }
-                    if (cld::get<PrimitiveType>(exp->getType().getVariant()).isSigned() && constant->toInt() < 0)
+                    if (constant->getInteger().isNegative())
                     {
                         log(Errors::Semantics::DESIGNATOR_INDEX_MUST_NOT_BE_NEGATIVE.args(*exp, m_sourceInterface, *exp,
-                                                                                          constant->toInt()));
+                                                                                          *constant));
                         finishRest(iter + 1, node.getNonCommaExpressionsAndBlocks().end());
                         return std::make_unique<ErrorExpression>(node);
                     }
                     if (!(current == &top && isAbstractArray)
-                        && constant->toUInt() >= cld::get<ArrayType>(current->type->getVariant()).getSize())
+                        && constant->getInteger() >= cld::get<ArrayType>(current->type->getVariant()).getSize())
                     {
                         log(Errors::Semantics::DESIGNATOR_INDEX_OUT_OF_RANGE_FOR_ARRAY_TYPE_N.args(
-                            *exp, m_sourceInterface, *current->type, *exp, constant->toUInt()));
+                            *exp, m_sourceInterface, *current->type, *exp, *constant));
                         finishRest(iter + 1, node.getNonCommaExpressionsAndBlocks().end());
                         return std::make_unique<ErrorExpression>(node);
                     }
                     if (current == &top && isAbstractArray)
                     {
-                        *size = std::max(*size, constant->toUInt() + 1);
+                        *size = std::max(*size, constant->getInteger().getZExtValue() + 1);
                         auto prevSize = top.size();
                         for (std::size_t i = prevSize; i < *size; i++)
                         {
@@ -3034,7 +3035,7 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
                             assignChildren(*top.at(i).type, top.at(i));
                         }
                     }
-                    currentIndex = constant->toUInt();
+                    currentIndex = constant->getInteger().getZExtValue();
                 }
                 else if (isRecord(*current->type))
                 {

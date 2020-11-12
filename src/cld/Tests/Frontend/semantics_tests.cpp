@@ -540,7 +540,7 @@ TEST_CASE("Semantics primitive declarations", "[semantics]")
                             "}",
                       ProducesError(DECLARATION_MUST_NOT_BE_VOID));
     }
-    auto options = cld::LanguageOptions::native();
+    auto options = cld::LanguageOptions::fromTriple(x64linux);
     std::vector<std::pair<cld::Semantics::Type, std::vector<std::string_view>>> table = {
         {cld::Semantics::PrimitiveType::createChar(isConst, isVolatile, options), {"char"}},
         {cld::Semantics::PrimitiveType::createSignedChar(isConst, isVolatile), {"signed", "char"}},
@@ -576,6 +576,9 @@ TEST_CASE("Semantics primitive declarations", "[semantics]")
         {cld::Semantics::PrimitiveType::createDouble(isConst, isVolatile, options), {"double"}},
         {cld::Semantics::PrimitiveType::createLongDouble(isConst, isVolatile, options), {"long", "double"}},
         {cld::Semantics::PrimitiveType::createUnderlineBool(isConst, isVolatile), {"_Bool"}},
+        {cld::Semantics::PrimitiveType::createInt128(isConst, isVolatile), {"__int128"}},
+        {cld::Semantics::PrimitiveType::createInt128(isConst, isVolatile), {"signed", "__int128"}},
+        {cld::Semantics::PrimitiveType::createUnsignedInt128(isConst, isVolatile), {"unsigned", "__int128"}},
     };
     for (auto& [type, variants] : table)
     {

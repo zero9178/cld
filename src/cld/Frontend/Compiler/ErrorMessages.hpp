@@ -626,7 +626,7 @@ CREATE_ERROR(EXPECTED_ARITHMETIC_CONSTANT_EXPRESSION_AS_THIRD_ARGUMENT_TO_BUILTI
              "Expected arithmetic constant expression as third argument to __builtin_expect_with_probability",
              Underline<0>);
 
-CREATE_ERROR(EXPECTED_A_VALUE_OF_0_TO_1_AS_THIRd_ARGUMENT_TO_BUILTIN_EXPECT_WITH_PROBABILITY,
+CREATE_ERROR(EXPECTED_A_VALUE_OF_0_TO_1_AS_THIRD_ARGUMENT_TO_BUILTIN_EXPECT_WITH_PROBABILITY,
              "Expected a value of 0 to 1 as third argument to __builtin_expect_with_probability", Annotate<0, 1>);
 
 // Size of

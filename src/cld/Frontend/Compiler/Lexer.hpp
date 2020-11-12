@@ -122,7 +122,6 @@ enum class TokenType : std::uint8_t
     GotoKeyword,    ///<[C,OpenCL]
     UnderlineBool,  ///<[C,OpenCL]
     Int128Keyword,  ///<[C,OpenCL]
-    UInt128Keyword, ///<[C,OpenCL]
     GNUAttribute,   ///<[GNUC]
     GNUExtension,   ///<[GNUC]
     GNUTypeOf,      ///<[GNUC]

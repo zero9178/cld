@@ -1918,6 +1918,8 @@ public:
         Signed = 0b100000000,
         Unsigned = 0b1000000000,
         Bool = 0b10000000000,
+        Int128 = 0b100000000000,
+        MAX_VALUE = Int128
     };
 
 private:

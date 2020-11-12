@@ -97,11 +97,9 @@ public:
 
     explicit operator bool() const;
 
-    std::int64_t toInt() const;
+    const llvm::APSInt& getInteger() const;
 
-    std::uint64_t toUInt() const;
-
-    double toDouble() const;
+    const llvm::APFloat& getFloating() const;
 
     std::string toString() const;
 };
