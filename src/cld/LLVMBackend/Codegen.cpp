@@ -3700,6 +3700,158 @@ public:
                 case cld::Semantics::BuiltinFunction::Unreachable: return m_builder.CreateUnreachable();
                 case cld::Semantics::BuiltinFunction::Trap:
                     return m_builder.CreateIntrinsic(llvm::Intrinsic::trap, {}, {});
+                case cld::Semantics::BuiltinFunction::SyncFetchAndAdd:
+                case cld::Semantics::BuiltinFunction::SyncFetchAndSub:
+                case cld::Semantics::BuiltinFunction::SyncFetchAndOr:
+                case cld::Semantics::BuiltinFunction::SyncFetchAndAnd:
+                case cld::Semantics::BuiltinFunction::SyncFetchAndXor:
+                case cld::Semantics::BuiltinFunction::SyncFetchAndNand:
+                case cld::Semantics::BuiltinFunction::SyncLockTestAndSet:
+                {
+                    auto pointer = visit(*call.getArgumentExpressions()[0]);
+                    auto value = visit(*call.getArgumentExpressions()[1]);
+                    auto* pointerType = value.value->getType()->isPointerTy() ?
+                                            value.value->getType()->getPointerElementType() :
+                                            nullptr;
+                    if (pointerType)
+                    {
+                        llvm::IntegerType* intPtrType =
+                            m_module.getDataLayout().getIntPtrType(m_module.getContext(), 0);
+                        value = m_builder.CreatePtrToInt(value, intPtrType);
+                        pointer = createPointerCast(pointer, llvm::PointerType::getUnqual(intPtrType));
+                    }
+                    llvm::AtomicRMWInst::BinOp inst;
+                    switch (builtin.getKind())
+                    {
+                        case cld::Semantics::BuiltinFunction::SyncFetchAndAdd: inst = llvm::AtomicRMWInst::Add; break;
+                        case cld::Semantics::BuiltinFunction::SyncFetchAndSub: inst = llvm::AtomicRMWInst::Sub; break;
+                        case cld::Semantics::BuiltinFunction::SyncFetchAndOr: inst = llvm::AtomicRMWInst::Or; break;
+                        case cld::Semantics::BuiltinFunction::SyncFetchAndAnd: inst = llvm::AtomicRMWInst::And; break;
+                        case cld::Semantics::BuiltinFunction::SyncFetchAndXor: inst = llvm::AtomicRMWInst::Xor; break;
+                        case cld::Semantics::BuiltinFunction::SyncFetchAndNand: inst = llvm::AtomicRMWInst::Nand; break;
+                        case cld::Semantics::BuiltinFunction::SyncLockTestAndSet:
+                            inst = llvm::AtomicRMWInst::Xchg;
+                            break;
+                        default: CLD_UNREACHABLE;
+                    }
+                    auto* ret =
+                        m_builder.CreateAtomicRMW(inst, pointer, value, llvm::AtomicOrdering::SequentiallyConsistent);
+                    if (!pointerType)
+                    {
+                        return ret;
+                    }
+                    return valueOf(m_builder.CreateIntToPtr(ret, llvm::PointerType::getUnqual(pointerType)));
+                }
+                case cld::Semantics::BuiltinFunction::SyncAddAndFetch:
+                case cld::Semantics::BuiltinFunction::SyncSubAndFetch:
+                case cld::Semantics::BuiltinFunction::SyncOrAndFetch:
+                case cld::Semantics::BuiltinFunction::SyncAndAndFetch:
+                case cld::Semantics::BuiltinFunction::SyncXorAndFetch:
+                case cld::Semantics::BuiltinFunction::SyncNandAndFetch:
+                {
+                    auto pointer = visit(*call.getArgumentExpressions()[0]);
+                    auto value = visit(*call.getArgumentExpressions()[1]);
+                    auto* pointerType = value.value->getType()->isPointerTy() ?
+                                            value.value->getType()->getPointerElementType() :
+                                            nullptr;
+                    auto type = call.getArgumentExpressions()[1]->getType();
+                    if (pointerType)
+                    {
+                        llvm::IntegerType* intPtrType =
+                            m_module.getDataLayout().getIntPtrType(m_module.getContext(), 0);
+                        value = m_builder.CreatePtrToInt(value, intPtrType);
+                        pointer = createPointerCast(pointer, llvm::PointerType::getUnqual(intPtrType));
+                        type = cld::Semantics::PrimitiveType::createLongLong(false, false,
+                                                                             m_sourceInterface.getLanguageOptions());
+                    }
+                    llvm::AtomicRMWInst::BinOp inst;
+                    switch (builtin.getKind())
+                    {
+                        case cld::Semantics::BuiltinFunction::SyncAddAndFetch: inst = llvm::AtomicRMWInst::Add; break;
+                        case cld::Semantics::BuiltinFunction::SyncSubAndFetch: inst = llvm::AtomicRMWInst::Sub; break;
+                        case cld::Semantics::BuiltinFunction::SyncOrAndFetch: inst = llvm::AtomicRMWInst::Or; break;
+                        case cld::Semantics::BuiltinFunction::SyncAndAndFetch: inst = llvm::AtomicRMWInst::And; break;
+                        case cld::Semantics::BuiltinFunction::SyncXorAndFetch: inst = llvm::AtomicRMWInst::Xor; break;
+                        case cld::Semantics::BuiltinFunction::SyncNandAndFetch: inst = llvm::AtomicRMWInst::Nand; break;
+                        default: CLD_UNREACHABLE;
+                    }
+                    auto* temp =
+                        m_builder.CreateAtomicRMW(inst, pointer, value, llvm::AtomicOrdering::SequentiallyConsistent);
+                    llvm::Value* ret;
+                    switch (builtin.getKind())
+                    {
+                        case cld::Semantics::BuiltinFunction::SyncAddAndFetch:
+                            ret = add(temp, type, value, type);
+                            break;
+                        case cld::Semantics::BuiltinFunction::SyncSubAndFetch:
+                            ret = sub(temp, type, value, type);
+                            break;
+                        case cld::Semantics::BuiltinFunction::SyncOrAndFetch:
+                            ret = m_builder.CreateOr(temp, value);
+                            break;
+                        case cld::Semantics::BuiltinFunction::SyncAndAndFetch:
+                            ret = m_builder.CreateAnd(temp, value);
+                            break;
+                        case cld::Semantics::BuiltinFunction::SyncXorAndFetch:
+                            ret = m_builder.CreateXor(temp, value);
+                            break;
+                        case cld::Semantics::BuiltinFunction::SyncNandAndFetch:
+                            ret = m_builder.CreateNot(m_builder.CreateAnd(temp, value));
+                            break;
+                        default: CLD_UNREACHABLE;
+                    }
+                    if (!pointerType)
+                    {
+                        return ret;
+                    }
+                    return valueOf(m_builder.CreateIntToPtr(ret, llvm::PointerType::getUnqual(pointerType)));
+                }
+                case cld::Semantics::BuiltinFunction::SyncValCompareAndSwap:
+                case cld::Semantics::BuiltinFunction::SyncBoolCompareAndSwap:
+                {
+                    auto pointer = visit(*call.getArgumentExpressions()[0]);
+                    auto oldValue = visit(*call.getArgumentExpressions()[1]);
+                    auto newValue = visit(*call.getArgumentExpressions()[2]);
+                    auto* pointerType = oldValue.value->getType()->isPointerTy() ?
+                                            oldValue.value->getType()->getPointerElementType() :
+                                            nullptr;
+                    if (pointerType)
+                    {
+                        llvm::IntegerType* intPtrType =
+                            m_module.getDataLayout().getIntPtrType(m_module.getContext(), 0);
+                        oldValue = m_builder.CreatePtrToInt(oldValue, intPtrType);
+                        newValue = m_builder.CreatePtrToInt(newValue, intPtrType);
+                        pointer = createPointerCast(pointer, llvm::PointerType::getUnqual(intPtrType));
+                    }
+                    auto* temp = m_builder.CreateAtomicCmpXchg(pointer, oldValue, newValue,
+                                                               llvm::AtomicOrdering::SequentiallyConsistent,
+                                                               llvm::AtomicOrdering::SequentiallyConsistent);
+                    if (builtin.getKind() == cld::Semantics::BuiltinFunction::SyncBoolCompareAndSwap)
+                    {
+                        return m_builder.CreateExtractValue(temp, {1});
+                    }
+                    auto* ret = m_builder.CreateExtractValue(temp, {0});
+                    if (!pointerType)
+                    {
+                        return ret;
+                    }
+                    return valueOf(m_builder.CreateIntToPtr(ret, llvm::PointerType::getUnqual(pointerType)));
+                }
+                case cld::Semantics::BuiltinFunction::SyncLockRelease:
+                {
+                    auto pointer = visit(*call.getArgumentExpressions()[0]);
+                    if (pointer.value->getType()->getPointerElementType()->isPointerTy())
+                    {
+                        llvm::IntegerType* intPtrType =
+                            m_module.getDataLayout().getIntPtrType(m_module.getContext(), 0);
+                        pointer = createPointerCast(pointer, llvm::PointerType::getUnqual(intPtrType));
+                    }
+                    auto* store = m_builder.CreateAlignedStore(
+                        llvm::Constant::getNullValue(pointer.value->getType()->getPointerElementType()), pointer,
+                        pointer.alignment);
+                    store->setAtomic(llvm::AtomicOrdering::Release);
+                    return store;
+                }
             }
             CLD_UNREACHABLE;
         }

@@ -629,6 +629,23 @@ CREATE_ERROR(EXPECTED_ARITHMETIC_CONSTANT_EXPRESSION_AS_THIRD_ARGUMENT_TO_BUILTI
 CREATE_ERROR(EXPECTED_A_VALUE_OF_0_TO_1_AS_THIRD_ARGUMENT_TO_BUILTIN_EXPECT_WITH_PROBABILITY,
              "Expected a value of 0 to 1 as third argument to __builtin_expect_with_probability", Annotate<0, 1>);
 
+// __sync_*
+
+CREATE_ERROR(EXPECTED_POINTER_TYPE_AS_FIRST_ARGUMENT_TO_N, "Expected pointer type as first argument to %0",
+             Underline<0>, AnnotateExpr<1>);
+
+CREATE_ERROR(POINTER_ELEMENT_TYPE_IN_N_MAY_NOT_BE_CONST_QUALIFIED,
+             "Pointer element type in %0 may not be const qualified", Underline<0>, AnnotateExpr<1>);
+
+CREATE_ERROR(POINTER_ELEMENT_TYPE_IN_N_MUST_BE_AN_INTEGER_OR_POINTER_TYPe,
+             "Pointer element type in %0 must be an integer or pointer type", Underline<0>, AnnotateExpr<1>);
+
+CREATE_ERROR(POINTER_ELEMENT_TYPE_IN_N_MUST_NOT_BE_BOOL, "Pointer element type in %0 must not be bool", Underline<0>,
+             AnnotateExpr<1>);
+
+CREATE_ERROR(POINTER_ELEMENT_TYPE_IN_N_MUST_NOT_HAVE_A_SIZE_GREATER_THAN_8,
+             "Pointer element type in %0 must not have a size greater than 8", Underline<0>, AnnotateExpr<1>);
+
 // Size of
 
 CREATE_ERROR(INCOMPLETE_TYPE_N_IN_SIZE_OF, "Incomplete type %full0 in 'sizeof'", Underline<1>);

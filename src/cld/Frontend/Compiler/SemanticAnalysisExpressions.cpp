@@ -918,6 +918,40 @@ bool isBuiltinKind(const cld::Semantics::ExpressionBase& expression, cld::Semant
     return builtin->getKind() == kind;
 }
 
+bool isSyncBuiltinWithType(const cld::Semantics::ExpressionBase& expression)
+{
+    auto* declRead = expression.get_if<cld::Semantics::DeclarationRead>();
+    if (!declRead)
+    {
+        return false;
+    }
+    auto* builtin = declRead->getDeclRead().get_if<cld::Semantics::BuiltinFunction>();
+    if (!builtin)
+    {
+        return false;
+    }
+    switch (builtin->getKind())
+    {
+        case cld::Semantics::BuiltinFunction::SyncFetchAndAdd:
+        case cld::Semantics::BuiltinFunction::SyncFetchAndSub:
+        case cld::Semantics::BuiltinFunction::SyncFetchAndOr:
+        case cld::Semantics::BuiltinFunction::SyncFetchAndAnd:
+        case cld::Semantics::BuiltinFunction::SyncFetchAndXor:
+        case cld::Semantics::BuiltinFunction::SyncFetchAndNand:
+        case cld::Semantics::BuiltinFunction::SyncAddAndFetch:
+        case cld::Semantics::BuiltinFunction::SyncSubAndFetch:
+        case cld::Semantics::BuiltinFunction::SyncOrAndFetch:
+        case cld::Semantics::BuiltinFunction::SyncAndAndFetch:
+        case cld::Semantics::BuiltinFunction::SyncXorAndFetch:
+        case cld::Semantics::BuiltinFunction::SyncNandAndFetch:
+        case cld::Semantics::BuiltinFunction::SyncBoolCompareAndSwap:
+        case cld::Semantics::BuiltinFunction::SyncValCompareAndSwap:
+        case cld::Semantics::BuiltinFunction::SyncLockTestAndSet:
+        case cld::Semantics::BuiltinFunction::SyncLockRelease: return true;
+        default: return false;
+    }
+}
+
 bool isBuiltinFunction(const cld::Semantics::ExpressionBase& expression)
 {
     auto* declRead = expression.get_if<cld::Semantics::DeclarationRead>();
@@ -1113,6 +1147,80 @@ std::unique_ptr<cld::Semantics::CallExpression>
         node.getOpenParentheses(), std::move(arguments), node.getCloseParentheses());
 }
 
+std::unique_ptr<cld::Semantics::CallExpression>
+    cld::Semantics::SemanticAnalysis::visitSyncBuiltinWithT(const Syntax::PostFixExpressionFunctionCall& node,
+                                                            IntrVarPtr<ExpressionBase>&& function)
+{
+    auto type = function->getType();
+    function = std::make_unique<Conversion>(PointerType::create(false, false, false, std::move(type)),
+                                            Conversion::LValue, std::move(function));
+    auto& ft =
+        cld::get<FunctionType>(cld::get<PointerType>(function->getType().getVariant()).getElementType().getVariant());
+
+    Type placeholder;
+    std::vector<IntrVarPtr<ExpressionBase>> arguments;
+    if (checkFunctionCount(*function, ft, node))
+    {
+        auto& decl = function->cast<Conversion>().getExpression().cast<DeclarationRead>();
+        arguments.push_back(lvalueConversion(visit(node.getOptionalAssignmentExpressions()[0])));
+        if (!std::holds_alternative<PointerType>(arguments.back()->getType().getVariant()))
+        {
+            log(Errors::Semantics::EXPECTED_POINTER_TYPE_AS_FIRST_ARGUMENT_TO_N.args(
+                *arguments.back(), m_sourceInterface, *decl.getIdentifierToken(), *arguments.back()));
+        }
+        else
+        {
+            auto& elementType = cld::get<PointerType>(arguments.back()->getType().getVariant()).getElementType();
+            if (elementType.isConst())
+            {
+                log(Errors::Semantics::POINTER_ELEMENT_TYPE_IN_N_MAY_NOT_BE_CONST_QUALIFIED.args(
+                    *arguments.back(), m_sourceInterface, *decl.getIdentifierToken(), *arguments.back()));
+            }
+            if (!isInteger(elementType) && !std::holds_alternative<PointerType>(elementType.getVariant()))
+            {
+                log(Errors::Semantics::POINTER_ELEMENT_TYPE_IN_N_MUST_BE_AN_INTEGER_OR_POINTER_TYPe.args(
+                    *arguments.back(), m_sourceInterface, *decl.getIdentifierToken(), *arguments.back()));
+            }
+            else if (isBool(elementType))
+            {
+                log(Errors::Semantics::POINTER_ELEMENT_TYPE_IN_N_MUST_NOT_BE_BOOL.args(
+                    *arguments.back(), m_sourceInterface, *decl.getIdentifierToken(), *arguments.back()));
+            }
+            else if (elementType.getSizeOf(*this) > 8)
+            {
+                log(Errors::Semantics::POINTER_ELEMENT_TYPE_IN_N_MUST_NOT_HAVE_A_SIZE_GREATER_THAN_8.args(
+                    *arguments.back(), m_sourceInterface, *decl.getIdentifierToken(), *arguments.back()));
+            }
+            placeholder = removeQualifiers(elementType);
+        }
+        std::size_t i = 1;
+        for (; i < ft.getArguments().size(); i++)
+        {
+            if (ft.getArguments()[i].first.isUndefined())
+            {
+                arguments.push_back(
+                    checkFunctionArg(i + 1, placeholder, visit(node.getOptionalAssignmentExpressions()[i])));
+            }
+            else
+            {
+                arguments.push_back(checkFunctionArg(i + 1, ft.getArguments()[i].first,
+                                                     visit(node.getOptionalAssignmentExpressions()[i])));
+            }
+        }
+        for (; i < node.getOptionalAssignmentExpressions().size(); i++)
+        {
+            visit(node.getOptionalAssignmentExpressions()[i]);
+        }
+    }
+    if (ft.getReturnType().isUndefined())
+    {
+        return std::make_unique<CallExpression>(std::move(placeholder), std::move(function), node.getOpenParentheses(),
+                                                std::move(arguments), node.getCloseParentheses());
+    }
+    return std::make_unique<CallExpression>(ft.getReturnType(), std::move(function), node.getOpenParentheses(),
+                                            std::move(arguments), node.getCloseParentheses());
+}
+
 cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::checkFunctionArg(std::size_t i, Type paramType,
                                                        IntrVarPtr<ExpressionBase>&& expression)
@@ -1172,6 +1280,89 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     return {std::move(expression)};
 }
 
+bool cld::Semantics::SemanticAnalysis::checkFunctionCount(const ExpressionBase& function, const FunctionType& ft,
+                                                          const Syntax::PostFixExpressionFunctionCall& node)
+{
+    auto callsFunction = [&] {
+        if (!function.is<Conversion>())
+        {
+            return false;
+        }
+        auto& conversion = function.cast<Conversion>();
+        if (conversion.getKind() != Conversion::LValue)
+        {
+            return false;
+        }
+        if (!conversion.getExpression().is<DeclarationRead>())
+        {
+            return false;
+        }
+        auto& decl = conversion.getExpression().cast<DeclarationRead>();
+        return decl.getDeclRead().match([](const FunctionDefinition&) { return true; },
+                                        [](const Declaration& declaration) {
+                                            return std::holds_alternative<FunctionType>(
+                                                declaration.getType().getVariant());
+                                        },
+                                        [](const BuiltinFunction&) { return true; });
+    }();
+    auto& argumentTypes = ft.getArguments();
+    if (node.getOptionalAssignmentExpressions().size() < argumentTypes.size())
+    {
+        if (!ft.isLastVararg())
+        {
+            if (callsFunction)
+            {
+                auto& decl = function.cast<Conversion>().getExpression().cast<DeclarationRead>();
+                log(Errors::Semantics::NOT_ENOUGH_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_N_GOT_N.args(
+                    decl, m_sourceInterface, *decl.getIdentifierToken(), argumentTypes.size(),
+                    node.getOptionalAssignmentExpressions().size()));
+            }
+            else
+            {
+                log(Errors::Semantics::NOT_ENOUGH_ARGUMENTS_FOR_FUNCTION_CALL_EXPECTED_N_GOT_N.args(
+                    function, m_sourceInterface, argumentTypes.size(), node.getOptionalAssignmentExpressions().size(),
+                    function));
+            }
+        }
+        else
+        {
+            if (callsFunction)
+            {
+                auto& decl = function.cast<Conversion>().getExpression().cast<DeclarationRead>();
+                log(Errors::Semantics::NOT_ENOUGH_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_AT_LEAST_N_GOT_N.args(
+                    decl, m_sourceInterface, *decl.getIdentifierToken(), argumentTypes.size(),
+                    node.getOptionalAssignmentExpressions().size()));
+            }
+            else
+            {
+                log(Errors::Semantics::NOT_ENOUGH_ARGUMENTS_FOR_FUNCTION_CALL_EXPECTED_AT_LEAST_N_GOT_N.args(
+                    function, m_sourceInterface, argumentTypes.size(), node.getOptionalAssignmentExpressions().size(),
+                    function));
+            }
+        }
+        return false;
+    }
+    if (!ft.isLastVararg() && node.getOptionalAssignmentExpressions().size() > argumentTypes.size())
+    {
+        if (callsFunction)
+        {
+            auto& decl = function.cast<Conversion>().getExpression().cast<DeclarationRead>();
+            log(Errors::Semantics::TOO_MANY_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_N_GOT_N.args(
+                decl, m_sourceInterface, *decl.getIdentifierToken(), argumentTypes.size(),
+                node.getOptionalAssignmentExpressions().size(),
+                llvm::ArrayRef(node.getOptionalAssignmentExpressions()).drop_front(argumentTypes.size())));
+        }
+        else
+        {
+            log(Errors::Semantics::TOO_MANY_ARGUMENTS_FOR_FUNCTION_CALL_EXPECTED_N_GOT_N.args(
+                function, m_sourceInterface, argumentTypes.size(), node.getOptionalAssignmentExpressions().size(),
+                function, llvm::ArrayRef(node.getOptionalAssignmentExpressions()).drop_front(argumentTypes.size())));
+        }
+        return false;
+    }
+    return true;
+}
+
 cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::PostFixExpressionFunctionCall& node)
 {
@@ -1187,6 +1378,10 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     if (isBuiltinKind(*function, BuiltinFunction::ExpectWithProbability))
     {
         return visitExpectWithProbability(node, std::move(function));
+    }
+    if (isSyncBuiltinWithType(*function))
+    {
+        return visitSyncBuiltinWithT(node, std::move(function));
     }
     if (!isBuiltinFunction(*function))
     {
@@ -1225,89 +1420,13 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     }
     else
     {
-        auto callsFunction = [&] {
-            if (!function->is<Conversion>())
-            {
-                return false;
-            }
-            auto& conversion = function->cast<Conversion>();
-            if (conversion.getKind() != Conversion::LValue)
-            {
-                return false;
-            }
-            if (!conversion.getExpression().is<DeclarationRead>())
-            {
-                return false;
-            }
-            auto& decl = conversion.getExpression().cast<DeclarationRead>();
-            return decl.getDeclRead().match([](const FunctionDefinition&) { return true; },
-                                            [](const Declaration& declaration) {
-                                                return std::holds_alternative<FunctionType>(
-                                                    declaration.getType().getVariant());
-                                            },
-                                            [](const BuiltinFunction&) { return true; });
-        }();
-        auto& argumentTypes = ft.getArguments();
-        if (node.getOptionalAssignmentExpressions().size() < argumentTypes.size())
-        {
-            if (!ft.isLastVararg())
-            {
-                if (callsFunction)
-                {
-                    auto& decl = function->cast<Conversion>().getExpression().cast<DeclarationRead>();
-                    log(Errors::Semantics::NOT_ENOUGH_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_N_GOT_N.args(
-                        decl, m_sourceInterface, *decl.getIdentifierToken(), argumentTypes.size(),
-                        node.getOptionalAssignmentExpressions().size()));
-                }
-                else
-                {
-                    log(Errors::Semantics::NOT_ENOUGH_ARGUMENTS_FOR_FUNCTION_CALL_EXPECTED_N_GOT_N.args(
-                        *function, m_sourceInterface, argumentTypes.size(),
-                        node.getOptionalAssignmentExpressions().size(), *function));
-                }
-            }
-            else
-            {
-                if (callsFunction)
-                {
-                    auto& decl = function->cast<Conversion>().getExpression().cast<DeclarationRead>();
-                    log(Errors::Semantics::NOT_ENOUGH_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_AT_LEAST_N_GOT_N.args(
-                        decl, m_sourceInterface, *decl.getIdentifierToken(), argumentTypes.size(),
-                        node.getOptionalAssignmentExpressions().size()));
-                }
-                else
-                {
-                    log(Errors::Semantics::NOT_ENOUGH_ARGUMENTS_FOR_FUNCTION_CALL_EXPECTED_AT_LEAST_N_GOT_N.args(
-                        *function, m_sourceInterface, argumentTypes.size(),
-                        node.getOptionalAssignmentExpressions().size(), *function));
-                }
-            }
-        }
-        else if (!ft.isLastVararg() && node.getOptionalAssignmentExpressions().size() > argumentTypes.size())
-        {
-            if (callsFunction)
-            {
-                auto& decl = function->cast<Conversion>().getExpression().cast<DeclarationRead>();
-                log(Errors::Semantics::TOO_MANY_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_N_GOT_N.args(
-                    decl, m_sourceInterface, *decl.getIdentifierToken(), argumentTypes.size(),
-                    node.getOptionalAssignmentExpressions().size(),
-                    llvm::ArrayRef(node.getOptionalAssignmentExpressions()).drop_front(argumentTypes.size())));
-            }
-            else
-            {
-                log(Errors::Semantics::TOO_MANY_ARGUMENTS_FOR_FUNCTION_CALL_EXPECTED_N_GOT_N.args(
-                    *function, m_sourceInterface, argumentTypes.size(), node.getOptionalAssignmentExpressions().size(),
-                    *function,
-                    llvm::ArrayRef(node.getOptionalAssignmentExpressions()).drop_front(argumentTypes.size())));
-            }
-        }
-        else
+        if (checkFunctionCount(*function, ft, node))
         {
             std::size_t i = 0;
-            for (; i < argumentTypes.size(); i++)
+            for (; i < ft.getArguments().size(); i++)
             {
-                arguments.push_back(
-                    checkFunctionArg(i + 1, argumentTypes[i].first, visit(node.getOptionalAssignmentExpressions()[i])));
+                arguments.push_back(checkFunctionArg(i + 1, ft.getArguments()[i].first,
+                                                     visit(node.getOptionalAssignmentExpressions()[i])));
             }
             for (; i < node.getOptionalAssignmentExpressions().size(); i++)
             {

@@ -5639,3 +5639,215 @@ TEST_CASE("LLVM codegen Initializer constant expression", "[LLVM]")
         CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 1);
     }
 }
+
+TEST_CASE("LLVM codegen __sync_*", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    auto module = std::make_unique<llvm::Module>("", context);
+    SECTION("__sync_fetch_and_add")
+    {
+        auto program = generateProgram("int function(void) {\n"
+                                       "    int i = 0;\n"
+                                       "    int ret = __sync_fetch_and_add(&i,5);\n"
+                                       "    return ret == 0 && i == 5;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 1);
+    }
+    SECTION("__sync_fetch_and_sub")
+    {
+        auto program = generateProgram("int function(void) {\n"
+                                       "    int i = 0;\n"
+                                       "    int ret = __sync_fetch_and_sub(&i,5);\n"
+                                       "    return ret == 0 && i == -5;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 1);
+    }
+    SECTION("__sync_fetch_and_or")
+    {
+        auto program = generateProgram("int function(void) {\n"
+                                       "    int i = 0;\n"
+                                       "    int ret = __sync_fetch_and_or(&i,5);\n"
+                                       "    return ret == 0 && i == 5;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 1);
+    }
+    SECTION("__sync_fetch_and_and")
+    {
+        auto program = generateProgram("int function(void) {\n"
+                                       "    int i = 0xF;\n"
+                                       "    int ret = __sync_fetch_and_and(&i,0x5);\n"
+                                       "    return ret == 0xF && i == 0x5;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 1);
+    }
+    SECTION("__sync_fetch_and_xor")
+    {
+        auto program = generateProgram("int function(void) {\n"
+                                       "    int i = 0xF;\n"
+                                       "    int ret = __sync_fetch_and_xor(&i,5);\n"
+                                       "    return ret == 0xF && i == 10;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 1);
+    }
+    SECTION("__sync_fetch_and_nand")
+    {
+        auto program = generateProgram("int function(void) {\n"
+                                       "    int i = 0xF;\n"
+                                       "    int ret = __sync_fetch_and_nand(&i,5);\n"
+                                       "    return ret == 0xF && i == ~5;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 1);
+    }
+    SECTION("__sync_lock_test_and_set")
+    {
+        auto program = generateProgram("int function(void) {\n"
+                                       "    int i = 0xF;\n"
+                                       "    int ret = __sync_lock_test_and_set(&i,5);\n"
+                                       "    return ret == 0xF && i == 5;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 1);
+    }
+    SECTION("__sync_add_and_fetch")
+    {
+        auto program = generateProgram("int function(void) {\n"
+                                       "    int i = 0;\n"
+                                       "    int ret = __sync_add_and_fetch(&i,5);\n"
+                                       "    return ret == 5;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 1);
+    }
+    SECTION("__sync_sub_and_fetch")
+    {
+        auto program = generateProgram("int function(void) {\n"
+                                       "    int i = 0;\n"
+                                       "    int ret = __sync_sub_and_fetch(&i,5);\n"
+                                       "    return ret == -5;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 1);
+    }
+    SECTION("__sync_or_and_fetch")
+    {
+        auto program = generateProgram("int function(void) {\n"
+                                       "    int i = 0;\n"
+                                       "    int ret = __sync_or_and_fetch(&i,5);\n"
+                                       "    return ret == 5;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 1);
+    }
+    SECTION("__sync_and_and_fetch")
+    {
+        auto program = generateProgram("int function(void) {\n"
+                                       "    int i = 0xF;\n"
+                                       "    int ret = __sync_and_and_fetch(&i,0x5);\n"
+                                       "    return ret == 0x5;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 1);
+    }
+    SECTION("__sync_xor_and_fetch")
+    {
+        auto program = generateProgram("int function(void) {\n"
+                                       "    int i = 0xF;\n"
+                                       "    int ret = __sync_xor_and_fetch(&i,5);\n"
+                                       "    return ret == 10;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 1);
+    }
+    SECTION("__sync_nand_and_fetch")
+    {
+        auto program = generateProgram("int function(void) {\n"
+                                       "    int i = 0xF;\n"
+                                       "    int ret = __sync_nand_and_fetch(&i,5);\n"
+                                       "    return ret == ~5;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 1);
+    }
+    SECTION("__sync_sub_and_fetch with pointers")
+    {
+        auto program = generateProgram("int function(void) {\n"
+                                       "    char c[5];\n"
+                                       "    char *p = c,*end = c + 5;\n"
+                                       "    char* ret = __sync_sub_and_fetch(&end,p);\n"
+                                       "    return (int)ret == 5;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 1);
+    }
+    SECTION("__sync_fetch_and_sub with pointers")
+    {
+        auto program = generateProgram("int function(void) {\n"
+                                       "    char c[5];\n"
+                                       "    char* p = c,*end = c + 5;\n"
+                                       "    __sync_fetch_and_sub(&end,p);\n"
+                                       "    return (int)end == 5;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 1);
+    }
+    SECTION("__sync_val_compare_and_swap")
+    {
+        auto program = generateProgram("int function(void) {\n"
+                                       "    int i = 0xF;\n"
+                                       "    int ret = __sync_val_compare_and_swap(&i,0xF,5);\n"
+                                       "    return ret == 0xF;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 1);
+    }
+    SECTION("__sync_bool_compare_and_swap")
+    {
+        auto program = generateProgram("int function(void) {\n"
+                                       "    int i = 0xF;\n"
+                                       "    while(!__sync_bool_compare_and_swap(&i,0xF,5));\n"
+                                       "    return i == 5;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 1);
+    }
+}

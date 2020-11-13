@@ -314,7 +314,13 @@ private:
     std::unique_ptr<CallExpression> visitExpectWithProbability(const Syntax::PostFixExpressionFunctionCall& node,
                                                                IntrVarPtr<ExpressionBase>&& function);
 
+    std::unique_ptr<CallExpression> visitSyncBuiltinWithT(const Syntax::PostFixExpressionFunctionCall& node,
+                                                          IntrVarPtr<ExpressionBase>&& function);
+
     IntrVarPtr<ExpressionBase> checkFunctionArg(std::size_t i, Type paramType, IntrVarPtr<ExpressionBase>&& expression);
+
+    bool checkFunctionCount(const ExpressionBase& function, const FunctionType& ft,
+                            const Syntax::PostFixExpressionFunctionCall& node);
 
 public:
     explicit SemanticAnalysis(const SourceInterface& sourceInterface, llvm::raw_ostream* reporter = &llvm::errs(),

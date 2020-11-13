@@ -1667,6 +1667,7 @@ namespace
 enum class Types
 {
     Void,
+    Bool,
     Int,
     UnsignedInt,
     Long,
@@ -1676,7 +1677,9 @@ enum class Types
     LongDouble,
     VAList,
     VoidStar,
-    ConstVoidStar
+    ConstVoidStar,
+    Placeholder,
+    PlaceholderPointer
 };
 
 template <std::size_t n>
@@ -1731,6 +1734,24 @@ constexpr Types extractType(std::string_view& text)
         {
             CLD_ASSERT(!result);
             result = Types::Void;
+            text.remove_prefix(4);
+        }
+        else if (text.substr(0, 4) == "bool")
+        {
+            CLD_ASSERT(!result);
+            result = Types::Bool;
+            text.remove_prefix(4);
+        }
+        else if (text.substr(0, 5) == "type*")
+        {
+            CLD_ASSERT(!result);
+            result = Types::PlaceholderPointer;
+            text.remove_prefix(5);
+        }
+        else if (text.substr(0, 4) == "type")
+        {
+            CLD_ASSERT(!result);
+            result = Types::Placeholder;
             text.remove_prefix(4);
         }
         else if (text.substr(0, 7) == "va_list")
@@ -1926,6 +1947,9 @@ const cld::Semantics::ProgramInterface::DeclarationInScope::Variant* CLD_NULLABL
                 return PointerType::create(false, false, false, PrimitiveType::createVoid(false, false));
             case Types::ConstVoidStar:
                 return PointerType::create(false, false, false, PrimitiveType::createVoid(true, false));
+            case Types::Placeholder: return Type{};
+            case Types::PlaceholderPointer: return PointerType::create(false, false, false, Type{});
+            case Types::Bool: return PrimitiveType::createUnderlineBool(false, false);
         }
         CLD_UNREACHABLE;
     };

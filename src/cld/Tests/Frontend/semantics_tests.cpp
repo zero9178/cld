@@ -4832,3 +4832,55 @@ TEST_CASE("Semantics offsetof", "[semantics]")
                   "}",
                   ProducesError(EXPECTED_ARRAY_TYPE_ON_THE_LEFT_SIDE_OF_THE_SUBSCRIPT_OPERATOR));
 }
+
+TEST_CASE("Semantics __sync_*", "[semantics]")
+{
+    auto& expr = generateExpression("void function(void) {\n"
+                                    "int i = 5;\n"
+                                    "__sync_fetch_and_add(&i,3);\n"
+                                    "}");
+    CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+    SEMA_PRODUCES("void function(void) {\n"
+                  "int i = 5;\n"
+                  "int f = __sync_fetch_and_add(&i,3);\n"
+                  "}",
+                  ProducesNoErrors());
+    SEMA_PRODUCES(
+        "void function(void) {\n"
+        "int i[3] = {5};\n"
+        "__sync_fetch_and_add(&i,5);\n"
+        "}",
+        ProducesError(POINTER_ELEMENT_TYPE_IN_N_MUST_BE_AN_INTEGER_OR_POINTER_TYPe, "'__sync_fetch_and_add'"));
+    SEMA_PRODUCES(
+        "void function(void) {\n"
+        "float i = 5;\n"
+        "__sync_fetch_and_add(&i,5);\n"
+        "}",
+        ProducesError(POINTER_ELEMENT_TYPE_IN_N_MUST_BE_AN_INTEGER_OR_POINTER_TYPe, "'__sync_fetch_and_add'"));
+    SEMA_PRODUCES("void function(void) {\n"
+                  "int* i = 0,p;\n"
+                  "__sync_fetch_and_add(&i,&p);\n"
+                  "}",
+                  ProducesNoErrors());
+    SEMA_PRODUCES("void function(void) {\n"
+                  "__sync_fetch_and_add(5,5);\n"
+                  "}",
+                  ProducesError(EXPECTED_POINTER_TYPE_AS_FIRST_ARGUMENT_TO_N, "'__sync_fetch_and_add'"));
+    SEMA_PRODUCES("void function(void) {\n"
+                  "const int i = 5;\n"
+                  "__sync_fetch_and_add(&i,5);\n"
+                  "}",
+                  ProducesError(POINTER_ELEMENT_TYPE_IN_N_MAY_NOT_BE_CONST_QUALIFIED, "'__sync_fetch_and_add'"));
+    SEMA_PRODUCES("void function(void) {\n"
+                  "_Bool i = 1;\n"
+                  "__sync_fetch_and_add(&i,5);\n"
+                  "}",
+                  ProducesError(POINTER_ELEMENT_TYPE_IN_N_MUST_NOT_BE_BOOL, "'__sync_fetch_and_add'"));
+    SEMA_PRODUCES_WITH(
+        "void function(void) {\n"
+        "__int128 i = 1;\n"
+        "__sync_fetch_and_add(&i,5);\n"
+        "}",
+        ProducesError(POINTER_ELEMENT_TYPE_IN_N_MUST_NOT_HAVE_A_SIZE_GREATER_THAN_8, "'__sync_fetch_and_add'"),
+        x64linux);
+}
