@@ -1,8 +1,6 @@
 #pragma once
 
-#include <ciso646>
-
-#if defined(_WIN32) && defined(__clang__) && defined(_LIBCPP_VERSION)
+#if defined(_WIN32) && !defined(_MSC_VER)
     #define GHC_FILESYSTEM_FWD
     #define GHC_WIN_WSTRING_STRING_TYPE
     #include <ghc/filesystem.hpp>
