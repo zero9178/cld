@@ -69,6 +69,23 @@
         }                                                                               \
     } while (0)
 
+#define PP_OUTPUTS_WITH_OPTIONS(input, match, options)                                  \
+    do                                                                                  \
+    {                                                                                   \
+        std::string s;                                                                  \
+        llvm::raw_string_ostream ss(s);                                                 \
+        auto tokens = cld::Lexer::tokenize(input, cld::LanguageOptions::native(), &ss); \
+        UNSCOPED_INFO(ss.str());                                                        \
+        REQUIRE(ss.str().empty());                                                      \
+        cld::PP::preprocess(std::move(tokens), options, &ss);                           \
+        CHECK_THAT(s, match);                                                           \
+        if (!s.empty())                                                                 \
+        {                                                                               \
+            tokens = cld::Lexer::tokenize(input, cld::LanguageOptions::native(), &ss);  \
+            cld::PP::preprocess(std::move(tokens), options);                            \
+        }                                                                               \
+    } while (0)
+
 namespace cld::Tests
 {
 struct ProducesPP : Catch::MatcherBase<cld::PPSourceObject>
@@ -716,9 +733,9 @@ TEST_CASE("PP Operator #", "[PP]")
                                     "Q(5)");
         CHECK_THAT(ret, ProducesPP("\"5\""));
         auto subs = ret.getSubstitutions();
-        REQUIRE(subs.size() == 4);
-        REQUIRE(std::holds_alternative<cld::Source::Stringification>(subs[3]));
-        auto& stringify = cld::get<cld::Source::Stringification>(subs[3]);
+        REQUIRE(subs.size() == 3);
+        REQUIRE(std::holds_alternative<cld::Source::Stringification>(subs[2]));
+        auto& stringify = cld::get<cld::Source::Stringification>(subs[2]);
         CHECK(stringify.replacedIdentifier.getRepresentation(ret) == "x");
         REQUIRE(stringify.stringified.size() == 1);
         CHECK(stringify.stringified[0].getRepresentation(ret) == "5");
@@ -1134,8 +1151,6 @@ TEST_CASE("PP includes", "[PP]")
     {
         auto cwd = cld::fs::current_path();
         auto file2 = createInclude("Quoted/A.h", "#define MACRO 1\n");
-        cld::PP::Options options;
-        options.includeQuoteDirectories.push_back((cwd / "Quoted").string());
         PP_OUTPUTS_WITH("#include <A.h>\n", ProducesError(FILE_NOT_FOUND, "A.h"));
     }
     SECTION("Changed __FILE__")
@@ -1153,6 +1168,25 @@ TEST_CASE("PP includes", "[PP]")
         CHECK(cld::fs::equivalent(ret.data()[0].getValue().data(), cwd / "B.h"));
         CHECK(cld::fs::equivalent(ret.data()[1].getValue().data(), cwd / "A.h"));
         CHECK(ret.data()[2].getValue() == "<stdin>");
+    }
+    SECTION("System include does not emit warnings")
+    {
+        auto cwd = cld::fs::current_path();
+        auto file1 = createInclude("Quoted/A.h", "#define MACRO 1\n");
+        cld::PP::Options options;
+        options.includeDirectories.push_back((cwd / "Quoted").string());
+        PP_OUTPUTS_WITH_OPTIONS("#define MACRO 1\n"
+                                "#include <A.h>\n",
+                                ProducesWarning(N_REDEFINED, "'MACRO'"), options);
+        options.systemDirectories = {(cwd / "Quoted").string()};
+        options.includeDirectories.clear();
+        PP_OUTPUTS_WITH_OPTIONS("#define MACRO 1\n"
+                                "#include <A.h>\n",
+                                !ProducesWarning(N_REDEFINED, "'MACRO'"), options);
+        auto file2 = createInclude("B.h", "#define MACRO 1\n"
+                                          "#include \"./Quoted/A.h\"\n");
+        options.systemDirectories = {cwd.string()};
+        PP_OUTPUTS_WITH_OPTIONS("#include <A.h>\n", !ProducesWarning(N_REDEFINED, "'MACRO'"), options);
     }
     SECTION("File not found")
     {

@@ -385,10 +385,11 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
         }
         return decls;
     }
+    auto baseType = qualifiersToType(node.getDeclarationSpecifiers());
     for (auto& [declarator, initializer] : node.getInitDeclarators())
     {
         const auto* loc = declaratorToLoc(*declarator);
-        auto result = declaratorsToType(node.getDeclarationSpecifiers(), *declarator);
+        auto result = applyDeclarator(baseType, *declarator);
         if (auto* functionType = std::get_if<FunctionType>(&result.getVariant());
             functionType
             && (!storageClassSpecifier

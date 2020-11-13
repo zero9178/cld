@@ -186,16 +186,13 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
     type = FunctionType::create(std::move(type), std::move(parameters), parameterTypeList->hasEllipse(), false);
 }
 
-cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
-    const std::vector<DeclarationOrSpecifierQualifier>& declarationOrSpecifierQualifiers,
-    const PossiblyAbstractQualifierRef& declarator, const std::vector<Syntax::Declaration>& declarations,
-    cld::function_ref<void(const Type&, Lexer::CTokenIterator, const std::vector<Syntax::DeclarationSpecifier>&, bool)>
-        paramCallback)
+cld::Semantics::Type cld::Semantics::SemanticAnalysis::qualifiersToTypeImpl(
+    const std::vector<DeclarationOrSpecifierQualifier>& directAbstractDeclaratorParentheses)
 {
     bool isConst = false;
     bool isVolatile = false;
     std::vector<const Syntax::TypeSpecifier*> typeSpecs;
-    for (auto& iter : declarationOrSpecifierQualifiers)
+    for (auto& iter : directAbstractDeclaratorParentheses)
     {
         if (auto* typeSpec = std::get_if<const Syntax::TypeSpecifier*>(&iter))
         {
@@ -217,13 +214,20 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
     if (typeSpecs.empty())
     {
         log(Errors::Semantics::AT_LEAST_ONE_TYPE_SPECIFIER_REQUIRED.args(
-            declarationOrSpecifierQualifiers, m_sourceInterface, declarationOrSpecifierQualifiers));
+            directAbstractDeclaratorParentheses, m_sourceInterface, directAbstractDeclaratorParentheses));
         return Type{};
     }
-    auto type = typeSpecifiersToType(isConst, isVolatile, std::move(typeSpecs));
+    return typeSpecifiersToType(isConst, isVolatile, std::move(typeSpecs));
+}
+
+cld::Semantics::Type cld::Semantics::SemanticAnalysis::applyDeclaratorsImpl(
+    Type&& type, const PossiblyAbstractQualifierRef& declarator, const std::vector<Syntax::Declaration>& declarations,
+    cld::function_ref<void(const Type&, Lexer::CTokenIterator, const std::vector<Syntax::DeclarationSpecifier>&, bool)>
+        paramCallback)
+{
     if (!cld::match(declarator, [](auto&& value) -> bool { return value; }))
     {
-        return type;
+        return std::move(type);
     }
     // whatever is in declarator it is not null
     if (std::holds_alternative<const Syntax::Declarator * CLD_NON_NULL>(declarator))
@@ -313,20 +317,16 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                 if (std::holds_alternative<FunctionType>(type.getVariant()))
                 {
                     log(Errors::Semantics::FUNCTION_RETURN_TYPE_MUST_NOT_BE_A_FUNCTION.args(
-                        std::forward_as_tuple(declarationOrSpecifierQualifiers[0], identifiers.getDirectDeclarator()),
-                        m_sourceInterface,
-                        std::forward_as_tuple(declarationOrSpecifierQualifiers[0], identifiers.getDirectDeclarator()),
-                        type));
+                        /*TODO: Better source location*/ identifiers.getDirectDeclarator(), m_sourceInterface,
+                        /*TODO: Better source location*/ identifiers.getDirectDeclarator(), type));
                     type = Type{};
                     return;
                 }
                 if (isArray(type))
                 {
                     log(Errors::Semantics::FUNCTION_RETURN_TYPE_MUST_NOT_BE_AN_ARRAY.args(
-                        std::forward_as_tuple(declarationOrSpecifierQualifiers[0], identifiers.getDirectDeclarator()),
-                        m_sourceInterface,
-                        std::forward_as_tuple(declarationOrSpecifierQualifiers[0], identifiers.getDirectDeclarator()),
-                        type));
+                        /*TODO: Better source location*/ identifiers.getDirectDeclarator(), m_sourceInterface,
+                        /*TODO: Better source location*/ identifiers.getDirectDeclarator(), type));
                     type = Type{};
                     return;
                 }
@@ -455,16 +455,14 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                 }
                 if (&parameterList == declarationsOwner)
                 {
-                    handleParameterList(
-                        type, &parameterList.getParameterTypeList(),
-                        std::forward_as_tuple(declarationOrSpecifierQualifiers, parameterList.getDirectDeclarator()),
-                        paramCallback);
+                    handleParameterList(type, &parameterList.getParameterTypeList(),
+                                        /*TODO: better source location*/ parameterList.getDirectDeclarator(),
+                                        paramCallback);
                 }
                 else
                 {
-                    handleParameterList(
-                        type, &parameterList.getParameterTypeList(),
-                        std::forward_as_tuple(declarationOrSpecifierQualifiers, parameterList.getDirectDeclarator()));
+                    handleParameterList(type, &parameterList.getParameterTypeList(),
+                                        /*TODO: better source location*/ parameterList.getDirectDeclarator());
                 }
             });
     }
@@ -478,7 +476,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
         }
         if (!realDecl.getDirectAbstractDeclarator())
         {
-            return type;
+            return std::move(type);
         }
         cld::matchWithSelf<void>(
             *realDecl.getDirectAbstractDeclarator(),
@@ -526,7 +524,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                 }
                 else
                 {
-                    handleArray(type, {}, nullptr, nullptr, true, declarationOrSpecifierQualifiers);
+                    handleArray(type, {}, nullptr, nullptr, true, /*TODO:*/ asterisk);
                 }
             },
             [&](auto&& self, const Syntax::DirectAbstractDeclaratorAssignmentExpression& expression) {
@@ -544,7 +542,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                 else
                 {
                     handleArray(type, expression.getTypeQualifiers(), expression.getAssignmentExpression(), nullptr,
-                                false, declarationOrSpecifierQualifiers);
+                                false, /*TODO:*/ expression);
                 }
             },
             [&](auto&& self, const Syntax::DirectAbstractDeclaratorParameterTypeList& parameterTypeList) {
@@ -554,8 +552,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                         cld::match(*parameterTypeList.getDirectAbstractDeclarator(), self);
                     }
                 });
-                handleParameterList(type, parameterTypeList.getParameterTypeList(), declarationOrSpecifierQualifiers,
-                                    {});
+                handleParameterList(type, parameterTypeList.getParameterTypeList(), /*TODO:*/ parameterTypeList, {});
             },
             [&](auto&& self, const Syntax::DirectAbstractDeclaratorStatic& declaratorStatic) {
                 auto scope = cld::ScopeExit([&] {
@@ -568,7 +565,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::declaratorsToTypeImpl(
                             declaratorStatic.getStaticLoc(), false, declaratorStatic.getAssignmentExpression());
             });
     }
-    return type;
+    return std::move(type);
 }
 
 cld::Semantics::Type
@@ -689,19 +686,11 @@ cld::Semantics::Type
         {
             if (structOrUnion->isUnion())
             {
-                if (auto result = m_anonymousTagToID.find(structOrUnion->begin()); result != m_anonymousTagToID.end())
-                {
-                    return UnionType::create(isConst, isVolatile, "", result->second);
-                }
                 structOrUnionID = m_unionDefinitions.size();
                 m_unionDefinitions.push_back({UnionDecl{}, m_currentScope, structOrUnion->begin()});
             }
             else
             {
-                if (auto result = m_anonymousTagToID.find(structOrUnion->begin()); result != m_anonymousTagToID.end())
-                {
-                    return StructType::create(isConst, isVolatile, "", result->second);
-                }
                 structOrUnionID = m_structDefinitions.size();
                 m_structDefinitions.push_back({StructDecl{}, m_currentScope, structOrUnion->begin()});
             }
@@ -718,12 +707,6 @@ cld::Semantics::Type
                     if (!std::holds_alternative<UnionTag>(prev->second.tagType)
                         || getUnionDefinition(static_cast<std::size_t>(cld::get<UnionTag>(prev->second.tagType))))
                     {
-                        if (structOrUnion->getIdentifierLoc() == prev->second.identifier)
-                        {
-                            return UnionType::create(
-                                isConst, isVolatile, name,
-                                static_cast<std::size_t>(cld::get<UnionTag>(prev->second.tagType)));
-                        }
                         log(Errors::REDEFINITION_OF_SYMBOL_N.args(*structOrUnion->getIdentifierLoc(), m_sourceInterface,
                                                                   *structOrUnion->getIdentifierLoc()));
                         if (prev->second.identifier)
@@ -752,12 +735,6 @@ cld::Semantics::Type
                     if (!std::holds_alternative<StructTag>(prev->second.tagType)
                         || getStructDefinition(static_cast<std::size_t>(cld::get<StructTag>(prev->second.tagType))))
                     {
-                        if (structOrUnion->getIdentifierLoc() == prev->second.identifier)
-                        {
-                            return StructType::create(
-                                isConst, isVolatile, name,
-                                static_cast<std::size_t>(cld::get<StructTag>(prev->second.tagType)));
-                        }
                         log(Errors::REDEFINITION_OF_SYMBOL_N.args(*structOrUnion->getIdentifierLoc(), m_sourceInterface,
                                                                   *structOrUnion->getIdentifierLoc()));
                         if (prev->second.identifier)
@@ -842,24 +819,41 @@ cld::Semantics::Type
                 }
                 continue;
             }
+            auto baseType = qualifiersToType(specifiers);
             for (auto iter2 = declarators.begin(); iter2 != declarators.end(); iter2++)
             {
                 bool last = iter2 + 1 == declarators.end() && iter + 1 == structOrUnion->getStructDeclarations().end();
                 bool first = iter2 == declarators.begin() && iter == structOrUnion->getStructDeclarations().begin();
 
                 auto& [declarator, size] = *iter2;
-                auto type = declarator ? declaratorsToType(specifiers, *declarator) : declaratorsToType(specifiers);
+                auto type = declarator ? applyDeclarator(baseType, *declarator) : baseType;
                 if (isVoid(type))
                 {
                     if (structOrUnion->isUnion())
                     {
-                        log(Errors::Semantics::VOID_TYPE_NOT_ALLOWED_IN_UNION.args(*declarator, m_sourceInterface,
-                                                                                   specifiers, *declarator));
+                        if (declarator)
+                        {
+                            log(Errors::Semantics::VOID_TYPE_NOT_ALLOWED_IN_UNION.args(*declarator, m_sourceInterface,
+                                                                                       specifiers, *declarator));
+                        }
+                        else
+                        {
+                            log(Errors::Semantics::VOID_TYPE_NOT_ALLOWED_IN_UNION.args(specifiers, m_sourceInterface,
+                                                                                       specifiers, specifiers));
+                        }
                     }
                     else
                     {
-                        log(Errors::Semantics::VOID_TYPE_NOT_ALLOWED_IN_STRUCT.args(*declarator, m_sourceInterface,
-                                                                                    specifiers, *declarator));
+                        if (declarator)
+                        {
+                            log(Errors::Semantics::VOID_TYPE_NOT_ALLOWED_IN_STRUCT.args(*declarator, m_sourceInterface,
+                                                                                        specifiers, *declarator));
+                        }
+                        else
+                        {
+                            log(Errors::Semantics::VOID_TYPE_NOT_ALLOWED_IN_STRUCT.args(specifiers, m_sourceInterface,
+                                                                                        specifiers, specifiers));
+                        }
                     }
                     type = Type{};
                 }
@@ -897,13 +891,29 @@ cld::Semantics::Type
                 {
                     if (structOrUnion->isUnion())
                     {
-                        log(Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_UNION.args(*declarator, m_sourceInterface,
-                                                                                       specifiers, *declarator, type));
+                        if (declarator)
+                        {
+                            log(Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_UNION.args(
+                                *declarator, m_sourceInterface, specifiers, *declarator, type));
+                        }
+                        else
+                        {
+                            log(Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_UNION.args(
+                                specifiers, m_sourceInterface, specifiers, specifiers, type));
+                        }
                     }
                     else
                     {
-                        log(Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_STRUCT.args(*declarator, m_sourceInterface,
-                                                                                        specifiers, *declarator, type));
+                        if (declarator)
+                        {
+                            log(Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_STRUCT.args(
+                                *declarator, m_sourceInterface, specifiers, *declarator, type));
+                        }
+                        else
+                        {
+                            log(Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_STRUCT.args(
+                                specifiers, m_sourceInterface, specifiers, specifiers, type));
+                        }
                     }
                     type = Type{};
                 }
@@ -1160,10 +1170,6 @@ cld::Semantics::Type
         currentSize = roundUpTo(currentSize, currentAlignment);
 
         std::string_view name = structOrUnion->getIdentifierLoc() ? structOrUnion->getIdentifierLoc()->getText() : "";
-        if (name.empty() && structOrUnionID)
-        {
-            m_anonymousTagToID.emplace(structOrUnion->begin(), *structOrUnionID);
-        }
         if (structOrUnion->isUnion())
         {
             if (structOrUnionID)
@@ -1277,11 +1283,6 @@ cld::Semantics::Type
             {name, TagTypeInScope{enumDef.getName(), EnumTag{m_enumDefinitions.size()}}});
         if (!notRedefined)
         {
-            if (enumDef.getName() == prev->second.identifier)
-            {
-                return EnumType::create(isConst, isVolatile, name,
-                                        static_cast<std::size_t>(cld::get<EnumTag>(prev->second.tagType)));
-            }
             log(Errors::REDEFINITION_OF_SYMBOL_N.args(*enumDef.getName(), m_sourceInterface, *enumDef.getName()));
             if (prev->second.identifier)
             {
@@ -1289,10 +1290,6 @@ cld::Semantics::Type
                                                          *prev->second.identifier));
             }
         }
-    }
-    else
-    {
-        m_anonymousTagToID.emplace(enumDecl->begin(), m_enumDefinitions.size());
     }
     m_enumDefinitions.push_back(
         {EnumDefinition(name, PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions()),

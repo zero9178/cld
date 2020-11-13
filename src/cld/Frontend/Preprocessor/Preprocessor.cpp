@@ -198,7 +198,7 @@ class Preprocessor final : private cld::PPSourceInterface
                                                m_disabledMacros[copy.front().getMacroId()].end());
             }
             m_substitutions.push_back({});
-            // CLD_ASSERT(i == m_substitutions.size() - 1);
+            CLD_ASSERT(i == m_substitutions.size() - 1);
             for (auto& token : copy)
             {
                 token.setMacroId(i);
@@ -274,7 +274,7 @@ class Preprocessor final : private cld::PPSourceInterface
                 file.ppTokens[0].setMacroId(i);
                 result.insert(result.end(), file.ppTokens[0]);
                 m_files.push_back(std::move(file));
-                m_substitutions.push_back(cld::Source::Stringification{std::move(copy), *iter});
+                m_substitutions[i] = cld::Source::Stringification{std::move(copy), *iter};
             }
             // If we did token pasting and it was empty and the ## is to the right "delete" it by setting the start
             // iterator to one past it as not to include it when inserting. Don't do that when there was also a ##
@@ -647,7 +647,7 @@ class Preprocessor final : private cld::PPSourceInterface
             m_disabledMacros[i].insert(m_disabledMacros[iter->getMacroId()].begin(),
                                        m_disabledMacros[iter->getMacroId()].end());
             m_substitutions.push_back({});
-            // CLD_ASSERT(i == m_substitutions.size() - 1);
+            CLD_ASSERT(i == m_substitutions.size() - 1);
             iter = std::find_if(iter + 1, tokens.data() + tokens.size(),
                                 [&line](const cld::Lexer::PPToken& token) {
                                     if (token.getTokenType() == cld::Lexer::TokenType::Newline)

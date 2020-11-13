@@ -899,6 +899,9 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
     SECTION("Defining two variables with one struct definition")
     {
         SEMA_PRODUCES("struct A{ int i; float f, r; } a,b;", ProducesNoErrors());
+        SEMA_PRODUCES("struct A;\n"
+                      "typedef struct A{ int i; float f, r; } a,b;",
+                      ProducesNoErrors());
     }
     SECTION("Simple union")
     {
@@ -1242,6 +1245,12 @@ TEST_CASE("Semantics enums", "[semantics]")
                       "};",
                       ProducesError(VALUE_OF_ENUMERATION_CONSTANT_MUST_FIT_IN_TYPE_INT));
     }
+    SEMA_PRODUCES("typedef enum _STORAGE_PORT_CODE_SET {\n"
+                  "  StoragePortCodeSetReserved   = 0,\n"
+                  "  StoragePortCodeSetStorport   = 1,\n"
+                  "  StoragePortCodeSetSCSIport   = 2 \n"
+                  "} STORAGE_PORT_CODE_SET, *PSTORAGE_PORT_CODE_SET;",
+                  ProducesNoErrors());
     SEMA_PRODUCES("enum A;", ProducesError(FORWARD_DECLARING_AN_ENUM_IS_NOT_ALLOWED));
     SEMA_PRODUCES("enum A {\n"
                   "l,\n"

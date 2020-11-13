@@ -43,7 +43,6 @@ class SemanticAnalysis final : public ProgramInterface
         const DefaultStatement* CLD_NULLABLE defaultStmt;
     };
     std::vector<SwitchStack> m_switchStatements;
-    std::unordered_map<Lexer::CTokenIterator, std::size_t> m_anonymousTagToID;
 
     [[nodiscard]] ValueReset<bool> changeFunctionPrototypeScope(bool newValue)
     {
@@ -155,12 +154,13 @@ class SemanticAnalysis final : public ProgramInterface
     Type typeSpecifiersToType(bool isConst, bool isVolatile,
                               const std::vector<const Syntax::TypeSpecifier * CLD_NON_NULL>& typeSpec);
 
-    Type declaratorsToTypeImpl(const std::vector<DeclarationOrSpecifierQualifier>& directAbstractDeclaratorParentheses,
-                               const PossiblyAbstractQualifierRef& parameterList,
-                               const std::vector<Syntax::Declaration>& declarations = {},
-                               cld::function_ref<void(const Type&, Lexer::CTokenIterator,
-                                                      const std::vector<Syntax::DeclarationSpecifier>&, bool)>
-                                   paramCallback = {});
+    Type applyDeclaratorsImpl(Type&& type, const PossiblyAbstractQualifierRef& parameterList,
+                              const std::vector<Syntax::Declaration>& declarations = {},
+                              cld::function_ref<void(const Type&, Lexer::CTokenIterator,
+                                                     const std::vector<Syntax::DeclarationSpecifier>&, bool)>
+                                  paramCallback = {});
+
+    Type qualifiersToTypeImpl(const std::vector<DeclarationOrSpecifierQualifier>& directAbstractDeclaratorParentheses);
 
     Type primitiveTypeSpecifiersToType(bool isConst, bool isVolatile,
                                        const std::vector<const Syntax::TypeSpecifier * CLD_NON_NULL>& typeSpecs);
@@ -241,14 +241,8 @@ private:
     Type declaratorsToType(const std::vector<T>& declarationOrSpecifierQualifiers,
                            const Syntax::AbstractDeclarator* declarator = nullptr)
     {
-        std::vector<DeclarationOrSpecifierQualifier> temp(declarationOrSpecifierQualifiers.size());
-        std::transform(declarationOrSpecifierQualifiers.begin(), declarationOrSpecifierQualifiers.end(), temp.begin(),
-                       [](auto&& value) {
-                           return cld::match(value, [](auto&& valueInVariant) -> DeclarationOrSpecifierQualifier {
-                               return &valueInVariant;
-                           });
-                       });
-        return declaratorsToTypeImpl(std::move(temp), declarator);
+        auto type = qualifiersToType(declarationOrSpecifierQualifiers);
+        return applyDeclarator(std::move(type), declarator);
     }
 
     template <class T>
@@ -258,6 +252,13 @@ private:
                                                   const std::vector<Syntax::DeclarationSpecifier>&, bool)>
                                paramCallback = {})
     {
+        auto type = qualifiersToType(declarationOrSpecifierQualifiers);
+        return applyDeclarator(std::move(type), declarator, declarations, std::move(paramCallback));
+    }
+
+    template <class T>
+    Type qualifiersToType(const std::vector<T>& declarationOrSpecifierQualifiers)
+    {
         std::vector<DeclarationOrSpecifierQualifier> temp(declarationOrSpecifierQualifiers.size());
         std::transform(declarationOrSpecifierQualifiers.begin(), declarationOrSpecifierQualifiers.end(), temp.begin(),
                        [](auto&& value) {
@@ -265,7 +266,21 @@ private:
                                return &valueInVariant;
                            });
                        });
-        return declaratorsToTypeImpl(std::move(temp), &declarator, declarations, paramCallback);
+        return qualifiersToTypeImpl(temp);
+    }
+
+    Type applyDeclarator(Type type, const Syntax::AbstractDeclarator* declarator = nullptr)
+    {
+        return applyDeclaratorsImpl(std::move(type), declarator);
+    }
+
+    Type applyDeclarator(Type type, const Syntax::Declarator& declarator,
+                         const std::vector<Syntax::Declaration>& declarations = {},
+                         cld::function_ref<void(const Type&, Lexer::CTokenIterator,
+                                                const std::vector<Syntax::DeclarationSpecifier>&, bool)>
+                             paramCallback = {})
+    {
+        return applyDeclaratorsImpl(std::move(type), &declarator, declarations, std::move(paramCallback));
     }
 
     bool doAssignmentLikeConstraints(const Type& lhsTyp, IntrVarPtr<ExpressionBase>& rhsValue,
