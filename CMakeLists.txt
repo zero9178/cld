@@ -219,6 +219,6 @@ install(TARGETS cld cldMain Support Frontend LLVMBackend
 
 export(TARGETS cld cldMain Support Frontend LLVMBackend NAMESPACE cld:: FILE "${CMAKE_CURRENT_BINARY_DIR}/cldConfig.cmake")
 
-install(DIRECTORY src/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} FILES_MATCHING PATTERN "*.hpp" PATTERN "cld/Tests" EXCLUDE PATTERN "cld/Fuzzer" EXCLUDE)
+install(DIRECTORY src/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} FILES_MATCHING PATTERN "*.hpp" PATTERN "*.def" PATTERN "cld/Tests" EXCLUDE PATTERN "cld/Fuzzer" EXCLUDE)
 
 install(EXPORT cldConfig DESTINATION "${CMAKE_INSTALL_DATADIR}/cld/cmake" NAMESPACE cld::)
