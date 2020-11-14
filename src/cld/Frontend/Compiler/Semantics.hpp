@@ -2276,7 +2276,10 @@ public:
         Prefetch,
         ClearCache,
         Trap,
-        Unreachable
+        Unreachable,
+        x86CpuInit,
+        x86CpuIs,
+        x86CpuSupports,
     };
 
 private:

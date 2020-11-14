@@ -6,6 +6,24 @@
 #include <numeric>
 
 #include "Diagnostic.hpp"
+#include "Targets/X86TargetFeatures.hpp"
+
+namespace
+{
+std::unique_ptr<cld::TargetFeatures> tripleToFeatures(const cld::Triple& triple)
+{
+    if (triple.getArchitecture() == cld::Architecture::x86 || triple.getArchitecture() == cld::Architecture::x86_64)
+    {
+        auto result = std::make_unique<cld::X86TargetFeatures>();
+        if (triple.getArchitecture() == cld::Architecture::x86_64)
+        {
+
+        }
+        return result;
+    }
+    return std::make_unique<cld::DefaultTargetFeatures>();
+}
+} // namespace
 
 cld::LanguageOptions cld::LanguageOptions::native(Language language)
 {
@@ -45,12 +63,14 @@ cld::LanguageOptions cld::LanguageOptions::native(Language language)
 #endif
     };
     temp.enabledWarnings = cld::diag::getAllWarnings();
+    temp.targetFeatures = tripleToFeatures(cld::Triple::native());
     return temp;
 }
 
 cld::LanguageOptions cld::LanguageOptions::fromTriple(Triple triple, Language language)
 {
     LanguageOptions options = native(language);
+    options.targetFeatures = tripleToFeatures(triple);
     options.enabledWarnings = cld::diag::getAllWarnings();
     options.language = language;
     options.sizeOfUnderlineBool = 1;
@@ -217,4 +237,14 @@ std::string_view cld::LanguageOptions::string(cld::LanguageOptions::UnderlyingTy
         case UnderlyingType::UnsignedLongLong: return "unsigned long long";
     }
     CLD_UNREACHABLE;
+}
+
+bool cld::DefaultTargetFeatures::hasFeature(cld::TargetFeatures::Features) const
+{
+    return false;
+}
+
+bool cld::DefaultTargetFeatures::setFeature(cld::TargetFeatures::Features, bool)
+{
+    return false;
 }

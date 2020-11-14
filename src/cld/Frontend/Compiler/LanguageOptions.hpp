@@ -3,12 +3,38 @@
 #include <cld/Support/Triple.hpp>
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <unordered_set>
 #include <vector>
 
 namespace cld
 {
+class TargetFeatures
+{
+public:
+    virtual ~TargetFeatures() = default;
+
+    enum Features
+    {
+    // x86 features
+#define HANDLE_VALUE(x) x,
+#include "Targets/X86Features.def"
+    };
+
+    virtual bool hasFeature(Features features) const = 0;
+
+    virtual bool setFeature(Features features, bool value) = 0;
+};
+
+class DefaultTargetFeatures final : public TargetFeatures
+{
+public:
+    bool hasFeature(Features features) const override;
+
+    bool setFeature(Features features, bool value) override;
+};
+
 struct LanguageOptions
 {
     enum Language
@@ -56,6 +82,7 @@ struct LanguageOptions
     UnderlyingType sizeTType;
     bool int128Enabled;
 
+    std::shared_ptr<TargetFeatures> targetFeatures = std::make_shared<DefaultTargetFeatures>();
     std::unordered_set<std::string_view> enabledWarnings{};
     bool freeStanding{};
     enum class Extension

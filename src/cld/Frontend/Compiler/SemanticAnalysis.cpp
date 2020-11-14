@@ -1678,6 +1678,7 @@ enum class Types
     VAList,
     VoidStar,
     ConstVoidStar,
+    ConstCharStar,
     Placeholder,
     PlaceholderPointer
 };
@@ -1764,6 +1765,12 @@ constexpr Types extractType(std::string_view& text)
         {
             CLD_ASSERT(!result);
             result = Types::ConstVoidStar;
+            text.remove_prefix(11);
+        }
+        else if (text.substr(0, 11) == "const char*")
+        {
+            CLD_ASSERT(!result);
+            result = Types::ConstCharStar;
             text.remove_prefix(11);
         }
         else if (text.substr(0, 5) == "float")
@@ -1950,6 +1957,10 @@ const cld::Semantics::ProgramInterface::DeclarationInScope::Variant* CLD_NULLABL
             case Types::Placeholder: return Type{};
             case Types::PlaceholderPointer: return PointerType::create(false, false, false, Type{});
             case Types::Bool: return PrimitiveType::createUnderlineBool(false, false);
+            case Types::ConstCharStar:
+                return PointerType::create(
+                    false, false, false,
+                    PrimitiveType::createChar(true, false, m_sourceInterface.getLanguageOptions()));
         }
         CLD_UNREACHABLE;
     };

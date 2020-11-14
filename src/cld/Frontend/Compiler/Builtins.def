@@ -3,6 +3,10 @@
 #error HANDLE_BUILTIN must be declared to proceed
 #endif
 
+#ifndef HANDLE_X86
+#define HANDLE_X86(signature,kind,required) HANDLE_BUILTIN(signature,kind)
+#endif
+
 HANDLE_BUILTIN("void __builtin_va_start(va_list,...)", VAStart);
 HANDLE_BUILTIN("void __builtin_va_end(va_list)", VAEnd);
 HANDLE_BUILTIN("void __builtin_va_copy(va_list,va_list)", VACopy);
@@ -42,3 +46,7 @@ HANDLE_BUILTIN("void __builtin_prefetch(const void*,...)", Prefetch);
 HANDLE_BUILTIN("void __builtin___clear_cache(void*,void*)", ClearCache);
 HANDLE_BUILTIN("void __builtin_trap()", Trap);
 HANDLE_BUILTIN("void __builtin_unreachable()", Unreachable);
+
+HANDLE_X86("void __builtin_cpu_init()",x86CpuInit,0);
+HANDLE_X86("int __builtin_cpu_is(const char*)",x86CpuIs,0);
+HANDLE_X86("int __builtin_cpu_supports(const char*)",x86CpuSupports,0);

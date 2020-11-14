@@ -4,6 +4,7 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/IR/Intrinsics.h>
+#include <llvm/IR/IntrinsicsX86.h>
 #include <llvm/Support/TargetRegistry.h>
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Target/TargetOptions.h>
@@ -3851,6 +3852,17 @@ public:
                         pointer.alignment);
                     store->setAtomic(llvm::AtomicOrdering::Release);
                     return store;
+                }
+                case cld::Semantics::BuiltinFunction::x86CpuInit:
+                {
+                    auto cpuInit = m_module.getOrInsertFunction("__cpu_indicator_init", m_builder.getVoidTy());
+                    return m_builder.CreateCall(cpuInit);
+                }
+                case cld::Semantics::BuiltinFunction::x86CpuIs:
+                case cld::Semantics::BuiltinFunction::x86CpuSupports:
+                {
+                    llvm::errs() << "Not implemented yet, sorry\n";
+                    std::terminate();
                 }
             }
             CLD_UNREACHABLE;
