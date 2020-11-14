@@ -270,11 +270,16 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::applyDeclaratorsImpl(
                     auto [isConst, isVolatile, restricted] = getQualifiers(iter.getTypeQualifiers());
                     if (restricted && std::holds_alternative<FunctionType>(type.getVariant()))
                     {
-                        auto restrictQual =
-                            std::find_if(iter.getTypeQualifiers().begin(), iter.getTypeQualifiers().end(),
-                                         [](const Syntax::TypeQualifier& typeQualifier) {
-                                             return typeQualifier.getQualifier() == Syntax::TypeQualifier::Restrict;
-                                         });
+                        auto restrictQual = std::find_if(
+                            iter.getTypeQualifiers().begin(), iter.getTypeQualifiers().end(),
+                            [](const std::variant<Syntax::TypeQualifier, Syntax::GNUAttributes>& typeQualifier) {
+                                if (!std::holds_alternative<Syntax::TypeQualifier>(typeQualifier))
+                                {
+                                    return false;
+                                }
+                                return cld::get<Syntax::TypeQualifier>(typeQualifier).getQualifier()
+                                       == Syntax::TypeQualifier::Restrict;
+                            });
                         CLD_ASSERT(restrictQual != iter.getTypeQualifiers().end());
                         log(Errors::Semantics::
                                 ELEMENT_TYPE_OF_POINTER_WITH_RESTRICT_QUALIFIER_MUST_NOT_BE_A_FUNCTION_TYPE.args(
@@ -391,15 +396,15 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::applyDeclaratorsImpl(
                         log(Errors::Semantics::DECLARATION_OF_IDENTIFIER_LIST_MUST_DECLARE_AT_LEAST_ONE_IDENTIFIER.args(
                             iter, m_sourceInterface, iter));
                     }
-                    for (auto& [decl, init] : iter.getInitDeclarators())
+                    for (auto& iter2 : iter.getInitDeclarators())
                     {
-                        if (init)
+                        if (iter2.optionalInitializer)
                         {
                             log(Errors::Semantics::DECLARATION_OF_IDENTIFIER_LIST_NOT_ALLOWED_TO_HAVE_AN_INITIALIZER
-                                    .args(*init, m_sourceInterface, *init));
+                                    .args(*iter2.optionalInitializer, m_sourceInterface, *iter2.optionalInitializer));
                         }
-                        auto paramType = declaratorsToType(iter.getDeclarationSpecifiers(), *decl);
-                        const auto* loc = declaratorToLoc(*decl);
+                        auto paramType = declaratorsToType(iter.getDeclarationSpecifiers(), *iter2.declarator);
+                        const auto* loc = declaratorToLoc(*iter2.declarator);
                         auto result = paramNames.find(loc->getText());
                         if (result == paramNames.end())
                         {
@@ -486,11 +491,16 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::applyDeclaratorsImpl(
                     auto [isConst, isVolatile, restricted] = getQualifiers(iter.getTypeQualifiers());
                     if (restricted && std::holds_alternative<FunctionType>(type.getVariant()))
                     {
-                        auto restrictQual =
-                            std::find_if(iter.getTypeQualifiers().begin(), iter.getTypeQualifiers().end(),
-                                         [](const Syntax::TypeQualifier& typeQualifier) {
-                                             return typeQualifier.getQualifier() == Syntax::TypeQualifier::Restrict;
-                                         });
+                        auto restrictQual = std::find_if(
+                            iter.getTypeQualifiers().begin(), iter.getTypeQualifiers().end(),
+                            [](const std::variant<Syntax::TypeQualifier, Syntax::GNUAttributes>& typeQualifier) {
+                                if (!std::holds_alternative<Syntax::TypeQualifier>(typeQualifier))
+                                {
+                                    return false;
+                                }
+                                return cld::get<Syntax::TypeQualifier>(typeQualifier).getQualifier()
+                                       == Syntax::TypeQualifier::Restrict;
+                            });
                         CLD_ASSERT(restrictQual != iter.getTypeQualifiers().end());
                         log(Errors::Semantics::
                                 ELEMENT_TYPE_OF_POINTER_WITH_RESTRICT_QUALIFIER_MUST_NOT_BE_A_FUNCTION_TYPE.args(
@@ -825,7 +835,8 @@ cld::Semantics::Type
                 bool last = iter2 + 1 == declarators.end() && iter + 1 == structOrUnion->getStructDeclarations().end();
                 bool first = iter2 == declarators.begin() && iter == structOrUnion->getStructDeclarations().begin();
 
-                auto& [declarator, size] = *iter2;
+                auto& declarator = iter2->optionalDeclarator;
+                auto& size = iter2->optionalBitfield;
                 auto type = declarator ? applyDeclarator(baseType, *declarator) : baseType;
                 if (isVoid(type))
                 {
@@ -1196,9 +1207,9 @@ cld::Semantics::Type
             *typeSpec[1], m_sourceInterface, Lexer::TokenType::EnumKeyword, llvm::ArrayRef(typeSpec).drop_front()));
     }
     auto& enumDecl = cld::get<std::unique_ptr<Syntax::EnumSpecifier>>(typeSpec[0]->getVariant());
-    if (auto* loc = std::get_if<Lexer::CTokenIterator>(&enumDecl->getVariant()))
+    if (auto* loc = std::get_if<Syntax::EnumSpecifier::EnumTag>(&enumDecl->getVariant()))
     {
-        const auto* lookup = lookupType<EnumTag>((*loc)->getText());
+        const auto* lookup = lookupType<EnumTag>(loc->identifier->getText());
         if (!lookup)
         {
             // C99 6.7.2.3:
@@ -1209,15 +1220,17 @@ cld::Semantics::Type
                                                                                  *typeSpec[0]));
             return Type{};
         }
-        return EnumType::create(isConst, isVolatile, (*loc)->getText(), static_cast<std::size_t>(*lookup));
+        return EnumType::create(isConst, isVolatile, loc->identifier->getText(), static_cast<std::size_t>(*lookup));
     }
     auto& enumDef = cld::get<Syntax::EnumDeclaration>(enumDecl->getVariant());
     // TODO: Type depending on values as an extension
     const ConstValue one = {llvm::APSInt(llvm::APInt(m_sourceInterface.getLanguageOptions().sizeOfInt * 8, 1), false)};
     ConstValue nextValue = {llvm::APSInt(m_sourceInterface.getLanguageOptions().sizeOfInt * 8, false)};
     std::vector<std::pair<std::string_view, llvm::APSInt>> values;
-    for (auto& [loc, maybeExpression] : enumDef.getValues())
+    for (auto& iter : enumDef.getValues())
     {
+        const auto* loc = iter.name;
+        auto& maybeExpression = iter.value;
         ConstValue value;
         bool validValue = true;
         if (maybeExpression)
@@ -1233,9 +1246,9 @@ cld::Semantics::Type
                 }
                 validValue = false;
                 value = ConstValue{};
-                for (auto& iter : result.error())
+                for (auto& iter2 : result.error())
                 {
-                    log(iter);
+                    log(iter2);
                 }
             }
             else

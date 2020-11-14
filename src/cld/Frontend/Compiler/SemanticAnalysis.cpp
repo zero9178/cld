@@ -386,19 +386,19 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
         return decls;
     }
     auto baseType = qualifiersToType(node.getDeclarationSpecifiers());
-    for (auto& [declarator, initializer] : node.getInitDeclarators())
+    for (auto& iter : node.getInitDeclarators())
     {
-        const auto* loc = declaratorToLoc(*declarator);
-        auto result = applyDeclarator(baseType, *declarator);
+        const auto* loc = declaratorToLoc(*iter.declarator);
+        auto result = applyDeclarator(baseType, *iter.declarator);
         if (auto* functionType = std::get_if<FunctionType>(&result.getVariant());
             functionType
             && (!storageClassSpecifier
                 || storageClassSpecifier->getSpecifier() != Syntax::StorageClassSpecifier::Typedef))
         {
-            if (initializer)
+            if (iter.optionalInitializer)
             {
                 log(Errors::Semantics::FUNCTION_PROTOTYPE_MUST_NOT_HAVE_AN_INITIALIZER.args(
-                    *initializer, m_sourceInterface, *initializer));
+                    *iter.optionalInitializer, m_sourceInterface, *iter.optionalInitializer));
             }
             Linkage linkage = Linkage::External;
             // C99 6.7.1§5:
@@ -481,9 +481,9 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
         }
         else
         {
-            for (auto& iter : node.getDeclarationSpecifiers())
+            for (auto& type : node.getDeclarationSpecifiers())
             {
-                if (auto* funcSpec = std::get_if<Syntax::FunctionSpecifier>(&iter))
+                if (auto* funcSpec = std::get_if<Syntax::FunctionSpecifier>(&type))
                 {
                     log(Errors::Semantics::INLINE_ONLY_ALLOWED_FOR_FUNCTIONS.args(*funcSpec, m_sourceInterface,
                                                                                   *funcSpec));
@@ -586,11 +586,11 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                     log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
                                                              *prev->second.identifier));
                 }
-                for (auto& iter : RecursiveVisitor(result, TYPE_NEXT_FN))
+                for (auto& type : RecursiveVisitor(result, TYPE_NEXT_FN))
                 {
-                    if (std::holds_alternative<ValArrayType>(iter.getVariant()))
+                    if (std::holds_alternative<ValArrayType>(type.getVariant()))
                     {
-                        decls.push_back(cld::get<ValArrayType>(iter.getVariant()).getExpression());
+                        decls.push_back(cld::get<ValArrayType>(type.getVariant()).getExpression());
                     }
                 }
                 continue;
@@ -605,7 +605,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
             // C99 6.8.2§1:
             // If the declaration of an identifier for an object has file scope and an initializer, the
             // declaration is an external definition for the identifier.
-            if (m_currentScope == 0 && initializer
+            if (m_currentScope == 0 && iter.optionalInitializer
                 && (!storageClassSpecifier || *storageClassSpecifier != Syntax::StorageClassSpecifier::Extern))
             {
                 kind = Declaration::Definition;
@@ -692,7 +692,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                 }
             }
 
-            if (initializer)
+            if (iter.optionalInitializer)
             {
                 // C99 6.7.5$5:
                 // If the declaration of an identifier has block scope, and the identifier has external or
@@ -706,14 +706,14 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                 {
                     log(Errors::Semantics::CANNOT_INITIALIZE_VARIABLE_LENGTH_ARRAY_TYPE.args(
                         *loc, m_sourceInterface, *loc, declaration->getType()));
-                    visit(*initializer, Type{}, declaration->getLifetime() == Lifetime::Static);
+                    visit(*iter.optionalInitializer, Type{}, declaration->getLifetime() == Lifetime::Static);
                 }
                 else
                 {
                     m_inStaticInitializer = lifetime == Lifetime::Static;
                     auto prevType = declaration->getType();
                     std::size_t size = 0;
-                    auto expr = visit(*initializer, declaration->getType(),
+                    auto expr = visit(*iter.optionalInitializer, declaration->getType(),
                                       declaration->getLifetime() == Lifetime::Static, &size);
                     if (std::holds_alternative<AbstractArrayType>(declaration->getType().getVariant()))
                     {
@@ -880,6 +880,29 @@ std::tuple<bool, bool, bool>
     for (auto& typeQual : typeQualifiers)
     {
         switch (typeQual.getQualifier())
+        {
+            case Syntax::TypeQualifier::Const: isConst = true; break;
+            case Syntax::TypeQualifier::Restrict: isRestricted = true; break;
+            case Syntax::TypeQualifier::Volatile: isVolatile = true; break;
+            default: break;
+        }
+    }
+    return std::make_tuple(isConst, isVolatile, isRestricted);
+}
+
+std::tuple<bool, bool, bool> cld::Semantics::SemanticAnalysis::getQualifiers(
+    const std::vector<std::variant<Syntax::TypeQualifier, Syntax::GNUAttributes>>& typeQualifiers)
+{
+    bool isConst = false;
+    bool isVolatile = false;
+    bool isRestricted = false;
+    for (auto& typeQual : typeQualifiers)
+    {
+        if (!std::holds_alternative<Syntax::TypeQualifier>(typeQual))
+        {
+            continue;
+        }
+        switch (cld::get<Syntax::TypeQualifier>(typeQual).getQualifier())
         {
             case Syntax::TypeQualifier::Const: isConst = true; break;
             case Syntax::TypeQualifier::Restrict: isRestricted = true; break;

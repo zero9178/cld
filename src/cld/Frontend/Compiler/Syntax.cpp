@@ -328,8 +328,11 @@ cld::Syntax::ReturnStatement::ReturnStatement(Lexer::CTokenIterator begin, Lexer
 }
 
 cld::Syntax::ExpressionStatement::ExpressionStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                                                      std::unique_ptr<Expression>&& optionalExpression)
-    : Node(begin, end), m_optionalExpression(std::move(optionalExpression))
+                                                      std::unique_ptr<Expression>&& optionalExpression,
+                                                      std::optional<GNUAttributes>&& optionalAttributes)
+    : Node(begin, end),
+      m_optionalExpression(std::move(optionalExpression)),
+      m_optionalAttributes(std::move(optionalAttributes))
 {
 }
 
@@ -740,10 +743,15 @@ const typename cld::Syntax::InitializerList::vector&
     return m_nonCommaExpressionsAndBlocks;
 }
 
-cld::Syntax::EnumDeclaration::EnumDeclaration(
-    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, const Lexer::CToken* name,
-    std::vector<std::pair<Lexer::CTokenIterator, std::optional<ConstantExpression>>>&& values)
-    : Node(begin, end), m_name(std::move(name)), m_values(std::move(values))
+cld::Syntax::EnumDeclaration::EnumDeclaration(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
+                                              std::optional<GNUAttributes>&& beforeAttributes,
+                                              const Lexer::CToken* name, std::vector<EnumValue>&& values,
+                                              std::optional<GNUAttributes>&& afterAttributes)
+    : Node(begin, end),
+      m_beforeAttributes(std::move(beforeAttributes)),
+      m_name(std::move(name)),
+      m_values(std::move(values)),
+      m_afterAttributes(std::move(afterAttributes))
 {
 }
 
@@ -752,8 +760,7 @@ cld::Lexer::CTokenIterator cld::Syntax::EnumDeclaration::getName() const
     return m_name;
 }
 
-const std::vector<std::pair<cld::Lexer::CTokenIterator, std::optional<cld::Syntax::ConstantExpression>>>&
-    cld::Syntax::EnumDeclaration::getValues() const
+const std::vector<cld::Syntax::EnumDeclaration::EnumValue>& cld::Syntax::EnumDeclaration::getValues() const
 {
     return m_values;
 }
@@ -795,17 +802,15 @@ const cld::Syntax::TypeSpecifier::variant& cld::Syntax::TypeSpecifier::getVarian
     return m_variant;
 }
 
-cld::Syntax::Declaration::Declaration(
-    Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-    std::vector<cld::Syntax::DeclarationSpecifier>&& declarationSpecifiers,
-    std::vector<std::pair<std::unique_ptr<cld::Syntax::Declarator>, std::unique_ptr<cld::Syntax::Initializer>>>&&
-        initDeclarators)
+cld::Syntax::Declaration::Declaration(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
+                                      std::vector<cld::Syntax::DeclarationSpecifier>&& declarationSpecifiers,
+                                      std::vector<InitDeclarator>&& initDeclarators)
     : Node(begin, end),
       m_declarationSpecifiers(std::move(declarationSpecifiers)),
       m_initDeclarators(std::move(initDeclarators))
 {
     CLD_ASSERT(std::all_of(m_initDeclarators.begin(), m_initDeclarators.end(),
-                           [](const auto& pair) -> bool { return pair.first.get() != nullptr; }));
+                           [](const InitDeclarator& value) -> bool { return value.declarator != nullptr; }));
 }
 
 const std::vector<cld::Syntax::DeclarationSpecifier>& cld::Syntax::Declaration::getDeclarationSpecifiers() const
@@ -813,20 +818,24 @@ const std::vector<cld::Syntax::DeclarationSpecifier>& cld::Syntax::Declaration::
     return m_declarationSpecifiers;
 }
 
-const std::vector<std::pair<std::unique_ptr<cld::Syntax::Declarator>, std::unique_ptr<cld::Syntax::Initializer>>>&
-    cld::Syntax::Declaration::getInitDeclarators() const
+const std::vector<cld::Syntax::Declaration::InitDeclarator>& cld::Syntax::Declaration::getInitDeclarators() const
 {
     return m_initDeclarators;
 }
 
 cld::Syntax::StructOrUnionSpecifier::StructOrUnionSpecifier(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                                                            bool isUnion, const Lexer::CToken* identifierLoc,
+                                                            bool isUnion,
+                                                            std::optional<GNUAttributes>&& optionalBeforeAttribute,
+                                                            const Lexer::CToken* identifierLoc,
                                                             std::vector<StructDeclaration>&& structDeclarations,
+                                                            std::optional<GNUAttributes>&& optionalAfterAttribute,
                                                             bool extensionsEnabled)
     : Node(begin, end),
       m_isUnion(isUnion),
+      m_optionalBeforeAttribute(std::move(optionalBeforeAttribute)),
       m_identifierLoc(std::move(identifierLoc)),
       m_structDeclarations(std::move(structDeclarations)),
+      m_optionalAfterAttribute(std::move(optionalAfterAttribute)),
       m_extensionEnabled(extensionsEnabled)
 {
 }
@@ -885,12 +894,13 @@ bool cld::Syntax::ParameterTypeList::hasEllipse() const
 }
 
 cld::Syntax::Pointer::Pointer(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                              std::vector<cld::Syntax::TypeQualifier>&& typeQualifiers)
+                              std::vector<std::variant<TypeQualifier, GNUAttributes>>&& typeQualifiers)
     : Node(begin, end), m_typeQualifiers(std::move(typeQualifiers))
 {
 }
 
-const std::vector<cld::Syntax::TypeQualifier>& cld::Syntax::Pointer::getTypeQualifiers() const
+const std::vector<std::variant<cld::Syntax::TypeQualifier, cld::Syntax::GNUAttributes>>&
+    cld::Syntax::Pointer::getTypeQualifiers() const
 {
     return m_typeQualifiers;
 }
@@ -1140,18 +1150,28 @@ cld::Lexer::CTokenIterator cld::Syntax::GotoStatement::getIdentifier() const
 
 cld::Syntax::LabelStatement::LabelStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                             Lexer::CTokenIterator identifier, Statement&& statement)
-    : Node(begin, end), m_identifier(identifier), m_statement(std::make_unique<Statement>(std::move(statement)))
+    : Node(begin, end),
+      m_identifier(identifier),
+      m_statementOrAttribute(std::make_unique<Statement>(std::move(statement)))
 {
 }
 
-const cld::Syntax::Statement& cld::Syntax::LabelStatement::getStatement() const
+const std::variant<std::unique_ptr<cld::Syntax::Statement>, cld::Syntax::GNUAttributes>&
+    cld::Syntax::LabelStatement::getStatementOrAttribute() const
 {
-    return *m_statement;
+    return m_statementOrAttribute;
 }
 
 cld::Lexer::CTokenIterator cld::Syntax::LabelStatement::getIdentifierToken() const
 {
     return m_identifier;
+}
+
+cld::Syntax::LabelStatement::LabelStatement(cld::Lexer::CTokenIterator begin, cld::Lexer::CTokenIterator end,
+                                            cld::Lexer::CTokenIterator identifier,
+                                            cld::Syntax::GNUAttributes&& attributes)
+    : Node(begin, end), m_identifier(identifier), m_statementOrAttribute(std::move(attributes))
+{
 }
 
 cld::Syntax::TranslationUnit::TranslationUnit(std::vector<cld::Syntax::ExternalDeclaration>&& globals) noexcept
@@ -1249,8 +1269,9 @@ cld::Lexer::CTokenIterator cld::Syntax::DirectDeclaratorIdentifier::getIdentifie
 
 cld::Syntax::DirectDeclaratorParentheses::DirectDeclaratorParentheses(Lexer::CTokenIterator begin,
                                                                       Lexer::CTokenIterator end,
+                                                                      std::optional<GNUAttributes>&& optionalAttributes,
                                                                       std::unique_ptr<Declarator>&& declarator)
-    : Node(begin, end), m_declarator(std::move(declarator))
+    : Node(begin, end), m_optionalAttributes(std::move(optionalAttributes)), m_declarator(std::move(declarator))
 {
     CLD_ASSERT(m_declarator);
 }
@@ -1261,8 +1282,11 @@ const cld::Syntax::Declarator& cld::Syntax::DirectDeclaratorParentheses::getDecl
 }
 
 cld::Syntax::DirectAbstractDeclaratorParentheses::DirectAbstractDeclaratorParentheses(
-    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::unique_ptr<AbstractDeclarator>&& abstractDeclarator)
-    : Node(begin, end), m_abstractDeclarator(std::move(abstractDeclarator))
+    Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::optional<GNUAttributes>&& optionalAttributes,
+    std::unique_ptr<AbstractDeclarator>&& abstractDeclarator)
+    : Node(begin, end),
+      m_optionalAttributes(std::move(optionalAttributes)),
+      m_abstractDeclarator(std::move(abstractDeclarator))
 {
     CLD_ASSERT(m_abstractDeclarator);
 }

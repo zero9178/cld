@@ -505,10 +505,10 @@ std::unique_ptr<cld::Semantics::LabelStatement>
         log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second->getIdentifier(), m_sourceInterface,
                                                  *prev->second->getIdentifier()));
     }
-    else
+    else if (auto* statement = std::get_if<std::unique_ptr<Syntax::Statement>>(&node.getStatementOrAttribute()))
     {
         *storage = LabelStatement(m_currentScope, node.getIdentifierToken(), getCurrentScope().declarations.size(),
-                                  visit(node.getStatement()));
+                                  visit(**statement));
     }
 
     return storage;

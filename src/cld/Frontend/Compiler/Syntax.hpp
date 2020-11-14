@@ -1088,16 +1088,58 @@ public:
 };
 
 /**
+ *
+ * [GNU]:
+ *
+ * <GNUAttributes> ::= <GNUAttribute> { <GNUAttribute> }
+ *
+ * <GNUAttribute> ::= <TokenType::GNUAttribute> <TokenType::OpenParentheses> <TokenType::OpenParentheses>
+ *                    <GNUAttributeList> <TokenType::CloseParentheses> <TokenType::CloseParentheses>
+ *
+ * <GNUAttributeList> ::= [<GNUAttrib>] { <TokenType::Comma> [<GNUAttrib>] }
+ *
+ * <GNUAttrib> ::= <GNUAttribName>
+ *               | <GNUAttribName> <TokenType::OpenParentheses> <TokenType::Identifier> <TokenType::CloseParentheses>
+ *               | <GNUAttribName> <TokenType::OpenParentheses> <TokenType::Identifier> <TokenType::Comma>
+ *                 <NonCommaExpression> { <TokenType::Comma> <NonCommaExpression> } <TokenType::CloseParentheses>
+ *               | <GNUAttribName> <TokenType::OpenParentheses> [<NonCommaExpression> { <TokenType::Comma>
+ *                 <NonCommaExpression> } ] <TokenType::CloseParentheses>
+ *
+ * <GNUAttribName> ::= <TokenType::Identifier>
+ *                   | <TypeSpecifier>
+ *                   | <TypeQualifier>
+ *                   | <StorageClassSpecifier>
+ */
+class GNUAttributes final : public Node
+{
+public:
+    struct GNUAttribute
+    {
+        Lexer::CTokenIterator nameToken;
+        const Lexer::CToken* optionalFirstIdentifierArgument;
+        std::vector<AssignmentExpression> arguments;
+    };
+
+private:
+    std::vector<GNUAttribute> m_attributes;
+
+public:
+    GNUAttributes(const Lexer::CToken* begin, const Lexer::CToken* end, std::vector<GNUAttribute>&& attributes);
+};
+
+/**
  * <ExpressionStatement> ::= [<Expression>] <TokenType::SemiColon>
  *                         | <GNUAttribute> <TokenType::SemiColon>
  */
 class ExpressionStatement final : public Node
 {
     std::unique_ptr<Expression> m_optionalExpression;
+    std::optional<GNUAttributes> m_optionalAttributes;
 
 public:
     ExpressionStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
-                        std::unique_ptr<Expression>&& optionalExpression = nullptr);
+                        std::unique_ptr<Expression>&& optionalExpression,
+                        std::optional<GNUAttributes>&& optionalAttributes = {});
 
     [[nodiscard]] const Expression* getOptionalExpression() const;
 
@@ -1210,20 +1252,23 @@ public:
 };
 
 /**
- * <LabelStatement> ::= <TokenType::Identifier> <TokenType::Colon> (<Statement> | <GNUAttribute>)
+ * <LabelStatement> ::= <TokenType::Identifier> <TokenType::Colon> (<Statement> | <GNUAttribute> <TokenType::SemiColon>)
  */
 class LabelStatement final : public Node
 {
     Lexer::CTokenIterator m_identifier;
-    std::unique_ptr<Statement> m_statement;
+    std::variant<std::unique_ptr<Statement>, GNUAttributes> m_statementOrAttribute; // unique_ptr<Statement> is not null
 
 public:
     LabelStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, Lexer::CTokenIterator identifier,
                    Statement&& statement);
 
+    LabelStatement(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, Lexer::CTokenIterator identifier,
+                   GNUAttributes&& attributes);
+
     [[nodiscard]] Lexer::CTokenIterator getIdentifierToken() const;
 
-    [[nodiscard]] const Statement& getStatement() const;
+    [[nodiscard]] const std::variant<std::unique_ptr<Statement>, GNUAttributes>& getStatementOrAttribute() const;
 };
 
 /**
@@ -1313,6 +1358,23 @@ using DeclarationSpecifier =
     std::variant<StorageClassSpecifier, TypeSpecifier, TypeQualifier, FunctionSpecifier, GNUAttributes>;
 
 /**
+ * [GNU]:
+ *
+ * <GNUASMString> ::= <TokenType::StringLiteral>
+ * StringLiteral must be a vanilla string however (no suffixes)
+ *
+ * <GNUSimpleASM> ::= <TokenType::GNUASM> <TokenType::OpenParentheses> <GNUASMString>
+ *                    <TokenType::CloseParentheses>
+ */
+class GNUSimpleASM final : public Node
+{
+    std::string m_string;
+
+public:
+    GNUSimpleASM(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::string string);
+};
+
+/**
  * <InitDeclarator> ::= <Declarator> [ <TokenType::Assignment> <Initializer> ]
  *
  * [GNU]: <InitDeclarator> ::= <Declarator> [ <TokenType::Assignment> <Initializer> ] [<GNUSimpleASM>] [<GNUAttribute>]
@@ -1322,18 +1384,29 @@ using DeclarationSpecifier =
  */
 class Declaration final : public Node
 {
+public:
+    struct InitDeclarator
+    {
+        std::unique_ptr<Declarator> declarator;           // NOT NULL
+        std::unique_ptr<Initializer> optionalInitializer; // nullable
+        std::optional<GNUSimpleASM> optionalSimpleASM;
+        std::optional<GNUAttributes> optionalAfterAttributes;
+        std::optional<GNUAttributes>
+            optionalBeforeAttributes{}; // not allowed to be set for the first InitDeclarator of a Declaration
+    };
+
+private:
     std::vector<DeclarationSpecifier> m_declarationSpecifiers;
-    std::vector<std::pair<std::unique_ptr<Declarator>, std::unique_ptr<Initializer>>> m_initDeclarators;
+    std::vector<InitDeclarator> m_initDeclarators;
 
 public:
     Declaration(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                 std::vector<DeclarationSpecifier>&& declarationSpecifiers,
-                std::vector<std::pair<std::unique_ptr<Declarator>, std::unique_ptr<Initializer>>>&& initDeclarators);
+                std::vector<InitDeclarator>&& initDeclarators);
 
     [[nodiscard]] const std::vector<DeclarationSpecifier>& getDeclarationSpecifiers() const;
 
-    [[nodiscard]] const std::vector<std::pair<std::unique_ptr<Declarator>, std::unique_ptr<Initializer>>>&
-        getInitDeclarators() const;
+    [[nodiscard]] const std::vector<InitDeclarator>& getInitDeclarators() const;
 };
 
 /**
@@ -1448,10 +1521,12 @@ using DirectAbstractDeclarator =
  */
 class DirectAbstractDeclaratorParentheses final : public Node
 {
+    std::optional<GNUAttributes> m_optionalAttributes;
     std::unique_ptr<AbstractDeclarator> m_abstractDeclarator;
 
 public:
     DirectAbstractDeclaratorParentheses(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
+                                        std::optional<GNUAttributes>&& optionalAttributes,
                                         std::unique_ptr<AbstractDeclarator>&& abstractDeclarator);
 
     [[nodiscard]] const AbstractDeclarator& getAbstractDeclarator() const;
@@ -1657,10 +1732,12 @@ public:
  */
 class DirectDeclaratorParentheses final : public Node
 {
+    std::optional<GNUAttributes> m_optionalAttributes;
     std::unique_ptr<Declarator> m_declarator;
 
 public:
     DirectDeclaratorParentheses(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
+                                std::optional<GNUAttributes>&& optionalAttributes,
                                 std::unique_ptr<Declarator>&& declarator);
 
     [[nodiscard]] const Declarator& getDeclarator() const;
@@ -1806,6 +1883,7 @@ public:
 class StructOrUnionSpecifier final : public Node
 {
     bool m_isUnion;
+    std::optional<GNUAttributes> m_optionalBeforeAttribute;
     const Lexer::CToken* m_identifierLoc;
 
 public:
@@ -1823,17 +1901,26 @@ public:
     struct StructDeclaration
     {
         std::vector<SpecifierQualifier> specifierQualifiers;
-        std::vector<std::pair<std::unique_ptr<Declarator>, std::optional<ConstantExpression>>> structDeclarators;
+        struct StructDeclarator
+        {
+            std::optional<GNUAttributes> optionalBeforeAttributes; // guaranteed empty for the first declarator
+            std::unique_ptr<Declarator> optionalDeclarator;
+            std::optional<ConstantExpression> optionalBitfield;
+            std::optional<GNUAttributes> optionalAfterAttributes;
+        };
+        std::vector<StructDeclarator> structDeclarators;
     };
 
 private:
     std::vector<StructDeclaration> m_structDeclarations;
+    std::optional<GNUAttributes> m_optionalAfterAttribute;
     bool m_extensionEnabled;
 
 public:
     StructOrUnionSpecifier(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, bool isUnion,
-                           const Lexer::CToken* identifierLoc, std::vector<StructDeclaration>&& structDeclarations,
-                           bool extensionsEnabled);
+                           std::optional<GNUAttributes>&& optionalBeforeAttribute, const Lexer::CToken* identifierLoc,
+                           std::vector<StructDeclaration>&& structDeclarations,
+                           std::optional<GNUAttributes>&& optionalAfterAttribute, bool extensionsEnabled);
 
     [[nodiscard]] bool isUnion() const;
 
@@ -1858,17 +1945,29 @@ public:
  */
 class EnumDeclaration final : public Node
 {
+    std::optional<GNUAttributes> m_beforeAttributes;
     const Lexer::CToken* m_name;
-    std::vector<std::pair<Lexer::CTokenIterator, std::optional<ConstantExpression>>> m_values;
 
 public:
-    EnumDeclaration(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, const Lexer::CToken* name,
-                    std::vector<std::pair<Lexer::CTokenIterator, std::optional<ConstantExpression>>>&& values);
+    struct EnumValue
+    {
+        Lexer::CTokenIterator name;
+        std::optional<GNUAttributes> optionalAttributes;
+        std::optional<ConstantExpression> value;
+    };
+
+private:
+    std::vector<EnumValue> m_values;
+    std::optional<GNUAttributes> m_afterAttributes;
+
+public:
+    EnumDeclaration(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
+                    std::optional<GNUAttributes>&& beforeAttributes, const Lexer::CToken* name,
+                    std::vector<EnumValue>&& values, std::optional<GNUAttributes>&& afterAttributes);
 
     [[nodiscard]] const Lexer::CToken* getName() const;
 
-    [[nodiscard]] const std::vector<std::pair<Lexer::CTokenIterator, std::optional<ConstantExpression>>>&
-        getValues() const;
+    [[nodiscard]] const std::vector<EnumValue>& getValues() const;
 };
 
 /**
@@ -1878,7 +1977,15 @@ public:
  */
 class EnumSpecifier final : public Node
 {
-    using Variant = std::variant<EnumDeclaration, const Lexer::CToken * CLD_NULLABLE>;
+public:
+    struct EnumTag
+    {
+        std::optional<GNUAttributes> optionalAttributes;
+        const Lexer::CToken* CLD_NULLABLE identifier;
+    };
+
+private:
+    using Variant = std::variant<EnumDeclaration, EnumTag>;
 
     Variant m_variant;
 
@@ -1936,15 +2043,18 @@ public:
 
 /**
  * <Pointer> ::= <TokenType::Asterisk> { <TypeQualifier> }
+ *
+ * [GNU]: <Pointer> ::= <TokenType::Asterisk> { <TypeQualifier> | <GNUAttributes> }
  */
 class Pointer final : public Node
 {
-    std::vector<TypeQualifier> m_typeQualifiers;
+    std::vector<std::variant<TypeQualifier, GNUAttributes>> m_typeQualifiers;
 
 public:
-    Pointer(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::vector<TypeQualifier>&& typeQualifiers);
+    Pointer(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
+            std::vector<std::variant<TypeQualifier, GNUAttributes>>&& typeQualifiers);
 
-    [[nodiscard]] const std::vector<TypeQualifier>& getTypeQualifiers() const;
+    [[nodiscard]] const std::vector<std::variant<TypeQualifier, GNUAttributes>>& getTypeQualifiers() const;
 };
 
 /**
@@ -2036,63 +2146,6 @@ public:
     explicit TranslationUnit(std::vector<ExternalDeclaration>&& globals) noexcept;
 
     [[nodiscard]] const std::vector<ExternalDeclaration>& getGlobals() const;
-};
-
-/**
- *
- * [GNU]:
- *
- * <GNUAttributes> ::= <GNUAttribute> { <GNUAttribute> }
- *
- * <GNUAttribute> ::= <TokenType::GNUAttribute> <TokenType::OpenParentheses> <TokenType::OpenParentheses>
- *                    <GNUAttributeList> <TokenType::CloseParentheses> <TokenType::CloseParentheses>
- *
- * <GNUAttributeList> ::= [<GNUAttrib>] { <TokenType::Comma> [<GNUAttrib>] }
- *
- * <GNUAttrib> ::= <GNUAttribName>
- *               | <GNUAttribName> <TokenType::OpenParentheses> <TokenType::Identifier> <TokenType::CloseParentheses>
- *               | <GNUAttribName> <TokenType::OpenParentheses> <TokenType::Identifier> <TokenType::Comma>
- *                 <NonCommaExpression> { <TokenType::Comma> <NonCommaExpression> } <TokenType::CloseParentheses>
- *               | <GNUAttribName> <TokenType::OpenParentheses> [<NonCommaExpression> { <TokenType::Comma>
- *                 <NonCommaExpression> } ] <TokenType::CloseParentheses>
- *
- * <GNUAttribName> ::= <TokenType::Identifier>
- *                   | <TypeSpecifier>
- *                   | <TypeQualifier>
- *                   | <StorageClassSpecifier>
- */
-class GNUAttributes final : public Node
-{
-public:
-    struct GNUAttribute
-    {
-        Lexer::CTokenIterator nameToken;
-        const Lexer::CToken* optionalFirstIdentifierArgument;
-        std::vector<AssignmentExpression> arguments;
-    };
-
-private:
-    std::vector<GNUAttribute> m_attributes;
-
-public:
-    GNUAttributes(const Lexer::CToken* begin, const Lexer::CToken* end, std::vector<GNUAttribute>&& attributes);
-};
-
-/**
- * [GNU]:
- *
- * <GNUASMString> ::= <TokenType::StringLiteral>
- * StringLiteral must be a vanilla string however (no suffixes)
- *
- * <GNUSimpleASM> ::= <TokenType::GNUASM> <TokenType::OpenParentheses> <GNUASMString>
- *                    <TokenType::CloseParentheses>
- */
-class GNUSimpleASM final : public Node
-{
-    std::string m_string;
-
-public:
-    GNUSimpleASM(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::string string);
 };
 
 /**

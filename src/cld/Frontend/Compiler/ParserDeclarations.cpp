@@ -93,14 +93,13 @@ TranslationUnit cld::Parser::parseTranslationUnit(Lexer::CTokenIterator& begin, 
 
 namespace
 {
-// The last parameter being std::optioanl<std::optional<T>> looks really bad lol
+// The last parameter being std::optional<std::optional<T>> looks really bad lol
 // This is because it's optional once due to not having been parsed correctly, and optional due to not having been
 // specified
-std::optional<cld::Syntax::Declaration>
-    finishDeclaration(std::vector<cld::Syntax::DeclarationSpecifier>&& declarationSpecifiers,
-                      cld::Lexer::CTokenIterator start, cld::Lexer::CTokenIterator& begin,
-                      cld::Lexer::CTokenIterator end, cld::Parser::Context& context,
-                      std::optional<std::optional<Declarator>> alreadyParsedDeclarator = {})
+std::optional<cld::Syntax::Declaration> finishDeclaration(
+    std::vector<cld::Syntax::DeclarationSpecifier>&& declarationSpecifiers, cld::Lexer::CTokenIterator start,
+    cld::Lexer::CTokenIterator& begin, cld::Lexer::CTokenIterator end, cld::Parser::Context& context,
+    std::optional<std::pair<std::optional<Declarator>, std::optional<GNUAttributes>>> alreadyParsedDeclarator = {})
 {
     using namespace cld::Parser;
     using namespace cld;
@@ -123,26 +122,29 @@ std::optional<cld::Syntax::Declaration>
         declaratorMightActuallyBeTypedef = true;
     }
 
-    std::vector<std::pair<std::unique_ptr<Declarator>, std::unique_ptr<Initializer>>> initDeclarators;
+    std::vector<cld::Syntax::Declaration::InitDeclarator> initDeclarators;
     if (alreadyParsedDeclarator)
     {
-        if (!isTypedef && *alreadyParsedDeclarator)
+        if (!isTypedef && alreadyParsedDeclarator->first)
         {
-            const auto* loc = Semantics::declaratorToLoc(**alreadyParsedDeclarator);
+            const auto* loc = Semantics::declaratorToLoc(*alreadyParsedDeclarator->first);
             context.addToScope(loc->getText(), {start, begin, loc});
         }
         if (begin == end || begin->getTokenType() != Lexer::TokenType::Assignment)
         {
-            if (*alreadyParsedDeclarator)
-            {
-                initDeclarators.emplace_back(std::make_unique<Declarator>(std::move(**alreadyParsedDeclarator)),
-                                             nullptr);
-            }
-            // TODO: Store
             // GNU Attribute for this case may have already been parsed by the caller if there was no asm statement
             // but attributes
-            parseGNUSimpleASM(begin, end, context);
-            parseGNUAttributes(begin, end, context);
+            auto simpleASM = parseGNUSimpleASM(begin, end, context);
+            auto attributes = std::move(alreadyParsedDeclarator->second);
+            if (!attributes)
+            {
+                attributes = parseGNUAttributes(begin, end, context);
+            }
+            if (alreadyParsedDeclarator->first)
+            {
+                initDeclarators.push_back({std::make_unique<Declarator>(std::move(*alreadyParsedDeclarator->first)),
+                                           nullptr, std::move(simpleASM), std::move(attributes)});
+            }
         }
         else
         {
@@ -150,33 +152,33 @@ std::optional<cld::Syntax::Declaration>
             auto initializer = parseInitializer(begin, end,
                                                 context.withRecoveryTokens(Context::fromTokenTypes(
                                                     Lexer::TokenType::SemiColon, Lexer::TokenType::Comma)));
-            if (*alreadyParsedDeclarator && initializer)
+            auto simpleASM = parseGNUSimpleASM(begin, end, context);
+            auto attributes = parseGNUAttributes(begin, end, context);
+            if (alreadyParsedDeclarator->first && initializer)
             {
-                initDeclarators.emplace_back(std::make_unique<Declarator>(std::move(**alreadyParsedDeclarator)),
-                                             std::make_unique<Initializer>(std::move(*initializer)));
+                initDeclarators.push_back({std::make_unique<Declarator>(std::move(*alreadyParsedDeclarator->first)),
+                                           std::make_unique<Initializer>(std::move(*initializer)), std::move(simpleASM),
+                                           std::move(attributes)});
             }
-            else if (*alreadyParsedDeclarator)
+            else if (alreadyParsedDeclarator->first)
             {
-                initDeclarators.emplace_back(std::make_unique<Declarator>(std::move(**alreadyParsedDeclarator)),
-                                             nullptr);
+                initDeclarators.push_back({std::make_unique<Declarator>(std::move(*alreadyParsedDeclarator->first)),
+                                           nullptr, std::move(simpleASM), std::move(attributes)});
             }
-            // TODO: Store
-            parseGNUSimpleASM(begin, end, context);
-            parseGNUAttributes(begin, end, context);
         }
     }
     bool first = !alreadyParsedDeclarator.has_value();
     do
     {
+        std::optional<GNUAttributes> optionalBeforeAttribute;
         if (first)
         {
             first = false;
         }
         else if (begin < end && begin->getTokenType() == Lexer::TokenType::Comma)
         {
-            // TODO: Store
-            parseGNUAttributes(begin, end, context);
             begin++;
+            optionalBeforeAttribute = parseGNUAttributes(begin, end, context);
         }
         else
         {
@@ -193,13 +195,14 @@ std::optional<cld::Syntax::Declaration>
         }
         if (begin == end || begin->getTokenType() != Lexer::TokenType::Assignment)
         {
+            auto simpleASM = parseGNUSimpleASM(begin, end, context);
+            auto attributes = parseGNUAttributes(begin, end, context);
             if (declarator)
             {
-                initDeclarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)), nullptr);
+                initDeclarators.push_back({std::make_unique<Declarator>(std::move(*declarator)), nullptr,
+                                           std::move(simpleASM), std::move(attributes),
+                                           std::move(optionalBeforeAttribute)});
             }
-            // TODO: Store
-            parseGNUSimpleASM(begin, end, context);
-            parseGNUAttributes(begin, end, context);
         }
         else
         {
@@ -207,24 +210,26 @@ std::optional<cld::Syntax::Declaration>
             auto initializer = parseInitializer(begin, end,
                                                 context.withRecoveryTokens(Context::fromTokenTypes(
                                                     Lexer::TokenType::SemiColon, Lexer::TokenType::Comma)));
+            auto simpleASM = parseGNUSimpleASM(begin, end, context);
+            auto attributes = parseGNUAttributes(begin, end, context);
             if (declarator && initializer)
             {
-                initDeclarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)),
-                                             std::make_unique<Initializer>(std::move(*initializer)));
+                initDeclarators.push_back({std::make_unique<Declarator>(std::move(*declarator)),
+                                           std::make_unique<Initializer>(std::move(*initializer)), std::move(simpleASM),
+                                           std::move(attributes), std::move(optionalBeforeAttribute)});
             }
             else if (declarator)
             {
-                initDeclarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)), nullptr);
+                initDeclarators.push_back({std::make_unique<Declarator>(std::move(*declarator)), nullptr,
+                                           std::move(simpleASM), std::move(attributes),
+                                           std::move(optionalBeforeAttribute)});
             }
-            // TODO: Store
-            parseGNUSimpleASM(begin, end, context);
-            parseGNUAttributes(begin, end, context);
         }
     } while (true);
 
     if (declaratorMightActuallyBeTypedef && initDeclarators.size() == 1)
     {
-        auto* loc = context.getLocationOf(Semantics::declaratorToLoc(*initDeclarators[0].first)->getText());
+        auto* loc = context.getLocationOf(Semantics::declaratorToLoc(*initDeclarators[0].declarator)->getText());
         if (loc)
         {
             if (!expect(Lexer::TokenType::SemiColon, begin, end, context, [&] {
@@ -256,9 +261,9 @@ std::optional<cld::Syntax::Declaration>
 
     if (isTypedef)
     {
-        for (auto& [declarator, init] : initDeclarators)
+        for (auto& iter : initDeclarators)
         {
-            const auto* loc = Semantics::declaratorToLoc(*declarator);
+            const auto* loc = Semantics::declaratorToLoc(*iter.declarator);
             context.addTypedef(loc->getText(), {start, begin, loc});
         }
     }
@@ -306,8 +311,7 @@ std::optional<cld::Syntax::ExternalDeclaration>
         return {};
     }
 
-    // TODO: Store
-    parseGNUAttributes(begin, end, context);
+    auto attributes = parseGNUAttributes(begin, end, context);
     if (begin->getTokenType() == Lexer::TokenType::OpenBrace || firstIsInDeclaration(*begin, context))
     {
         std::vector<Declaration> declarations;
@@ -456,7 +460,9 @@ std::optional<cld::Syntax::ExternalDeclaration>
                                   std::move(declarations), std::move(*compoundStatement));
     }
 
-    return finishDeclaration(std::move(declarationSpecifiers), start, begin, end, context, std::move(declarator));
+    return finishDeclaration(std::move(declarationSpecifiers), start, begin, end, context,
+                             std::optional<std::pair<std::optional<Declarator>, std::optional<GNUAttributes>>>{
+                                 std::in_place, std::move(declarator), std::move(attributes)});
 }
 
 std::optional<cld::Syntax::Declaration> cld::Parser::parseDeclaration(Lexer::CTokenIterator& begin,
@@ -649,8 +655,7 @@ std::optional<cld::Syntax::StructOrUnionSpecifier>
         return {};
     }
 
-    // TODO: Store
-    parseGNUAttributes(begin, end, context);
+    auto beforeAttributes = parseGNUAttributes(begin, end, context);
 
     if (begin == end)
     {
@@ -675,7 +680,8 @@ std::optional<cld::Syntax::StructOrUnionSpecifier>
             context.skipUntil(begin, end);
             return {};
         }
-        return StructOrUnionSpecifier(start, begin, isUnion, name, {}, context.extensionsEnabled(start));
+        return StructOrUnionSpecifier(start, begin, isUnion, std::move(beforeAttributes), name, {}, {},
+                                      context.extensionsEnabled(start));
     }
     const Lexer::CToken* openBrace = nullptr;
     if (expect(Lexer::TokenType::OpenBrace, begin, end, context))
@@ -698,12 +704,13 @@ std::optional<cld::Syntax::StructOrUnionSpecifier>
             begin, end,
             context.withRecoveryTokens(firstDeclaratorSet | Context::fromTokenTypes(Lexer::TokenType::Colon)));
 
-        std::vector<std::pair<std::unique_ptr<Declarator>, std::optional<ConstantExpression>>> declarators;
+        std::vector<StructOrUnionSpecifier::StructDeclaration::StructDeclarator> declarators;
         if (begin < end && (firstIsInDeclarator(*begin, context) || begin->getTokenType() == Lexer::TokenType::Colon))
         {
             bool first = true;
             do
             {
+                std::optional<GNUAttributes> beforeDeclAttributes;
                 if (first)
                 {
                     first = false;
@@ -711,8 +718,7 @@ std::optional<cld::Syntax::StructOrUnionSpecifier>
                 else if (begin < end && begin->getTokenType() == Lexer::TokenType::Comma)
                 {
                     begin++;
-                    // TODO: Store
-                    parseGNUAttributes(begin, end, context);
+                    beforeDeclAttributes = parseGNUAttributes(begin, end, context);
                 }
                 else
                 {
@@ -725,9 +731,9 @@ std::optional<cld::Syntax::StructOrUnionSpecifier>
                         parseConditionalExpression(begin, end,
                                                    context.withRecoveryTokens(Context::fromTokenTypes(
                                                        Lexer::TokenType::Comma, Lexer::TokenType::SemiColon)));
-                    declarators.emplace_back(nullptr, std::move(constant));
-                    // TODO: Store
-                    parseGNUAttributes(begin, end, context);
+                    auto afterAttributes = parseGNUAttributes(begin, end, context);
+                    declarators.push_back(
+                        {std::move(beforeDeclAttributes), nullptr, std::move(constant), std::move(afterAttributes)});
                     continue;
                 }
                 auto declarator = parseDeclarator(
@@ -741,19 +747,24 @@ std::optional<cld::Syntax::StructOrUnionSpecifier>
                         parseConditionalExpression(begin, end,
                                                    context.withRecoveryTokens(Context::fromTokenTypes(
                                                        Lexer::TokenType::Comma, Lexer::TokenType::SemiColon)));
+                    auto afterAttributes = parseGNUAttributes(begin, end, context);
                     if (declarator)
                     {
-                        declarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)),
-                                                 std::move(constant));
+                        declarators.push_back({std::move(beforeDeclAttributes),
+                                               std::make_unique<Declarator>(std::move(*declarator)),
+                                               std::move(constant), std::move(afterAttributes)});
                     }
                 }
-                else if (declarator)
+                else
                 {
-                    declarators.emplace_back(std::make_unique<Declarator>(std::move(*declarator)),
-                                             std::optional<ConstantExpression>{});
+                    auto afterAttributes = parseGNUAttributes(begin, end, context);
+                    if (declarator)
+                    {
+                        declarators.push_back({std::move(beforeDeclAttributes),
+                                               std::make_unique<Declarator>(std::move(*declarator)), std::nullopt,
+                                               std::move(afterAttributes)});
+                    }
                 }
-                // TODO: Store
-                parseGNUAttributes(begin, end, context);
             } while (true);
         }
         if (!expect(Lexer::TokenType::SemiColon, begin, end, context))
@@ -791,9 +802,9 @@ std::optional<cld::Syntax::StructOrUnionSpecifier>
                 *start, context.getSourceInterface(), std::forward_as_tuple(*start, *(begin - 1))));
         }
     }
-    // TODO: Store
-    parseGNUAttributes(begin, end, context);
-    return StructOrUnionSpecifier(start, begin, isUnion, name, std::move(structDeclarations),
+    auto afterAttributes = parseGNUAttributes(begin, end, context);
+    return StructOrUnionSpecifier(start, begin, isUnion, std::move(beforeAttributes), name,
+                                  std::move(structDeclarations), std::move(afterAttributes),
                                   context.extensionsEnabled(start));
 }
 
@@ -1220,12 +1231,14 @@ std::optional<cld::Syntax::DirectAbstractDeclarator>
                     }
                 })};
                 begin++;
-                // TODO: store
-                // This __attribute__ may either be part of the declaration specifiers of the parameter type list
-                // or part of the DirectAbstractDeclaratorParentheses. We parse it here to be able to resolve the
-                // ambiguity
-                parseGNUAttributes(begin, end, context);
-                if (begin < end && firstIsInDeclarationSpecifier(*begin, context))
+
+                // https://gcc.gnu.org/onlinedocs/gcc/Attribute-Syntax.html#Attribute-Syntax:
+                // At present, the first parameter in a function prototype must have some type specifier that is not an
+                // attribute specifier; this resolves an ambiguity in the interpretation of void f(int
+                // (__attribute__((foo)) x)), but is subject to change.
+
+                if (begin < end && firstIsInDeclarationSpecifier(*begin, context)
+                    && begin->getTokenType() != Lexer::TokenType::GNUAttribute)
                 {
                     auto parameterTypeList = parseParameterTypeList(
                         begin, end,
@@ -1238,11 +1251,13 @@ std::optional<cld::Syntax::DirectAbstractDeclarator>
                 }
                 else if (begin < end && first && firstIsInAbstractDeclarator(*begin, context))
                 {
+                    auto attribute = parseGNUAttributes(begin, end, context);
                     auto abstractDeclarator = parseAbstractDeclarator(begin, end, context);
                     closeParenth.reset();
                     directAbstractDeclarator =
                         std::make_unique<DirectAbstractDeclarator>(DirectAbstractDeclaratorParentheses(
-                            start, begin, std::make_unique<AbstractDeclarator>(std::move(abstractDeclarator))));
+                            start, begin, std::move(attribute),
+                            std::make_unique<AbstractDeclarator>(std::move(abstractDeclarator))));
                 }
                 else
                 {
@@ -1428,14 +1443,13 @@ std::optional<cld::Syntax::DirectDeclarator>
         auto scope = context.parenthesesEntered(begin);
         const auto* openPpos = begin;
         begin++;
-        // TODO: Store
-        parseGNUAttributes(begin, end, context);
+        auto attributes = parseGNUAttributes(begin, end, context);
         auto declarator = parseDeclarator(
             begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
         if (declarator)
         {
-            directDeclarator = std::make_unique<DirectDeclarator>(
-                DirectDeclaratorParentheses(start, begin, std::make_unique<Declarator>(std::move(*declarator))));
+            directDeclarator = std::make_unique<DirectDeclarator>(DirectDeclaratorParentheses(
+                start, begin, std::move(attributes), std::make_unique<Declarator>(std::move(*declarator))));
         }
         if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
                     [&] { return Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos); }))
@@ -1529,6 +1543,7 @@ cld::Syntax::ParameterList cld::Parser::parseParameterList(Lexer::CTokenIterator
             std::vector<Syntax::Pointer> pointers;
             std::optional<ValueReset<std::uint64_t>> scope;
             const Lexer::CToken* openParentheses;
+            std::optional<GNUAttributes> attributes;
         };
 
         std::vector<Stack> pointerStack;
@@ -1644,7 +1659,7 @@ cld::Syntax::ParameterList cld::Parser::parseParameterList(Lexer::CTokenIterator
                 {
                     pointerStack.back().scope = context.parenthesesEntered(begin);
                     pointerStack.back().openParentheses = begin++;
-                    parseGNUAttributes(begin, end, context);
+                    pointerStack.back().attributes = parseGNUAttributes(begin, end, context);
                     break;
                 }
             }
@@ -1664,8 +1679,8 @@ cld::Syntax::ParameterList cld::Parser::parseParameterList(Lexer::CTokenIterator
             foundDeclarator = cld::match(
                 std::move(foundDeclarator), [](std::monostate) -> DeclaratorVariant { CLD_UNREACHABLE; },
                 [&](std::unique_ptr<Declarator>&& declarator) -> DeclaratorVariant {
-                    auto parentheses = std::make_unique<DirectDeclarator>(
-                        DirectDeclaratorParentheses(iter->openParentheses, begin, std::move(declarator)));
+                    auto parentheses = std::make_unique<DirectDeclarator>(DirectDeclaratorParentheses(
+                        iter->openParentheses, begin, std::move(iter->attributes), std::move(declarator)));
                     auto result = parseDirectDeclaratorSuffix(begin, end, context, std::move(parentheses));
                     if (result)
                     {
@@ -1676,7 +1691,7 @@ cld::Syntax::ParameterList cld::Parser::parseParameterList(Lexer::CTokenIterator
                 },
                 [&](std::unique_ptr<AbstractDeclarator>&& abstractDeclarator) -> DeclaratorVariant {
                     auto parentheses = std::make_unique<DirectAbstractDeclarator>(DirectAbstractDeclaratorParentheses(
-                        iter->openParentheses, begin, std::move(abstractDeclarator)));
+                        iter->openParentheses, begin, std::move(iter->attributes), std::move(abstractDeclarator)));
                     auto result = parseDirectAbstractDeclaratorSuffix(begin, end, context, std::move(parentheses));
                     return std::make_unique<AbstractDeclarator>(iter->openParentheses, begin, std::move(iter->pointers),
                                                                 std::move(result));
@@ -1711,7 +1726,7 @@ cld::Syntax::Pointer cld::Parser::parsePointer(Lexer::CTokenIterator& begin, Lex
                           Context::fromTokenTypes(Lexer::TokenType::ConstKeyword, Lexer::TokenType::RestrictKeyword,
                                                   Lexer::TokenType::VolatileKeyword));
     }
-    std::vector<TypeQualifier> typeQualifier;
+    std::vector<std::variant<TypeQualifier, GNUAttributes>> typeQualifier;
     while (begin < end
            && (begin->getTokenType() == Lexer::TokenType::ConstKeyword
                || begin->getTokenType() == Lexer::TokenType::RestrictKeyword
@@ -1721,21 +1736,26 @@ cld::Syntax::Pointer cld::Parser::parsePointer(Lexer::CTokenIterator& begin, Lex
         switch (begin->getTokenType())
         {
             case Lexer::TokenType::ConstKeyword:
-                typeQualifier.emplace_back(begin, begin + 1, TypeQualifier::Const);
+                typeQualifier.emplace_back(std::in_place_type<TypeQualifier>, begin, begin + 1, TypeQualifier::Const);
                 begin++;
                 break;
             case Lexer::TokenType::RestrictKeyword:
-                typeQualifier.emplace_back(begin, begin + 1, TypeQualifier::Restrict);
+                typeQualifier.emplace_back(std::in_place_type<TypeQualifier>, begin, begin + 1,
+                                           TypeQualifier::Restrict);
                 begin++;
                 break;
             case Lexer::TokenType::VolatileKeyword:
-                typeQualifier.emplace_back(begin, begin + 1, TypeQualifier::Volatile);
+                typeQualifier.emplace_back(std::in_place_type<TypeQualifier>, begin, begin + 1,
+                                           TypeQualifier::Volatile);
                 begin++;
                 break;
             case Lexer::TokenType::GNUAttribute:
-                // TODO: Store
-                parseGNUAttributes(begin, end, context);
-                break;
+            {
+                auto attributes = parseGNUAttributes(begin, end, context);
+                CLD_ASSERT(attributes);
+                typeQualifier.emplace_back(std::move(*attributes));
+            }
+            break;
             default: CLD_UNREACHABLE;
         }
     }
@@ -1776,8 +1796,7 @@ std::optional<cld::Syntax::EnumSpecifier> cld::Parser::parseEnumSpecifier(Lexer:
         context.skipUntil(begin, end,
                           Context::fromTokenTypes(Lexer::TokenType::OpenBrace, Lexer::TokenType::Identifier));
     }
-    // TODO: Store
-    parseGNUAttributes(begin, end, context);
+    auto beforeAttributes = parseGNUAttributes(begin, end, context);
     const Lexer::CToken* name = nullptr;
     if (begin < end && begin->getTokenType() == Lexer::TokenType::Identifier)
     {
@@ -1801,12 +1820,12 @@ std::optional<cld::Syntax::EnumSpecifier> cld::Parser::parseEnumSpecifier(Lexer:
             context.skipUntil(begin, end);
             return {};
         }
-        return EnumSpecifier(start, begin, name);
+        return EnumSpecifier(start, begin, EnumSpecifier::EnumTag{std::move(beforeAttributes), name});
     }
     begin++;
 
     bool inLoop = false;
-    std::vector<std::pair<Lexer::CTokenIterator, std::optional<ConstantExpression>>> values;
+    std::vector<EnumDeclaration::EnumValue> values;
     while (
         begin < end
         && (begin->getTokenType() == Lexer::TokenType::Identifier || begin->getTokenType() == Lexer::TokenType::Comma))
@@ -1819,10 +1838,7 @@ std::optional<cld::Syntax::EnumSpecifier> cld::Parser::parseEnumSpecifier(Lexer:
                               Context::fromTokenTypes(Lexer::TokenType::Assignment, Lexer::TokenType::Comma,
                                                       Lexer::TokenType::CloseBrace));
         }
-        else
-        {
-            values.emplace_back(thisValueStart, std::optional<ConstantExpression>{});
-        }
+        values.push_back({thisValueStart, parseGNUAttributes(begin, end, context), std::nullopt});
 
         if (begin < end && begin->getTokenType() == Lexer::TokenType::Assignment)
         {
@@ -1832,7 +1848,7 @@ std::optional<cld::Syntax::EnumSpecifier> cld::Parser::parseEnumSpecifier(Lexer:
                                                            Lexer::TokenType::CloseBrace, Lexer::TokenType::Comma)));
             if (thisValueStart->getTokenType() == Lexer::TokenType::Identifier)
             {
-                values.back().second = std::move(constant);
+                values.back().value = std::move(constant);
             }
         }
 
@@ -1874,7 +1890,10 @@ std::optional<cld::Syntax::EnumSpecifier> cld::Parser::parseEnumSpecifier(Lexer:
         context.log(Errors::Parser::ENUM_REQUIRES_AT_LEAST_ONE_VALUE.args(
             *openPpos, context.getSourceInterface(), std::forward_as_tuple(*openPpos, *(begin - 1))));
     }
-    return EnumSpecifier(start, begin, EnumDeclaration(start, begin, name, std::move(values)));
+    auto afterAttributes = parseGNUAttributes(begin, end, context);
+    return EnumSpecifier(
+        start, begin,
+        EnumDeclaration(start, begin, std::move(afterAttributes), name, std::move(values), std::move(afterAttributes)));
 }
 
 std::optional<cld::Syntax::CompoundStatement> cld::Parser::parseCompoundStatement(Lexer::CTokenIterator& begin,
@@ -2222,10 +2241,17 @@ std::optional<cld::Syntax::Statement> cld::Parser::parseStatement(Lexer::CTokenI
             {
                 if (begin + 1 < end && (begin + 1)->getTokenType() == Lexer::TokenType::Colon)
                 {
-                    // TODO: Store
-                    parseGNUAttributes(begin, end, context);
                     const auto* name = begin;
                     begin += 2;
+                    auto attribute = parseGNUAttributes(begin, end, context);
+                    if (attribute)
+                    {
+                        if (!expect(Lexer::TokenType::SemiColon, begin, end, context))
+                        {
+                            context.skipUntil(begin, end);
+                        }
+                        return Statement(LabelStatement(start, begin, name, std::move(*attribute)));
+                    }
                     auto statement = parseStatement(begin, end, context);
                     if (!statement)
                     {
@@ -2278,13 +2304,12 @@ std::optional<cld::Syntax::Statement> cld::Parser::parseStatement(Lexer::CTokenI
         return Statement(ExpressionStatement(start, begin, std::make_unique<Expression>(std::move(expression))));
     }
 
-    // TODO: Store
-    parseGNUAttributes(begin, end, context);
+    auto attributes = parseGNUAttributes(begin, end, context);
     if (!expect(Lexer::TokenType::SemiColon, begin, end, context))
     {
         context.skipUntil(begin, end);
     }
-    return Statement(ExpressionStatement(start, begin));
+    return Statement(ExpressionStatement(start, begin, nullptr, std::move(attributes)));
 }
 
 std::optional<cld::Syntax::HeadWhileStatement>

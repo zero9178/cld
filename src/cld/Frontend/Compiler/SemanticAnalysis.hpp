@@ -143,6 +143,9 @@ class SemanticAnalysis final : public ProgramInterface
 
     static std::tuple<bool, bool, bool> getQualifiers(const std::vector<Syntax::TypeQualifier>& typeQualifiers);
 
+    static std::tuple<bool, bool, bool>
+        getQualifiers(const std::vector<std::variant<Syntax::TypeQualifier, Syntax::GNUAttributes>>& typeQualifiers);
+
     using PossiblyAbstractQualifierRef =
         std::variant<const Syntax::AbstractDeclarator * CLD_NULLABLE, const Syntax::Declarator * CLD_NON_NULL>;
 

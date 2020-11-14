@@ -965,11 +965,15 @@ std::optional<cld::Syntax::UnaryExpression>
                 case Lexer::TokenType::Minus: return UnaryExpressionUnaryOperator::UnaryOperator::Minus;
                 case Lexer::TokenType::LogicalNegation: return UnaryExpressionUnaryOperator::UnaryOperator::LogicalNot;
                 case Lexer::TokenType::BitWiseNegation: return UnaryExpressionUnaryOperator::UnaryOperator::BitNot;
-                case Lexer::TokenType::GNUExtension:
-                    return UnaryExpressionUnaryOperator::UnaryOperator::GNUExtension; // TODO:
+                case Lexer::TokenType::GNUExtension: return UnaryExpressionUnaryOperator::UnaryOperator::GNUExtension;
                 default: CLD_UNREACHABLE;
             }
         }();
+        std::optional<decltype(context.enableExtensions(true))> enabler;
+        if (op == Syntax::UnaryExpressionUnaryOperator::UnaryOperator::GNUExtension)
+        {
+            enabler = context.enableExtensions(true);
+        }
         auto cast = parseCastExpression(begin, end, context);
         if (!cast)
         {
