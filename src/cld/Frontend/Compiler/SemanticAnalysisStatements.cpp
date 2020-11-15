@@ -246,7 +246,7 @@ void cld::Semantics::SemanticAnalysis::checkForIllegalSwitchJumps(
                     break;
                 }
             }
-            if (auto* typeDef = std::get_if<Type>(&decl.declared))
+            else if (auto* typeDef = std::get_if<Type>(&decl.declared))
             {
                 if (isVariablyModified(*typeDef))
                 {
@@ -261,37 +261,38 @@ void cld::Semantics::SemanticAnalysis::checkForIllegalSwitchJumps(
         curr = m_scopes[curr].previousScope;
     }
 
-    if (illegalJump)
+    if (!illegalJump)
     {
-        if (!isTypedef)
+        return;
+    }
+    if (!isTypedef)
+    {
+        if (isCaseOrDefault)
         {
-            if (isCaseOrDefault)
-            {
-                log(Errors::Semantics::CASE_OF_SWITCH_SKIPS_INITIALIZATION_OF_VARIABLY_MODIFIED_VARIABLE_N.args(
-                    loc, m_sourceInterface, *identifier, loc));
-            }
-            else
-            {
-                log(Errors::Semantics::DEFAULT_CASE_OF_SWITCH_SKIPS_INITIALIZATION_OF_VARIABLY_MODIFIED_VARIABLE_N.args(
-                    loc, m_sourceInterface, *identifier, loc));
-            }
-            log(Notes::Semantics::VARIABLY_MODIFIED_VARIABLE_N_WITH_TYPE_N_HERE.args(*identifier, m_sourceInterface,
-                                                                                     *identifier, *type));
+            log(Errors::Semantics::CASE_OF_SWITCH_SKIPS_INITIALIZATION_OF_VARIABLY_MODIFIED_VARIABLE_N.args(
+                loc, m_sourceInterface, *identifier, loc));
         }
         else
         {
-            if (isCaseOrDefault)
-            {
-                log(Errors::Semantics::CASE_OF_SWITCH_SKIPS_INITIALIZATION_OF_VARIABLY_MODIFIED_TYPEDEF_N.args(
-                    loc, m_sourceInterface, *identifier, loc));
-            }
-            else
-            {
-                log(Errors::Semantics::DEFAULT_CASE_OF_SWITCH_SKIPS_INITIALIZATION_OF_VARIABLY_MODIFIED_TYPEDEF_N.args(
-                    loc, m_sourceInterface, *identifier, loc));
-            }
-            log(Notes::Semantics::VARIABLY_MODIFIED_TYPEDEF_N_HERE.args(*identifier, m_sourceInterface, *identifier));
+            log(Errors::Semantics::DEFAULT_CASE_OF_SWITCH_SKIPS_INITIALIZATION_OF_VARIABLY_MODIFIED_VARIABLE_N.args(
+                loc, m_sourceInterface, *identifier, loc));
         }
+        log(Notes::Semantics::VARIABLY_MODIFIED_VARIABLE_N_WITH_TYPE_N_HERE.args(*identifier, m_sourceInterface,
+                                                                                 *identifier, *type));
+    }
+    else
+    {
+        if (isCaseOrDefault)
+        {
+            log(Errors::Semantics::CASE_OF_SWITCH_SKIPS_INITIALIZATION_OF_VARIABLY_MODIFIED_TYPEDEF_N.args(
+                loc, m_sourceInterface, *identifier, loc));
+        }
+        else
+        {
+            log(Errors::Semantics::DEFAULT_CASE_OF_SWITCH_SKIPS_INITIALIZATION_OF_VARIABLY_MODIFIED_TYPEDEF_N.args(
+                loc, m_sourceInterface, *identifier, loc));
+        }
+        log(Notes::Semantics::VARIABLY_MODIFIED_TYPEDEF_N_HERE.args(*identifier, m_sourceInterface, *identifier));
     }
 }
 

@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
+#include <functional>
 #include <memory>
 #include <variant>
 
@@ -489,6 +490,72 @@ constexpr T1 roundUpTo(T1 number, T2 multiple)
     }
 
     return number + multiple - remainder;
+}
+
+namespace details
+{
+template <class F, class... Args>
+class BindFrontImpl
+{
+    F f;
+    std::tuple<Args...> front;
+
+public:
+    template <class F2, class... Args2>
+    explicit BindFrontImpl(F2&& f2, Args2&&... args2) : f(std::forward<F2>(f2)), front(std::forward<Args2>(args2)...)
+    {
+    }
+
+    template <class... Last>
+    decltype(auto) operator()(Last&&... last) & noexcept(std::is_nothrow_invocable_v<F, Args..., Last...>)
+    {
+        return std::apply(
+            [&](auto&&... members) -> decltype(auto) {
+                return std::invoke(f, std::forward<decltype(members)>(members)..., std::forward<Last>(last)...);
+            },
+            front);
+    }
+
+    template <class... Last>
+    decltype(auto) operator()(Last&&... last) const& noexcept(std::is_nothrow_invocable_v<F, Args..., Last...>)
+    {
+        return std::apply(
+            [&](auto&&... members) -> decltype(auto) {
+                return std::invoke(f, std::forward<decltype(members)>(members)..., std::forward<Last>(last)...);
+            },
+            front);
+    }
+
+    template <class... Last>
+    decltype(auto) operator()(Last&&... last) && noexcept(std::is_nothrow_invocable_v<F, Args..., Last...>)
+    {
+        return std::apply(
+            [&](auto&&... members) -> decltype(auto) {
+                return std::invoke(std::move(f), std::forward<decltype(members)>(members)...,
+                                   std::forward<Last>(last)...);
+            },
+            std::move(front));
+    }
+
+    template <class... Last>
+    decltype(auto) operator()(Last&&... last) const&& noexcept(std::is_nothrow_invocable_v<F, Args..., Last...>)
+    {
+        return std::apply(
+            [&](auto&&... members) -> decltype(auto) {
+                return std::invoke(std::move(f), std::forward<decltype(members)>(members)...,
+                                   std::forward<Last>(last)...);
+            },
+            std::move(front));
+    }
+};
+
+} // namespace details
+
+template <class F, class... Args>
+auto bind_front(F&& f, Args&&... args)
+{
+    return details::BindFrontImpl<std::decay_t<F>, std::decay_t<Args>...>(std::forward<F>(f),
+                                                                          std::forward<Args>(args)...);
 }
 
 } // namespace cld

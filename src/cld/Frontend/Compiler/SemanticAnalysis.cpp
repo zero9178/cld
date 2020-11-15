@@ -1253,10 +1253,7 @@ cld::Expected<cld::Semantics::ConstValue, std::vector<cld::Message>>
     {
         return {std::move(messages)};
     }
-    for (auto& iter : messages)
-    {
-        log(iter);
-    }
+    std::for_each(messages.begin(), messages.end(), cld::bind_front(&SemanticAnalysis::log, this));
     return value;
 }
 

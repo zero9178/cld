@@ -1246,10 +1246,8 @@ cld::Semantics::Type
                 }
                 validValue = false;
                 value = ConstValue{};
-                for (auto& iter2 : result.error())
-                {
-                    log(iter2);
-                }
+                std::for_each(result.error().begin(), result.error().end(),
+                              cld::bind_front(&SemanticAnalysis::log, this));
             }
             else
             {

@@ -1239,7 +1239,7 @@ public:
 
     void visit(const cld::PP::TextBlock& text)
     {
-        macroSubstitute(text.tokens, [this](auto&& tokens) { pushLine(tokens); });
+        macroSubstitute(text.tokens, cld::bind_front(&Preprocessor::pushLine, this));
     }
 
     void visit(const cld::PP::IfSection& ifSection)
@@ -1575,7 +1575,7 @@ public:
     {
         auto name = undef->getValue();
         if (std::any_of(PREDEFINED_MACRO_NAMES.begin(), PREDEFINED_MACRO_NAMES.end(),
-                        [name](std::string_view value) { return value == name; }))
+                        cld::bind_front(std::equal_to{}, name)))
         {
             log(cld::Errors::PP::UNDEFINING_BUILTIN_MACRO_N_IS_NOT_ALLOWED.args(*undef, *this, *undef));
             return;
@@ -1653,7 +1653,7 @@ public:
         }
         if (!m_visitingScratchPad
             && std::any_of(PREDEFINED_MACRO_NAMES.begin(), PREDEFINED_MACRO_NAMES.end(),
-                           [name](std::string_view value) { return value == name; }))
+                           cld::bind_front(std::equal_to{}, name)))
         {
             log(cld::Errors::PP::DEFINING_BUILTIN_MACRO_N_IS_NOT_ALLOWED.args(*macro->identifierPos, *this,
                                                                               *macro->identifierPos));
