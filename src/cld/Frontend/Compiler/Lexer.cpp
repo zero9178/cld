@@ -1617,8 +1617,6 @@ struct [[maybe_unused]] FirstArgOfMethod<R (*)(U, Args...) noexcept>
 };
 } // namespace
 
-constexpr static auto pattern = ctll::fixed_string{"(\\?\\?/|\\\\)[\n]|\\?\\?[=()'<!>\\-/]"};
-
 cld::PPSourceObject cld::Lexer::tokenize(std::string source, LanguageOptions languageOptions,
                                          llvm::raw_ostream* reporter, bool* errorsOccured, std::string_view sourcePath)
 {
@@ -1662,30 +1660,70 @@ cld::PPSourceObject cld::Lexer::tokenize(std::string source, LanguageOptions lan
     charactersSpace.reserve(source.size());
     {
         auto stringView = std::string_view(source);
-        for (auto& iter : ctre::range<pattern>(stringView))
+        std::size_t curr = 0;
+        while (!stringView.empty())
         {
-            auto view = iter.view();
-            auto pos = view.data() - source.data();
-            auto prefix = stringView.substr(0, view.data() - stringView.data());
+            for (; curr < stringView.size() && stringView[curr] != '?' && stringView[curr] != '\\'; curr++)
+                ;
+            if (curr == stringView.size())
+            {
+                break;
+            }
+            if (curr + 1 == stringView.size() || (stringView[curr] == '\\' && stringView[curr + 1] != '\n')
+                || (stringView[curr] == '?'
+                    && (curr + 1 == stringView.size() || stringView[curr + 1] != '?' || curr + 2 == stringView.size()
+                        || (stringView[curr + 2] != '=' && stringView[curr + 2] != '<' && stringView[curr + 2] != '('
+                            && stringView[curr + 2] != '!' && stringView[curr + 2] != '/' && stringView[curr + 2] != '>'
+                            && stringView[curr + 2] != ')' && stringView[curr + 2] != '-'
+                            && stringView[curr + 2] != '\'' && stringView[curr + 2] != '/'))))
+            {
+                curr++;
+                continue;
+            }
+            bool trigraph = false;
+            auto view = stringView.substr(curr);
+            if (view[0] == '\\')
+            {
+                view = view.substr(0, 2);
+            }
+            else if (view.substr(0, std::min<std::size_t>(view.size(), 4)) == "?\?/\n")
+            {
+                view = view.substr(0, 4);
+            }
+            else
+            {
+                trigraph = true;
+                view = view.substr(0, 3);
+            }
+            auto pos = stringView.data() + curr - source.data();
+            auto prefix = stringView.substr(0, curr);
             if (prefix.length() != 0)
             {
                 characterToSourceSpace.emplace_back(charactersSpace.size(), pos - prefix.size(), pos);
             }
             charactersSpace += prefix;
-            if (!iter.get<1>())
+            if (trigraph)
             {
                 // If the first and only group didn't match it's a trigraph
                 // While backslashes are removed and therefore not replaced we need to now replace the
                 // trigraph
-                static const std::unordered_map<std::string_view, char> mapping = {
-                    {"?\?=", '#'}, {"?\?(", '['}, {"?\?/", '\\'}, {"?\?)", ']'}, {"?\?'", '^'},
-                    {"?\?<", '{'}, {"?\?!", '|'}, {"?\?>", '}'},  {"?\?-", '~'}};
-                auto result = mapping.find(view);
+                constexpr std::array<std::pair<std::string_view, char>, 9> mapping = {{{"?\?=", '#'},
+                                                                                       {"?\?(", '['},
+                                                                                       {"?\?/", '\\'},
+                                                                                       {"?\?)", ']'},
+                                                                                       {"?\?'", '^'},
+                                                                                       {"?\?<", '{'},
+                                                                                       {"?\?!", '|'},
+                                                                                       {"?\?>", '}'},
+                                                                                       {"?\?-", '~'}}};
+                const auto result = std::find_if(mapping.begin(), mapping.end(),
+                                                 [&view](const auto& pair) { return pair.first == view; });
                 CLD_ASSERT(result != mapping.end());
                 characterToSourceSpace.emplace_back(charactersSpace.size(), pos, pos + view.size());
                 charactersSpace += result->second;
             }
             stringView.remove_prefix(prefix.size() + view.size());
+            curr = 0;
         }
         if (!stringView.empty())
         {
@@ -2989,6 +3027,8 @@ std::string_view cld::Lexer::tokenValue(cld::Lexer::TokenType tokenType)
     }
     CLD_UNREACHABLE;
 }
+
+constexpr static auto pattern = ctll::fixed_string{"(\\?\\?/|\\\\)[\n]|\\?\\?[=()'<!>\\-/]"};
 
 std::string cld::Lexer::normalizeSpelling(std::string_view tokenSpelling)
 {

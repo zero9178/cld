@@ -24,7 +24,6 @@ constexpr std::array PREDEFINED_MACRO_NAMES = {"__DATE__",         "__FILE__",  
 template <class T>
 std::vector<T>& append(std::vector<T>& lhs, std::vector<T>&& rhs)
 {
-    lhs.reserve(lhs.size() + rhs.size());
     lhs.insert(lhs.end(), std::move_iterator(rhs.begin()), std::move_iterator(rhs.end()));
     return lhs;
 }
@@ -61,13 +60,13 @@ class Preprocessor final : private cld::PPSourceInterface
 
     std::unordered_map<std::string, IncludeGuardOpt> m_includeGuardOptCache;
 
-    void pushLine(llvm::ArrayRef<cld::Lexer::PPToken> tokens)
+    void pushLine(std::vector<cld::Lexer::PPToken>&& tokens)
     {
         if (m_visitingScratchPad)
         {
             return;
         }
-        m_result.insert(m_result.end(), tokens.begin(), tokens.end());
+        append(m_result, std::move(tokens));
     }
 
     bool log(const cld::Message& message)
@@ -1198,6 +1197,7 @@ public:
                 }
             }
         }
+        m_result.reserve(std::max(m_result.size() + sourceObject.data().size(), m_result.capacity()));
         visit(tree);
         m_fileTokens.push_back(std::move(sourceObject.data()));
     }
