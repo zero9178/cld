@@ -49,6 +49,7 @@ class Preprocessor final : private cld::PPSourceInterface
 
     std::vector<std::unordered_set<cld::Lexer::PPTokenIterator>> m_disabledMacros{1};
     std::vector<cld::Source::File> m_files;
+    std::vector<std::vector<cld::Lexer::PPToken>> m_fileTokens;
     std::vector<cld::Lexer::IntervalMap> m_intervalMaps;
     bool m_errorsOccurred = false;
     bool m_visitingScratchPad = true;
@@ -268,11 +269,11 @@ class Preprocessor final : private cld::PPSourceInterface
                     cld::Lexer::tokenize(std::move(text), m_languageOptions, m_reporter, &errorsOccurred, "<Strings>");
                 CLD_ASSERT(!errorsOccurred);
                 CLD_ASSERT(scratchPadPP.getFiles().size() == 1);
-                CLD_ASSERT(scratchPadPP.getFiles()[0].ppTokens.size() == 1);
+                CLD_ASSERT(scratchPadPP.data().size() == 1);
+                scratchPadPP.data()[0].setFileId(m_files.size());
+                scratchPadPP.data()[0].setMacroId(i);
+                result.insert(result.end(), scratchPadPP.data()[0]);
                 auto file = scratchPadPP.getFiles()[0];
-                file.ppTokens[0].setFileId(m_files.size());
-                file.ppTokens[0].setMacroId(i);
-                result.insert(result.end(), file.ppTokens[0]);
                 m_files.push_back(std::move(file));
                 m_substitutions[i] = cld::Source::Stringification{std::move(copy), *iter};
             }
@@ -458,7 +459,7 @@ class Preprocessor final : private cld::PPSourceInterface
             auto scratchPadPP =
                 cld::Lexer::tokenize(std::move(text), m_languageOptions, &llvm::nulls(), &errors, "<Pastings>");
             CLD_ASSERT(scratchPadPP.getFiles().size() == 1);
-            if (errors || scratchPadPP.getFiles()[0].ppTokens.size() != 1)
+            if (errors || scratchPadPP.data().size() != 1)
             {
                 if (log(cld::Warnings::PP::TOKEN_CONCATENATION_RESULTING_IN_AN_INVALID_TOKEN_IS_UB.args(
                         *iter, *this, lhs, *iter, rhs)))
@@ -472,18 +473,17 @@ class Preprocessor final : private cld::PPSourceInterface
                 }
                 continue;
             }
-            CLD_ASSERT(scratchPadPP.getFiles()[0].ppTokens.size() == 1);
+            CLD_ASSERT(scratchPadPP.data().size() == 1);
             auto i = ++m_macroID;
             m_disabledMacros.push_back({});
             m_disabledMacros[i].insert(m_disabledMacros[parentID].begin(), m_disabledMacros[parentID].end());
             m_substitutions.push_back(cld::Source::TokenConcatenation{lhs, rhs});
-            auto file = scratchPadPP.getFiles()[0];
-            file.ppTokens[0].setFileId(m_files.size());
-            file.ppTokens[0].setMacroId(i);
+            scratchPadPP.data()[0].setFileId(m_files.size());
+            scratchPadPP.data()[0].setMacroId(i);
             iter = tokens.erase(iter - 1, iter + 1);
-            *iter = file.ppTokens[0];
+            *iter = scratchPadPP.data()[0];
             iter->setLeadingWhitespace(leadingWhitespace);
-            m_files.push_back(std::move(file));
+            m_files.push_back(std::move(scratchPadPP.getFiles()[0]));
         }
     }
 
@@ -1002,12 +1002,8 @@ class Preprocessor final : private cld::PPSourceInterface
     [[nodiscard]] std::uint64_t getLineEndOffset(std::uint32_t fileID, std::uint64_t line) const noexcept override
     {
         CLD_ASSERT(fileID < m_files.size());
-        CLD_ASSERT(line - 1 < m_files[fileID].starts.size());
-        if (line != m_files[fileID].starts.size())
-        {
-            return m_files[fileID].starts[line] - 1;
-        }
-        return m_files[fileID].ppTokens.back().getOffset() + m_files[fileID].ppTokens.back().getLength();
+        CLD_ASSERT(line < m_files[fileID].starts.size());
+        return m_files[fileID].starts[line] - 1;
     }
 
     llvm::ArrayRef<cld::Source::File> getFiles() const noexcept override
@@ -1150,27 +1146,22 @@ public:
         auto scope = cld::ScopeExit([prev = m_currentFile, this] { m_currentFile = prev; });
         CLD_ASSERT(sourceObject.getFiles().size() == 1);
         auto path = cld::fs::u8path(sourceObject.getFiles()[0].path);
-        for (auto& iter : sourceObject.getFiles())
+        for (auto& iter2 : sourceObject.data())
         {
-            for (auto& iter2 : iter.ppTokens)
-            {
-                iter2.setFileId(m_files.size());
-            }
-            m_files.push_back({std::move(iter.path),
-                               std::move(iter.source),
-                               std::move(iter.starts),
-                               std::move(iter.ppTokens),
-                               iter.systemHeader,
-                               includePos,
-                               {}});
-            m_intervalMaps.push_back(std::move(sourceObject.getIntervalMap()[0]));
+            iter2.setFileId(m_files.size());
         }
+        m_files.push_back({std::move(sourceObject.getFiles()[0].path),
+                           std::move(sourceObject.getFiles()[0].source),
+                           std::move(sourceObject.getFiles()[0].starts),
+                           sourceObject.getFiles()[0].systemHeader,
+                           includePos,
+                           {}});
+        m_intervalMaps.push_back(std::move(sourceObject.getIntervalMap()[0]));
         m_currentFile = m_files.size() - 1;
         cld::PP::Context context(*this, m_reporter);
-        const auto* begin = std::as_const(m_files).back().ppTokens.data();
+        const auto* begin = std::as_const(sourceObject).data().data();
         auto tree = parseFile(
-            begin, std::as_const(m_files).back().ppTokens.data() + std::as_const(m_files).back().ppTokens.size(),
-            context);
+            begin, std::as_const(sourceObject).data().data() + std::as_const(sourceObject).data().size(), context);
         if (context.getErrorCount() != 0)
         {
             m_errorsOccurred = true;
@@ -1208,6 +1199,7 @@ public:
             }
         }
         visit(tree);
+        m_fileTokens.push_back(std::move(sourceObject.data()));
     }
 
     void visit(const cld::PP::File& file)

@@ -20,7 +20,6 @@ struct File
     std::string path;
     std::string source;
     std::vector<std::uint64_t> starts;
-    std::vector<Lexer::PPToken> ppTokens;
     bool systemHeader;
     std::optional<std::pair<std::uint32_t, std::uint64_t>> includedBy{};
     std::vector<std::tuple<std::uint64_t, std::optional<std::string>, std::uint64_t>> lineAndFileMapping{};
@@ -143,12 +142,8 @@ public:
     [[nodiscard]] std::uint64_t getLineEndOffset(std::uint32_t fileID, std::uint64_t line) const noexcept override
     {
         CLD_ASSERT(fileID < m_files.size());
-        CLD_ASSERT(line - 1 < m_files[fileID].starts.size());
-        if (line != m_files[fileID].starts.size())
-        {
-            return m_files[fileID].starts[line] - 1;
-        }
-        return m_files[fileID].ppTokens.back().getOffset() + m_files[fileID].ppTokens.back().getLength();
+        CLD_ASSERT(line < m_files[fileID].starts.size());
+        return m_files[fileID].starts[line] - 1;
     }
 
     [[nodiscard]] const std::vector<T>& data() const noexcept
@@ -159,19 +154,6 @@ public:
     [[nodiscard]] std::vector<T>& data() noexcept
     {
         return m_tokens;
-    }
-
-    void shrinkFiles()
-    {
-        for (auto& iter : m_files)
-        {
-            if (iter.ppTokens.empty())
-            {
-                continue;
-            }
-            iter.ppTokens = {iter.ppTokens.back()};
-            iter.ppTokens.shrink_to_fit();
-        }
     }
 
     [[nodiscard]] const LanguageOptions& getLanguageOptions() const noexcept override

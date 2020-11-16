@@ -789,7 +789,7 @@ public:
           m_offset(offset),
           m_lineStarts(std::move(lineStarts)),
           m_characterToSourceSpace(characterToSourceSpace),
-          m_fakeFile{cld::to_string(path), cld::to_string(sourceSpace), {}, {}, false},
+          m_fakeFile{cld::to_string(path), cld::to_string(sourceSpace), {}, false},
           m_languageOptions(languageOptions)
     {
     }
@@ -1870,10 +1870,9 @@ cld::PPSourceObject cld::Lexer::tokenize(std::string source, LanguageOptions lan
         *errorsOccured = context.errorsOccurred();
     }
 
-    return PPSourceObject(
-        context.getResult(),
-        {Source::File{to_string(sourcePath), std::move(source), std::move(starts), context.getResult(), false}},
-        languageOptions, {}, {{std::move(characterToSourceSpace)}});
+    return PPSourceObject(std::move(context.getResult()),
+                          {Source::File{to_string(sourcePath), std::move(source), std::move(starts), false}},
+                          languageOptions, {}, {{std::move(characterToSourceSpace)}});
 }
 
 [[nodiscard]] std::string_view cld::Lexer::TokenBase::getRepresentation(const SourceInterface& sourceObject) const
@@ -2343,18 +2342,19 @@ std::optional<std::pair<CToken::ValueType, CToken::Type>>
     }
 
     auto suffix = std::string_view(suffixBegin, std::distance(suffixBegin, end));
-    const std::unordered_set<std::string_view>& set = [=]() -> decltype(auto) {
-        if (!isFloat)
-        {
-            static const std::unordered_set<std::string_view> result{"u",   "U",   "ul", "Ul", "uL", "UL", "uLL", "ULL",
-                                                                     "ull", "Ull", "lu", "lU", "Lu", "LU", "LLu", "LLU",
-                                                                     "llu", "llU", "l",  "L",  "ll", "LL", ""};
-            return result;
-        }
-        static const std::unordered_set<std::string_view> result{"f", "l", "F", "L", ""};
-        return result;
-    }();
-    if (set.count(suffix) == 0)
+    bool valid;
+    if (!isFloat)
+    {
+        constexpr std::array variants = {"u",  "U",  "ul",  "Ul",  "uL",  "UL",  "uLL", "ULL", "ull", "Ull", "lu", "lU",
+                                         "Lu", "LU", "LLu", "LLU", "llu", "llU", "l",   "L",   "ll",  "LL",  ""};
+        valid = std::any_of(variants.begin(), variants.end(), cld::bind_front(std::equal_to{}, suffix));
+    }
+    else
+    {
+        constexpr std::array variants = {"f", "l", "F", "L", ""};
+        valid = std::any_of(variants.begin(), variants.end(), cld::bind_front(std::equal_to{}, suffix));
+    }
+    if (!valid)
     {
         auto arrowBegin = beginLocation + std::distance(begin, suffixBegin);
         context.report(cld::Errors::Lexer::INVALID_LITERAL_SUFFIX, arrowBegin, suffix,
