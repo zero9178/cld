@@ -7,6 +7,7 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/TargetSelect.h>
+#include <llvm/Support/Timer.h>
 #include <llvm/Transforms/IPO/PassManagerBuilder.h>
 
 #include <cld/Frontend/Compiler/ErrorMessages.hpp>
@@ -27,6 +28,8 @@ CLD_CLI_OPT(COMPILE_ONLY, ("-c", "--compile"))("Stop after compiling object file
 CLD_CLI_OPT(ASSEMBLY_OUTPUT, ("-S", "--assemble"))("Stop after compiling and output assembly files");
 
 CLD_CLI_OPT(PREPROCESS_ONLY, ("-E", "--preprocess"))("Preprocess to stdout or output file");
+
+CLD_CLI_OPT(SYNTAX_ONLY, ("-fsyntax-only"))("Stop after semantic analysis and produce no output file");
 
 CLD_CLI_OPT(TARGET, ("--target=<arg>", "-target <arg>"), (std::string_view, arg))("Compiler target triple to use");
 
@@ -56,6 +59,8 @@ CLD_CLI_OPT(EMIT_ALL_DECLS, ("-femit-all-decls"))("Compile in a freestanding env
 CLD_CLI_OPT(VERSION, ("--version"))("Print version");
 
 CLD_CLI_OPT(HELP, ("--help", "-help"))("Display all options");
+
+CLD_CLI_OPT(TIME, ("-time"))("Time individual components");
 
 CLD_CLI_OPT(STANDARD_VERSION, ("-std=<arg>", "--std=<arg>", "--std <arg>"), (std::string_view, arg))
 ("C standard version");
@@ -297,7 +302,7 @@ enum class Action
     Compile,
     Preprocess,
     AssemblyOutput,
-    Link
+    Link,
 };
 
 template <class CL>
@@ -305,6 +310,11 @@ std::optional<cld::fs::path> compileCFile(Action action, cld::fs::path cSourceFi
                                           const cld::LanguageOptions& languageOptions, const CL& cli,
                                           llvm::raw_ostream* reporter)
 {
+    std::optional<llvm::TimerGroup> timer;
+    if (cli.template get<TIME>())
+    {
+        timer.emplace("Compilation", "Time it took for the whole compilation of " + cSourceFile.u8string());
+    }
     cld::fs::ifstream file(cSourceFile, std::ios_base::binary | std::ios_base::ate | std::ios_base::in);
     if (!file.is_open())
     {
@@ -324,11 +334,29 @@ std::optional<cld::fs::path> compileCFile(Action action, cld::fs::path cSourceFi
     cSourceFile = cld::fs::absolute(cSourceFile);
     cSourceFile = cSourceFile.lexically_normal();
 
+    std::optional<llvm::Timer> ppTokenTimer;
+    std::optional<llvm::TimeRegion> ppTokenTimeRegion;
+    if (timer)
+    {
+        ppTokenTimer.emplace("Lexing preprocessor tokens",
+                             "Time it took to lex all preprocessor tokens in " + cSourceFile.u8string(), *timer);
+        ppTokenTimeRegion.emplace(*ppTokenTimer);
+    }
+
     bool errors = false;
     auto pptokens = cld::Lexer::tokenize(std::move(input), languageOptions, reporter, &errors, cSourceFile.u8string());
     if (errors)
     {
         return {};
+    }
+    ppTokenTimeRegion.reset();
+
+    std::optional<llvm::Timer> ppTimer;
+    std::optional<llvm::TimeRegion> ppTimeRegion;
+    if (timer)
+    {
+        ppTimer.emplace("Preprocessor", "Time it took to preprocess " + cSourceFile.u8string(), *timer);
+        ppTimeRegion.emplace(*ppTimer);
     }
 
     cld::PP::Options ppOptions = getTargetSpecificPreprocessorOptions(languageOptions, triple, cli);
@@ -354,6 +382,7 @@ std::optional<cld::fs::path> compileCFile(Action action, cld::fs::path cSourceFi
     {
         return {};
     }
+    ppTimeRegion.reset();
     if (action == Action::Preprocess)
     {
         auto reconstruction =
@@ -379,23 +408,64 @@ std::optional<cld::fs::path> compileCFile(Action action, cld::fs::path cSourceFi
         outputFile.close();
         return cld::fs::u8path(*cli.template get<OUTPUT_FILE>());
     }
+
+    std::optional<llvm::Timer> cTokenTimer;
+    std::optional<llvm::TimeRegion> cTokenTimeRegion;
+    if (timer)
+    {
+        cTokenTimer.emplace("C Token", "Time it took turn PP Tokens into C Tokens " + cSourceFile.u8string(), *timer);
+        cTokenTimeRegion.emplace(*cTokenTimer);
+    }
+
     auto ctokens = cld::Lexer::toCTokens(std::move(pptokens), reporter, &errors);
     if (errors)
     {
         return {};
     }
-    ctokens.shrinkFiles();
+    cTokenTimeRegion.reset();
+
+    std::optional<llvm::Timer> parserTimer;
+    std::optional<llvm::TimeRegion> parserTimeRegion;
+    if (timer)
+    {
+        parserTimer.emplace("Parser", "Time it took to parse " + cSourceFile.u8string(), *timer);
+        parserTimeRegion.emplace(*parserTimer);
+    }
+
     std::optional<cld::Syntax::TranslationUnit> tree = cld::Parser::buildTree(ctokens, reporter, &errors);
     if (errors)
     {
         return {};
     }
+    parserTimeRegion.reset();
+
+    std::optional<llvm::Timer> semanticsTimer;
+    std::optional<llvm::TimeRegion> semanticsTimeRegion;
+    if (timer)
+    {
+        semanticsTimer.emplace("Semantics", "Time it took to semantically analyze " + cSourceFile.u8string(), *timer);
+        semanticsTimeRegion.emplace(*semanticsTimer);
+    }
+
     auto program = cld::Semantics::analyse(*tree, std::move(ctokens), reporter, &errors);
     if (errors)
     {
         return {};
     }
+    if (cli.template get<SYNTAX_ONLY>())
+    {
+        return std::optional<cld::fs::path>{std::in_place};
+    }
+    semanticsTimeRegion.reset();
     tree.reset();
+
+    std::optional<llvm::Timer> codegenTimer;
+    std::optional<llvm::TimeRegion> codegenTimeRegion;
+    if (timer)
+    {
+        codegenTimer.emplace("Codegen", "Time it took to generate LLVM IR for " + cSourceFile.u8string(), *timer);
+        codegenTimeRegion.emplace(*codegenTimer);
+    }
 
     cld::CGLLVM::Options codegenOptions;
     llvm::LLVMContext context;
@@ -442,6 +512,7 @@ std::optional<cld::fs::path> compileCFile(Action action, cld::fs::path cSourceFi
     }
 
     auto targetMachine = cld::CGLLVM::generateLLVM(module, program, triple, codegenOptions);
+    codegenTimeRegion.reset();
 #ifndef NDEBUG
     if (llvm::verifyModule(module, &llvm::errs()))
     {
@@ -494,6 +565,14 @@ std::optional<cld::fs::path> compileCFile(Action action, cld::fs::path cSourceFi
         return {};
     }
 
+    std::optional<llvm::Timer> compileTimer;
+    std::optional<llvm::TimeRegion> compileTimeRegion;
+    if (timer)
+    {
+        compileTimer.emplace("Compile",
+                             "Time it took for LLVM to generate native object code " + cSourceFile.u8string(), *timer);
+        compileTimeRegion.emplace(*compileTimer);
+    }
     llvm::PassManagerBuilder builder;
     targetMachine->adjustPassManager(builder);
     llvm::legacy::PassManager pass;
@@ -520,6 +599,7 @@ std::optional<cld::fs::path> compileCFile(Action action, cld::fs::path cSourceFi
         }
     }
     pass.run(module);
+    compileTimeRegion.reset();
     os.flush();
 
     return cld::fs::u8path(outputFile);
@@ -541,7 +621,7 @@ int doActionOnAllFiles(Action action, const cld::LanguageOptions& languageOption
             {
                 return -1;
             }
-            if (action == Action::Compile)
+            if (action == Action::Compile && !cli.template get<SYNTAX_ONLY>())
             {
                 linkableFiles.push_back(*objectFile);
             }
@@ -566,9 +646,10 @@ int cld::main(llvm::MutableArrayRef<std::string_view> elements, llvm::raw_ostrea
     llvm::InitializeAllAsmPrinters();
     llvm::InitializeAllAsmParsers();
 
-    auto cli = cld::parseCommandLine<OUTPUT_FILE, COMPILE_ONLY, ASSEMBLY_OUTPUT, PREPROCESS_ONLY, TARGET, EMIT_LLVM,
-                                     OPT, DEFINE_MACRO, INCLUDES, PIE, PIC, FREESTANDING, HELP, VERSION,
-                                     STANDARD_VERSION, WARNINGS, ISYSTEM, EMIT_ALL_DECLS, G0, G1, G2, G3>(elements);
+    auto cli =
+        cld::parseCommandLine<OUTPUT_FILE, COMPILE_ONLY, ASSEMBLY_OUTPUT, PREPROCESS_ONLY, TARGET, EMIT_LLVM, OPT,
+                              DEFINE_MACRO, INCLUDES, PIE, PIC, FREESTANDING, HELP, VERSION, STANDARD_VERSION, WARNINGS,
+                              ISYSTEM, EMIT_ALL_DECLS, G0, G1, G2, G3, SYNTAX_ONLY, TIME>(elements);
     if (cli.get<HELP>())
     {
         if (out)
