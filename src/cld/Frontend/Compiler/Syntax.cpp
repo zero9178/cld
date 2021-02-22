@@ -1281,6 +1281,11 @@ const cld::Syntax::Declarator& cld::Syntax::DirectDeclaratorParentheses::getDecl
     return *m_declarator;
 }
 
+const std::optional<cld::Syntax::GNUAttributes>& cld::Syntax::DirectDeclaratorParentheses::getOptionalAttributes() const
+{
+    return m_optionalAttributes;
+}
+
 cld::Syntax::DirectAbstractDeclaratorParentheses::DirectAbstractDeclaratorParentheses(
     Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::optional<GNUAttributes>&& optionalAttributes,
     std::unique_ptr<AbstractDeclarator>&& abstractDeclarator)
@@ -1294,6 +1299,12 @@ cld::Syntax::DirectAbstractDeclaratorParentheses::DirectAbstractDeclaratorParent
 const cld::Syntax::AbstractDeclarator& cld::Syntax::DirectAbstractDeclaratorParentheses::getAbstractDeclarator() const
 {
     return *m_abstractDeclarator;
+}
+
+const std::optional<cld::Syntax::GNUAttributes>&
+    cld::Syntax::DirectAbstractDeclaratorParentheses::getOptionalAttributes() const
+{
+    return m_optionalAttributes;
 }
 
 cld::Syntax::DirectAbstractDeclaratorAsterisk::DirectAbstractDeclaratorAsterisk(
@@ -1382,16 +1393,24 @@ cld::Syntax::GNUAttributes::GNUAttributes(Lexer::CTokenIterator begin, Lexer::CT
 {
 }
 
+const std::vector<cld::Syntax::GNUAttributes::GNUAttribute>& cld::Syntax::GNUAttributes::getAttributes() const
+{
+    return m_attributes;
+}
+
 cld::Syntax::GNUSimpleASM::GNUSimpleASM(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, std::string string)
     : Node(begin, end), m_string(std::move(string))
 {
 }
 
 cld::Syntax::GNUASMQualifier::GNUASMQualifier(Lexer::CTokenIterator qualifier)
-    : Node(qualifier, qualifier + 1), m_qualifier([qualifier] {
-          switch (qualifier->getTokenType())
+    : Node(qualifier, qualifier + 1),
+      m_qualifier(
+          [qualifier]
           {
-              case Lexer::TokenType::VolatileKeyword: return Qualifier::Volatile;
+              switch (qualifier->getTokenType())
+              {
+                  case Lexer::TokenType::VolatileKeyword: return Qualifier::Volatile;
               case Lexer::TokenType::InlineKeyword: return Qualifier::Inline;
               case Lexer::TokenType::GotoKeyword: return Qualifier::Goto;
               default: CLD_UNREACHABLE;

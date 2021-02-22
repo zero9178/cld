@@ -104,20 +104,32 @@ class SemanticAnalysis final : public ProgramInterface
     {
         m_breakableStatements.push_back(&switchStatement);
         m_switchStatements.push_back({&switchStatement, {}, nullptr});
-        return cld::ScopeExit([&] {
-            m_breakableStatements.pop_back();
-            m_switchStatements.pop_back();
-        });
+        return cld::ScopeExit(
+            [&]
+            {
+                m_breakableStatements.pop_back();
+                m_switchStatements.pop_back();
+            });
     }
 
     bool m_inParameter = false;
 
+public:
+    struct GNUAttribute
+    {
+        Lexer::CTokenIterator name;
+        const Lexer::CToken* firstParamName;
+        std::vector<IntrVarPtr<ExpressionBase>> paramExpressions;
+    };
+
+private:
     template <class T>
     void handleParameterList(Type& type, const Syntax::ParameterTypeList* CLD_NULLABLE parameterTypeList,
                              T&& returnTypeLoc,
                              cld::function_ref<void(const Type&, Lexer::CTokenIterator,
                                                     const std::vector<Syntax::DeclarationSpecifier>&, bool)>
-                                 paramCallback = {});
+                                 paramCallback = {},
+                             std::vector<GNUAttribute>* attributes = nullptr);
 
     template <class T>
     void handleArray(Type& type, const std::vector<Syntax::TypeQualifier>& typeQualifiers,
@@ -161,9 +173,11 @@ class SemanticAnalysis final : public ProgramInterface
                               const std::vector<Syntax::Declaration>& declarations = {},
                               cld::function_ref<void(const Type&, Lexer::CTokenIterator,
                                                      const std::vector<Syntax::DeclarationSpecifier>&, bool)>
-                                  paramCallback = {});
+                                  paramCallback = {},
+                              std::vector<GNUAttribute>* attributes = nullptr);
 
-    Type qualifiersToTypeImpl(const std::vector<DeclarationOrSpecifierQualifier>& directAbstractDeclaratorParentheses);
+    Type qualifiersToTypeImpl(const std::vector<DeclarationOrSpecifierQualifier>& directAbstractDeclaratorParentheses,
+                              std::vector<GNUAttribute>* attributes = nullptr);
 
     Type primitiveTypeSpecifiersToType(bool isConst, bool isVolatile,
                                        const std::vector<const Syntax::TypeSpecifier * CLD_NON_NULL>& typeSpecs);
@@ -242,10 +256,11 @@ private:
 
     template <class T>
     Type declaratorsToType(const std::vector<T>& declarationOrSpecifierQualifiers,
-                           const Syntax::AbstractDeclarator* declarator = nullptr)
+                           const Syntax::AbstractDeclarator* declarator = nullptr,
+                           std::vector<GNUAttribute>* attributes = nullptr)
     {
-        auto type = qualifiersToType(declarationOrSpecifierQualifiers);
-        return applyDeclarator(std::move(type), declarator);
+        auto type = qualifiersToType(declarationOrSpecifierQualifiers, attributes);
+        return applyDeclarator(std::move(type), declarator, attributes);
     }
 
     template <class T>
@@ -253,37 +268,42 @@ private:
                            const std::vector<Syntax::Declaration>& declarations = {},
                            cld::function_ref<void(const Type&, Lexer::CTokenIterator,
                                                   const std::vector<Syntax::DeclarationSpecifier>&, bool)>
-                               paramCallback = {})
+                               paramCallback = {},
+                           std::vector<GNUAttribute>* attributes = nullptr)
     {
-        auto type = qualifiersToType(declarationOrSpecifierQualifiers);
-        return applyDeclarator(std::move(type), declarator, declarations, std::move(paramCallback));
+        auto type = qualifiersToType(declarationOrSpecifierQualifiers, attributes);
+        return applyDeclarator(std::move(type), declarator, declarations, std::move(paramCallback), attributes);
     }
 
     template <class T>
-    Type qualifiersToType(const std::vector<T>& declarationOrSpecifierQualifiers)
+    Type qualifiersToType(const std::vector<T>& declarationOrSpecifierQualifiers,
+                          std::vector<GNUAttribute>* attributes = nullptr)
     {
         std::vector<DeclarationOrSpecifierQualifier> temp(declarationOrSpecifierQualifiers.size());
         std::transform(declarationOrSpecifierQualifiers.begin(), declarationOrSpecifierQualifiers.end(), temp.begin(),
-                       [](auto&& value) {
-                           return cld::match(value, [](auto&& valueInVariant) -> DeclarationOrSpecifierQualifier {
-                               return &valueInVariant;
-                           });
+                       [](auto&& value)
+                       {
+                           return cld::match(value,
+                                             [](auto&& valueInVariant) -> DeclarationOrSpecifierQualifier
+                                             { return &valueInVariant; });
                        });
-        return qualifiersToTypeImpl(temp);
+        return qualifiersToTypeImpl(temp, attributes);
     }
 
-    Type applyDeclarator(Type type, const Syntax::AbstractDeclarator* declarator = nullptr)
+    Type applyDeclarator(Type type, const Syntax::AbstractDeclarator* declarator = nullptr,
+                         std::vector<GNUAttribute>* attributes = nullptr)
     {
-        return applyDeclaratorsImpl(std::move(type), declarator);
+        return applyDeclaratorsImpl(std::move(type), declarator, {}, {}, attributes);
     }
 
     Type applyDeclarator(Type type, const Syntax::Declarator& declarator,
                          const std::vector<Syntax::Declaration>& declarations = {},
                          cld::function_ref<void(const Type&, Lexer::CTokenIterator,
                                                 const std::vector<Syntax::DeclarationSpecifier>&, bool)>
-                             paramCallback = {})
+                             paramCallback = {},
+                         std::vector<GNUAttribute>* attributes = nullptr)
     {
-        return applyDeclaratorsImpl(std::move(type), &declarator, declarations, std::move(paramCallback));
+        return applyDeclaratorsImpl(std::move(type), &declarator, declarations, std::move(paramCallback), attributes);
     }
 
     bool doAssignmentLikeConstraints(const Type& lhsTyp, IntrVarPtr<ExpressionBase>& rhsValue,
@@ -458,6 +478,8 @@ public:
     [[nodiscard]] std::unique_ptr<LabelStatement> visit(const Syntax::LabelStatement& node);
 
     [[nodiscard]] std::unique_ptr<GNUASMStatement> visit(const Syntax::GNUASMStatement& node);
+
+    [[nodiscard]] std::vector<GNUAttribute> visit(const Syntax::GNUAttributes& node);
 };
 
 } // namespace cld::Semantics

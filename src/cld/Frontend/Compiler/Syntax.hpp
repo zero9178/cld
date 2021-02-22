@@ -1125,6 +1125,8 @@ private:
 
 public:
     GNUAttributes(const Lexer::CToken* begin, const Lexer::CToken* end, std::vector<GNUAttribute>&& attributes);
+
+    [[nodiscard]] const std::vector<GNUAttribute>& getAttributes() const;
 };
 
 /**
@@ -1530,6 +1532,8 @@ public:
                                         std::unique_ptr<AbstractDeclarator>&& abstractDeclarator);
 
     [[nodiscard]] const AbstractDeclarator& getAbstractDeclarator() const;
+
+    [[nodiscard]] const std::optional<GNUAttributes>& getOptionalAttributes() const;
 };
 
 /**
@@ -1741,6 +1745,8 @@ public:
                                 std::unique_ptr<Declarator>&& declarator);
 
     [[nodiscard]] const Declarator& getDeclarator() const;
+
+    [[nodiscard]] const std::optional<GNUAttributes>& getOptionalAttributes() const;
 };
 
 /**

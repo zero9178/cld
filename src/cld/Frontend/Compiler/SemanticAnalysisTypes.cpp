@@ -9,7 +9,8 @@ template <class T>
 void cld::Semantics::SemanticAnalysis::handleParameterList(
     Type& type, const Syntax::ParameterTypeList* parameterTypeList, T&& returnTypeLoc,
     cld::function_ref<void(const Type&, Lexer::CTokenIterator, const std::vector<Syntax::DeclarationSpecifier>&, bool)>
-        paramCallback)
+        paramCallback,
+    std::vector<GNUAttribute>* attributes)
 {
     if (std::holds_alternative<FunctionType>(type.getVariant()))
     {
@@ -64,12 +65,10 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
         m_inParameter = true;
         auto paramType = cld::match(
             iter.declarator,
-            [&](const std::unique_ptr<cld::Syntax::Declarator>& ptr) {
-                return declaratorsToType(iter.declarationSpecifiers, *ptr);
-            },
-            [&](const std::unique_ptr<cld::Syntax::AbstractDeclarator>& ptr) {
-                return declaratorsToType(iter.declarationSpecifiers, ptr.get());
-            });
+            [&](const std::unique_ptr<cld::Syntax::Declarator>& ptr)
+            { return declaratorsToType(iter.declarationSpecifiers, *ptr, {}, {}, attributes); },
+            [&](const std::unique_ptr<cld::Syntax::AbstractDeclarator>& ptr)
+            { return declaratorsToType(iter.declarationSpecifiers, ptr.get(), attributes); });
         if (isVoid(paramType) && !paramType.isConst() && !paramType.isVolatile()
             && !std::holds_alternative<std::unique_ptr<cld::Syntax::Declarator>>(iter.declarator)
             && !cld::get<std::unique_ptr<cld::Syntax::AbstractDeclarator>>(iter.declarator)
@@ -187,7 +186,8 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
 }
 
 cld::Semantics::Type cld::Semantics::SemanticAnalysis::qualifiersToTypeImpl(
-    const std::vector<DeclarationOrSpecifierQualifier>& directAbstractDeclaratorParentheses)
+    const std::vector<DeclarationOrSpecifierQualifier>& directAbstractDeclaratorParentheses,
+    std::vector<GNUAttribute>* attributes)
 {
     bool isConst = false;
     bool isVolatile = false;
@@ -210,6 +210,15 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::qualifiersToTypeImpl(
                     break;
             }
         }
+        else if (auto* gnuAttributes = std::get_if<const Syntax::GNUAttributes*>(&iter))
+        {
+            auto result = visit(**gnuAttributes);
+            if (attributes)
+            {
+                attributes->insert(attributes->end(), std::move_iterator(result.begin()),
+                                   std::move_iterator(result.end()));
+            }
+        }
     }
     if (typeSpecs.empty())
     {
@@ -223,7 +232,8 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::qualifiersToTypeImpl(
 cld::Semantics::Type cld::Semantics::SemanticAnalysis::applyDeclaratorsImpl(
     Type&& type, const PossiblyAbstractQualifierRef& declarator, const std::vector<Syntax::Declaration>& declarations,
     cld::function_ref<void(const Type&, Lexer::CTokenIterator, const std::vector<Syntax::DeclarationSpecifier>&, bool)>
-        paramCallback)
+        paramCallback,
+    std::vector<GNUAttribute>* attributes)
 {
     if (!cld::match(declarator, [](auto&& value) -> bool { return value; }))
     {
@@ -264,7 +274,17 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::applyDeclaratorsImpl(
         auto changedValue = changeFunctionPrototypeScope(m_inFunctionPrototype || isFunctionPrototype);
         cld::matchWithSelf<void>(
             realDecl.getDirectDeclarator(), [](auto&&, const Syntax::DirectDeclaratorIdentifier&) {},
-            [&](auto&& self, const Syntax::DirectDeclaratorParentheses& parentheses) {
+            [&](auto&& self, const Syntax::DirectDeclaratorParentheses& parentheses)
+            {
+                if (parentheses.getOptionalAttributes())
+                {
+                    auto result = visit(*parentheses.getOptionalAttributes());
+                    if (attributes)
+                    {
+                        attributes->insert(attributes->end(), std::move_iterator(result.begin()),
+                                           std::move_iterator(result.end()));
+                    }
+                }
                 for (auto& iter : parentheses.getDeclarator().getPointers())
                 {
                     auto [isConst, isVolatile, restricted] = getQualifiers(iter.getTypeQualifiers());
@@ -272,7 +292,8 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::applyDeclaratorsImpl(
                     {
                         auto restrictQual = std::find_if(
                             iter.getTypeQualifiers().begin(), iter.getTypeQualifiers().end(),
-                            [](const std::variant<Syntax::TypeQualifier, Syntax::GNUAttributes>& typeQualifier) {
+                            [](const std::variant<Syntax::TypeQualifier, Syntax::GNUAttributes>& typeQualifier)
+                            {
                                 if (!std::holds_alternative<Syntax::TypeQualifier>(typeQualifier))
                                 {
                                     return false;
@@ -485,7 +506,17 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::applyDeclaratorsImpl(
         }
         cld::matchWithSelf<void>(
             *realDecl.getDirectAbstractDeclarator(),
-            [&](auto&& self, const Syntax::DirectAbstractDeclaratorParentheses& parentheses) {
+            [&](auto&& self, const Syntax::DirectAbstractDeclaratorParentheses& parentheses)
+            {
+                if (parentheses.getOptionalAttributes())
+                {
+                    auto result = visit(*parentheses.getOptionalAttributes());
+                    if (attributes)
+                    {
+                        attributes->insert(attributes->end(), std::move_iterator(result.begin()),
+                                           std::move_iterator(result.end()));
+                    }
+                }
                 for (auto& iter : parentheses.getAbstractDeclarator().getPointers())
                 {
                     auto [isConst, isVolatile, restricted] = getQualifiers(iter.getTypeQualifiers());
@@ -493,7 +524,8 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::applyDeclaratorsImpl(
                     {
                         auto restrictQual = std::find_if(
                             iter.getTypeQualifiers().begin(), iter.getTypeQualifiers().end(),
-                            [](const std::variant<Syntax::TypeQualifier, Syntax::GNUAttributes>& typeQualifier) {
+                            [](const std::variant<Syntax::TypeQualifier, Syntax::GNUAttributes>& typeQualifier)
+                            {
                                 if (!std::holds_alternative<Syntax::TypeQualifier>(typeQualifier))
                                 {
                                     return false;

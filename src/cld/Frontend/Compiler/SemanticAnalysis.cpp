@@ -2083,3 +2083,21 @@ void cld::Semantics::SemanticAnalysis::diagnoseUnusedLocals()
             [](const std::pair<ConstValue, Type>&) {});
     }
 }
+
+std::vector<cld::Semantics::SemanticAnalysis::GNUAttribute>
+    cld::Semantics::SemanticAnalysis::visit(const Syntax::GNUAttributes& node)
+{
+    std::vector<GNUAttribute> result;
+    for (auto& iter : node.getAttributes())
+    {
+        std::vector<IntrVarPtr<ExpressionBase>> parameters;
+        std::transform(
+            iter.arguments.begin(), iter.arguments.end(), std::back_inserter(parameters),
+            cld::bind_front(
+                static_cast<IntrVarPtr<ExpressionBase> (SemanticAnalysis::*)(const Syntax::AssignmentExpression&)>(
+                    &SemanticAnalysis::visit),
+                this));
+        result.push_back(GNUAttribute{iter.nameToken, iter.optionalFirstIdentifierArgument, std::move(parameters)});
+    }
+    return result;
+}
