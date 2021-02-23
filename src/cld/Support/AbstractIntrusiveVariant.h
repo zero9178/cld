@@ -167,14 +167,29 @@ public:
     IntrusiveVariantDeleter() = default;
 
     template <class T, std::enable_if_t<std::disjunction_v<std::is_same<T, SubClasses>...>>* = nullptr>
-    IntrusiveVariantDeleter(const std::default_delete<T>&) noexcept
+    IntrusiveVariantDeleter(std::default_delete<T>&&) noexcept
+    {
+    }
+
+    template <class U, std::enable_if_t<std::is_base_of_v<Base, U>>* = nullptr>
+    IntrusiveVariantDeleter(IntrusiveVariantDeleter<U>&&) noexcept
     {
     }
 
     void operator()(Base* pointer) const noexcept
     {
         constexpr std::array<void (*)(Base*), sizeof...(SubClasses)> deleteFuncs = {
-            {+[](Base* ptr) { delete static_cast<SubClasses*>(ptr); }...}};
+            {+[](Base* ptr)
+             {
+                 if constexpr (std::is_base_of_v<Base, SubClasses>)
+                 {
+                     delete static_cast<SubClasses*>(ptr);
+                 }
+                 else
+                 {
+                     CLD_UNREACHABLE;
+                 }
+             }...}};
         deleteFuncs[pointer->index()](pointer);
     }
 };

@@ -30,29 +30,29 @@ bool cld::Semantics::SemanticAnalysis::log(const Message& message)
 
 cld::Semantics::TranslationUnit cld::Semantics::SemanticAnalysis::visit(const Syntax::TranslationUnit& node)
 {
-    std::vector<TranslationUnit::Variant> globals;
+    std::vector<IntrVarPtr<Useable>> globals;
     for (auto& iter : node.getGlobals())
     {
         auto result = cld::match(
             iter,
-            [&](const Syntax::FunctionDefinition& value) -> std::vector<TranslationUnit::Variant> {
-                return visit(value);
-            },
-            [&](const Syntax::Declaration& declaration) -> std::vector<TranslationUnit::Variant> {
+            [&](const Syntax::FunctionDefinition& value) -> std::vector<IntrVarPtr<Useable>> { return visit(value); },
+            [&](const Syntax::Declaration& declaration) -> std::vector<IntrVarPtr<Useable>>
+            {
                 auto value = visit(declaration);
-                std::vector<TranslationUnit::Variant> ret(value.size());
-                std::transform(std::move_iterator(value.begin()), std::move_iterator(value.end()), ret.begin(),
-                               [](DeclRetVariant&& variant) -> TranslationUnit::Variant {
-                                   return cld::match(
-                                       std::move(variant),
-                                       [](std::shared_ptr<const ExpressionBase>&&) -> TranslationUnit::Variant {
-                                           CLD_UNREACHABLE;
-                                       },
-                                       [](auto&& value) -> TranslationUnit::Variant { return {std::move(value)}; });
-                               });
+                std::vector<IntrVarPtr<Useable>> ret(value.size());
+                std::transform(
+                    std::move_iterator(value.begin()), std::move_iterator(value.end()), ret.begin(),
+                    [](DeclRetVariant&& variant) -> IntrVarPtr<Useable>
+                    {
+                        return cld::match(
+                            std::move(variant),
+                            [](std::shared_ptr<const ExpressionBase>&&) -> IntrVarPtr<Useable> { CLD_UNREACHABLE; },
+                            [](auto&& value) -> IntrVarPtr<Useable> { return std::move(value); });
+                    });
                 return ret;
             },
-            [&](const Syntax::GNUSimpleASM&) -> std::vector<TranslationUnit::Variant> {
+            [&](const Syntax::GNUSimpleASM&) -> std::vector<IntrVarPtr<Useable>>
+            {
                 // TODO:
                 return {};
             });
@@ -61,18 +61,18 @@ cld::Semantics::TranslationUnit cld::Semantics::SemanticAnalysis::visit(const Sy
     for (auto& [name, declared] : m_scopes[0].declarations)
     {
         (void)name;
-        if (std::holds_alternative<Declaration*>(declared.declared))
+        if (auto* decl = std::get_if<FunctionDeclaration*>(&declared.declared))
         {
-            auto* decl = cld::get<Declaration*>(declared.declared);
-            if (decl->isInline() && decl->getLinkage() == Linkage::External)
+            if ((*decl)->isInline() && (*decl)->getLinkage() == Linkage::External)
             {
                 log(Errors::Semantics::NO_DEFINITION_FOR_INLINE_FUNCTION_N_FOUND.args(
-                    *decl->getNameToken(), m_sourceInterface, *decl->getNameToken()));
+                    *(*decl)->getNameToken(), m_sourceInterface, *(*decl)->getNameToken()));
             }
         }
         cld::match(
             declared.declared, [](const auto&) {},
-            [&declared = declared, this](Declaration* declaration) {
+            [&declared = declared, this](VariableDeclaration* declaration)
+            {
                 if (declaration->isUsed() || declaration->getLinkage() == Linkage::External)
                 {
                     return;
@@ -80,7 +80,8 @@ cld::Semantics::TranslationUnit cld::Semantics::SemanticAnalysis::visit(const Sy
                 log(Warnings::Semantics::UNUSED_VARIABLE_N.args(*declared.identifier, m_sourceInterface,
                                                                 *declared.identifier));
             },
-            [&declared = declared, this](FunctionDefinition* functionDefinition) {
+            [&declared = declared, this](FunctionDefinition* functionDefinition)
+            {
                 if (functionDefinition->isUsed() || functionDefinition->getLinkage() == Linkage::External)
                 {
                     return;
@@ -92,7 +93,7 @@ cld::Semantics::TranslationUnit cld::Semantics::SemanticAnalysis::visit(const Sy
     return TranslationUnit(std::move(globals));
 }
 
-std::vector<cld::Semantics::TranslationUnit::Variant>
+std::vector<cld::IntrVarPtr<cld::Semantics::Useable>>
     cld::Semantics::SemanticAnalysis::visit(const cld::Syntax::FunctionDefinition& node)
 {
     bool isInline = false;
@@ -118,11 +119,12 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
         storageClassSpecifier = &storage;
     }
     auto scope = pushScope();
-    std::vector<std::unique_ptr<Declaration>> parameterDeclarations;
+    std::vector<std::unique_ptr<VariableDeclaration>> parameterDeclarations;
     auto type = declaratorsToType(
         node.getDeclarationSpecifiers(), node.getDeclarator(), node.getDeclarations(),
         [&](Type paramType, Lexer::CTokenIterator loc,
-            const std::vector<Syntax::DeclarationSpecifier>& declarationSpecifiers, bool) {
+            const std::vector<Syntax::DeclarationSpecifier>& declarationSpecifiers, bool)
+        {
             if (loc->getText() == "__func__")
             {
                 log(Errors::Semantics::DECLARING_PARAMETERS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR.args(
@@ -144,8 +146,8 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
             }
             paramType = adjustParameterType(std::move(paramType));
 
-            auto& ptr = parameterDeclarations.emplace_back(std::make_unique<Declaration>(
-                std::move(paramType), Linkage::None, lifetime, loc, Declaration::Kind::Definition, InlineKind::None));
+            auto& ptr = parameterDeclarations.emplace_back(std::make_unique<VariableDeclaration>(
+                std::move(paramType), Linkage::None, lifetime, loc, VariableDeclaration::Kind::Definition));
             auto [prev, notRedefined] =
                 getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, ptr.get()}});
             if (!notRedefined)
@@ -255,21 +257,24 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
     {
         inlineKind = InlineKind::InlineDefinition;
     }
-    std::vector<TranslationUnit::Variant> result;
-    auto& ptr = cld::get<std::unique_ptr<FunctionDefinition>>(result.emplace_back(std::make_unique<FunctionDefinition>(
-        std::move(type), loc, std::move(parameterDeclarations),
-        storageClassSpecifier ?
-            (storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Static ? Linkage::Internal :
-                                                                                              Linkage::External) :
-            Linkage::External,
-        inlineKind, CompoundStatement(m_currentScope, loc, {}, loc))));
+    std::vector<IntrVarPtr<Useable>> result;
+    auto& ptr = result
+                    .emplace_back(std::make_unique<FunctionDefinition>(
+                        std::move(type), loc, std::move(parameterDeclarations),
+                        storageClassSpecifier ?
+                            (storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Static ?
+                                 Linkage::Internal :
+                                 Linkage::External) :
+                            Linkage::External,
+                        inlineKind, CompoundStatement(m_currentScope, loc, {}, loc)))
+                    ->cast<FunctionDefinition>();
     // We are currently in block scope. Functions are always at file scope though so we can't use getCurrentScope
-    auto [prev, notRedefinition] =
-        m_scopes[0].declarations.insert({loc->getText(), DeclarationInScope{loc, ptr.get()}});
+    auto [prev, notRedefinition] = m_scopes[0].declarations.insert({loc->getText(), DeclarationInScope{loc, &ptr}});
     if (!notRedefinition)
     {
-        if (!std::holds_alternative<Declaration*>(prev->second.declared)
-            || !typesAreCompatible(ptr->getType(), cld::get<Declaration*>(prev->second.declared)->getType(), true))
+        if (!std::holds_alternative<FunctionDeclaration*>(prev->second.declared)
+            || !typesAreCompatible(ptr.getType(), cld::get<FunctionDeclaration*>(prev->second.declared)->getType(),
+                                   true))
         {
             log(Errors::REDEFINITION_OF_SYMBOL_N.args(*loc, m_sourceInterface, *loc));
             log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
@@ -277,18 +282,18 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
         }
         else
         {
-            ptr->setInlineKind(
-                std::max(ptr->getInlineKind(), cld::get<Declaration*>(prev->second.declared)->getInlineKind()));
-            ptr->setUses(cld::get<Declaration*>(prev->second.declared)->getUses());
-            prev.value() = DeclarationInScope{loc, ptr.get()};
+            ptr.setInlineKind(
+                std::max(ptr.getInlineKind(), cld::get<FunctionDeclaration*>(prev->second.declared)->getInlineKind()));
+            ptr.setUses(cld::get<FunctionDeclaration*>(prev->second.declared)->getUses());
+            prev.value() = DeclarationInScope{loc, &ptr};
         }
     }
 
     Type funcType =
         ArrayType::create(false, false, false, false, PrimitiveType::createChar(true, false, getLanguageOptions()),
                           loc->getText().size() + 1);
-    auto funcName = std::make_unique<Declaration>(
-        std::move(funcType), Linkage::Internal, Lifetime::Static, loc, Declaration::Definition, InlineKind::None,
+    auto funcName = std::make_unique<VariableDeclaration>(
+        std::move(funcType), Linkage::Internal, Lifetime::Static, loc, VariableDeclaration::Definition,
         std::make_unique<Constant>(ArrayType::create(false, false, false, false,
                                                      PrimitiveType::createChar(false, false, getLanguageOptions()),
                                                      loc->getText().size() + 1),
@@ -298,11 +303,11 @@ std::vector<cld::Semantics::TranslationUnit::Variant>
     getCurrentScope().declarations.insert({"__FUNCTION__", DeclarationInScope{nullptr, funcName.get()}});
     getCurrentScope().declarations.insert({"__PRETTY_FUNCTION__", DeclarationInScope{nullptr, funcName.get()}});
 
-    auto functionScope = pushFunctionScope(*ptr);
+    auto functionScope = pushFunctionScope(ptr);
 
     auto comp = visit(node.getCompoundStatement(), false);
     comp->prependItem(std::move(funcName));
-    ptr->setCompoundStatement(std::move(*comp));
+    ptr.setCompoundStatement(std::move(*comp));
     return result;
 }
 
@@ -415,7 +420,6 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
             {
                 linkage = Linkage::Internal;
             }
-            Lifetime lifetime = Lifetime::Static;
             if (loc->getText() == "__func__")
             {
                 log(Errors::Semantics::DECLARING_FUNCTIONS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR.args(
@@ -437,17 +441,17 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
             {
                 inlineKind = InlineKind::InlineDefinition;
             }
-            auto declaration = std::make_unique<Declaration>(std::move(result), linkage, lifetime, loc,
-                                                             Declaration::Kind::DeclarationOnly, inlineKind);
+            auto declaration = std::make_unique<FunctionDeclaration>(std::move(result), linkage, loc, inlineKind);
             auto [prev, notRedefinition] =
                 getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, declaration.get()}});
             if (!notRedefinition)
             {
                 if (std::holds_alternative<std::pair<ConstValue, Type>>(prev->second.declared)
                     || std::holds_alternative<Type>(prev->second.declared)
-                    || (std::holds_alternative<Declaration*>(prev->second.declared)
+                    || std::holds_alternative<VariableDeclaration*>(prev->second.declared)
+                    || (std::holds_alternative<FunctionDeclaration*>(prev->second.declared)
                         && !typesAreCompatible(declaration->getType(),
-                                               cld::get<Declaration*>(prev->second.declared)->getType()))
+                                               cld::get<FunctionDeclaration*>(prev->second.declared)->getType()))
                     || (std::holds_alternative<FunctionDefinition*>(prev->second.declared)
                         && !typesAreCompatible(declaration->getType(),
                                                cld::get<FunctionDefinition*>(prev->second.declared)->getType())))
@@ -456,14 +460,13 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                     log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
                                                              *prev->second.identifier));
                 }
-                else if (std::holds_alternative<Declaration*>(prev->second.declared))
+                else if (std::holds_alternative<FunctionDeclaration*>(prev->second.declared))
                 {
-                    auto& prevDecl = *cld::get<Declaration*>(prev->second.declared);
+                    auto& prevDecl = *cld::get<FunctionDeclaration*>(prev->second.declared);
                     auto& otherType = prevDecl.getType();
                     auto composite = compositeType(otherType, declaration->getType());
-                    *declaration =
-                        Declaration(std::move(composite), linkage, lifetime, loc, Declaration::Kind::DeclarationOnly,
-                                    std::max(inlineKind, prevDecl.getInlineKind()));
+                    *declaration = FunctionDeclaration(std::move(composite), linkage, loc,
+                                                       std::max(inlineKind, prevDecl.getInlineKind()));
                     declaration->setUses(prevDecl.getUses());
                     prev.value().declared = declaration.get();
                     decls.push_back(std::move(declaration));
@@ -601,14 +604,14 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                     *loc, m_sourceInterface, *loc));
                 continue;
             }
-            Declaration::Kind kind;
+            VariableDeclaration::Kind kind;
             // C99 6.8.2§1:
             // If the declaration of an identifier for an object has file scope and an initializer, the
             // declaration is an external definition for the identifier.
             if (m_currentScope == 0 && iter.optionalInitializer
                 && (!storageClassSpecifier || *storageClassSpecifier != Syntax::StorageClassSpecifier::Extern))
             {
-                kind = Declaration::Definition;
+                kind = VariableDeclaration::Definition;
             }
             else if (m_currentScope == 0
                      && (!storageClassSpecifier || *storageClassSpecifier == Syntax::StorageClassSpecifier::Static))
@@ -617,41 +620,42 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                 // A declaration of an identifier for an object that has file scope without an initializer, and
                 // without a storage-class specifier or with the storage-class specifier static, constitutes a
                 // tentative definition
-                kind = Declaration::TentativeDefinition;
+                kind = VariableDeclaration::TentativeDefinition;
             }
             else if (storageClassSpecifier && *storageClassSpecifier == Syntax::StorageClassSpecifier::Extern)
             {
-                kind = Declaration::DeclarationOnly;
+                kind = VariableDeclaration::DeclarationOnly;
             }
             else
             {
-                kind = Declaration::Definition;
+                kind = VariableDeclaration::Definition;
             }
 
-            auto declaration =
-                std::make_unique<Declaration>(std::move(result), linkage, lifetime, loc, kind, InlineKind::None);
+            auto declaration = std::make_unique<VariableDeclaration>(std::move(result), linkage, lifetime, loc, kind);
             auto [prev, notRedefinition] =
                 getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, declaration.get()}});
             if (!notRedefinition)
             {
-                if (!std::holds_alternative<Declaration*>(prev->second.declared)
+                if (!std::holds_alternative<VariableDeclaration*>(prev->second.declared)
                     // C99 6.7§3:
                     // If an identifier has no linkage, there shall be no more than one declaration of the identifier
                     // (in a declarator or type specifier) with the same scope and in the same name space, except
                     // for tags as specified in 6.7.2.3.
-                    || cld::get<Declaration*>(prev->second.declared)->getLinkage() == Linkage::None
+                    || cld::get<VariableDeclaration*>(prev->second.declared)->getLinkage() == Linkage::None
                     || declaration->getLinkage() == Linkage::None
                     // C99 6.7§2:
                     // All declarations in the same scope that refer to the same object or function shall specify
                     // compatible types.
                     || !typesAreCompatible(declaration->getType(),
-                                           cld::get<Declaration*>(prev->second.declared)->getType())
+                                           cld::get<VariableDeclaration*>(prev->second.declared)->getType())
                     // C99 6.9§3:
                     // There shall be no more than one external definition for each identifier declared with
                     // internal linkage in a translation unit.
-                    || (m_currentScope == 0 && (kind == Declaration::Definition && linkage == Linkage::Internal)
-                        && (cld::get<Declaration*>(prev->second.declared)->getKind() == Declaration::Definition
-                            && cld::get<Declaration*>(prev->second.declared)->getLinkage() == Linkage::Internal)))
+                    || (m_currentScope == 0 && (kind == VariableDeclaration::Definition && linkage == Linkage::Internal)
+                        && (cld::get<VariableDeclaration*>(prev->second.declared)->getKind()
+                                == VariableDeclaration::Definition
+                            && cld::get<VariableDeclaration*>(prev->second.declared)->getLinkage()
+                                   == Linkage::Internal)))
                 {
                     log(Errors::REDEFINITION_OF_SYMBOL_N.args(*loc, m_sourceInterface, *loc));
                     log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
@@ -659,7 +663,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                 }
                 else
                 {
-                    auto& prevDecl = cld::get<Declaration*>(prev->second.declared);
+                    auto& prevDecl = cld::get<VariableDeclaration*>(prev->second.declared);
                     auto composite = compositeType(prevDecl->getType(), declaration->getType());
                     // C99 6.2.2§4:
                     // For an identifier declared with the storage-class specifier extern in a scope in which a
@@ -686,8 +690,8 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                                                                  *prev->second.identifier));
                         linkage = Linkage::Internal;
                     }
-                    *declaration = Declaration(std::move(composite), linkage, lifetime, loc,
-                                               std::max(prevDecl->getKind(), kind), InlineKind::None);
+                    *declaration = VariableDeclaration(std::move(composite), linkage, lifetime, loc,
+                                                       std::max(prevDecl->getKind(), kind));
                     prev.value().declared = declaration.get();
                 }
             }
@@ -722,8 +726,8 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                                               cld::get<AbstractArrayType>(prevType.getVariant()).isRestricted(), false,
                                               cld::get<AbstractArrayType>(prevType.getVariant()).getType(), size);
                     }
-                    *declaration = Declaration(std::move(prevType), linkage, lifetime, loc, kind, InlineKind::None,
-                                               std::move(expr));
+                    *declaration =
+                        VariableDeclaration(std::move(prevType), linkage, lifetime, loc, kind, std::move(expr));
                     m_inStaticInitializer = false;
                 }
             }
@@ -737,7 +741,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
             // If the declaration of an identifier for an object is a tentative definition and has internal
             // linkage, the declared type shall not be an incomplete type.
             if (linkage == Linkage::None
-                || (kind == Declaration::Kind::TentativeDefinition && linkage == Linkage::Internal))
+                || (kind == VariableDeclaration::Kind::TentativeDefinition && linkage == Linkage::Internal))
             {
                 if (isVoid(declaration->getType()))
                 {
@@ -752,8 +756,8 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
 
             if (getCurrentFunctionScope() && getCurrentFunctionScope()->currentFunction->isInline()
                 && getCurrentFunctionScope()->currentFunction->getLinkage() == Linkage::External
-                && declaration->getKind() == Declaration::Definition && declaration->getLifetime() == Lifetime::Static
-                && !declaration->getType().isConst())
+                && declaration->getKind() == VariableDeclaration::Definition
+                && declaration->getLifetime() == Lifetime::Static && !declaration->getType().isConst())
             {
                 log(Errors::Semantics::
                         INLINE_FUNCTION_N_WITH_EXTERNAL_LINKAGE_IS_NOT_ALLOWED_TO_CONTAIN_OR_ACCESS_THE_INTERNAL_IDENTIFIER_N
@@ -1313,13 +1317,15 @@ cld::Semantics::ConstValue
         },
         [&](const DeclarationRead& declRead) -> ConstValue {
             if (mode != Initialization
-                || declRead.getDeclRead().match(
-                    [](const FunctionDefinition&) { return false; },
-                    [](const Declaration& declaration) { return declaration.getLifetime() != Lifetime::Static; },
-                    [](const BuiltinFunction&) {
-                        // TODO:?
-                        return false;
-                    }))
+                || declRead.getDeclRead().match([](const FunctionDefinition&) { return false; },
+                                                [](const FunctionDeclaration&) { return false; },
+                                                [](const VariableDeclaration& declaration)
+                                                { return declaration.getLifetime() != Lifetime::Static; },
+                                                [](const BuiltinFunction&)
+                                                {
+                                                    // TODO:?
+                                                    return false;
+                                                }))
             {
                 logger(Errors::Semantics::VARIABLE_ACCESS_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
                     declRead, m_sourceInterface, declRead));
@@ -2070,8 +2076,9 @@ void cld::Semantics::SemanticAnalysis::diagnoseUnusedLocals()
     for (auto& [name, declInScope] : getCurrentScope().declarations)
     {
         cld::match(
-            declInScope.declared,
-            [this, &declInScope = declInScope](Declaration* declaration) {
+            declInScope.declared, [](FunctionDeclaration*) {},
+            [this, &declInScope = declInScope](VariableDeclaration* declaration)
+            {
                 if (declaration->isUsed() || declaration->getLinkage() == Linkage::External || !declInScope.identifier)
                 {
                     return;

@@ -154,7 +154,7 @@ class CodeGenerator final
     const ABITransformations* m_currentFunctionABI = nullptr;
     llvm::AllocaInst* m_returnSlot = nullptr;
     std::unordered_map<std::shared_ptr<const cld::Semantics::ExpressionBase>, llvm::Value*> m_valSizes;
-    std::unordered_map<const cld::Semantics::Declaration * CLD_NON_NULL, llvm::AllocaInst*> m_stackSaves;
+    std::unordered_map<const cld::Semantics::VariableDeclaration * CLD_NON_NULL, llvm::AllocaInst*> m_stackSaves;
     std::unordered_map<std::string_view, llvm::GlobalVariable*> m_cGlobalVariables;
 
     llvm::Value* toBool(llvm::Value* value)
@@ -443,9 +443,9 @@ class CodeGenerator final
     }
 
     template <class T>
-    void applyFunctionAttributes(T& attributeApply, llvm::FunctionType* CLD_NON_NULL functionType,
-                                 const cld::Semantics::FunctionType& ft,
-                                 const std::vector<std::unique_ptr<cld::Semantics::Declaration>>* paramDecls = nullptr)
+    void applyFunctionAttributes(
+        T& attributeApply, llvm::FunctionType* CLD_NON_NULL functionType, const cld::Semantics::FunctionType& ft,
+        const std::vector<std::unique_ptr<cld::Semantics::VariableDeclaration>>* paramDecls = nullptr)
     {
         auto transformations = m_functionABITransformations.find(ft);
         CLD_ASSERT(transformations != m_functionABITransformations.end());
@@ -1135,11 +1135,11 @@ class CodeGenerator final
             for (auto iter = m_programInterface.getScopes()[from].declarations.rbegin();
                  iter != m_programInterface.getScopes()[from].declarations.rend(); iter++)
             {
-                if (!std::holds_alternative<cld::Semantics::Declaration*>(iter->second.declared))
+                if (!std::holds_alternative<cld::Semantics::VariableDeclaration*>(iter->second.declared))
                 {
                     continue;
                 }
-                const auto* decl = cld::get<cld::Semantics::Declaration*>(iter->second.declared);
+                const auto* decl = cld::get<cld::Semantics::VariableDeclaration*>(iter->second.declared);
                 if (cld::Semantics::isVariableLengthArray(decl->getType()))
                 {
                     auto* alloca = m_stackSaves[decl];
@@ -1783,23 +1783,23 @@ public:
     {
         for (auto& iter : translationUnit.getGlobals())
         {
-            cld::match(
-                iter,
-                [&](const std::unique_ptr<cld::Semantics::FunctionDefinition>& functionDefinition) {
-                    visit(*functionDefinition);
-                },
-                [&](const std::unique_ptr<cld::Semantics::Declaration>& declaration) {
-                    auto global = visit(*declaration);
+            iter->match(
+                [&](const cld::Semantics::FunctionDefinition& functionDefinition) { visit(functionDefinition); },
+                [&](const cld::Semantics::VariableDeclaration& declaration)
+                {
+                    auto global = visit(declaration);
                     if (llvm::isa_and_nonnull<llvm::GlobalVariable>(global.value))
                     {
-                        m_cGlobalVariables.emplace(declaration->getNameToken()->getText(),
+                        m_cGlobalVariables.emplace(declaration.getNameToken()->getText(),
                                                    llvm::cast<llvm::GlobalVariable>(global.value));
                     }
-                });
+                },
+                [&](const cld::Semantics::FunctionDeclaration& functionDeclaration) { visit(functionDeclaration); },
+                [&](const cld::Semantics::BuiltinFunction&) { CLD_UNREACHABLE; });
         }
     }
 
-    Value visit(const cld::Semantics::Declaration& declaration)
+    Value visit(const cld::Semantics::FunctionDeclaration& declaration)
     {
         llvm::Function::LinkageTypes linkageType = llvm::GlobalValue::ExternalLinkage;
         switch (declaration.getLinkage())
@@ -1808,29 +1808,38 @@ public:
             case cld::Semantics::Linkage::External: linkageType = llvm::GlobalValue::ExternalLinkage; break;
             case cld::Semantics::Linkage::None: break;
         }
-        if (std::holds_alternative<cld::Semantics::FunctionType>(declaration.getType().getVariant()))
+        CLD_ASSERT(std::holds_alternative<cld::Semantics::FunctionType>(declaration.getType().getVariant()));
+        if (!m_options.emitAllDecls && !declaration.isUsed())
         {
-            if (!m_options.emitAllDecls && !declaration.isUsed())
-            {
-                return nullptr;
-            }
-            auto* function = m_module.getFunction(declaration.getNameToken()->getText());
-            if (function)
-            {
-                m_lvalues.emplace(&declaration, valueOf(function));
-                return valueOf(function);
-            }
-            auto* ft = llvm::cast<llvm::FunctionType>(visit(declaration.getType()));
-            function = llvm::Function::Create(ft, linkageType, -1,
-                                              llvm::StringRef{declaration.getNameToken()->getText()}, &m_module);
-            applyFunctionAttributes(*function, ft,
-                                    cld::get<cld::Semantics::FunctionType>(declaration.getType().getVariant()));
-            if (!m_options.reloc)
-            {
-                function->setDSOLocal(true);
-            }
+            return nullptr;
+        }
+        auto* function = m_module.getFunction(declaration.getNameToken()->getText());
+        if (function)
+        {
             m_lvalues.emplace(&declaration, valueOf(function));
             return valueOf(function);
+        }
+        auto* ft = llvm::cast<llvm::FunctionType>(visit(declaration.getType()));
+        function = llvm::Function::Create(ft, linkageType, -1, llvm::StringRef{declaration.getNameToken()->getText()},
+                                          &m_module);
+        applyFunctionAttributes(*function, ft,
+                                cld::get<cld::Semantics::FunctionType>(declaration.getType().getVariant()));
+        if (!m_options.reloc)
+        {
+            function->setDSOLocal(true);
+        }
+        m_lvalues.emplace(&declaration, valueOf(function));
+        return valueOf(function);
+    }
+
+    Value visit(const cld::Semantics::VariableDeclaration& declaration)
+    {
+        llvm::Function::LinkageTypes linkageType = llvm::GlobalValue::ExternalLinkage;
+        switch (declaration.getLinkage())
+        {
+            case cld::Semantics::Linkage::Internal: linkageType = llvm::GlobalValue::InternalLinkage; break;
+            case cld::Semantics::Linkage::External: linkageType = llvm::GlobalValue::ExternalLinkage; break;
+            case cld::Semantics::Linkage::None: break;
         }
         if (declaration.getLifetime() == cld::Semantics::Lifetime::Static)
         {
@@ -1839,7 +1848,8 @@ public:
             {
                 return nullptr;
             }
-            auto& declType = [&]() -> decltype(auto) {
+            auto& declType = [&]() -> decltype(auto)
+            {
                 if (m_currentFunction)
                 {
                     return declaration.getType();
@@ -1847,27 +1857,28 @@ public:
 
                 auto& decl =
                     m_programInterface.getScopes()[0].declarations.at(declaration.getNameToken()->getText()).declared;
-                return cld::get<cld::Semantics::Declaration*>(decl)->getType();
+                return cld::get<cld::Semantics::VariableDeclaration*>(decl)->getType();
             }();
             auto* type = visit(declType);
 
             auto* prevType = type;
             llvm::Constant* constant = nullptr;
-            if (declaration.getInitializer() && declaration.getKind() != cld::Semantics::Declaration::DeclarationOnly)
+            if (declaration.getInitializer()
+                && declaration.getKind() != cld::Semantics::VariableDeclaration::DeclarationOnly)
             {
                 constant = llvm::cast<llvm::Constant>(visit(*declaration.getInitializer(), declType, type).value);
                 type = constant->getType();
             }
-            else if (declaration.getKind() != cld::Semantics::Declaration::DeclarationOnly)
+            else if (declaration.getKind() != cld::Semantics::VariableDeclaration::DeclarationOnly)
             {
                 constant = llvm::Constant::getNullValue(type);
             }
-            if (m_currentFunction && declaration.getKind() != cld::Semantics::Declaration::DeclarationOnly)
+            if (m_currentFunction && declaration.getKind() != cld::Semantics::VariableDeclaration::DeclarationOnly)
             {
                 linkageType = llvm::GlobalValue::InternalLinkage;
             }
             else if (declaration.getLinkage() != cld::Semantics::Linkage::Internal
-                     && declaration.getKind() == cld::Semantics::Declaration::TentativeDefinition)
+                     && declaration.getKind() == cld::Semantics::VariableDeclaration::TentativeDefinition)
             {
                 linkageType = llvm::GlobalValue::CommonLinkage;
             }
@@ -2246,9 +2257,17 @@ public:
                 (void)result;
                 CLD_ASSERT(result.second);
             }
-            else if (std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(iter))
+            else if (std::holds_alternative<cld::IntrVarPtr<cld::Semantics::Declaration>>(iter))
             {
-                visit(*cld::get<std::unique_ptr<cld::Semantics::Declaration>>(iter));
+                auto& decl = cld::get<cld::IntrVarPtr<cld::Semantics::Declaration>>(iter);
+                if (auto* varDecl = decl->get_if<cld::Semantics::VariableDeclaration>())
+                {
+                    visit(*varDecl);
+                }
+                else if (auto* funcDecl = decl->get_if<cld::Semantics::FunctionDeclaration>())
+                {
+                    visit(*funcDecl);
+                }
             }
             else if (std::holds_alternative<cld::IntrVarPtr<cld::Semantics::Statement>>(iter))
             {
@@ -2330,7 +2349,8 @@ public:
         std::optional<cld::ValueReset<llvm::DIScope*>> reset;
         cld::match(
             forStatement.getInitial(), [](std::monostate) {},
-            [&](const std::vector<std::unique_ptr<cld::Semantics::Declaration>>& declaration) {
+            [&](const std::vector<cld::IntrVarPtr<cld::Semantics::Declaration>>& declaration)
+            {
                 if (m_options.debugEmission != cld::CGLLVM::DebugEmission::None)
                 {
                     if (!m_scopeIdToScope[forStatement.getScope()])
@@ -2347,7 +2367,14 @@ public:
                 }
                 for (auto& iter : declaration)
                 {
-                    visit(*iter);
+                    if (auto* varDecl = iter->get_if<cld::Semantics::VariableDeclaration>())
+                    {
+                        visit(*varDecl);
+                    }
+                    else if (auto* funcDecl = iter->get_if<cld::Semantics::FunctionDeclaration>())
+                    {
+                        visit(*funcDecl);
+                    }
                 }
             },
             [&](const cld::IntrVarPtr<cld::Semantics::ExpressionBase>& expression) {
@@ -2390,7 +2417,7 @@ public:
             m_builder.CreateBr(controlling);
         }
         m_builder.SetInsertPoint(contBlock);
-        if (std::holds_alternative<std::vector<std::unique_ptr<cld::Semantics::Declaration>>>(
+        if (std::holds_alternative<std::vector<cld::IntrVarPtr<cld::Semantics::Declaration>>>(
                 forStatement.getInitial()))
         {
             // If the for statement held declarations we must run the destructors for those declarations as soon as we
@@ -2701,10 +2728,7 @@ public:
     Value visit(const cld::Semantics::DeclarationRead& declarationRead)
     {
         auto result = declarationRead.getDeclRead().match(
-            [&](const cld::Semantics::Declaration& declaration) { return m_lvalues.find(&declaration); },
-            [&](const cld::Semantics::FunctionDefinition& functionDefinition) {
-                return m_lvalues.find(&functionDefinition);
-            },
+            [&](const auto& declaration) { return m_lvalues.find(&declaration); },
             [&](const cld::Semantics::BuiltinFunction&) -> decltype(m_lvalues)::iterator { CLD_UNREACHABLE; });
         CLD_ASSERT(result != m_lvalues.end());
         return result->second;

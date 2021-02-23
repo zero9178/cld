@@ -633,11 +633,6 @@ bool cld::Semantics::isVariableLengthArray(const Type& type)
                        [](const Type& type) { return std::holds_alternative<ValArrayType>(type.getVariant()); });
 }
 
-cld::Semantics::TranslationUnit::TranslationUnit(std::vector<TranslationUnit::Variant> globals)
-    : m_globals(std::move(globals))
-{
-}
-
 namespace
 {
 std::string typeToString(const cld::Semantics::Type& arg)

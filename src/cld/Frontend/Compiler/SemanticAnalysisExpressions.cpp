@@ -1298,12 +1298,9 @@ bool cld::Semantics::SemanticAnalysis::checkFunctionCount(const ExpressionBase& 
             return false;
         }
         auto& decl = conversion.getExpression().cast<DeclarationRead>();
-        return decl.getDeclRead().match([](const FunctionDefinition&) { return true; },
-                                        [](const Declaration& declaration) {
-                                            return std::holds_alternative<FunctionType>(
-                                                declaration.getType().getVariant());
-                                        },
-                                        [](const BuiltinFunction&) { return true; });
+        return decl.getDeclRead().match(
+            [](const FunctionDefinition&) { return true; }, [](const FunctionDeclaration&) { return true; },
+            [](const VariableDeclaration&) { return false; }, [](const BuiltinFunction&) { return true; });
     }();
     auto& argumentTypes = ft.getArguments();
     if (node.getOptionalAssignmentExpressions().size() < argumentTypes.size())
@@ -1569,7 +1566,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         {
             if (auto* declRead = value->get_if<DeclarationRead>())
             {
-                if (auto* decl = declRead->getDeclRead().get_if<Declaration>();
+                if (auto* decl = declRead->getDeclRead().get_if<VariableDeclaration>();
                     decl && decl->getLifetime() == Lifetime::Register)
                 {
                     log(Errors::Semantics::CANNOT_TAKE_ADDRESS_OF_DECLARATION_ANNOTATED_WITH_REGISTER.args(

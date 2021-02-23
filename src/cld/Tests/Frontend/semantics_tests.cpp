@@ -90,9 +90,8 @@ TEST_CASE("Semantics declarations", "[semantics]")
         REQUIRE_THAT(errors, ProducesNoErrors());
         REQUIRE(translationUnit->getGlobals().size() == 2);
         {
-            REQUIRE(
-                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
-            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
+            REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
+            auto* decl = &translationUnit->getGlobals()[0]->cast<cld::Semantics::VariableDeclaration>();
             CHECK(decl->getLinkage() == cld::Semantics::Linkage::External);
             CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
             CHECK(decl->getNameToken()->getText() == "i");
@@ -100,9 +99,8 @@ TEST_CASE("Semantics declarations", "[semantics]")
                   == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
         }
         {
-            REQUIRE(
-                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[1]));
-            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[1]);
+            REQUIRE(translationUnit->getGlobals()[1]->is<cld::Semantics::VariableDeclaration>());
+            auto* decl = &translationUnit->getGlobals()[1]->cast<cld::Semantics::VariableDeclaration>();
             CHECK(decl->getLinkage() == cld::Semantics::Linkage::External);
             CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
             CHECK(decl->getNameToken()->getText() == "f");
@@ -119,24 +117,22 @@ TEST_CASE("Semantics declarations", "[semantics]")
                 auto [translationUnit, errors] = generateSemantics("extern int i;");
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
-                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
-                    translationUnit->getGlobals()[0]));
-                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
+                REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
+                auto* decl = &translationUnit->getGlobals()[0]->cast<cld::Semantics::VariableDeclaration>();
                 CHECK(decl->getLinkage() == cld::Semantics::Linkage::External);
                 CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
-                CHECK(decl->getKind() == cld::Semantics::Declaration::Kind::DeclarationOnly);
+                CHECK(decl->getKind() == cld::Semantics::VariableDeclaration::Kind::DeclarationOnly);
             }
             SECTION("With init")
             {
                 auto [translationUnit, errors] = generateSemantics("extern int i = 5;");
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
-                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
-                    translationUnit->getGlobals()[0]));
-                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
+                REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
+                auto* decl = &translationUnit->getGlobals()[0]->cast<cld::Semantics::VariableDeclaration>();
                 CHECK(decl->getLinkage() == cld::Semantics::Linkage::External);
                 CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
-                CHECK(decl->getKind() == cld::Semantics::Declaration::Kind::DeclarationOnly);
+                CHECK(decl->getKind() == cld::Semantics::VariableDeclaration::Kind::DeclarationOnly);
             }
             SEMA_PRODUCES("void foo(void) {\n"
                           " extern int i = 0;\n"
@@ -149,12 +145,11 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                "extern int i;");
             REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit->getGlobals().size() == 2);
-            REQUIRE(
-                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[1]));
-            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[1]);
+            REQUIRE(translationUnit->getGlobals()[1]->is<cld::Semantics::VariableDeclaration>());
+            auto* decl = &translationUnit->getGlobals()[1]->cast<cld::Semantics::VariableDeclaration>();
             CHECK(decl->getLinkage() == cld::Semantics::Linkage::Internal);
             CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
-            CHECK(decl->getKind() == cld::Semantics::Declaration::Kind::TentativeDefinition);
+            CHECK(decl->getKind() == cld::Semantics::VariableDeclaration::Kind::TentativeDefinition);
             SEMA_PRODUCES("static int i;\n"
                           "int i;",
                           ProducesError(STATIC_VARIABLE_N_REDEFINED_WITHOUT_STATIC, "'i'"));
@@ -166,24 +161,22 @@ TEST_CASE("Semantics declarations", "[semantics]")
                 auto [translationUnit, errors] = generateSemantics("static int i;");
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
-                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
-                    translationUnit->getGlobals()[0]));
-                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
+                REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
+                auto* decl = &translationUnit->getGlobals()[0]->cast<cld::Semantics::VariableDeclaration>();
                 CHECK(decl->getLinkage() == cld::Semantics::Linkage::Internal);
                 CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
-                CHECK(decl->getKind() == cld::Semantics::Declaration::Kind::TentativeDefinition);
+                CHECK(decl->getKind() == cld::Semantics::VariableDeclaration::Kind::TentativeDefinition);
             }
             SECTION("Definition")
             {
                 auto [translationUnit, errors] = generateSemantics("static int i = 0;");
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
-                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
-                    translationUnit->getGlobals()[0]));
-                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
+                REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
+                auto* decl = &translationUnit->getGlobals()[0]->cast<cld::Semantics::VariableDeclaration>();
                 CHECK(decl->getLinkage() == cld::Semantics::Linkage::Internal);
                 CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
-                CHECK(decl->getKind() == cld::Semantics::Declaration::Kind::Definition);
+                CHECK(decl->getKind() == cld::Semantics::VariableDeclaration::Kind::Definition);
             }
             SEMA_PRODUCES("static int i;\n"
                           "static int i;",
@@ -208,14 +201,12 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                    "}\n");
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
-                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
-                    translationUnit->getGlobals()[0]));
-                auto& func =
-                    *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit->getGlobals()[0]);
+                REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::FunctionDefinition>());
+                auto& func = translationUnit->getGlobals()[0]->cast<cld::Semantics::FunctionDefinition>();
                 REQUIRE(func.getCompoundStatement().getCompoundItems().size() >= 1);
                 auto& var = func.getCompoundStatement().getCompoundItems().back();
-                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(var));
-                auto& decl = *cld::get<std::unique_ptr<cld::Semantics::Declaration>>(var);
+                REQUIRE(std::holds_alternative<cld::IntrVarPtr<cld::Semantics::Declaration>>(var));
+                auto& decl = *cld::get<cld::IntrVarPtr<cld::Semantics::Declaration>>(var);
                 CHECK(decl.getLinkage() == cld::Semantics::Linkage::None);
             }
             SECTION("extern")
@@ -226,14 +217,12 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                    "}\n");
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
-                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
-                    translationUnit->getGlobals()[0]));
-                auto& func =
-                    *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit->getGlobals()[0]);
+                REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::FunctionDefinition>());
+                auto& func = translationUnit->getGlobals()[0]->cast<cld::Semantics::FunctionDefinition>();
                 REQUIRE(func.getCompoundStatement().getCompoundItems().size() >= 1);
                 auto& var = func.getCompoundStatement().getCompoundItems().back();
-                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(var));
-                auto& decl = *cld::get<std::unique_ptr<cld::Semantics::Declaration>>(var);
+                REQUIRE(std::holds_alternative<cld::IntrVarPtr<cld::Semantics::Declaration>>(var));
+                auto& decl = *cld::get<cld::IntrVarPtr<cld::Semantics::Declaration>>(var);
                 CHECK(decl.getLinkage() == cld::Semantics::Linkage::External);
             }
         }
@@ -242,9 +231,8 @@ TEST_CASE("Semantics declarations", "[semantics]")
             auto [translationUnit, errors] = generateSemantics("int i;");
             REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit->getGlobals().size() == 1);
-            REQUIRE(
-                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
-            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
+            REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
+            auto* decl = &translationUnit->getGlobals()[0]->cast<cld::Semantics::VariableDeclaration>();
             CHECK(decl->getLinkage() == cld::Semantics::Linkage::External);
             CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
         }
@@ -253,9 +241,8 @@ TEST_CASE("Semantics declarations", "[semantics]")
             auto [translationUnit, errors] = generateSemantics("static int i;");
             REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit->getGlobals().size() == 1);
-            REQUIRE(
-                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
-            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
+            REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
+            auto* decl = &translationUnit->getGlobals()[0]->cast<cld::Semantics::VariableDeclaration>();
             CHECK(decl->getLinkage() == cld::Semantics::Linkage::Internal);
             CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
         }
@@ -269,9 +256,8 @@ TEST_CASE("Semantics declarations", "[semantics]")
             auto [translationUnit, errors] = generateSemantics("int i;");
             REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit->getGlobals().size() == 1);
-            REQUIRE(
-                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
-            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
+            REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
+            auto* decl = &translationUnit->getGlobals()[0]->cast<cld::Semantics::VariableDeclaration>();
             CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
             SEMA_PRODUCES("auto int i;", ProducesError(DECLARATIONS_AT_FILE_SCOPE_CANNOT_BE_AUTO));
             SEMA_PRODUCES("register int i;", ProducesError(DECLARATIONS_AT_FILE_SCOPE_CANNOT_BE_REGISTER));
@@ -286,15 +272,15 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                    "}\n");
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
-                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
-                    translationUnit->getGlobals()[0]));
-                auto& func =
-                    *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit->getGlobals()[0]);
+                REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::FunctionDefinition>());
+                auto& func = translationUnit->getGlobals()[0]->cast<cld::Semantics::FunctionDefinition>();
                 REQUIRE(func.getCompoundStatement().getCompoundItems().size() >= 1);
                 auto& var = func.getCompoundStatement().getCompoundItems().back();
-                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(var));
-                auto& decl = *cld::get<std::unique_ptr<cld::Semantics::Declaration>>(var);
-                CHECK(decl.getLifetime() == cld::Semantics::Lifetime::Automatic);
+                REQUIRE(std::holds_alternative<cld::IntrVarPtr<cld::Semantics::Declaration>>(var));
+                auto& decl = *cld::get<cld::IntrVarPtr<cld::Semantics::Declaration>>(var);
+                auto* varDecl = decl.get_if<cld::Semantics::VariableDeclaration>();
+                REQUIRE(varDecl);
+                CHECK(varDecl->getLifetime() == cld::Semantics::Lifetime::Automatic);
             }
             SECTION("auto")
             {
@@ -304,15 +290,15 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                    "}\n");
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
-                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
-                    translationUnit->getGlobals()[0]));
-                auto& func =
-                    *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit->getGlobals()[0]);
+                REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::FunctionDefinition>());
+                auto& func = translationUnit->getGlobals()[0]->cast<cld::Semantics::FunctionDefinition>();
                 REQUIRE(func.getCompoundStatement().getCompoundItems().size() >= 1);
                 auto& var = func.getCompoundStatement().getCompoundItems().back();
-                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(var));
-                auto& decl = *cld::get<std::unique_ptr<cld::Semantics::Declaration>>(var);
-                CHECK(decl.getLifetime() == cld::Semantics::Lifetime::Automatic);
+                REQUIRE(std::holds_alternative<cld::IntrVarPtr<cld::Semantics::Declaration>>(var));
+                auto& decl = *cld::get<cld::IntrVarPtr<cld::Semantics::Declaration>>(var);
+                auto* varDecl = decl.get_if<cld::Semantics::VariableDeclaration>();
+                REQUIRE(varDecl);
+                CHECK(varDecl->getLifetime() == cld::Semantics::Lifetime::Automatic);
             }
             SECTION("static")
             {
@@ -322,15 +308,15 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                    "}\n");
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
-                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
-                    translationUnit->getGlobals()[0]));
-                auto& func =
-                    *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit->getGlobals()[0]);
+                REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::FunctionDefinition>());
+                auto& func = translationUnit->getGlobals()[0]->cast<cld::Semantics::FunctionDefinition>();
                 REQUIRE(func.getCompoundStatement().getCompoundItems().size() >= 1);
                 auto& var = func.getCompoundStatement().getCompoundItems().back();
-                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(var));
-                auto& decl = *cld::get<std::unique_ptr<cld::Semantics::Declaration>>(var);
-                CHECK(decl.getLifetime() == cld::Semantics::Lifetime::Static);
+                REQUIRE(std::holds_alternative<cld::IntrVarPtr<cld::Semantics::Declaration>>(var));
+                auto& decl = *cld::get<cld::IntrVarPtr<cld::Semantics::Declaration>>(var);
+                auto* varDecl = decl.get_if<cld::Semantics::VariableDeclaration>();
+                REQUIRE(varDecl);
+                CHECK(varDecl->getLifetime() == cld::Semantics::Lifetime::Static);
             }
             SECTION("extern")
             {
@@ -340,15 +326,15 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                    "}\n");
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
-                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
-                    translationUnit->getGlobals()[0]));
-                auto& func =
-                    *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit->getGlobals()[0]);
+                REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::FunctionDefinition>());
+                auto& func = translationUnit->getGlobals()[0]->cast<cld::Semantics::FunctionDefinition>();
                 REQUIRE(func.getCompoundStatement().getCompoundItems().size() >= 1);
                 auto& var = func.getCompoundStatement().getCompoundItems().back();
-                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(var));
-                auto& decl = *cld::get<std::unique_ptr<cld::Semantics::Declaration>>(var);
-                CHECK(decl.getLifetime() == cld::Semantics::Lifetime::Static);
+                REQUIRE(std::holds_alternative<cld::IntrVarPtr<cld::Semantics::Declaration>>(var));
+                auto& decl = *cld::get<cld::IntrVarPtr<cld::Semantics::Declaration>>(var);
+                auto* varDecl = decl.get_if<cld::Semantics::VariableDeclaration>();
+                REQUIRE(varDecl);
+                CHECK(varDecl->getLifetime() == cld::Semantics::Lifetime::Static);
             }
             SECTION("register")
             {
@@ -358,10 +344,8 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                        "{}\n");
                     REQUIRE_THAT(errors, ProducesNoErrors());
                     REQUIRE(translationUnit->getGlobals().size() == 1);
-                    REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
-                        translationUnit->getGlobals()[0]));
-                    auto& func = *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
-                        translationUnit->getGlobals()[0]);
+                    REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::FunctionDefinition>());
+                    auto& func = translationUnit->getGlobals()[0]->cast<cld::Semantics::FunctionDefinition>();
                     REQUIRE(func.getParameterDeclarations().size() == 1);
                     auto& decl = *func.getParameterDeclarations()[0];
                     CHECK(decl.getLifetime() == cld::Semantics::Lifetime::Register);
@@ -372,10 +356,8 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                        "{}\n");
                     REQUIRE_THAT(errors, ProducesNoErrors());
                     REQUIRE(translationUnit->getGlobals().size() == 1);
-                    REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
-                        translationUnit->getGlobals()[0]));
-                    auto& func = *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
-                        translationUnit->getGlobals()[0]);
+                    REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::FunctionDefinition>());
+                    auto& func = translationUnit->getGlobals()[0]->cast<cld::Semantics::FunctionDefinition>();
                     REQUIRE(func.getParameterDeclarations().size() == 1);
                     auto& decl = *func.getParameterDeclarations()[0];
                     CHECK(decl.getLifetime() == cld::Semantics::Lifetime::Register);
@@ -391,9 +373,8 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                "ld d;");
             REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit->getGlobals().size() == 1);
-            REQUIRE(
-                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
-            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
+            REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
+            auto* decl = &translationUnit->getGlobals()[0]->cast<cld::Semantics::VariableDeclaration>();
             CHECK(decl->getNameToken()->getText() == "d");
             CHECK(decl->getType()
                   == cld::Semantics::PrimitiveType::createLongDouble(false, false, cld::LanguageOptions::native()));
@@ -405,9 +386,8 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                "const volatile ld d;");
             REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit->getGlobals().size() == 1);
-            REQUIRE(
-                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
-            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
+            REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
+            auto* decl = &translationUnit->getGlobals()[0]->cast<cld::Semantics::VariableDeclaration>();
             CHECK(decl->getNameToken()->getText() == "d");
             CHECK(decl->getType()
                   == cld::Semantics::PrimitiveType::createLongDouble(true, true, cld::LanguageOptions::native()));
@@ -418,9 +398,8 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                "ld d;");
             REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit->getGlobals().size() == 1);
-            REQUIRE(
-                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
-            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
+            REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
+            auto* decl = &translationUnit->getGlobals()[0]->cast<cld::Semantics::VariableDeclaration>();
             CHECK(decl->getNameToken()->getText() == "d");
             CHECK(decl->getType()
                   == cld::Semantics::PrimitiveType::createLongDouble(true, true, cld::LanguageOptions::native()));
@@ -431,9 +410,8 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                "volatile ld d;");
             REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit->getGlobals().size() == 1);
-            REQUIRE(
-                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
-            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
+            REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
+            auto* decl = &translationUnit->getGlobals()[0]->cast<cld::Semantics::VariableDeclaration>();
             CHECK(decl->getNameToken()->getText() == "d");
             CHECK(decl->getType()
                   == cld::Semantics::PrimitiveType::createLongDouble(true, true, cld::LanguageOptions::native()));
@@ -444,9 +422,8 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                "volatile ld d;");
             REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit->getGlobals().size() == 1);
-            REQUIRE(
-                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
-            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
+            REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
+            auto* decl = &translationUnit->getGlobals()[0]->cast<cld::Semantics::VariableDeclaration>();
             CHECK(decl->getNameToken()->getText() == "d");
             CHECK(decl->getType()
                   == cld::Semantics::ArrayType::create(
@@ -462,8 +439,8 @@ TEST_CASE("Semantics declarations", "[semantics]")
             REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit->getGlobals().size() == 1);
             auto& global = translationUnit->getGlobals()[0];
-            REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(global));
-            auto& def = *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(global);
+            REQUIRE(global->is<cld::Semantics::FunctionDefinition>());
+            auto& def = global->cast<cld::Semantics::FunctionDefinition>();
             REQUIRE(def.getCompoundStatement().getCompoundItems().size() >= 4);
             auto& first = def.getCompoundStatement().getCompoundItems()[1];
             REQUIRE(std::holds_alternative<std::shared_ptr<const cld::Semantics::ExpressionBase>>(first));
@@ -474,8 +451,8 @@ TEST_CASE("Semantics declarations", "[semantics]")
             auto& secondExpr = *cld::get<std::shared_ptr<const cld::Semantics::ExpressionBase>>(second);
             CHECK(secondExpr.is<cld::Semantics::UnaryOperator>());
             auto& third = def.getCompoundStatement().getCompoundItems()[3];
-            REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(third));
-            auto& thirdDecl = *cld::get<std::unique_ptr<cld::Semantics::Declaration>>(third);
+            REQUIRE(std::holds_alternative<cld::IntrVarPtr<cld::Semantics::Declaration>>(third));
+            auto& thirdDecl = *cld::get<cld::IntrVarPtr<cld::Semantics::Declaration>>(third);
             CHECK(std::holds_alternative<cld::Semantics::ValArrayType>(thirdDecl.getType().getVariant()));
             SEMA_PRODUCES("extern int i;\n"
                           "typedef int n[i];",
@@ -601,9 +578,8 @@ TEST_CASE("Semantics primitive declarations", "[semantics]")
             auto [translationUnit, errors] = generateSemantics(text + " i;", options);
             REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit->getGlobals().size() == 1);
-            REQUIRE(
-                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
-            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
+            REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
+            auto* decl = &translationUnit->getGlobals()[0]->cast<cld::Semantics::VariableDeclaration>();
             CHECK(decl->getNameToken()->getText() == "i");
             CHECK(decl->getType() == type);
             CHECK(decl->getLinkage() == cld::Semantics::Linkage::External);
@@ -636,9 +612,8 @@ TEST_CASE("Semantics pointer declarations", "[semantics]")
             auto [translationUnit, errors] = generateSemantics("int *f;");
             REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit->getGlobals().size() == 1);
-            REQUIRE(
-                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
-            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
+            REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
+            auto* decl = &translationUnit->getGlobals()[0]->cast<cld::Semantics::VariableDeclaration>();
             CHECK(decl->getNameToken()->getText() == "f");
             CHECK(decl->getType()
                   == cld::Semantics::PointerType::create(
@@ -663,9 +638,8 @@ TEST_CASE("Semantics pointer declarations", "[semantics]")
                 auto [translationUnit, errors] = generateSemantics(text);
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
-                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
-                    translationUnit->getGlobals()[0]));
-                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
+                REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
+                auto* decl = &translationUnit->getGlobals()[0]->cast<cld::Semantics::VariableDeclaration>();
                 CHECK(decl->getNameToken()->getText() == "f");
                 CHECK(decl->getType()
                       == cld::Semantics::PointerType::create(false, false, false,
@@ -689,9 +663,8 @@ TEST_CASE("Semantics pointer declarations", "[semantics]")
                 auto [translationUnit, errors] = generateSemantics(text);
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
-                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
-                    translationUnit->getGlobals()[0]));
-                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
+                REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
+                auto* decl = &translationUnit->getGlobals()[0]->cast<cld::Semantics::VariableDeclaration>();
                 CHECK(decl->getNameToken()->getText() == "f");
                 CHECK(decl->getType()
                       == cld::Semantics::PointerType::create(false, false, false,
@@ -721,9 +694,8 @@ TEST_CASE("Semantics pointer declarations", "[semantics]")
             auto [translationUnit, errors] = generateSemantics(text);
             REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit->getGlobals().size() == 1);
-            REQUIRE(
-                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
-            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
+            REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
+            auto* decl = &translationUnit->getGlobals()[0]->cast<cld::Semantics::VariableDeclaration>();
             CHECK(decl->getNameToken()->getText() == "f");
             CHECK(decl->getType()
                   == cld::Semantics::PointerType::create(
@@ -749,9 +721,8 @@ TEST_CASE("Semantics array declarations", "[semantics]")
             auto [translationUnit, errors] = generateSemantics("int f[1];");
             REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit->getGlobals().size() == 1);
-            REQUIRE(
-                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
-            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
+            REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
+            auto* decl = &translationUnit->getGlobals()[0]->cast<cld::Semantics::VariableDeclaration>();
             CHECK(decl->getNameToken()->getText() == "f");
             CHECK(decl->getType()
                   == cld::Semantics::ArrayType::create(
@@ -763,9 +734,8 @@ TEST_CASE("Semantics array declarations", "[semantics]")
             auto [translationUnit, errors] = generateSemantics("int (*f[1]);");
             REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit->getGlobals().size() == 1);
-            REQUIRE(
-                std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
-            auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
+            REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
+            auto* decl = &translationUnit->getGlobals()[0]->cast<cld::Semantics::VariableDeclaration>();
             CHECK(decl->getNameToken()->getText() == "f");
             CHECK(decl->getType()
                   == cld::Semantics::ArrayType::create(
@@ -825,8 +795,8 @@ TEST_CASE("Semantics function prototypes", "[semantics]")
         auto [translationUnit, errors] = generateSemantics("int f(int,float);");
         REQUIRE_THAT(errors, ProducesNoErrors());
         REQUIRE(translationUnit->getGlobals().size() == 1);
-        REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
-        auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
+        REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::FunctionDeclaration>());
+        auto* decl = &translationUnit->getGlobals()[0]->cast<cld::Semantics::FunctionDeclaration>();
         CHECK(decl->getNameToken()->getText() == "f");
         CHECK(decl->getType()
               == cld::Semantics::FunctionType::create(
@@ -858,8 +828,8 @@ TEST_CASE("Semantics function prototypes", "[semantics]")
                                                            cld::Tests::x64windowsGnu);
         REQUIRE_THAT(errors, ProducesNoErrors());
         REQUIRE(translationUnit->getGlobals().size() == 1);
-        REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
-        auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
+        REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::FunctionDeclaration>());
+        auto* decl = &translationUnit->getGlobals()[0]->cast<cld::Semantics::FunctionDeclaration>();
         CHECK(decl->getNameToken()->getText() == "atexit");
         CHECK(decl->getType()
               == cld::Semantics::FunctionType::create(
@@ -890,8 +860,8 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
         auto [translationUnit, errors] = generateSemantics("struct A{ int i; float f, r; } a;");
         REQUIRE_THAT(errors, ProducesNoErrors());
         REQUIRE(translationUnit->getGlobals().size() == 1);
-        REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
-        auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
+        REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
+        auto* decl = &translationUnit->getGlobals()[0]->cast<cld::Semantics::VariableDeclaration>();
         CHECK(decl->getNameToken()->getText() == "a");
         REQUIRE(std::holds_alternative<cld::Semantics::StructType>(decl->getType().getVariant()));
         CHECK(cld::get<cld::Semantics::StructType>(decl->getType().getVariant()).getName() == "A");
@@ -908,8 +878,8 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
         auto [translationUnit, errors] = generateSemantics("union A{ int i; float f, r; } a;");
         REQUIRE_THAT(errors, ProducesNoErrors());
         REQUIRE(translationUnit->getGlobals().size() == 1);
-        REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]));
-        auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
+        REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
+        auto* decl = &translationUnit->getGlobals()[0]->cast<cld::Semantics::VariableDeclaration>();
         CHECK(decl->getNameToken()->getText() == "a");
         REQUIRE(std::holds_alternative<cld::Semantics::UnionType>(decl->getType().getVariant()));
         CHECK(cld::get<cld::Semantics::UnionType>(decl->getType().getVariant()).getName() == "A");
@@ -928,10 +898,8 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
     {
         auto program = generateProgram("struct { int i; float f, r; } a;");
         REQUIRE(program.getTranslationUnit().getGlobals().size() == 1);
-        REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
-            program.getTranslationUnit().getGlobals()[0]));
-        auto& decl =
-            cld::get<std::unique_ptr<cld::Semantics::Declaration>>(program.getTranslationUnit().getGlobals()[0]);
+        REQUIRE(program.getTranslationUnit().getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
+        auto* decl = &program.getTranslationUnit().getGlobals()[0]->cast<cld::Semantics::VariableDeclaration>();
         CHECK(decl->getNameToken()->getText() == "a");
         REQUIRE(std::holds_alternative<cld::Semantics::StructType>(decl->getType().getVariant()));
         CHECK(cld::get<cld::Semantics::StructType>(decl->getType().getVariant()).isAnonymous());
@@ -952,10 +920,8 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
     {
         auto program = generateProgram("union { int i; float f, r; } a;");
         REQUIRE(program.getTranslationUnit().getGlobals().size() == 1);
-        REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
-            program.getTranslationUnit().getGlobals()[0]));
-        auto& decl =
-            cld::get<std::unique_ptr<cld::Semantics::Declaration>>(program.getTranslationUnit().getGlobals()[0]);
+        REQUIRE(program.getTranslationUnit().getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
+        auto* decl = &program.getTranslationUnit().getGlobals()[0]->cast<cld::Semantics::VariableDeclaration>();
         CHECK(decl->getNameToken()->getText() == "a");
         REQUIRE(std::holds_alternative<cld::Semantics::UnionType>(decl->getType().getVariant()));
         CHECK(cld::get<cld::Semantics::UnionType>(decl->getType().getVariant()).isAnonymous());
@@ -993,9 +959,8 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
                                                                    x64windowsMsvc);
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
-                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
-                    translationUnit->getGlobals()[0]));
-                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
+                REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
+                auto* decl = &translationUnit->getGlobals()[0]->cast<cld::Semantics::VariableDeclaration>();
                 REQUIRE(std::holds_alternative<cld::Semantics::ArrayType>(decl->getType().getVariant()));
                 auto& array = cld::get<cld::Semantics::ArrayType>(decl->getType().getVariant());
                 CHECK(array.getSize() == 8);
@@ -1016,9 +981,8 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
                                                                    x64linux);
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
-                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(
-                    translationUnit->getGlobals()[0]));
-                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[0]);
+                REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
+                auto* decl = &translationUnit->getGlobals()[0]->cast<cld::Semantics::VariableDeclaration>();
                 REQUIRE(std::holds_alternative<cld::Semantics::ArrayType>(decl->getType().getVariant()));
                 auto& array = cld::get<cld::Semantics::ArrayType>(decl->getType().getVariant());
                 CHECK(array.getSize() == 4);
@@ -1163,8 +1127,8 @@ TEST_CASE("Semantics enums", "[semantics]")
             std::uint64_t i = 1;
             for (auto& iter : tu->getGlobals())
             {
-                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(iter));
-                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(iter);
+                auto* decl = iter->get_if<cld::Semantics::VariableDeclaration>();
+                REQUIRE(decl);
                 REQUIRE(std::holds_alternative<cld::Semantics::ArrayType>(decl->getType().getVariant()));
                 auto& array = cld::get<cld::Semantics::ArrayType>(decl->getType().getVariant());
                 CHECK(array.getSize() == i++);
@@ -1184,8 +1148,8 @@ TEST_CASE("Semantics enums", "[semantics]")
             std::uint64_t i = 5;
             for (auto& iter : tu->getGlobals())
             {
-                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(iter));
-                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(iter);
+                auto* decl = iter->get_if<cld::Semantics::VariableDeclaration>();
+                REQUIRE(decl);
                 REQUIRE(std::holds_alternative<cld::Semantics::ArrayType>(decl->getType().getVariant()));
                 auto& array = cld::get<cld::Semantics::ArrayType>(decl->getType().getVariant());
                 CHECK(array.getSize() == i--);
@@ -1212,8 +1176,8 @@ TEST_CASE("Semantics enums", "[semantics]")
             std::uint64_t i = 1;
             for (auto& iter : tu->getGlobals())
             {
-                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(iter));
-                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(iter);
+                auto* decl = iter->get_if<cld::Semantics::VariableDeclaration>();
+                REQUIRE(decl);
                 REQUIRE(std::holds_alternative<cld::Semantics::ArrayType>(decl->getType().getVariant()));
                 auto& array = cld::get<cld::Semantics::ArrayType>(decl->getType().getVariant());
                 CHECK(array.getSize() == i++);
@@ -1233,8 +1197,8 @@ TEST_CASE("Semantics enums", "[semantics]")
             std::uint64_t i = 5;
             for (auto& iter : tu->getGlobals())
             {
-                REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(iter));
-                auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(iter);
+                auto* decl = iter->get_if<cld::Semantics::VariableDeclaration>();
+                REQUIRE(decl);
                 REQUIRE(std::holds_alternative<cld::Semantics::ArrayType>(decl->getType().getVariant()));
                 auto& array = cld::get<cld::Semantics::ArrayType>(decl->getType().getVariant());
                 CHECK(array.getSize() == i--);
@@ -1301,8 +1265,8 @@ TEST_CASE("Semantics function definitions")
                                                            "{}");
         REQUIRE(translationUnit->getGlobals().size() == 1);
         auto& first = translationUnit->getGlobals()[0];
-        REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(first));
-        auto& functionDefinition = *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(first);
+        REQUIRE(first->is<cld::Semantics::FunctionDefinition>());
+        auto& functionDefinition = first->cast<cld::Semantics::FunctionDefinition>();
         REQUIRE(functionDefinition.getParameterDeclarations().size() == 4);
         CHECK(functionDefinition.getParameterDeclarations()[0]->getNameToken()->getText() == "compr");
         CHECK(functionDefinition.getParameterDeclarations()[0]->getType()
@@ -1585,8 +1549,8 @@ TEST_CASE("Semantics composite type", "[semantics]")
                                                            "int f(int (*)(char *),double (*)[]);");
         REQUIRE_THAT(errors, ProducesNoErrors());
         REQUIRE(translationUnit->getGlobals().size() == 2);
-        REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[1]));
-        auto& decl = cld::get<std::unique_ptr<cld::Semantics::Declaration>>(translationUnit->getGlobals()[1]);
+        REQUIRE(translationUnit->getGlobals()[1]->is<cld::Semantics::FunctionDeclaration>());
+        auto* decl = &translationUnit->getGlobals()[1]->cast<cld::Semantics::FunctionDeclaration>();
         CHECK(decl->getNameToken()->getText() == "f");
         CHECK(decl->getType()
               == cld::Semantics::FunctionType::create(
@@ -1756,8 +1720,8 @@ const ExpressionBase& generateExpression(std::string source,
 {
     auto [translationUnit, errors] = generateSemantics(std::move(source), options);
     REQUIRE_THAT(errors, ProducesNoErrors());
-    REQUIRE(std::holds_alternative<std::unique_ptr<FunctionDefinition>>(translationUnit->getGlobals().back()));
-    auto& funcDef = *cld::get<std::unique_ptr<FunctionDefinition>>(translationUnit->getGlobals().back());
+    REQUIRE(translationUnit->getGlobals().back()->is<cld::Semantics::FunctionDefinition>());
+    auto& funcDef = translationUnit->getGlobals().back()->cast<cld::Semantics::FunctionDefinition>();
     REQUIRE(
         std::holds_alternative<cld::IntrVarPtr<Statement>>(funcDef.getCompoundStatement().getCompoundItems().back()));
     auto& statement = *cld::get<cld::IntrVarPtr<Statement>>(funcDef.getCompoundStatement().getCompoundItems().back());
@@ -3733,8 +3697,8 @@ TEST_CASE("Semantics simple initializer", "[semantics]")
             REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit->getGlobals().size() == 1);
             auto& global = translationUnit->getGlobals()[0];
-            REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(global));
-            auto& declaration = *cld::get<std::unique_ptr<Declaration>>(global);
+            REQUIRE(global->is<cld::Semantics::VariableDeclaration>());
+            auto& declaration = global->cast<cld::Semantics::VariableDeclaration>();
             REQUIRE(std::holds_alternative<ArrayType>(declaration.getType().getVariant()));
             CHECK(cld::get<ArrayType>(declaration.getType().getVariant()).getSize() == 7);
         }
@@ -3747,8 +3711,8 @@ TEST_CASE("Semantics simple initializer", "[semantics]")
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
                 auto& global = translationUnit->getGlobals()[0];
-                REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(global));
-                auto& declaration = *cld::get<std::unique_ptr<Declaration>>(global);
+                REQUIRE(global->is<cld::Semantics::VariableDeclaration>());
+                auto& declaration = global->cast<cld::Semantics::VariableDeclaration>();
                 REQUIRE(std::holds_alternative<ArrayType>(declaration.getType().getVariant()));
                 CHECK(cld::get<ArrayType>(declaration.getType().getVariant()).getSize() == 7);
             }
@@ -3758,8 +3722,8 @@ TEST_CASE("Semantics simple initializer", "[semantics]")
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
                 auto& global = translationUnit->getGlobals()[0];
-                REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(global));
-                auto& declaration = *cld::get<std::unique_ptr<Declaration>>(global);
+                REQUIRE(global->is<cld::Semantics::VariableDeclaration>());
+                auto& declaration = global->cast<cld::Semantics::VariableDeclaration>();
                 REQUIRE(std::holds_alternative<ArrayType>(declaration.getType().getVariant()));
                 CHECK(cld::get<ArrayType>(declaration.getType().getVariant()).getSize() == 7);
             }
@@ -3823,8 +3787,8 @@ TEST_CASE("Semantics initializer list", "[semantics]")
                                                            "Point point = {5.0,3.0};");
         REQUIRE(translationUnit->getGlobals().size() == 1);
         auto& global = translationUnit->getGlobals()[0];
-        REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(global));
-        auto& decl = cld::get<std::unique_ptr<Declaration>>(global);
+        REQUIRE(global->is<cld::Semantics::VariableDeclaration>());
+        auto* decl = &global->cast<cld::Semantics::VariableDeclaration>();
         REQUIRE(decl->getInitializer());
         REQUIRE(std::holds_alternative<InitializerList>(*decl->getInitializer()));
         SEMA_PRODUCES("typedef struct Point {\n"
@@ -3955,8 +3919,8 @@ TEST_CASE("Semantics initializer list", "[semantics]")
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
                 auto& global = translationUnit->getGlobals()[0];
-                REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(global));
-                auto& declaration = *cld::get<std::unique_ptr<Declaration>>(global);
+                REQUIRE(global->is<cld::Semantics::VariableDeclaration>());
+                auto& declaration = global->cast<cld::Semantics::VariableDeclaration>();
                 REQUIRE(std::holds_alternative<ArrayType>(declaration.getType().getVariant()));
                 CHECK(cld::get<ArrayType>(declaration.getType().getVariant()).getSize() == 3);
             }
@@ -3970,8 +3934,8 @@ TEST_CASE("Semantics initializer list", "[semantics]")
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
                 auto& global = translationUnit->getGlobals()[0];
-                REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(global));
-                auto& declaration = *cld::get<std::unique_ptr<Declaration>>(global);
+                REQUIRE(global->is<cld::Semantics::VariableDeclaration>());
+                auto& declaration = global->cast<cld::Semantics::VariableDeclaration>();
                 REQUIRE(std::holds_alternative<ArrayType>(declaration.getType().getVariant()));
                 CHECK(cld::get<ArrayType>(declaration.getType().getVariant()).getSize() == 11);
                 REQUIRE(declaration.getInitializer());
@@ -3994,8 +3958,8 @@ TEST_CASE("Semantics initializer list", "[semantics]")
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
                 auto& global = translationUnit->getGlobals()[0];
-                REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(global));
-                auto& declaration = *cld::get<std::unique_ptr<Declaration>>(global);
+                REQUIRE(global->is<cld::Semantics::VariableDeclaration>());
+                auto& declaration = global->cast<cld::Semantics::VariableDeclaration>();
                 REQUIRE(std::holds_alternative<ArrayType>(declaration.getType().getVariant()));
                 CHECK(cld::get<ArrayType>(declaration.getType().getVariant()).getSize() == 4);
             }
@@ -4119,8 +4083,8 @@ TEST_CASE("Semantics __func__", "[semantics]")
                                    "}");
     REQUIRE(exp.is<DeclarationRead>());
     auto& declarationRead = exp.cast<DeclarationRead>();
-    REQUIRE(declarationRead.getDeclRead().is<Declaration>());
-    auto& decl = declarationRead.getDeclRead().cast<Declaration>();
+    REQUIRE(declarationRead.getDeclRead().is<VariableDeclaration>());
+    auto& decl = declarationRead.getDeclRead().cast<VariableDeclaration>();
     REQUIRE(decl.getInitializer());
     REQUIRE(std::holds_alternative<cld::IntrVarPtr<ExpressionBase>>(*decl.getInitializer()));
     REQUIRE(cld::get<cld::IntrVarPtr<ExpressionBase>>(*decl.getInitializer())->is<Constant>());

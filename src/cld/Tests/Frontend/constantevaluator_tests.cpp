@@ -77,9 +77,8 @@ std::pair<cld::Semantics::ConstValue, std::string>
     cld::Semantics::SemanticAnalysis analysis(ctokens, &ss);
     auto translationUnit = analysis.visit(parsing);
     REQUIRE_THAT(ss.str(), ProducesNoErrors());
-    REQUIRE(std::holds_alternative<std::unique_ptr<cld::Semantics::FunctionDefinition>>(
-        translationUnit.getGlobals().back()));
-    auto& funcDef = *cld::get<std::unique_ptr<cld::Semantics::FunctionDefinition>>(translationUnit.getGlobals().back());
+    REQUIRE(translationUnit.getGlobals().back()->is<cld::Semantics::FunctionDefinition>());
+    auto& funcDef = translationUnit.getGlobals().back()->cast<cld::Semantics::FunctionDefinition>();
     REQUIRE(std::holds_alternative<cld::IntrVarPtr<cld::Semantics::Statement>>(
         funcDef.getCompoundStatement().getCompoundItems().back()));
     auto& statement =

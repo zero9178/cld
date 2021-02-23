@@ -106,12 +106,12 @@ std::unique_ptr<cld::Semantics::ForStatement> cld::Semantics::SemanticAnalysis::
             }
         }
         auto result = visit(declarations);
-        auto& vector = initial.emplace<std::vector<std::unique_ptr<Declaration>>>();
+        auto& vector = initial.emplace<std::vector<IntrVarPtr<Declaration>>>();
         for (auto& iter : result)
         {
-            if (std::holds_alternative<std::unique_ptr<Declaration>>(iter))
+            if (std::holds_alternative<IntrVarPtr<Declaration>>(iter))
             {
-                vector.push_back(cld::get<std::unique_ptr<Declaration>>(std::move(iter)));
+                vector.push_back(cld::get<IntrVarPtr<Declaration>>(std::move(iter)));
             }
         }
     }
@@ -236,7 +236,7 @@ void cld::Semantics::SemanticAnalysis::checkForIllegalSwitchJumps(
     {
         for (auto& [name, decl] : m_scopes[curr].declarations)
         {
-            if (auto* val = std::get_if<Declaration*>(&decl.declared))
+            if (auto* val = std::get_if<VariableDeclaration*>(&decl.declared))
             {
                 if (isVariablyModified((*val)->getType()))
                 {
@@ -425,7 +425,7 @@ void cld::Semantics::SemanticAnalysis::resolveGotos()
                     break;
                 }
                 auto& [name, decl] = *iter;
-                if (auto* val = std::get_if<Declaration*>(&decl.declared))
+                if (auto* val = std::get_if<VariableDeclaration*>(&decl.declared))
                 {
                     if (isVariablyModified((*val)->getType()))
                     {

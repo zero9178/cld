@@ -659,6 +659,10 @@ class FunctionDefinition;
 
 class Declaration;
 
+class FunctionDeclaration;
+
+class VariableDeclaration;
+
 class BuiltinFunction;
 
 class Useable;
@@ -1557,11 +1561,80 @@ public:
     }
 };
 
+class Useable
+    : public AbstractIntrusiveVariant<VariableDeclaration, FunctionDefinition, BuiltinFunction, FunctionDeclaration>
+{
+    std::uint64_t m_uses{};
+
+protected:
+    template <class T>
+    Useable(std::in_place_type_t<T>) : AbstractIntrusiveVariant(std::in_place_type<T>)
+    {
+    }
+
+public:
+    [[nodiscard]] std::uint64_t getUses() const noexcept
+    {
+        return m_uses;
+    }
+
+    void setUses(std::uint64_t uses) noexcept
+    {
+        m_uses = uses;
+    }
+
+    void incrementUsage() noexcept
+    {
+        m_uses++;
+    }
+
+    [[nodiscard]] bool isUsed() const noexcept
+    {
+        return m_uses;
+    }
+};
+
+enum class Linkage : std::uint8_t
+{
+    Internal,
+    External,
+    None
+};
+
+class Declaration : public Useable
+{
+    Type m_type;
+    Linkage m_linkage;
+    Lexer::CTokenIterator m_nameToken;
+
+protected:
+    template <class T>
+    Declaration(std::in_place_type_t<T>, Type type, Linkage linkage, Lexer::CTokenIterator nameToken)
+        : Useable(std::in_place_type<T>), m_type(std::move(type)), m_linkage(linkage), m_nameToken(nameToken)
+    {
+    }
+
+public:
+    [[nodiscard]] const Type& getType() const
+    {
+        return m_type;
+    }
+
+    [[nodiscard]] Linkage getLinkage() const
+    {
+        return m_linkage;
+    }
+
+    [[nodiscard]] Lexer::CTokenIterator getNameToken() const
+    {
+        return m_nameToken;
+    }
+};
+
 class CompoundStatement final : public Statement
 {
 public:
-    using Variant =
-        std::variant<IntrVarPtr<Statement>, std::unique_ptr<Declaration>, std::shared_ptr<const ExpressionBase>>;
+    using Variant = std::variant<IntrVarPtr<Statement>, IntrVarPtr<Declaration>, std::shared_ptr<const ExpressionBase>>;
 
 private:
     Lexer::CTokenIterator m_openBrace;
@@ -1608,7 +1681,7 @@ public:
 class ForStatement final : public Statement
 {
 public:
-    using Variant = std::variant<std::monostate, IntrVarPtr<ExpressionBase>, std::vector<std::unique_ptr<Declaration>>>;
+    using Variant = std::variant<std::monostate, IntrVarPtr<ExpressionBase>, std::vector<IntrVarPtr<Declaration>>>;
 
 private:
     Lexer::CTokenIterator m_forToken;
@@ -2030,52 +2103,6 @@ public:
     }
 };
 
-class Useable : public AbstractIntrusiveVariant<Declaration, FunctionDefinition, BuiltinFunction>
-{
-    std::uint64_t m_uses{};
-
-protected:
-    template <class T>
-    Useable(std::in_place_type_t<T>) : AbstractIntrusiveVariant(std::in_place_type<T>)
-    {
-    }
-
-public:
-    [[nodiscard]] std::uint64_t getUses() const noexcept
-    {
-        return m_uses;
-    }
-
-    void setUses(std::uint64_t uses) noexcept
-    {
-        m_uses = uses;
-    }
-
-    void incrementUsage() noexcept
-    {
-        m_uses++;
-    }
-
-    [[nodiscard]] bool isUsed() const noexcept
-    {
-        return m_uses;
-    }
-};
-
-enum class Linkage : std::uint8_t
-{
-    Internal,
-    External,
-    None
-};
-
-enum class Lifetime : std::uint8_t
-{
-    Automatic,
-    Static,
-    Register
-};
-
 enum class InlineKind : std::uint8_t
 {
     InlineDefinition,
@@ -2083,67 +2110,15 @@ enum class InlineKind : std::uint8_t
     None,
 };
 
-class Declaration final : public Useable
+class FunctionDeclaration final : public Declaration
 {
-public:
-    enum Kind : std::uint8_t
-    {
-        DeclarationOnly,     // If a declaration is not at file scope it's a "DeclarationOnly" if "extern"
-        TentativeDefinition, // Only possible at file scope
-        Definition
-    };
-
-private:
-    Type m_type;
-    Linkage m_linkage;
-    Lifetime m_lifetime;
-    Lexer::CTokenIterator m_nameToken;
-    Kind m_kind;
     InlineKind m_inlineKind;
-    std::optional<Initializer> m_initializer;
 
 public:
-    Declaration(Type type, Linkage linkage, Lifetime lifetime, Lexer::CTokenIterator nameToken, Kind kind,
-                InlineKind inlineKind, std::optional<Initializer> initializer = {})
-        : Useable(std::in_place_type<Declaration>),
-          m_type(std::move(type)),
-          m_linkage(linkage),
-          m_lifetime(lifetime),
-          m_nameToken(nameToken),
-          m_kind(kind),
-          m_inlineKind(inlineKind),
-          m_initializer(std::move(initializer))
+    FunctionDeclaration(Type type, Linkage linkage, Lexer::CTokenIterator nameToken, InlineKind inlineKind)
+        : Declaration(std::in_place_type<FunctionDeclaration>, std::move(type), linkage, nameToken),
+          m_inlineKind(inlineKind)
     {
-    }
-
-    [[nodiscard]] const Type& getType() const
-    {
-        return m_type;
-    }
-
-    [[nodiscard]] Linkage getLinkage() const
-    {
-        return m_linkage;
-    }
-
-    [[nodiscard]] Lifetime getLifetime() const
-    {
-        return m_lifetime;
-    }
-
-    [[nodiscard]] Lexer::CTokenIterator getNameToken() const
-    {
-        return m_nameToken;
-    }
-
-    [[nodiscard]] Kind getKind() const
-    {
-        return m_kind;
-    }
-
-    [[nodiscard]] const std::optional<Initializer>& getInitializer() const
-    {
-        return m_initializer;
     }
 
     [[nodiscard]] bool isInline() const noexcept
@@ -2157,18 +2132,66 @@ public:
     }
 };
 
+enum class Lifetime : std::uint8_t
+{
+    Automatic,
+    Static,
+    Register
+};
+
+class VariableDeclaration final : public Declaration
+{
+public:
+    enum Kind : std::uint8_t
+    {
+        DeclarationOnly,     // If a declaration is not at file scope it's a "DeclarationOnly" if "extern"
+        TentativeDefinition, // Only possible at file scope
+        Definition
+    };
+
+private:
+    Lifetime m_lifetime;
+    Kind m_kind;
+    std::optional<Initializer> m_initializer;
+
+public:
+    VariableDeclaration(Type type, Linkage linkage, Lifetime lifetime, Lexer::CTokenIterator nameToken, Kind kind,
+                        std::optional<Initializer> initializer = {})
+        : Declaration(std::in_place_type<VariableDeclaration>, std::move(type), linkage, nameToken),
+          m_lifetime(lifetime),
+          m_kind(kind),
+          m_initializer(std::move(initializer))
+    {
+    }
+
+    [[nodiscard]] Lifetime getLifetime() const
+    {
+        return m_lifetime;
+    }
+
+    [[nodiscard]] Kind getKind() const
+    {
+        return m_kind;
+    }
+
+    [[nodiscard]] const std::optional<Initializer>& getInitializer() const
+    {
+        return m_initializer;
+    }
+};
+
 class FunctionDefinition final : public Useable
 {
     Type m_type;
     Lexer::CTokenIterator m_nameToken;
-    std::vector<std::unique_ptr<Declaration>> m_parameterDeclarations;
+    std::vector<std::unique_ptr<VariableDeclaration>> m_parameterDeclarations;
     Linkage m_linkage;
     InlineKind m_inlineKind;
     CompoundStatement m_compoundStatement;
 
 public:
     FunctionDefinition(Type type, Lexer::CTokenIterator nameToken,
-                       std::vector<std::unique_ptr<Declaration>> parameterDeclarations, Linkage linkage,
+                       std::vector<std::unique_ptr<VariableDeclaration>> parameterDeclarations, Linkage linkage,
                        InlineKind inlineKind, CompoundStatement compoundStatement)
         : Useable(std::in_place_type<FunctionDefinition>),
           m_type(std::move(type)),
@@ -2190,7 +2213,7 @@ public:
         return m_type;
     }
 
-    [[nodiscard]] const std::vector<std::unique_ptr<Declaration>>& getParameterDeclarations() const
+    [[nodiscard]] const std::vector<std::unique_ptr<VariableDeclaration>>& getParameterDeclarations() const
     {
         return m_parameterDeclarations;
     }
@@ -2304,18 +2327,14 @@ public:
 
 class TranslationUnit final
 {
-public:
-    using Variant = std::variant<std::unique_ptr<FunctionDefinition>, std::unique_ptr<Declaration>>;
-
-private:
-    std::vector<Variant> m_globals;
+    std::vector<IntrVarPtr<Useable>> m_globals;
 
 public:
     TranslationUnit() = default;
 
-    explicit TranslationUnit(std::vector<Variant> globals);
+    explicit TranslationUnit(std::vector<IntrVarPtr<Useable>> globals) : m_globals(std::move(globals)) {}
 
-    [[nodiscard]] const std::vector<Variant>& getGlobals() const
+    [[nodiscard]] const std::vector<IntrVarPtr<Useable>>& getGlobals() const
     {
         return m_globals;
     }

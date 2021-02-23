@@ -366,9 +366,9 @@ public:
 
     TranslationUnit visit(const Syntax::TranslationUnit& node);
 
-    std::vector<TranslationUnit::Variant> visit(const Syntax::FunctionDefinition& node);
+    std::vector<IntrVarPtr<Useable>> visit(const Syntax::FunctionDefinition& node);
 
-    using DeclRetVariant = std::variant<std::unique_ptr<Declaration>, std::shared_ptr<const ExpressionBase>>;
+    using DeclRetVariant = std::variant<IntrVarPtr<Declaration>, std::shared_ptr<const ExpressionBase>>;
 
     std::vector<DeclRetVariant> visit(const Syntax::Declaration& node);
 
