@@ -51,24 +51,15 @@ bool tryMatch(cld::Semantics::SemanticAnalysis& analysis, cld::Semantics::Semant
 }
 } // namespace
 
-void cld::Semantics::SemanticAnalysis::applyAttributes(AffectsAll applicant, std::vector<GNUAttribute>& attributes)
+void cld::Semantics::SemanticAnalysis::applyAttributes(AffectsAll applicant,
+                                                       const std::vector<GNUAttribute>& attributes)
 {
     using UnorderedMap =
-        std::unordered_map<std::string, std::function<std::pair<std::vector<GNUAttribute>::iterator, bool>(
-                                            std::vector<GNUAttribute>::iterator, SemanticAnalysis&, AffectsAll,
-                                            std::vector<GNUAttribute>&)>>;
+        std::unordered_map<std::string, std::function<bool(const GNUAttribute&, SemanticAnalysis&, AffectsAll)>>;
     static UnorderedMap handlers = [&] {
         UnorderedMap result;
-        auto lambda =
-            [](auto memberFunction, std::vector<GNUAttribute>::iterator iter, SemanticAnalysis& analysis,
-               AffectsAll applicant,
-               std::vector<GNUAttribute>& attributes) -> std::pair<std::vector<GNUAttribute>::iterator, bool> {
-            if (tryMatch(analysis, applicant, memberFunction, *iter))
-            {
-                return {attributes.erase(iter), true};
-            }
-            return {++iter, false};
-        };
+        auto lambda = [](auto memberFunction, const GNUAttribute& iter, SemanticAnalysis& analysis,
+                         AffectsAll applicant) -> bool { return tryMatch(analysis, applicant, memberFunction, iter); };
         auto unixSpelling = [&](std::string name, auto function) {
             result.emplace(name, function);
             result.emplace("__" + name + "__", function);
@@ -77,38 +68,37 @@ void cld::Semantics::SemanticAnalysis::applyAttributes(AffectsAll applicant, std
         unixSpelling("used", cld::bind_front(lambda, &SemanticAnalysis::applyUsedAttribute));
         return result;
     }();
-    for (auto iter = attributes.begin(); iter != attributes.end();)
+    for (auto& iter : attributes)
     {
-        auto name = Lexer::normalizeSpelling(iter->name->getRepresentation(m_sourceInterface));
+        auto name = Lexer::normalizeSpelling(iter.name->getRepresentation(m_sourceInterface));
         if (auto result = handlers.find(name); result != handlers.end())
         {
-            auto [next, applied] = (result->second)(iter, *this, applicant, attributes);
+            auto applied = (result->second)(iter, *this, applicant);
             if (!applied)
             {
                 cld::match(
                     applicant,
                     [&](VariableDeclaration* decl) {
                         log(Warnings::Semantics::ATTRIBUTE_N_DOES_NOT_APPLY_TO_VARIABLES.args(
-                            *iter->name, m_sourceInterface, *iter->name, *decl->getNameToken()));
+                            *iter.name, m_sourceInterface, *iter.name, *decl->getNameToken()));
                     },
                     [&](FunctionDeclaration* decl) {
                         log(Warnings::Semantics::ATTRIBUTE_N_DOES_NOT_APPLY_TO_FUNCTIONS.args(
-                            *iter->name, m_sourceInterface, *iter->name, *decl->getNameToken()));
+                            *iter.name, m_sourceInterface, *iter.name, *decl->getNameToken()));
                     },
                     [&](FunctionDefinition* def) {
                         log(Warnings::Semantics::ATTRIBUTE_N_DOES_NOT_APPLY_TO_VARIABLES.args(
-                            *iter->name, m_sourceInterface, *iter->name, *def->getNameToken()));
+                            *iter.name, m_sourceInterface, *iter.name, *def->getNameToken()));
                     },
                     [&](Type*) {
-                        log(Warnings::Semantics::ATTRIBUTE_N_DOES_NOT_APPLY_TO_TYPES.args(
-                            *iter->name, m_sourceInterface, *iter->name));
+                        log(Warnings::Semantics::ATTRIBUTE_N_DOES_NOT_APPLY_TO_TYPES.args(*iter.name, m_sourceInterface,
+                                                                                          *iter.name));
                     });
             }
-            iter = next;
         }
         else
         {
-            iter++;
+            log(Warnings::Semantics::UNKNOWN_ATTRIBUTE_N_IGNORED.args(*iter.name, m_sourceInterface, *iter.name));
         }
     }
 }

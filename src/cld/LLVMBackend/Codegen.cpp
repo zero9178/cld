@@ -1809,7 +1809,8 @@ public:
             case cld::Semantics::Linkage::None: break;
         }
         CLD_ASSERT(std::holds_alternative<cld::Semantics::FunctionType>(declaration.getType().getVariant()));
-        if (!m_options.emitAllDecls && !declaration.isUsed())
+        if (!m_options.emitAllDecls && !declaration.isUsed()
+            && !declaration.hasAttribute<cld::Semantics::UsedAttribute>())
         {
             return nullptr;
         }
@@ -1844,7 +1845,7 @@ public:
         if (declaration.getLifetime() == cld::Semantics::Lifetime::Static)
         {
             if (!m_options.emitAllDecls && declaration.getLinkage() == cld::Semantics::Linkage::Internal
-                && !declaration.isUsed())
+                && !declaration.isUsed() && !declaration.hasAttribute<cld::Semantics::UsedAttribute>())
             {
                 return nullptr;
             }
@@ -2019,7 +2020,7 @@ public:
     void visit(const cld::Semantics::FunctionDefinition& functionDefinition)
     {
         if (!m_options.emitAllDecls && functionDefinition.getLinkage() != cld::Semantics::Linkage::External
-            && !functionDefinition.isUsed())
+            && !functionDefinition.isUsed() && !functionDefinition.hasAttribute<cld::Semantics::UsedAttribute>())
         {
             return;
         }

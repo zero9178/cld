@@ -488,7 +488,7 @@ public:
     using AffectsVariableFunction = std::variant<VariableDeclaration * CLD_NON_NULL, FunctionDeclaration * CLD_NON_NULL,
                                                  FunctionDefinition * CLD_NON_NULL>;
 
-    void applyAttributes(AffectsAll applicant, std::vector<GNUAttribute>& attributes);
+    void applyAttributes(AffectsAll applicant, const std::vector<GNUAttribute>& attributes);
 
     void applyAlignAttribute(AffectsAll applicant, const GNUAttribute& attribute);
 

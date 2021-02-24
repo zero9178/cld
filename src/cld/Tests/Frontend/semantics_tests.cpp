@@ -4849,11 +4849,21 @@ TEST_CASE("Semantics __sync_*", "[semantics]")
         x64linux);
 }
 
+TEST_CASE("Semantics __attribute__", "[semantics]")
+{
+    SEMA_PRODUCES("int i __attribute__((thisAttributeShouldIdeallyNeverExit));",
+                  ProducesWarning(UNKNOWN_ATTRIBUTE_N_IGNORED, "'thisAttributeShouldIdeallyNeverExit'"));
+}
+
 TEST_CASE("Semantics __attribute__((used))", "[semantics]")
 {
     SEMA_PRODUCES("typedef int i __attribute__((used));",
                   ProducesWarning(ATTRIBUTE_N_DOES_NOT_APPLY_TO_TYPES, "'used'"));
     SEMA_PRODUCES("static int i __attribute__((used));",
+                  ProducesNoErrors() && !ProducesWarning(UNUSED_VARIABLE_N, "'i'"));
+    SEMA_PRODUCES("static int i __attribute__((used(name)));",
+                  ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_N_GOT_N, "'used'", "0", "1"));
+    SEMA_PRODUCES("static int i __attribute__((used()));",
                   ProducesNoErrors() && !ProducesWarning(UNUSED_VARIABLE_N, "'i'"));
     SEMA_PRODUCES("static int foo(void) __attribute__((used));",
                   ProducesNoErrors() && !ProducesWarning(UNUSED_FUNCTION_N, "'foo'"));

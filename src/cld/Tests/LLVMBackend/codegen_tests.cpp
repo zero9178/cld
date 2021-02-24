@@ -5851,3 +5851,27 @@ TEST_CASE("LLVM codegen __sync_*", "[LLVM]")
         CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "function") == 1);
     }
 }
+
+TEST_CASE("LLVM codegen __attribute__((used))", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    llvm::Module module("", context);
+    SECTION("Function")
+    {
+        auto program = generateProgram("static void foo(void) __attribute__((used)) {}");
+        cld::CGLLVM::generateLLVM(module, program, cld::Triple::native());
+        CAPTURE(module);
+        REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
+        auto* function = module.getFunction("foo");
+        REQUIRE(function);
+    }
+    SECTION("Function")
+    {
+        auto program = generateProgram("static int i __attribute__((used));");
+        cld::CGLLVM::generateLLVM(module, program, cld::Triple::native());
+        CAPTURE(module);
+        REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
+        auto* global = module.getGlobalVariable("i", true);
+        REQUIRE(global);
+    }
+}

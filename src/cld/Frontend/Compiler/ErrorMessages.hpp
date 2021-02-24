@@ -1095,6 +1095,8 @@ CREATE_WARNING(ATTRIBUTE_N_DOES_NOT_APPLY_TO_VARIABLES, "ignored-attributes",
 CREATE_WARNING(ATTRIBUTE_N_DOES_NOT_APPLY_TO_FUNCTIONS, "ignored-attributes",
                "Attribute %0 does not apply to functions", Underline<0>, Underline<1>);
 
+CREATE_WARNING(UNKNOWN_ATTRIBUTE_N_IGNORED, "unknown-attributes", "Unknown attribute %0 ignored", Underline<0>);
+
 // __attribute__((used))
 
 CREATE_WARNING(ATTRIBUTE_USED_ONLY_APPLIES_TO_FUNCTIONS_WITH_INTERNAL_LINKAGE, "ignored-attributes",
