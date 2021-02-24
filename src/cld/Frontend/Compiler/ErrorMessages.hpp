@@ -894,6 +894,11 @@ CREATE_ERROR(BREAK_MUST_BE_WITHIN_A_SWITCH_OR_LOOP_STATEMENT, "Break must be wit
 
 CREATE_ERROR(CONTINUE_MUST_BE_WITHIN_A_LOOP_STATEMENT, "Continue must be within a loop statement", Underline<0>);
 
+// __attribute__
+
+CREATE_ERROR(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_N_GOT_N,
+             "Invalid number of arguments for attribute %0. Expected %1 got %2", Underline<0>);
+
 } // namespace Semantics
 
 namespace Lexer
@@ -1078,6 +1083,26 @@ CREATE_WARNING(SECOND_ARGUMENT_OF_VA_START_SHOULD_BE_THE_LAST_PARAMETER, "vararg
 CREATE_WARNING(UNUSED_VARIABLE_N, "unused-variable", "Unused variable %0", PointAt<0>);
 
 CREATE_WARNING(UNUSED_FUNCTION_N, "unused-function", "Unused function %0", PointAt<0>);
+
+// __attribute__
+
+CREATE_WARNING(ATTRIBUTE_N_DOES_NOT_APPLY_TO_TYPES, "ignored-attributes", "Attribute %0 does not apply to types",
+               Underline<0>);
+
+CREATE_WARNING(ATTRIBUTE_N_DOES_NOT_APPLY_TO_VARIABLES, "ignored-attributes",
+               "Attribute %0 does not apply to variables", Underline<0>, Underline<1>);
+
+CREATE_WARNING(ATTRIBUTE_N_DOES_NOT_APPLY_TO_FUNCTIONS, "ignored-attributes",
+               "Attribute %0 does not apply to functions", Underline<0>, Underline<1>);
+
+// __attribute__((used))
+
+CREATE_WARNING(ATTRIBUTE_USED_ONLY_APPLIES_TO_FUNCTIONS_WITH_INTERNAL_LINKAGE, "ignored-attributes",
+               "Attribute 'used' only applies to functions with internal linkage", Underline<0>, Underline<1>);
+
+CREATE_WARNING(ATTRIBUTE_USED_ONLY_APPLIES_TO_GLOBAL_VARIABLES_WITH_INTERNAL_LINKAGE, "ignored-attributes",
+               "Attribute 'used' only applies to global variables with internal linkage", Underline<0>, Underline<1>);
+
 } // namespace Semantics
 namespace Lexer
 {

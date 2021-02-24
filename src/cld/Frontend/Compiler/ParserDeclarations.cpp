@@ -457,7 +457,7 @@ std::optional<cld::Syntax::ExternalDeclaration>
         context.addToScope(Semantics::declaratorToLoc(*declarator)->getText(),
                            {start, compoundStatement->begin(), Semantics::declaratorToLoc(*declarator)});
         return FunctionDefinition(start, begin, std::move(declarationSpecifiers), std::move(*declarator),
-                                  std::move(declarations), std::move(*compoundStatement));
+                                  std::move(attributes), std::move(declarations), std::move(*compoundStatement));
     }
 
     return finishDeclaration(std::move(declarationSpecifiers), start, begin, end, context,

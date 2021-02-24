@@ -10,6 +10,7 @@
 
 #include <tsl/ordered_map.h>
 
+#include "Attributes.hpp"
 #include "LanguageOptions.hpp"
 #include "Lexer.hpp"
 
@@ -488,7 +489,7 @@ public:
     [[nodiscard]] bool operator!=(const PointerType& rhs) const;
 };
 
-class Type final
+class Type final : public AttributeHolder<TypeAttribute>
 {
 public:
     using Variant = std::variant<std::monostate, PrimitiveType, ArrayType, AbstractArrayType, ValArrayType,
@@ -496,6 +497,7 @@ public:
 
 private:
     Variant m_type;
+    std::vector<TypeAttribute> m_typeAttributes;
     std::string_view m_name;
     bool m_isConst : 1;
     bool m_isVolatile : 1;
@@ -548,6 +550,45 @@ public:
     [[nodiscard]] bool isUndefined() const
     {
         return std::holds_alternative<std::monostate>(m_type);
+    }
+
+    [[nodiscard]] const std::vector<TypeAttribute>& getTypeAttributes() const
+    {
+        return m_typeAttributes;
+    }
+
+    template <class T>
+    const T& getAttribute() const
+    {
+        auto result = std::find_if(m_typeAttributes.begin(), m_typeAttributes.end(),
+                                   [](auto&& value) { return std::holds_alternative<T>(value); });
+        CLD_ASSERT(result != m_typeAttributes.end());
+        return cld::get<T>(*result);
+    }
+
+    template <class T>
+    const T* getAttributeIf() const
+    {
+        auto result = std::find_if(m_typeAttributes.begin(), m_typeAttributes.end(),
+                                   [](auto&& value) { return std::holds_alternative<T>(value); });
+        if (result == m_typeAttributes.end())
+        {
+            return nullptr;
+        }
+        return &cld::get<T>(*result);
+    }
+
+    template <class T>
+    bool hasAttribute() const
+    {
+        return std::find_if(m_typeAttributes.begin(), m_typeAttributes.end(),
+                            [](auto&& value) { return std::holds_alternative<T>(value); })
+               != m_typeAttributes.end();
+    }
+
+    void addAttribute(TypeAttribute&& typeAttribute)
+    {
+        m_typeAttributes.push_back(std::move(typeAttribute));
     }
 
     // Likely replaced with an interface soon?
@@ -2110,7 +2151,7 @@ enum class InlineKind : std::uint8_t
     None,
 };
 
-class FunctionDeclaration final : public Declaration
+class FunctionDeclaration final : public Declaration, public AttributeHolder<FunctionAttribute>
 {
     InlineKind m_inlineKind;
 
@@ -2139,7 +2180,7 @@ enum class Lifetime : std::uint8_t
     Register
 };
 
-class VariableDeclaration final : public Declaration
+class VariableDeclaration final : public Declaration, public AttributeHolder<VariableAttribute>
 {
 public:
     enum Kind : std::uint8_t
@@ -2150,17 +2191,18 @@ public:
     };
 
 private:
+    std::vector<VariableAttribute> m_variableAttributes;
+    std::optional<Initializer> m_initializer;
     Lifetime m_lifetime;
     Kind m_kind;
-    std::optional<Initializer> m_initializer;
 
 public:
     VariableDeclaration(Type type, Linkage linkage, Lifetime lifetime, Lexer::CTokenIterator nameToken, Kind kind,
                         std::optional<Initializer> initializer = {})
         : Declaration(std::in_place_type<VariableDeclaration>, std::move(type), linkage, nameToken),
+          m_initializer(std::move(initializer)),
           m_lifetime(lifetime),
-          m_kind(kind),
-          m_initializer(std::move(initializer))
+          m_kind(kind)
     {
     }
 
@@ -2180,7 +2222,7 @@ public:
     }
 };
 
-class FunctionDefinition final : public Useable
+class FunctionDefinition final : public Useable, public AttributeHolder<FunctionAttribute>
 {
     Type m_type;
     Lexer::CTokenIterator m_nameToken;

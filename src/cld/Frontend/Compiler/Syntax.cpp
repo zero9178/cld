@@ -1187,10 +1187,12 @@ const std::vector<cld::Syntax::ExternalDeclaration>& cld::Syntax::TranslationUni
 cld::Syntax::FunctionDefinition::FunctionDefinition(
     Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
     std::vector<cld::Syntax::DeclarationSpecifier>&& declarationSpecifiers, cld::Syntax::Declarator&& declarator,
-    std::vector<cld::Syntax::Declaration>&& declarations, cld::Syntax::CompoundStatement&& compoundStatement)
+    std::optional<GNUAttributes>&& optionalAttributes, std::vector<cld::Syntax::Declaration>&& declarations,
+    cld::Syntax::CompoundStatement&& compoundStatement)
     : Node(begin, end),
       m_declarationSpecifiers(std::move(declarationSpecifiers)),
       m_declarator(std::move(declarator)),
+      m_optionalAttributes(std::move(optionalAttributes)),
       m_declarations(std::move(declarations)),
       m_compoundStatement(std::move(compoundStatement))
 {
@@ -1204,6 +1206,11 @@ const std::vector<cld::Syntax::DeclarationSpecifier>& cld::Syntax::FunctionDefin
 const cld::Syntax::Declarator& cld::Syntax::FunctionDefinition::getDeclarator() const
 {
     return m_declarator;
+}
+
+const std::optional<cld::Syntax::GNUAttributes>& cld::Syntax::FunctionDefinition::getOptionalAttributes() const
+{
+    return m_optionalAttributes;
 }
 
 const std::vector<cld::Syntax::Declaration>& cld::Syntax::FunctionDefinition::getDeclarations() const

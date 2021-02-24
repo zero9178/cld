@@ -2111,22 +2111,29 @@ public:
 /**
  * <FunctionDefinition> ::= <DeclarationSpecifier> {<DeclarationSpecifier>} <Declarator> { <Declaration> }
  *                          <CompoundStatement>
+ *
+ * [GNU]: <FunctionDefinition> ::= <DeclarationSpecifier> {<DeclarationSpecifier>} <Declarator> [<GNUAttribute>]
+ *                                 { <Declaration> } <CompoundStatement>
  */
 class FunctionDefinition final : public Node
 {
     std::vector<DeclarationSpecifier> m_declarationSpecifiers;
     Declarator m_declarator;
+    std::optional<GNUAttributes> m_optionalAttributes;
     std::vector<Declaration> m_declarations;
     CompoundStatement m_compoundStatement;
 
 public:
     FunctionDefinition(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                        std::vector<DeclarationSpecifier>&& declarationSpecifiers, Declarator&& declarator,
-                       std::vector<Declaration>&& declarations, CompoundStatement&& compoundStatement);
+                       std::optional<GNUAttributes>&& optionalAttributes, std::vector<Declaration>&& declarations,
+                       CompoundStatement&& compoundStatement);
 
     [[nodiscard]] const std::vector<DeclarationSpecifier>& getDeclarationSpecifiers() const;
 
     [[nodiscard]] const Declarator& getDeclarator() const;
+
+    [[nodiscard]] const std::optional<GNUAttributes>& getOptionalAttributes() const;
 
     [[nodiscard]] const std::vector<Declaration>& getDeclarations() const;
 

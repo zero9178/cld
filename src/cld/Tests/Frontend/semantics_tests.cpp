@@ -4848,3 +4848,23 @@ TEST_CASE("Semantics __sync_*", "[semantics]")
         ProducesError(POINTER_ELEMENT_TYPE_IN_N_MUST_NOT_HAVE_A_SIZE_GREATER_THAN_8, "'__sync_fetch_and_add'"),
         x64linux);
 }
+
+TEST_CASE("Semantics __attribute__((used))", "[semantics]")
+{
+    SEMA_PRODUCES("typedef int i __attribute__((used));",
+                  ProducesWarning(ATTRIBUTE_N_DOES_NOT_APPLY_TO_TYPES, "'used'"));
+    SEMA_PRODUCES("static int i __attribute__((used));",
+                  ProducesNoErrors() && !ProducesWarning(UNUSED_VARIABLE_N, "'i'"));
+    SEMA_PRODUCES("static int foo(void) __attribute__((used));",
+                  ProducesNoErrors() && !ProducesWarning(UNUSED_FUNCTION_N, "'foo'"));
+    SEMA_PRODUCES("static int foo(void) __attribute__((used)){}",
+                  ProducesNoErrors() && !ProducesWarning(UNUSED_FUNCTION_N, "'foo'"));
+    SEMA_PRODUCES("int i __attribute__((used));",
+                  ProducesWarning(ATTRIBUTE_USED_ONLY_APPLIES_TO_GLOBAL_VARIABLES_WITH_INTERNAL_LINKAGE));
+    SEMA_PRODUCES("int foo(void) { int i __attribute__((used)); }",
+                  ProducesWarning(ATTRIBUTE_USED_ONLY_APPLIES_TO_GLOBAL_VARIABLES_WITH_INTERNAL_LINKAGE));
+    SEMA_PRODUCES("int foo(void) __attribute__((used));",
+                  ProducesWarning(ATTRIBUTE_USED_ONLY_APPLIES_TO_FUNCTIONS_WITH_INTERNAL_LINKAGE));
+    SEMA_PRODUCES("int foo(void) __attribute__((used)){}",
+                  ProducesWarning(ATTRIBUTE_USED_ONLY_APPLIES_TO_FUNCTIONS_WITH_INTERNAL_LINKAGE));
+}

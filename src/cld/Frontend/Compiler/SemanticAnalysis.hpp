@@ -119,7 +119,7 @@ public:
     {
         Lexer::CTokenIterator name;
         const Lexer::CToken* firstParamName;
-        std::vector<IntrVarPtr<ExpressionBase>> paramExpressions;
+        std::vector<std::shared_ptr<ExpressionBase>> paramExpressions;
     };
 
 private:
@@ -480,6 +480,21 @@ public:
     [[nodiscard]] std::unique_ptr<GNUASMStatement> visit(const Syntax::GNUASMStatement& node);
 
     [[nodiscard]] std::vector<GNUAttribute> visit(const Syntax::GNUAttributes& node);
+
+    using AffectsFunctions = std::variant<FunctionDeclaration * CLD_NON_NULL, FunctionDefinition * CLD_NON_NULL>;
+    using AffectsAll = std::variant<Type * CLD_NON_NULL, FunctionDeclaration * CLD_NON_NULL,
+                                    FunctionDefinition * CLD_NON_NULL, VariableDeclaration * CLD_NON_NULL>;
+    using AffectsTypeVariable = std::variant<VariableDeclaration * CLD_NON_NULL, Type * CLD_NON_NULL>;
+    using AffectsVariableFunction = std::variant<VariableDeclaration * CLD_NON_NULL, FunctionDeclaration * CLD_NON_NULL,
+                                                 FunctionDefinition * CLD_NON_NULL>;
+
+    void applyAttributes(AffectsAll applicant, std::vector<GNUAttribute>& attributes);
+
+    void applyAlignAttribute(AffectsAll applicant, const GNUAttribute& attribute);
+
+    void applyVectorSizeAttribute(AffectsTypeVariable applicant, const GNUAttribute& attribute);
+
+    void applyUsedAttribute(AffectsVariableFunction declaration, const GNUAttribute& attribute);
 };
 
 } // namespace cld::Semantics

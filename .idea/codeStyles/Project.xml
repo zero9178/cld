@@ -3,9 +3,6 @@
     <H2CodeStyleSettings version="5">
       <option name="USE_GENERAL_STYLE" value="false" />
     </H2CodeStyleSettings>
-    <H2CodeStyleSettings version="5">
-      <option name="USE_GENERAL_STYLE" value="false" />
-    </H2CodeStyleSettings>
     <Objective-C-extensions>
       <extensions>
         <pair source="cpp" header="hpp" fileNamingConvention="NONE" />
