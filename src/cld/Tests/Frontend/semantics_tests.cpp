@@ -4900,3 +4900,49 @@ TEST_CASE("Semantics __attribute__((vector_size(x)))", "[semantics]")
     SEMA_PRODUCES("typedef int i __attribute__((vector_size(20)));",
                   ProducesError(ARGUMENT_OF_VECTOR_SIZE_SHOULD_BE_A_POWER_OF_2_MULTIPLE_OF_THE_SIZE_OF_THE_BASE_TYPE));
 }
+
+TEST_CASE("Semantics vectors", "[semantics]")
+{
+    SECTION("Subscript operator")
+    {
+        auto& exp = generateExpression("void foo(void) {\n"
+                                       "__attribute__((vector_size(16))) int i;\n"
+                                       "i[0] = 1;\n"
+                                       "i[2];"
+                                       "}");
+        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getValueCategory() == ValueCategory::Lvalue);
+        CHECK(exp.is<SubscriptOperator>());
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(16))) int i;\n"
+                      "i[3.0] = 1;\n"
+                      "}",
+                      ProducesError(EXPECTED_OTHER_OPERAND_TO_BE_OF_INTEGER_TYPE));
+    }
+    SECTION("Unary minus")
+    {
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(16))) int i;\n"
+                      "-i;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(16))) float i;\n"
+                      "-i;\n"
+                      "}",
+                      ProducesNoErrors());
+    }
+    SECTION("Unary bitnot")
+    {
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(16))) int i;\n"
+                      "~i;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(16))) float i;\n"
+                      "~i;\n"
+                      "}",
+                      ProducesError(OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE, "'~'"));
+    }
+}

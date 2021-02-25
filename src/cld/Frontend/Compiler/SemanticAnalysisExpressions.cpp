@@ -99,6 +99,17 @@ bool cld::Semantics::SemanticAnalysis::doAssignmentLikeConstraints(
         return true;
     }
 
+    if (isVector(lhsType))
+    {
+        if (!rhsValue->getType().isUndefined()
+            && !typesAreCompatible(removeQualifiers(lhsType), removeQualifiers(rhsValue->getType())))
+        {
+            incompatibleTypes();
+            return false;
+        }
+        return true;
+    }
+
     if (!std::holds_alternative<PointerType>(lhsType.getVariant()))
     {
         return true;
@@ -725,12 +736,28 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         return std::make_unique<ErrorExpression>(node);
     }
     if (!std::holds_alternative<PointerType>(first->getType().getVariant())
-        && !std::holds_alternative<PointerType>(second->getType().getVariant()))
+        && !std::holds_alternative<PointerType>(second->getType().getVariant()) && !isVector(first->getType())
+        && !isVector(second->getType()))
     {
         log(Errors::Semantics::EXPECTED_ONE_OPERAND_TO_BE_OF_POINTER_TYPE.args(node.getPostFixExpression(),
                                                                                m_sourceInterface, *first, *second));
         return std::make_unique<ErrorExpression>(node);
     }
+    if (isVector(first->getType()) || isVector(second->getType()))
+    {
+        auto& vectorExpr = isVector(first->getType()) ? first : second;
+        auto& intExpr = &vectorExpr == &first ? second : first;
+        if (!isInteger(intExpr->getType()))
+        {
+            log(Errors::Semantics::EXPECTED_OTHER_OPERAND_TO_BE_OF_INTEGER_TYPE.args(*intExpr, m_sourceInterface,
+                                                                                     *intExpr));
+            return std::make_unique<ErrorExpression>(node);
+        }
+        auto elementType = cld::get<VectorType>(vectorExpr->getType().getVariant()).getType();
+        return std::make_unique<SubscriptOperator>(std::move(elementType), std::move(first), node.getOpenBracket(),
+                                                   std::move(second), node.getCloseBracket());
+    }
+
     auto& pointerExpr = std::holds_alternative<PointerType>(first->getType().getVariant()) ? first : second;
     auto& intExpr = &pointerExpr == &first ? second : first;
     if (!isInteger(intExpr->getType()))
@@ -1609,7 +1636,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Plus:
         {
             value = integerPromotion(std::move(value));
-            if (!value->getType().isUndefined() && !isArithmetic(value->getType()))
+            if (!value->getType().isUndefined() && !isArithmetic(value->getType()) && !isVector(value->getType()))
             {
                 log(Errors::Semantics::OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE.args(
                     *node.getUnaryToken(), m_sourceInterface, *node.getUnaryToken(), *value));
@@ -1627,7 +1654,8 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::BitNot:
         {
             value = integerPromotion(std::move(value));
-            if (!value->getType().isUndefined() && !isInteger(value->getType()))
+            if (!value->getType().isUndefined() && !isInteger(value->getType())
+                && (!isVector(value->getType()) || !isInteger(getVectorElementType(value->getType()))))
             {
                 log(Errors::Semantics::OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE.args(
                     *node.getUnaryToken(), m_sourceInterface, *node.getUnaryToken(), *value));

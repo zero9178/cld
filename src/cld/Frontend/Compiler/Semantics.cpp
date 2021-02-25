@@ -518,6 +518,11 @@ const cld::Semantics::Type& cld::Semantics::getArrayElementType(const Type& type
         [](const ValArrayType& arrayType) -> const Type& { return arrayType.getType(); });
 }
 
+const cld::Semantics::Type& cld::Semantics::getVectorElementType(const Type& type)
+{
+    return cld::get<VectorType>(type.getVariant()).getType();
+}
+
 bool cld::Semantics::isInteger(const Type& type)
 {
     return std::holds_alternative<PrimitiveType>(type.getVariant())
@@ -617,6 +622,11 @@ cld::Semantics::Type cld::Semantics::removeQualifiers(Type type)
 bool cld::Semantics::isAggregate(const Type& type)
 {
     return isRecord(type) || isArray(type);
+}
+
+bool cld::Semantics::isVector(const Type& type)
+{
+    return std::holds_alternative<VectorType>(type.getVariant());
 }
 
 bool cld::Semantics::isVariablyModified(const Type& type)
@@ -788,6 +798,11 @@ std::string typeToString(const cld::Semantics::Type& arg)
                 }
                 declarators += "]";
                 return arrayType.getType();
+            },
+            [&](const VectorType& vectorType) -> std::optional<Type> {
+                qualifiersAndSpecifiers += "__attribute__((vector_size(" + std::to_string(vectorType.getSize())
+                                           + " * sizeof(" + typeToString(vectorType.getType()) + ")))) ";
+                return vectorType.getType();
             },
             [&](const FunctionType& functionType) -> std::optional<Type> {
                 declarators += "(";
@@ -1149,4 +1164,35 @@ cld::Lexer::CTokenIterator cld::Semantics::ExpressionBase::end() const
 cld::Semantics::ErrorExpression::ErrorExpression(Type type, const cld::Syntax::Node& node)
     : ErrorExpression(std::move(type), node.begin(), node.end())
 {
+}
+
+cld::Semantics::VectorType::VectorType(std::shared_ptr<Type>&& type, std::uint64_t size)
+    : m_elementType(std::move(type)), m_size(size)
+{
+}
+
+cld::Semantics::Type cld::Semantics::VectorType::create(bool isConst, bool isVolatile, cld::Semantics::Type type,
+                                                        std::uint64_t size)
+{
+    return cld::Semantics::Type(isConst, isVolatile, VectorType(std::make_shared<Type>(std::move(type)), size));
+}
+
+bool cld::Semantics::VectorType::operator==(const cld::Semantics::VectorType& rhs) const
+{
+    return std::tie(m_size, m_elementType) == std::tie(rhs.m_size, rhs.m_elementType);
+}
+
+bool cld::Semantics::VectorType::operator!=(const cld::Semantics::VectorType& rhs) const
+{
+    return !(*this == rhs);
+}
+
+std::uint64_t cld::Semantics::VectorType::getSizeOf(const cld::Semantics::ProgramInterface& program) const
+{
+    return m_elementType->getSizeOf(program) * m_size;
+}
+
+std::uint64_t cld::Semantics::VectorType::getAlignOf(const cld::Semantics::ProgramInterface& program) const
+{
+    return getSizeOf(program);
 }

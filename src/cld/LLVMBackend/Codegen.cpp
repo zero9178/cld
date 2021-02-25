@@ -1450,6 +1450,10 @@ public:
                 }
                 return llvm::ArrayType::get(elementType, 0);
             },
+            [&](const cld::Semantics::VectorType& vectorType) -> llvm::Type* {
+                auto* elementType = visit(vectorType.getType());
+                return llvm::FixedVectorType::get(elementType, vectorType.getSize());
+            },
             [&](const std::monostate&) -> llvm::Type* { CLD_UNREACHABLE; },
             [&](const cld::Semantics::EnumType& enumType) -> llvm::Type* {
                 auto* enumDef = m_programInterface.getEnumDefinition(enumType.getId());
@@ -1584,6 +1588,13 @@ public:
             [&](const cld::Semantics::ValArrayType&) -> llvm::DIType* {
                 // TODO:
                 CLD_UNREACHABLE;
+            },
+            [&](const cld::Semantics::VectorType& vectorType) -> llvm::DIType* {
+                auto* element = visitDebug(vectorType.getType());
+                return m_debugInfo->createVectorType(
+                    vectorType.getType().getSizeOf(m_programInterface) * 8,
+                    vectorType.getType().getAlignOf(m_programInterface) * 8, element,
+                    m_debugInfo->getOrCreateArray(llvm::DISubrange::get(m_module.getContext(), vectorType.getSize())));
             },
             [&](const cld::Semantics::StructType& structType) -> llvm::DIType* {
                 auto result = m_debugTypes.find(structType);

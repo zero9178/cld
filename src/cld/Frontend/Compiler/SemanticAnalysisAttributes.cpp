@@ -179,6 +179,22 @@ void cld::Semantics::SemanticAnalysis::applyVectorSizeAttribute(AffectsTypeVaria
                           + std::to_string(size) + "*/ = " + multiple.toString()));
         return;
     }
+    cld::match(
+        applicant,
+        [&](const std::pair<Type*, Lexer::CTokenIterator>& pair) {
+            *pair.first =
+                VectorType::create(baseType.isConst(), baseType.isVolatile(), removeQualifiers(std::move(baseType)),
+                                   multiple.getInteger().getZExtValue());
+        },
+        [&](VariableDeclaration* variableDeclaration) {
+            auto newType =
+                VectorType::create(baseType.isConst(), baseType.isVolatile(), removeQualifiers(std::move(baseType)),
+                                   multiple.getInteger().getZExtValue());
+            *variableDeclaration =
+                VariableDeclaration(std::move(newType), variableDeclaration->getLinkage(),
+                                    variableDeclaration->getLifetime(), variableDeclaration->getNameToken(),
+                                    variableDeclaration->getKind(), std::move(*variableDeclaration).getInitializer());
+        });
 }
 
 void cld::Semantics::SemanticAnalysis::applyUsedAttribute(AffectsVariableFunction applicant,

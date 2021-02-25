@@ -489,11 +489,40 @@ public:
     [[nodiscard]] bool operator!=(const PointerType& rhs) const;
 };
 
+class VectorType final
+{
+    std::shared_ptr<const Type> m_elementType;
+    std::uint64_t m_size;
+
+    VectorType(std::shared_ptr<Type>&& type, std::uint64_t size);
+
+public:
+    [[nodiscard]] static Type create(bool isConst, bool isVolatile, Type type, std::uint64_t size);
+
+    [[nodiscard]] const Type& getType() const
+    {
+        return *m_elementType;
+    }
+
+    [[nodiscard]] std::uint64_t getSize() const
+    {
+        return m_size;
+    }
+
+    [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface& program) const;
+
+    [[nodiscard]] std::uint64_t getAlignOf(const ProgramInterface& program) const;
+
+    [[nodiscard]] bool operator==(const VectorType& rhs) const;
+
+    [[nodiscard]] bool operator!=(const VectorType& rhs) const;
+};
+
 class Type final : public AttributeHolder<TypeAttribute>
 {
 public:
     using Variant = std::variant<std::monostate, PrimitiveType, ArrayType, AbstractArrayType, ValArrayType,
-                                 FunctionType, StructType, UnionType, EnumType, PointerType>;
+                                 FunctionType, StructType, UnionType, EnumType, PointerType, VectorType>;
 
 private:
     Variant m_type;
@@ -2176,9 +2205,14 @@ public:
         return m_kind;
     }
 
-    [[nodiscard]] const std::optional<Initializer>& getInitializer() const
+    [[nodiscard]] const std::optional<Initializer>& getInitializer() const&
     {
         return m_initializer;
+    }
+
+    [[nodiscard]] std::optional<Initializer>&& getInitializer() &&
+    {
+        return std::move(m_initializer);
     }
 };
 
@@ -2357,6 +2391,8 @@ Program analyse(const Syntax::TranslationUnit& parseTree, CSourceObject&& cToken
 
 [[nodiscard]] const Type& getArrayElementType(const Type& type);
 
+[[nodiscard]] const Type& getVectorElementType(const Type& type);
+
 [[nodiscard]] Type adjustParameterType(Type type);
 
 [[nodiscard]] bool isInteger(const Type& type);
@@ -2380,6 +2416,8 @@ Program analyse(const Syntax::TranslationUnit& parseTree, CSourceObject&& cToken
 [[nodiscard]] bool isCharType(const Type& type);
 
 [[nodiscard]] bool isAggregate(const Type& type);
+
+[[nodiscard]] bool isVector(const Type& type);
 
 [[nodiscard]] bool isVariablyModified(const Type& type);
 
@@ -2515,6 +2553,15 @@ struct hash<cld::Semantics::PointerType>
     std::size_t operator()(const cld::Semantics::PointerType& type) const noexcept
     {
         return cld::hashCombine(type.isRestricted(), type.getElementType());
+    }
+};
+
+template <>
+struct hash<cld::Semantics::VectorType>
+{
+    std::size_t operator()(const cld::Semantics::VectorType& type) const noexcept
+    {
+        return cld::hashCombine(type.getSize(), type.getType());
     }
 };
 
