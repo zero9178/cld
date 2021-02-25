@@ -1769,13 +1769,15 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             return visit(unaryExpression);
         },
         [&](const Syntax::CastExpression::CastVariant& cast) -> IntrVarPtr<ExpressionBase> {
-            auto type =
-                declaratorsToType(cast.typeName.getSpecifierQualifiers(), cast.typeName.getAbstractDeclarator());
+            std::vector<GNUAttribute> attributes;
+            auto type = declaratorsToType(cast.typeName.getSpecifierQualifiers(), cast.typeName.getAbstractDeclarator(),
+                                          &attributes);
             if (type.isUndefined())
             {
                 visit(*cast.cast);
                 return std::make_unique<ErrorExpression>(node);
             }
+            applyAttributes(std::pair{&type, diag::getPointRange(cast.typeName)}, attributes);
             auto value = visit(*cast.cast);
             if (value->isUndefined())
             {
@@ -1787,20 +1789,44 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                 return std::make_unique<Cast>(removeQualifiers(type), cast.openParentheses, cast.closeParentheses,
                                               std::move(value));
             }
-            if (!isScalar(type))
+            if (!isScalar(type) && !isVector(type))
             {
                 log(Errors::Semantics::TYPE_IN_CAST_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
                     cast.typeName, m_sourceInterface, cast.typeName, type));
                 return std::make_unique<ErrorExpression>(node);
             }
-            if (!isScalar(value->getType()))
+            if (!isScalar(value->getType()) && !isVector(value->getType()))
             {
                 log(Errors::Semantics::EXPRESSION_IN_CAST_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
                     *value, m_sourceInterface, *value));
                 return std::make_unique<ErrorExpression>(node);
             }
             type = lvalueConversion(std::move(type));
-            if (isPointer(type))
+            if (isVector(type) || isVector(value->getType()))
+            {
+                auto toSize = type.getSizeOf(*this);
+                auto fromSize = value->getType().getSizeOf(*this);
+                if (toSize != fromSize)
+                {
+                    auto toString = "sizeof(" + diag::StringConverter<Type>::inArg(type, &m_sourceInterface)
+                                    + ") = " + std::to_string(toSize);
+                    auto fromString = "sizeof("
+                                      + diag::StringConverter<Type>::inArg(value->getType(), &m_sourceInterface)
+                                      + ") = " + std::to_string(fromSize);
+                    if (isVector(type))
+                    {
+                        log(Errors::Semantics::CANNOT_CAST_TO_VECTOR_TYPE_FROM_TYPE_OF_DIFFERING_SIZE.args(
+                            *value, m_sourceInterface, cast.typeName, toString, *value, fromString));
+                    }
+                    else
+                    {
+                        log(Errors::Semantics::CANNOT_CAST_FROM_VECTOR_TYPE_TO_TYPE_OF_DIFFERING_SIZE.args(
+                            *value, m_sourceInterface, cast.typeName, toString, *value, fromString));
+                    }
+                    return std::make_unique<ErrorExpression>(node);
+                }
+            }
+            else if (isPointer(type))
             {
                 if (!isPointer(value->getType()) && !isInteger(value->getType()))
                 {
@@ -2630,6 +2656,54 @@ std::unique_ptr<cld::Semantics::Conversion>
 void cld::Semantics::SemanticAnalysis::arithmeticConversion(IntrVarPtr<ExpressionBase>& lhs,
                                                             IntrVarPtr<ExpressionBase>& rhs)
 {
+    if (isVector(lhs->getType()) || isVector(rhs->getType()))
+    {
+        if (isVector(lhs->getType()) && isVector(rhs->getType()))
+        {
+            if (lhs->getType().getSizeOf(*this) != rhs->getType().getSizeOf(*this))
+            {
+                return;
+            }
+            if (removeQualifiers(getVectorElementType(lhs->getType()))
+                == removeQualifiers(getVectorElementType(rhs->getType())))
+            {
+                return;
+            }
+            auto& lhsElementType = getVectorElementType(lhs->getType());
+            auto& rhsElementType = getVectorElementType(rhs->getType());
+            auto lhsKind = cld::get<PrimitiveType>(lhsElementType.getVariant()).getKind();
+            auto rhsKind = cld::get<PrimitiveType>(rhsElementType.getVariant()).getKind();
+            if (lhsKind < rhsKind)
+            {
+                lhs = std::make_unique<Conversion>(rhsElementType, Conversion::ArithmeticConversion, std::move(lhs));
+                return;
+            }
+            rhs = std::make_unique<Conversion>(lhsElementType, Conversion::ArithmeticConversion, std::move(rhs));
+            return;
+        }
+        auto& vector = isVector(lhs->getType()) ? lhs : rhs;
+        auto& scalar = &vector == &lhs ? rhs : lhs;
+        if (!isArithmetic(scalar->getType()))
+        {
+            return;
+        }
+        auto& elementType = getVectorElementType(vector->getType());
+        auto scalarKind =
+            cld::get<PrimitiveType>(isEnum(scalar->getType()) ? integerPromotion(scalar->getType()).getVariant() :
+                                                                scalar->getType().getVariant())
+                .getKind();
+        auto elementKind = cld::get<PrimitiveType>(elementType.getVariant()).getKind();
+        if (elementKind == scalarKind)
+        {
+            return;
+        }
+        if (scalarKind < elementKind)
+        {
+            scalar = std::make_unique<Conversion>(elementType, Conversion::ArithmeticConversion,
+                                                  integerPromotion(std::move(scalar)));
+        }
+        return;
+    }
     lhs = integerPromotion(std::move(lhs));
     rhs = integerPromotion(std::move(rhs));
     if (!isArithmetic(lhs->getType()) || !isArithmetic(rhs->getType()))

@@ -11,7 +11,7 @@
 
 namespace
 {
-using PointLocation = cld::detail::Diagnostic::DiagnosticBase::PointLocation;
+using PointLocation = cld::diag::PointLocation;
 
 std::pair<PointLocation, PointLocation> toMacroId0Range(std::pair<PointLocation, PointLocation> location,
                                                         const cld::SourceInterface& sourceInterface)
@@ -261,11 +261,11 @@ auto cld::diag::after(const Lexer::TokenBase& token) -> std::tuple<const Lexer::
     return std::make_tuple(std::cref(token), token.getOffset() + token.getLength());
 }
 
-cld::Message cld::detail::Diagnostic::DiagnosticBase::print(std::pair<PointLocation, PointLocation> location,
-                                                            std::string_view message,
-                                                            llvm::MutableArrayRef<Argument> arguments,
-                                                            llvm::ArrayRef<Modifiers> modifiers,
-                                                            const SourceInterface& sourceInterface) const
+cld::Message
+    cld::detail::Diagnostic::DiagnosticBase::print(std::pair<diag::PointLocation, diag::PointLocation> location,
+                                                   std::string_view message, llvm::MutableArrayRef<Argument> arguments,
+                                                   llvm::ArrayRef<Modifiers> modifiers,
+                                                   const SourceInterface& sourceInterface) const
 {
     if (m_severity == Severity::Warning
         && (!sourceInterface.getLanguageOptions().enabledWarnings.count(to_string(m_name))
@@ -550,7 +550,7 @@ std::unordered_set<std::string_view>& cld::detail::Diagnostic::DiagnosticBase::a
 
 const std::unordered_set<std::string_view>& cld::diag::getAllWarnings()
 {
-    return detail::Diagnostic::DiagnosticBase::allWarnings();
+    return ::cld::detail::Diagnostic::DiagnosticBase::allWarnings();
 }
 
 cld::detail::Diagnostic::WarningRegistrar::WarningRegistrar(std::string_view name)

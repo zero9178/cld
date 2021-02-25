@@ -5,9 +5,8 @@
 #include "ErrorMessages.hpp"
 #include "SemanticUtil.hpp"
 
-template <class T>
 void cld::Semantics::SemanticAnalysis::handleParameterList(
-    Type& type, const Syntax::ParameterTypeList* parameterTypeList, T&& returnTypeLoc,
+    Type& type, const Syntax::ParameterTypeList* parameterTypeList, const diag::PointRange& returnTypeLoc,
     cld::function_ref<void(const Type&, Lexer::CTokenIterator, const std::vector<Syntax::DeclarationSpecifier>&, bool)>
         paramCallback,
     std::vector<GNUAttribute>* attributes)
@@ -301,12 +300,13 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::applyDeclaratorsImpl(
                 auto scope = cld::ScopeExit([&] { cld::match(noStaticOrAsterisk.getDirectDeclarator(), self); });
                 handleArray(type, noStaticOrAsterisk.getTypeQualifiers(),
                             noStaticOrAsterisk.getAssignmentExpression().get(), nullptr, false,
-                            noStaticOrAsterisk.getDirectDeclarator());
+                            diag::getPointRange(noStaticOrAsterisk.getDirectDeclarator()));
             },
             [&](auto&& self, const Syntax::DirectDeclaratorStatic& declaratorStatic) {
                 auto scope = cld::ScopeExit([&] { cld::match(declaratorStatic.getDirectDeclarator(), self); });
                 handleArray(type, declaratorStatic.getTypeQualifiers(), &declaratorStatic.getAssignmentExpression(),
-                            declaratorStatic.getStaticLoc(), false, declaratorStatic.getDirectDeclarator());
+                            declaratorStatic.getStaticLoc(), false,
+                            diag::getPointRange(declaratorStatic.getDirectDeclarator()));
             },
             [&](auto&& self, const Syntax::DirectDeclaratorAsterisk& asterisk) {
                 auto scope = cld::ScopeExit([&] { cld::match(asterisk.getDirectDeclarator(), self); });
@@ -316,7 +316,8 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::applyDeclaratorsImpl(
                     log(Errors::Semantics::STAR_IN_ARRAY_DECLARATOR_ONLY_ALLOWED_IN_FUNCTION_PROTOTYPES.args(
                         *asterisk.getAsterisk(), m_sourceInterface, *asterisk.getAsterisk()));
                 }
-                handleArray(type, asterisk.getTypeQualifiers(), nullptr, nullptr, true, asterisk.getDirectDeclarator());
+                handleArray(type, asterisk.getTypeQualifiers(), nullptr, nullptr, true,
+                            diag::getPointRange(asterisk.getDirectDeclarator()));
             },
             [&](auto&& self, const Syntax::DirectDeclaratorParenthesesIdentifiers& identifiers) {
                 auto scope = cld::ScopeExit([&] { cld::match(identifiers.getDirectDeclarator(), self); });
@@ -466,14 +467,16 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::applyDeclaratorsImpl(
                 }
                 if (&parameterList == declarationsOwner)
                 {
-                    handleParameterList(type, &parameterList.getParameterTypeList(),
-                                        /*TODO: better source location*/ parameterList.getDirectDeclarator(),
-                                        paramCallback);
+                    handleParameterList(
+                        type, &parameterList.getParameterTypeList(),
+                        /*TODO: better source location*/ diag::getPointRange(parameterList.getDirectDeclarator()),
+                        paramCallback);
                 }
                 else
                 {
-                    handleParameterList(type, &parameterList.getParameterTypeList(),
-                                        /*TODO: better source location*/ parameterList.getDirectDeclarator());
+                    handleParameterList(
+                        type, &parameterList.getParameterTypeList(),
+                        /*TODO: better source location*/ diag::getPointRange(parameterList.getDirectDeclarator()));
                 }
             });
     }
@@ -547,11 +550,12 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::applyDeclaratorsImpl(
                 }
                 if (asterisk.getDirectAbstractDeclarator())
                 {
-                    handleArray(type, {}, nullptr, nullptr, true, *asterisk.getDirectAbstractDeclarator());
+                    handleArray(type, {}, nullptr, nullptr, true,
+                                diag::getPointRange(*asterisk.getDirectAbstractDeclarator()));
                 }
                 else
                 {
-                    handleArray(type, {}, nullptr, nullptr, true, /*TODO:*/ asterisk);
+                    handleArray(type, {}, nullptr, nullptr, true, /*TODO:*/ diag::getPointRange(asterisk));
                 }
             },
             [&](auto&& self, const Syntax::DirectAbstractDeclaratorAssignmentExpression& expression) {
@@ -564,12 +568,12 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::applyDeclaratorsImpl(
                 if (expression.getDirectAbstractDeclarator())
                 {
                     handleArray(type, expression.getTypeQualifiers(), expression.getAssignmentExpression(), nullptr,
-                                false, *expression.getDirectAbstractDeclarator());
+                                false, diag::getPointRange(*expression.getDirectAbstractDeclarator()));
                 }
                 else
                 {
                     handleArray(type, expression.getTypeQualifiers(), expression.getAssignmentExpression(), nullptr,
-                                false, /*TODO:*/ expression);
+                                false, /*TODO:*/ diag::getPointRange(expression));
                 }
             },
             [&](auto&& self, const Syntax::DirectAbstractDeclaratorParameterTypeList& parameterTypeList) {
@@ -579,7 +583,8 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::applyDeclaratorsImpl(
                         cld::match(*parameterTypeList.getDirectAbstractDeclarator(), self);
                     }
                 });
-                handleParameterList(type, parameterTypeList.getParameterTypeList(), /*TODO:*/ parameterTypeList, {});
+                handleParameterList(type, parameterTypeList.getParameterTypeList(),
+                                    /*TODO:*/ diag::getPointRange(parameterTypeList), {});
             },
             [&](auto&& self, const Syntax::DirectAbstractDeclaratorStatic& declaratorStatic) {
                 auto scope = cld::ScopeExit([&] {
@@ -589,7 +594,8 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::applyDeclaratorsImpl(
                     }
                 });
                 handleArray(type, declaratorStatic.getTypeQualifiers(), &declaratorStatic.getAssignmentExpression(),
-                            declaratorStatic.getStaticLoc(), false, declaratorStatic.getAssignmentExpression());
+                            declaratorStatic.getStaticLoc(), false,
+                            diag::getPointRange(declaratorStatic.getAssignmentExpression()));
             });
     }
     return std::move(type);
@@ -1550,11 +1556,11 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitiveTypeSpecifiersTo
     return primKindToType(result->second.second);
 }
 
-template <class T>
 void cld::Semantics::SemanticAnalysis::handleArray(cld::Semantics::Type& type,
                                                    const std::vector<Syntax::TypeQualifier>& typeQualifiers,
                                                    const cld::Syntax::AssignmentExpression* assignmentExpression,
-                                                   const Lexer::CToken* isStatic, bool valArray, T&& returnTypeLoc)
+                                                   const Lexer::CToken* isStatic, bool valArray,
+                                                   const diag::PointRange& returnTypeLoc)
 {
     if (isFunctionType(type))
     {

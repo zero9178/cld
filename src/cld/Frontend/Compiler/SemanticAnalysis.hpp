@@ -10,6 +10,7 @@
 #include <functional>
 
 #include "ConstValue.hpp"
+#include "DiagnosticUtil.hpp"
 #include "Message.hpp"
 #include "ProgramInterface.hpp"
 #include "Syntax.hpp"
@@ -123,18 +124,16 @@ public:
     };
 
 private:
-    template <class T>
     void handleParameterList(Type& type, const Syntax::ParameterTypeList* CLD_NULLABLE parameterTypeList,
-                             T&& returnTypeLoc,
+                             const diag::PointRange& returnTypeLoc,
                              cld::function_ref<void(const Type&, Lexer::CTokenIterator,
                                                     const std::vector<Syntax::DeclarationSpecifier>&, bool)>
                                  paramCallback = {},
                              std::vector<GNUAttribute>* attributes = nullptr);
 
-    template <class T>
     void handleArray(Type& type, const std::vector<Syntax::TypeQualifier>& typeQualifiers,
                      const Syntax::AssignmentExpression* CLD_NULLABLE assignmentExpression,
-                     const Lexer::CToken* isStatic, bool valArray, T&& returnTypeLoc);
+                     const Lexer::CToken* isStatic, bool valArray, const diag::PointRange& returnTypeLoc);
 
     [[nodiscard]] bool isTypedef(std::string_view name) const;
 
@@ -483,10 +482,10 @@ public:
 
     using AffectsFunctions = std::variant<FunctionDeclaration * CLD_NON_NULL, FunctionDefinition * CLD_NON_NULL>;
     using AffectsAll =
-        std::variant<std::pair<Type * CLD_NON_NULL, Lexer::CTokenIterator>, FunctionDeclaration * CLD_NON_NULL,
+        std::variant<std::pair<Type * CLD_NON_NULL, diag::PointRange>, FunctionDeclaration * CLD_NON_NULL,
                      FunctionDefinition * CLD_NON_NULL, VariableDeclaration * CLD_NON_NULL>;
     using AffectsTypeVariable =
-        std::variant<VariableDeclaration * CLD_NON_NULL, std::pair<Type * CLD_NON_NULL, Lexer::CTokenIterator>>;
+        std::variant<VariableDeclaration * CLD_NON_NULL, std::pair<Type * CLD_NON_NULL, diag::PointRange>>;
     using AffectsVariableFunction = std::variant<VariableDeclaration * CLD_NON_NULL, FunctionDeclaration * CLD_NON_NULL,
                                                  FunctionDefinition * CLD_NON_NULL>;
 

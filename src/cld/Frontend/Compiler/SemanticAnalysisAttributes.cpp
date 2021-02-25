@@ -91,9 +91,9 @@ void cld::Semantics::SemanticAnalysis::applyAttributes(AffectsAll applicant,
                         log(Warnings::Semantics::ATTRIBUTE_N_DOES_NOT_APPLY_TO_VARIABLES.args(
                             *iter.name, m_sourceInterface, *iter.name, *def->getNameToken()));
                     },
-                    [&](const std::pair<Type*, Lexer::CTokenIterator>& pair) {
+                    [&](const std::pair<Type*, diag::PointRange>& pair) {
                         log(Warnings::Semantics::ATTRIBUTE_N_DOES_NOT_APPLY_TO_TYPES.args(*iter.name, m_sourceInterface,
-                                                                                          *iter.name, *pair.second));
+                                                                                          *iter.name, pair.second));
                     });
             }
         }
@@ -143,7 +143,7 @@ void cld::Semantics::SemanticAnalysis::applyVectorSizeAttribute(AffectsTypeVaria
     Type baseType = cld::match(
         applicant, [](VariableDeclaration* variableDeclaration) { return variableDeclaration->getType(); },
         [](auto pair) { return *pair.first; });
-    if (!isArithmetic(baseType))
+    if (!isArithmetic(baseType) || isEnum(baseType))
     {
         cld::match(
             applicant,
@@ -152,9 +152,24 @@ void cld::Semantics::SemanticAnalysis::applyVectorSizeAttribute(AffectsTypeVaria
                     *variableDeclaration->getNameToken(), m_sourceInterface, *variableDeclaration->getNameToken(),
                     baseType));
             },
-            [&](const std::pair<Type*, Lexer::CTokenIterator>& pair) {
+            [&](const std::pair<Type*, diag::PointRange>& pair) {
                 log(Errors::Semantics::VECTOR_SIZE_CAN_ONLY_BE_APPLIED_TO_ARITHMETIC_TYPES.args(
-                    *pair.second, m_sourceInterface, *pair.second, baseType));
+                    pair.second, m_sourceInterface, pair.second, baseType));
+            });
+        return;
+    }
+    if (cld::get<PrimitiveType>(baseType.getVariant()).getKind() == PrimitiveType::LongDouble)
+    {
+        cld::match(
+            applicant,
+            [&](VariableDeclaration* variableDeclaration) {
+                log(Errors::Semantics::VECTOR_SIZE_CAN_NOT_BE_APPLIED_TO_LONG_DOUBLE.args(
+                    *variableDeclaration->getNameToken(), m_sourceInterface, *variableDeclaration->getNameToken(),
+                    baseType));
+            },
+            [&](const std::pair<Type*, diag::PointRange>& pair) {
+                log(Errors::Semantics::VECTOR_SIZE_CAN_NOT_BE_APPLIED_TO_LONG_DOUBLE.args(
+                    pair.second, m_sourceInterface, pair.second, baseType));
             });
         return;
     }
@@ -181,7 +196,7 @@ void cld::Semantics::SemanticAnalysis::applyVectorSizeAttribute(AffectsTypeVaria
     }
     cld::match(
         applicant,
-        [&](const std::pair<Type*, Lexer::CTokenIterator>& pair) {
+        [&](const std::pair<Type*, diag::PointRange>& pair) {
             *pair.first =
                 VectorType::create(baseType.isConst(), baseType.isVolatile(), removeQualifiers(std::move(baseType)),
                                    multiple.getInteger().getZExtValue());

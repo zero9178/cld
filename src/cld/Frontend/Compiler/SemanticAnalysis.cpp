@@ -601,7 +601,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                     continue;
                 }
                 result.setName(loc->getText());
-                applyAttributes(std::pair{&result, loc}, thisAttributes);
+                applyAttributes(std::pair{&result, diag::getPointRange(*loc)}, thisAttributes);
                 auto [prev, noRedefinition] =
                     getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, result}});
                 if (!noRedefinition

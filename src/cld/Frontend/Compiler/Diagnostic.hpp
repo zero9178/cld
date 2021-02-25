@@ -14,6 +14,7 @@
 #include <ctre.hpp>
 
 #include "CustomDiag.hpp"
+#include "DiagnosticUtil.hpp"
 #include "Message.hpp"
 
 namespace cld
@@ -173,13 +174,6 @@ class DiagnosticBase
 public:
     static std::unordered_set<std::string_view>& allWarnings();
 
-    struct PointLocation
-    {
-        std::uint64_t offset;
-        std::uint32_t fileId;
-        std::uint32_t macroId;
-    };
-
 protected:
     struct Underline
     {
@@ -204,13 +198,13 @@ protected:
 
     struct Argument
     {
-        std::optional<std::pair<PointLocation, PointLocation>> range;
+        std::optional<std::pair<diag::PointLocation, diag::PointLocation>> range;
         std::optional<std::string> inFormatText;
         std::optional<std::string> inArgText;
         std::unordered_map<std::u32string_view, std::string> customModifiers;
     };
 
-    Message print(std::pair<PointLocation, PointLocation> location, std::string_view message,
+    Message print(std::pair<diag::PointLocation, diag::PointLocation> location, std::string_view message,
                   llvm::MutableArrayRef<Argument> arguments, llvm::ArrayRef<Modifiers> modifiers,
                   const SourceInterface& sourceInterface) const;
 
@@ -357,7 +351,11 @@ private:
     constexpr static bool locationConstraintCheck()
     {
         using U = std::decay_t<T>;
-        if constexpr (IsVariant<U>{})
+        if constexpr (std::is_same_v<diag::PointRange, U>)
+        {
+            return true;
+        }
+        else if constexpr (IsVariant<U>{})
         {
             constexpr auto size = std::variant_size_v<U>;
             return std::apply(
@@ -461,122 +459,6 @@ private:
                       "Argument must denote a location range");
         static_assert(!(constraint & TypeConstraint) || HasType<T>{}, "Argument must have a type");
     };
-
-    template <class T>
-    static std::pair<PointLocation, PointLocation> getPointRange(const T& arg)
-    {
-        using U = std::decay_t<T>;
-        if constexpr (std::is_base_of_v<Lexer::TokenBase, U>)
-        {
-            return {{arg.getOffset(), arg.getFileId(), arg.getMacroId()},
-                    {arg.getOffset() + arg.getLength(), arg.getFileId(), arg.getMacroId()}};
-        }
-        else if constexpr (std::is_convertible_v<U, std::uint64_t>)
-        {
-            return {{static_cast<std::uint64_t>(arg), 0, 0}, {static_cast<std::uint64_t>(arg) + 1, 0, 0}};
-        }
-        else if constexpr (IsIterable<T>{})
-        {
-            CLD_ASSERT(std::begin(arg) != std::end(arg));
-            auto& first = *std::begin(arg);
-            auto& last = *(std::end(arg) - 1);
-            if constexpr (std::is_pointer_v<
-                              std::decay_t<decltype(first)>> || IsSmartPtr<std::decay_t<decltype(first)>>{})
-            {
-                return {getPointRange(*first).first, getPointRange(*last).second};
-            }
-            else
-            {
-                return {getPointRange(first).first, getPointRange(last).second};
-            }
-        }
-        else if constexpr (IsVariant<U>{})
-        {
-            return cld::match(arg, [](auto&& value) {
-                using V = std::decay_t<decltype(value)>;
-                if constexpr (std::is_pointer_v<V> || IsSmartPtr<V>{})
-                {
-                    CLD_ASSERT(value);
-                    return getPointRange(*value);
-                }
-                else
-                {
-                    return getPointRange(value);
-                }
-            });
-        }
-        else if constexpr (std::tuple_size_v<U> == 2)
-        {
-            using T1 = std::decay_t<std::tuple_element_t<0, U>>;
-            using T2 = std::decay_t<std::tuple_element_t<1, U>>;
-            if constexpr (std::is_base_of_v<Lexer::TokenBase,
-                                            std::remove_pointer_t<
-                                                T1>> && std::is_base_of_v<Lexer::TokenBase, std::remove_pointer_t<T2>>)
-            {
-                auto& [arg1, arg2] = arg;
-                PointLocation first, second;
-                if constexpr (std::is_pointer_v<T1>)
-                {
-                    CLD_ASSERT(arg1);
-                    first = {arg1->getOffset(), arg1->getFileId(), arg1->getMacroId()};
-                }
-                else
-                {
-                    first = {arg1.getOffset(), arg1.getFileId(), arg1.getMacroId()};
-                }
-                if constexpr (std::is_pointer_v<T2>)
-                {
-                    CLD_ASSERT(arg2);
-                    second = {arg2->getOffset() + arg2->getLength(), arg2->getFileId(), arg2->getMacroId()};
-                }
-                else
-                {
-                    second = {arg2.getOffset() + arg2.getLength(), arg2.getFileId(), arg2.getMacroId()};
-                }
-                return {first, second};
-            }
-            else if constexpr (std::is_base_of_v<Lexer::TokenBase, T1> && std::is_convertible_v<T2, std::uint64_t>)
-            {
-                auto& [arg1, arg2] = arg;
-                return {{static_cast<std::uint64_t>(arg2), arg1.getFileId(), arg1.getMacroId()},
-                        {static_cast<std::uint64_t>(arg2) + 1, arg1.getFileId(), arg1.getMacroId()}};
-            }
-            else if constexpr (std::is_base_of_v<Lexer::TokenBase, T2> && std::is_convertible_v<T1, std::uint64_t>)
-            {
-                auto& [arg1, arg2] = arg;
-                return {{static_cast<std::uint64_t>(arg1), arg2.getFileId(), arg2.getMacroId()},
-                        {static_cast<std::uint64_t>(arg1) + 1, arg2.getFileId(), arg2.getMacroId()}};
-            }
-            else if constexpr (std::is_convertible_v<T1, std::uint64_t> && std::is_convertible_v<T2, std::uint64_t>)
-            {
-                auto& [arg1, arg2] = arg;
-                return {{static_cast<std::uint64_t>(arg1), 0, 0}, {static_cast<std::uint64_t>(arg2), 0, 0}};
-            }
-            else
-            {
-                auto& [arg1, arg2] = arg;
-                auto first = getPointRange(arg1);
-                auto second = getPointRange(arg2);
-                return {first.first, second.second};
-            }
-        }
-        else
-        {
-            using T1 = std::decay_t<std::tuple_element_t<0, U>>;
-            if constexpr (std::is_base_of_v<Lexer::TokenBase, T1>)
-            {
-                auto& [arg1, arg2, arg3] = arg;
-                return {{static_cast<std::uint64_t>(arg2), arg1.getFileId(), arg1.getMacroId()},
-                        {static_cast<std::uint64_t>(arg3), arg1.getFileId(), arg1.getMacroId()}};
-            }
-            else
-            {
-                auto& [arg1, arg2, arg3] = arg;
-                return {{static_cast<std::uint64_t>(arg1), arg3.getFileId(), arg3.getMacroId()},
-                        {static_cast<std::uint64_t>(arg2), arg3.getFileId(), arg3.getMacroId()}};
-            }
-        }
-    }
 
     template <auto&, std::size_t>
     constexpr static void checkConstraints()
@@ -719,7 +601,7 @@ Message Diagnostic<N, format, Mods...>::args(const T& location, const SourceInte
     constexpr auto u8array = Constexpr::utf32ToUtf8<u32string.size() * 4>(u32string);
     auto array = createArgumentArray(&sourceInterface, std::forward_as_tuple(std::forward<Args>(args)...),
                                      std::index_sequence_for<Args...>{});
-    return print(getPointRange(location), {u8array.data(), u8array.size()}, array, modifiers, sourceInterface);
+    return print(diag::getPointRange(location), {u8array.data(), u8array.size()}, array, modifiers, sourceInterface);
 }
 
 template <std::size_t N, auto& format, class... Mods>
@@ -811,7 +693,7 @@ auto Diagnostic<N, format, Mods...>::createArgumentArray(const SourceInterface* 
                           "If you are mean and want to circumvent this error, convert to std::string_view");
             if constexpr ((bool)(constraints[IntegerTy::value] & Constraint::LocationConstraint))
             {
-                result[IntegerTy::value].range = getPointRange(std::get<IntegerTy::value>(args));
+                result[IntegerTy::value].range = ::cld::diag::getPointRange(std::get<IntegerTy::value>(args));
             }
             if constexpr ((bool)(constraints[IntegerTy::value] & Constraint::StringConstraint))
             {

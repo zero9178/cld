@@ -4945,4 +4945,27 @@ TEST_CASE("Semantics vectors", "[semantics]")
                       "}",
                       ProducesError(OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE, "'~'"));
     }
+    SECTION("Casting")
+    {
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) int i;\n"
+                      "(long long)i;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) int i;\n"
+                      "(int)i;\n"
+                      "}",
+                      ProducesError(CANNOT_CAST_FROM_VECTOR_TYPE_TO_TYPE_OF_DIFFERING_SIZE));
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "int i;\n"
+                      "(__attribute__((vector_size(8))) int)i;\n"
+                      "}",
+                      ProducesError(CANNOT_CAST_TO_VECTOR_TYPE_FROM_TYPE_OF_DIFFERING_SIZE));
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) int i;\n"
+                      "(__attribute__((vector_size(8))) short)i;\n"
+                      "}",
+                      ProducesNoErrors());
+    }
 }

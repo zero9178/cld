@@ -671,6 +671,12 @@ CREATE_ERROR(CANNOT_CAST_POINTER_TYPE_TO_NON_INTEGER_AND_POINTER_TYPE,
 CREATE_ERROR(INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC, "Incomplete type %full0 used in pointer arithmetic",
              Annotate<1, 2>);
 
+CREATE_ERROR(CANNOT_CAST_TO_VECTOR_TYPE_FROM_TYPE_OF_DIFFERING_SIZE,
+             "Cannot cast to vector type from type of differing size", Annotate<0, 1>, Annotate<2, 3>);
+
+CREATE_ERROR(CANNOT_CAST_FROM_VECTOR_TYPE_TO_TYPE_OF_DIFFERING_SIZE,
+             "Cannot cast from vector type to type of differing size", Annotate<0, 1>, Annotate<2, 3>);
+
 // Initializer
 
 CREATE_ERROR(EXPECTED_INITIALIZER_TO_BE_AN_ARITHMETIC_TYPE, "Expected initializer to be an arithmetic type",
@@ -909,6 +915,9 @@ CREATE_ERROR(ARGUMENT_TO_VECTOR_SIZE_MUST_BE_A_POSITIVE_NUMBER, "Argument to 've
 
 CREATE_ERROR(VECTOR_SIZE_CAN_ONLY_BE_APPLIED_TO_VARIABLES_OF_ARITHMETIC_TYPES,
              "'vector_size' can only be applied to variables of arithmetic types", Annotate<0, 1>);
+
+CREATE_ERROR(VECTOR_SIZE_CAN_NOT_BE_APPLIED_TO_LONG_DOUBLE, "'vector_size' can not be applied to long double",
+             Annotate<0, 1>);
 
 CREATE_ERROR(VECTOR_SIZE_CAN_ONLY_BE_APPLIED_TO_ARITHMETIC_TYPES,
              "'vector_size' can only be applied to arithmetic types", Annotate<0, 1>);
