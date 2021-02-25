@@ -66,6 +66,7 @@ void cld::Semantics::SemanticAnalysis::applyAttributes(AffectsAll applicant,
         };
         unixSpelling("align", cld::bind_front(lambda, &SemanticAnalysis::applyAlignAttribute));
         unixSpelling("used", cld::bind_front(lambda, &SemanticAnalysis::applyUsedAttribute));
+        unixSpelling("vector_size", cld::bind_front(lambda, &SemanticAnalysis::applyVectorSizeAttribute));
         return result;
     }();
     for (auto& iter : attributes)
@@ -90,9 +91,9 @@ void cld::Semantics::SemanticAnalysis::applyAttributes(AffectsAll applicant,
                         log(Warnings::Semantics::ATTRIBUTE_N_DOES_NOT_APPLY_TO_VARIABLES.args(
                             *iter.name, m_sourceInterface, *iter.name, *def->getNameToken()));
                     },
-                    [&](Type*) {
+                    [&](const std::pair<Type*, Lexer::CTokenIterator>& pair) {
                         log(Warnings::Semantics::ATTRIBUTE_N_DOES_NOT_APPLY_TO_TYPES.args(*iter.name, m_sourceInterface,
-                                                                                          *iter.name));
+                                                                                          *iter.name, *pair.second));
                     });
             }
         }
@@ -108,6 +109,76 @@ void cld::Semantics::SemanticAnalysis::applyAlignAttribute(AffectsAll applicant,
 void cld::Semantics::SemanticAnalysis::applyVectorSizeAttribute(AffectsTypeVariable applicant,
                                                                 const GNUAttribute& attribute)
 {
+    auto argCount = (attribute.firstParamName ? 1 : 0) + attribute.paramExpressions.size();
+    if (argCount != 1)
+    {
+        log(Errors::Semantics::INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_N_GOT_N.args(
+            *attribute.name, m_sourceInterface, *attribute.name, 1, argCount));
+        return;
+    }
+    if (attribute.firstParamName)
+    {
+        log(Errors::Semantics::EXPECTED_INTEGER_CONSTANT_EXPRESSION_AS_ARGUMENT_TO_VECTOR_SIZE.args(
+            *attribute.firstParamName, m_sourceInterface, *attribute.firstParamName));
+        return;
+    }
+    if (!isInteger(attribute.paramExpressions[0]->getType()))
+    {
+        log(Errors::Semantics::EXPECTED_INTEGER_CONSTANT_EXPRESSION_AS_ARGUMENT_TO_VECTOR_SIZE.args(
+            *attribute.paramExpressions[0], m_sourceInterface, *attribute.paramExpressions[0]));
+        return;
+    }
+    auto result = evaluateConstantExpression(*attribute.paramExpressions[0]);
+    if (!result)
+    {
+        std::for_each(result.error().begin(), result.error().end(), cld::bind_front(&SemanticAnalysis::log, this));
+        return;
+    }
+    if (result->getInteger() < 0)
+    {
+        log(Errors::Semantics::ARGUMENT_TO_VECTOR_SIZE_MUST_BE_A_POSITIVE_NUMBER.args(
+            *attribute.paramExpressions[0], m_sourceInterface, *attribute.paramExpressions[0], *result));
+        return;
+    }
+    Type baseType = cld::match(
+        applicant, [](VariableDeclaration* variableDeclaration) { return variableDeclaration->getType(); },
+        [](auto pair) { return *pair.first; });
+    if (!isArithmetic(baseType))
+    {
+        cld::match(
+            applicant,
+            [&](VariableDeclaration* variableDeclaration) {
+                log(Errors::Semantics::VECTOR_SIZE_CAN_ONLY_BE_APPLIED_TO_VARIABLES_OF_ARITHMETIC_TYPES.args(
+                    *variableDeclaration->getNameToken(), m_sourceInterface, *variableDeclaration->getNameToken(),
+                    baseType));
+            },
+            [&](const std::pair<Type*, Lexer::CTokenIterator>& pair) {
+                log(Errors::Semantics::VECTOR_SIZE_CAN_ONLY_BE_APPLIED_TO_ARITHMETIC_TYPES.args(
+                    *pair.second, m_sourceInterface, *pair.second, baseType));
+            });
+        return;
+    }
+    auto size = baseType.getSizeOf(*this);
+    auto sizeConstValue = ConstValue(llvm::APSInt(llvm::APInt(result->getInteger().getBitWidth(), size)));
+    auto mod = result->modulo(sizeConstValue, getLanguageOptions());
+    if (mod.getInteger() != 0)
+    {
+        log(Errors::Semantics::ARGUMENT_OF_VECTOR_SIZE_MUST_BE_A_MULTIPLE_OF_THE_SIZE_OF_THE_BASE_TYPE.args(
+            *attribute.paramExpressions[0], m_sourceInterface, *attribute.paramExpressions[0],
+            result->toString() + " % sizeof(" + diag::StringConverter<Type>::inArg(baseType, &m_sourceInterface)
+                + ") /*" + std::to_string(size) + "*/ = " + mod.toString()));
+        return;
+    }
+    auto multiple = result->divide(sizeConstValue, getLanguageOptions());
+    if (!multiple.getInteger().isPowerOf2())
+    {
+        log(Errors::Semantics::ARGUMENT_OF_VECTOR_SIZE_SHOULD_BE_A_POWER_OF_2_MULTIPLE_OF_THE_SIZE_OF_THE_BASE_TYPE
+                .args(*attribute.paramExpressions[0], m_sourceInterface, *attribute.paramExpressions[0],
+                      result->toString() + " / sizeof("
+                          + diag::StringConverter<Type>::inArg(baseType, &m_sourceInterface) + ") /*"
+                          + std::to_string(size) + "*/ = " + multiple.toString()));
+        return;
+    }
 }
 
 void cld::Semantics::SemanticAnalysis::applyUsedAttribute(AffectsVariableFunction applicant,

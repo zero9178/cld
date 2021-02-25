@@ -497,7 +497,6 @@ public:
 
 private:
     Variant m_type;
-    std::vector<TypeAttribute> m_typeAttributes;
     std::string_view m_name;
     bool m_isConst : 1;
     bool m_isVolatile : 1;
@@ -550,45 +549,6 @@ public:
     [[nodiscard]] bool isUndefined() const
     {
         return std::holds_alternative<std::monostate>(m_type);
-    }
-
-    [[nodiscard]] const std::vector<TypeAttribute>& getTypeAttributes() const
-    {
-        return m_typeAttributes;
-    }
-
-    template <class T>
-    const T& getAttribute() const
-    {
-        auto result = std::find_if(m_typeAttributes.begin(), m_typeAttributes.end(),
-                                   [](auto&& value) { return std::holds_alternative<T>(value); });
-        CLD_ASSERT(result != m_typeAttributes.end());
-        return cld::get<T>(*result);
-    }
-
-    template <class T>
-    const T* getAttributeIf() const
-    {
-        auto result = std::find_if(m_typeAttributes.begin(), m_typeAttributes.end(),
-                                   [](auto&& value) { return std::holds_alternative<T>(value); });
-        if (result == m_typeAttributes.end())
-        {
-            return nullptr;
-        }
-        return &cld::get<T>(*result);
-    }
-
-    template <class T>
-    bool hasAttribute() const
-    {
-        return std::find_if(m_typeAttributes.begin(), m_typeAttributes.end(),
-                            [](auto&& value) { return std::holds_alternative<T>(value); })
-               != m_typeAttributes.end();
-    }
-
-    void addAttribute(TypeAttribute&& typeAttribute)
-    {
-        m_typeAttributes.push_back(std::move(typeAttribute));
     }
 
     // Likely replaced with an interface soon?

@@ -482,9 +482,11 @@ public:
     [[nodiscard]] std::vector<GNUAttribute> visit(const Syntax::GNUAttributes& node);
 
     using AffectsFunctions = std::variant<FunctionDeclaration * CLD_NON_NULL, FunctionDefinition * CLD_NON_NULL>;
-    using AffectsAll = std::variant<Type * CLD_NON_NULL, FunctionDeclaration * CLD_NON_NULL,
-                                    FunctionDefinition * CLD_NON_NULL, VariableDeclaration * CLD_NON_NULL>;
-    using AffectsTypeVariable = std::variant<VariableDeclaration * CLD_NON_NULL, Type * CLD_NON_NULL>;
+    using AffectsAll =
+        std::variant<std::pair<Type * CLD_NON_NULL, Lexer::CTokenIterator>, FunctionDeclaration * CLD_NON_NULL,
+                     FunctionDefinition * CLD_NON_NULL, VariableDeclaration * CLD_NON_NULL>;
+    using AffectsTypeVariable =
+        std::variant<VariableDeclaration * CLD_NON_NULL, std::pair<Type * CLD_NON_NULL, Lexer::CTokenIterator>>;
     using AffectsVariableFunction = std::variant<VariableDeclaration * CLD_NON_NULL, FunctionDeclaration * CLD_NON_NULL,
                                                  FunctionDefinition * CLD_NON_NULL>;
 

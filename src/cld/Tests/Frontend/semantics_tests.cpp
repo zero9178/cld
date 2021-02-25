@@ -4878,3 +4878,25 @@ TEST_CASE("Semantics __attribute__((used))", "[semantics]")
     SEMA_PRODUCES("int foo(void) __attribute__((used)){}",
                   ProducesWarning(ATTRIBUTE_USED_ONLY_APPLIES_TO_FUNCTIONS_WITH_INTERNAL_LINKAGE));
 }
+
+TEST_CASE("Semantics __attribute__((vector_size(x)))", "[semantics]")
+{
+    SEMA_PRODUCES("typedef int i __attribute__((vector_size));",
+                  ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_N_GOT_N, "'vector_size'", 1, 0));
+    SEMA_PRODUCES("typedef int i __attribute__((vector_size(3,5)));",
+                  ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_N_GOT_N, "'vector_size'", 1, 2));
+    SEMA_PRODUCES("typedef int i __attribute__((vector_size(x)));",
+                  ProducesError(EXPECTED_INTEGER_CONSTANT_EXPRESSION_AS_ARGUMENT_TO_VECTOR_SIZE));
+    SEMA_PRODUCES("typedef int i __attribute__((vector_size(3.5)));",
+                  ProducesError(EXPECTED_INTEGER_CONSTANT_EXPRESSION_AS_ARGUMENT_TO_VECTOR_SIZE));
+    SEMA_PRODUCES("typedef int i __attribute__((vector_size(-3)));",
+                  ProducesError(ARGUMENT_TO_VECTOR_SIZE_MUST_BE_A_POSITIVE_NUMBER));
+    SEMA_PRODUCES("typedef int* i __attribute__((vector_size(3)));",
+                  ProducesError(VECTOR_SIZE_CAN_ONLY_BE_APPLIED_TO_ARITHMETIC_TYPES));
+    SEMA_PRODUCES("int* i __attribute__((vector_size(3)));",
+                  ProducesError(VECTOR_SIZE_CAN_ONLY_BE_APPLIED_TO_VARIABLES_OF_ARITHMETIC_TYPES));
+    SEMA_PRODUCES("typedef int i __attribute__((vector_size(7)));",
+                  ProducesError(ARGUMENT_OF_VECTOR_SIZE_MUST_BE_A_MULTIPLE_OF_THE_SIZE_OF_THE_BASE_TYPE));
+    SEMA_PRODUCES("typedef int i __attribute__((vector_size(20)));",
+                  ProducesError(ARGUMENT_OF_VECTOR_SIZE_SHOULD_BE_A_POWER_OF_2_MULTIPLE_OF_THE_SIZE_OF_THE_BASE_TYPE));
+}

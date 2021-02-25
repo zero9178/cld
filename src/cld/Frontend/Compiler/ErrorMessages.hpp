@@ -899,6 +899,26 @@ CREATE_ERROR(CONTINUE_MUST_BE_WITHIN_A_LOOP_STATEMENT, "Continue must be within 
 CREATE_ERROR(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_N_GOT_N,
              "Invalid number of arguments for attribute %0. Expected %1 got %2", Underline<0>);
 
+// __attribute__((vector_size(n)))
+
+CREATE_ERROR(EXPECTED_INTEGER_CONSTANT_EXPRESSION_AS_ARGUMENT_TO_VECTOR_SIZE,
+             "Expected integer constant expression as argument to 'vector_size'", Underline<0>);
+
+CREATE_ERROR(ARGUMENT_TO_VECTOR_SIZE_MUST_BE_A_POSITIVE_NUMBER, "Argument to 'vector_size' must be a positive number",
+             Annotate<0, 1>);
+
+CREATE_ERROR(VECTOR_SIZE_CAN_ONLY_BE_APPLIED_TO_VARIABLES_OF_ARITHMETIC_TYPES,
+             "'vector_size' can only be applied to variables of arithmetic types", Annotate<0, 1>);
+
+CREATE_ERROR(VECTOR_SIZE_CAN_ONLY_BE_APPLIED_TO_ARITHMETIC_TYPES,
+             "'vector_size' can only be applied to arithmetic types", Annotate<0, 1>);
+
+CREATE_ERROR(ARGUMENT_OF_VECTOR_SIZE_MUST_BE_A_MULTIPLE_OF_THE_SIZE_OF_THE_BASE_TYPE,
+             "Argument of 'vector_size' must be a multiple of the size of the base type", Annotate<0, 1>);
+
+CREATE_ERROR(ARGUMENT_OF_VECTOR_SIZE_SHOULD_BE_A_POWER_OF_2_MULTIPLE_OF_THE_SIZE_OF_THE_BASE_TYPE,
+             "Argument of 'vector_size' must be a power of 2 multiple of the size of the base type", Annotate<0, 1>);
+
 } // namespace Semantics
 
 namespace Lexer
@@ -1087,7 +1107,7 @@ CREATE_WARNING(UNUSED_FUNCTION_N, "unused-function", "Unused function %0", Point
 // __attribute__
 
 CREATE_WARNING(ATTRIBUTE_N_DOES_NOT_APPLY_TO_TYPES, "ignored-attributes", "Attribute %0 does not apply to types",
-               Underline<0>);
+               Underline<0>, Underline<1>);
 
 CREATE_WARNING(ATTRIBUTE_N_DOES_NOT_APPLY_TO_VARIABLES, "ignored-attributes",
                "Attribute %0 does not apply to variables", Underline<0>, Underline<1>);
