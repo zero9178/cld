@@ -4968,4 +4968,69 @@ TEST_CASE("Semantics vectors", "[semantics]")
                       "}",
                       ProducesNoErrors());
     }
+    SECTION("Scalar conversion")
+    {
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) short i;\n"
+                      "i * 5;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) short i;\n"
+                      "i * 5.0;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) short i;\n"
+                      "i * 500000;\n"
+                      "}",
+                      ProducesError(CONVERSION_OF_SCALAR_IN_VECTOR_OPERATION_COULD_CAUSE_TRUNCATION));
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) short i;\n"
+                      "i * 5.1;\n"
+                      "}",
+                      ProducesError(CONVERSION_OF_SCALAR_IN_VECTOR_OPERATION_COULD_CAUSE_TRUNCATION));
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) float i;\n"
+                      "i * 5;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) float i;\n"
+                      "i * 5.0;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) float i;\n"
+                      "i * 5.03;\n"
+                      "}",
+                      ProducesError(CONVERSION_OF_SCALAR_IN_VECTOR_OPERATION_COULD_CAUSE_TRUNCATION));
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) float i;\n"
+                      "i * 4294967295;\n"
+                      "}",
+                      ProducesError(CONVERSION_OF_SCALAR_IN_VECTOR_OPERATION_COULD_CAUSE_TRUNCATION));
+    }
+    SECTION("Mul and div")
+    {
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) int i,i2;\n"
+                      "i / i2;\n"
+                      "i * i2;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) int i;\n"
+                      "__attribute__((vector_size(8))) short i2;\n"
+                      "i * i2;\n"
+                      "}",
+                      ProducesError(TYPE_OF_VECTOR_OPERANDS_OF_BINARY_OPERATOR_N_MUST_MATCH, "'*'"));
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) int i;\n"
+                      "__attribute__((vector_size(8))) unsigned int i2;\n"
+                      "i / i2;\n"
+                      "i * i2;\n"
+                      "}",
+                      ProducesNoErrors());
+    }
 }

@@ -1865,17 +1865,35 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase> cld::Semantics::SemanticAnalysis
             {
                 arithmeticConversion(value, rhsValue);
                 bool errors = false;
-                if (!value->isUndefined() && !isArithmetic(value->getType()))
+                if (!value->isUndefined() && !isArithmetic(value->getType()) && !isVector(value->getType()))
                 {
                     log(Errors::Semantics::LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE.args(
                         *value, m_sourceInterface, *token, *value));
                     errors = true;
                 }
-                if (!rhsValue->isUndefined() && !isArithmetic(rhsValue->getType()))
+                if (!rhsValue->isUndefined() && !isArithmetic(rhsValue->getType()) && !isVector(value->getType()))
                 {
                     log(Errors::Semantics::RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE.args(
                         *rhsValue, m_sourceInterface, *token, *rhsValue));
                     errors = true;
+                }
+                if (isVector(value->getType()) || isVector(rhsValue->getType()))
+                {
+                    if (isVector(value->getType()) && isVector(rhsValue->getType()))
+                    {
+                        if (rhsValue->getType() != value->getType())
+                        {
+                            log(Errors::Semantics::TYPE_OF_VECTOR_OPERANDS_OF_BINARY_OPERATOR_N_MUST_MATCH.args(
+                                *token, m_sourceInterface, *token, *value, *rhsValue));
+                            errors = true;
+                        }
+                    }
+                    else
+                    {
+                        log(Errors::Semantics::CONVERSION_OF_SCALAR_IN_VECTOR_OPERATION_COULD_CAUSE_TRUNCATION.args(
+                            *token, m_sourceInterface, *value, *rhsValue));
+                        errors = true;
+                    }
                 }
                 if (value->isUndefined() || rhsValue->isUndefined() || errors)
                 {
@@ -2658,27 +2676,47 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(IntrVarPtr<Expressio
 {
     if (isVector(lhs->getType()) || isVector(rhs->getType()))
     {
+        lhs = lvalueConversion(std::move(lhs));
+        rhs = lvalueConversion(std::move(rhs));
         if (isVector(lhs->getType()) && isVector(rhs->getType()))
         {
-            if (lhs->getType().getSizeOf(*this) != rhs->getType().getSizeOf(*this))
+            std::size_t lhsKind = cld::get<PrimitiveType>(getVectorElementType(lhs->getType()).getVariant()).getKind();
+            std::size_t rhsKind = cld::get<PrimitiveType>(getVectorElementType(rhs->getType()).getVariant()).getKind();
+            if (lhsKind == rhsKind)
             {
                 return;
             }
-            if (removeQualifiers(getVectorElementType(lhs->getType()))
-                == removeQualifiers(getVectorElementType(rhs->getType())))
+            if (lhsKind > rhsKind)
             {
+                switch (lhsKind)
+                {
+                    case PrimitiveType::UnsignedChar:
+                    case PrimitiveType::UnsignedShort:
+                    case PrimitiveType::UnsignedInt:
+                    case PrimitiveType::UnsignedLong:
+                    case PrimitiveType::UnsignedLongLong: lhsKind--;
+                    default: break;
+                }
+                if (lhsKind == rhsKind)
+                {
+                    rhs =
+                        std::make_unique<Conversion>(lhs->getType(), Conversion::ArithmeticConversion, std::move(rhs));
+                }
                 return;
             }
-            auto& lhsElementType = getVectorElementType(lhs->getType());
-            auto& rhsElementType = getVectorElementType(rhs->getType());
-            auto lhsKind = cld::get<PrimitiveType>(lhsElementType.getVariant()).getKind();
-            auto rhsKind = cld::get<PrimitiveType>(rhsElementType.getVariant()).getKind();
-            if (lhsKind < rhsKind)
+            switch (rhsKind)
             {
-                lhs = std::make_unique<Conversion>(rhsElementType, Conversion::ArithmeticConversion, std::move(lhs));
-                return;
+                case PrimitiveType::UnsignedChar:
+                case PrimitiveType::UnsignedShort:
+                case PrimitiveType::UnsignedInt:
+                case PrimitiveType::UnsignedLong:
+                case PrimitiveType::UnsignedLongLong: rhsKind--;
+                default: break;
             }
-            rhs = std::make_unique<Conversion>(lhsElementType, Conversion::ArithmeticConversion, std::move(rhs));
+            if (lhsKind == rhsKind)
+            {
+                lhs = std::make_unique<Conversion>(rhs->getType(), Conversion::ArithmeticConversion, std::move(lhs));
+            }
             return;
         }
         auto& vector = isVector(lhs->getType()) ? lhs : rhs;
@@ -2688,20 +2726,108 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(IntrVarPtr<Expressio
             return;
         }
         auto& elementType = getVectorElementType(vector->getType());
-        auto scalarKind =
+        std::size_t scalarKind =
             cld::get<PrimitiveType>(isEnum(scalar->getType()) ? integerPromotion(scalar->getType()).getVariant() :
                                                                 scalar->getType().getVariant())
                 .getKind();
-        auto elementKind = cld::get<PrimitiveType>(elementType.getVariant()).getKind();
+        // Signed and unsigned element types are seen as equal
+        switch (scalarKind)
+        {
+            case PrimitiveType::UnsignedChar:
+            case PrimitiveType::UnsignedShort:
+            case PrimitiveType::UnsignedInt:
+            case PrimitiveType::UnsignedLong:
+            case PrimitiveType::UnsignedLongLong: scalarKind--;
+            default: break;
+        }
+        std::size_t elementKind = cld::get<PrimitiveType>(elementType.getVariant()).getKind();
+        switch (elementKind)
+        {
+            case PrimitiveType::UnsignedChar:
+            case PrimitiveType::UnsignedShort:
+            case PrimitiveType::UnsignedInt:
+            case PrimitiveType::UnsignedLong:
+            case PrimitiveType::UnsignedLongLong: elementKind--;
+            default: break;
+        }
         if (elementKind == scalarKind)
         {
             return;
         }
-        if (scalarKind < elementKind)
+        // if they are both integers or both floating point types we can safely up cast
+        if (isInteger(elementType) == isInteger(scalar->getType()) && scalarKind < elementKind)
         {
-            scalar = std::make_unique<Conversion>(elementType, Conversion::ArithmeticConversion,
+            scalar = std::make_unique<Conversion>(vector->getType(), Conversion::ArithmeticConversion,
                                                   integerPromotion(std::move(scalar)));
+            return;
         }
+        // if the type of something is theoretically larger than the element type of a vector that leads to an error.
+        // Exception to that however is if the scalar is a constant that would fit into the element type of the vector
+        // aka can be safely downcast.
+        auto* constant = scalar->get_if<Constant>();
+        if (!constant)
+        {
+            return;
+        }
+        cld::match(
+            constant->getValue(),
+            [&](const llvm::APSInt& apsInt) {
+                if (isInteger(elementType))
+                {
+                    auto bitWidth = cld::get<PrimitiveType>(elementType.getVariant()).getBitCount();
+                    if (llvm::APSInt::isSameValue(apsInt.extOrTrunc(bitWidth), apsInt))
+                    {
+                        scalar = std::make_unique<Conversion>(vector->getType(), Conversion::ArithmeticConversion,
+                                                              integerPromotion(std::move(scalar)));
+                    }
+                }
+                else
+                {
+                    auto kind = cld::get<PrimitiveType>(elementType.getVariant()).getKind();
+                    llvm::APFloat temp(kind == PrimitiveType::Double ? llvm::APFloatBase::IEEEdouble() :
+                                                                       llvm::APFloatBase::IEEEsingle());
+                    temp.convertFromAPInt(apsInt, apsInt.isSigned(),
+                                          llvm::APFloatBase::roundingMode::NearestTiesToEven);
+                    auto copy = apsInt;
+                    bool exact;
+                    temp.convertToInteger(copy, llvm::APFloatBase::roundingMode::NearestTiesToEven, &exact);
+                    if (llvm::APSInt::isSameValue(copy, apsInt))
+                    {
+                        scalar = std::make_unique<Conversion>(vector->getType(), Conversion::ArithmeticConversion,
+                                                              integerPromotion(std::move(scalar)));
+                    }
+                }
+            },
+            [&](const llvm::APFloat& apFloat) {
+                if (isInteger(elementType))
+                {
+                    auto width = cld::get<PrimitiveType>(elementType.getVariant()).getBitCount();
+                    bool isSigned = cld::get<PrimitiveType>(elementType.getVariant()).isSigned();
+                    llvm::APSInt temp(width, !isSigned);
+                    bool exact = true;
+                    apFloat.convertToInteger(temp, llvm::APFloatBase::roundingMode::NearestTiesToEven, &exact);
+                    if (exact)
+                    {
+                        scalar = std::make_unique<Conversion>(vector->getType(), Conversion::ArithmeticConversion,
+                                                              integerPromotion(std::move(scalar)));
+                    }
+                }
+                else
+                {
+                    auto kind = cld::get<PrimitiveType>(elementType.getVariant()).getKind();
+                    bool notExact = false;
+                    auto temp = apFloat;
+                    temp.convert(kind == PrimitiveType::Double ? llvm::APFloatBase::IEEEdouble() :
+                                                                 llvm::APFloatBase::IEEEsingle(),
+                                 llvm::APFloatBase::roundingMode::NearestTiesToEven, &notExact);
+                    if (!notExact)
+                    {
+                        scalar = std::make_unique<Conversion>(vector->getType(), Conversion::ArithmeticConversion,
+                                                              integerPromotion(std::move(scalar)));
+                    }
+                }
+            },
+            [](auto&&) { CLD_UNREACHABLE; });
         return;
     }
     lhs = integerPromotion(std::move(lhs));

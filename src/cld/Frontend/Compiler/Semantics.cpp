@@ -1033,7 +1033,7 @@ cld::Semantics::Type cld::Semantics::VectorType::create(bool isConst, bool isVol
 
 bool cld::Semantics::VectorType::operator==(const cld::Semantics::VectorType& rhs) const
 {
-    return std::tie(m_size, m_elementType) == std::tie(rhs.m_size, rhs.m_elementType);
+    return std::tie(m_size, *m_elementType) == std::tie(rhs.m_size, *rhs.m_elementType);
 }
 
 bool cld::Semantics::VectorType::operator!=(const cld::Semantics::VectorType& rhs) const

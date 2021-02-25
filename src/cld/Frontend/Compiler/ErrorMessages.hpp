@@ -479,6 +479,12 @@ CREATE_ERROR(OPERAND_OF_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE, "Operand of %0 
 CREATE_ERROR(POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC,
              "Pointer to function type not allowed in pointer arithmetic", AnnotateExpr<0>);
 
+CREATE_ERROR(TYPE_OF_VECTOR_OPERANDS_OF_BINARY_OPERATOR_N_MUST_MATCH,
+             "Type of vector operands of binary operator %0 must match", PointAt<0>, AnnotateExpr<1>, AnnotateExpr<2>);
+
+CREATE_ERROR(CONVERSION_OF_SCALAR_IN_VECTOR_OPERATION_COULD_CAUSE_TRUNCATION,
+             "Conversion of scalar in vector operation could cause truncation", AnnotateExpr<0>, AnnotateExpr<1>);
+
 // Conditional expression
 
 CREATE_ERROR(FIRST_OPERAND_OF_CONDITIONAL_EXPRESSION_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE,
