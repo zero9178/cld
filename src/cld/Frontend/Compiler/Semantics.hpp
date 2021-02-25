@@ -2387,11 +2387,17 @@ Program analyse(const Syntax::TranslationUnit& parseTree, CSourceObject&& cToken
 
 [[nodiscard]] bool isArray(const Type& type);
 
+[[nodiscard]] bool isArrayType(const Type& type);
+
+[[nodiscard]] bool isAbstractArray(const Type& type);
+
 [[nodiscard]] bool isCharArray(const Type& type, const LanguageOptions& options);
 
 [[nodiscard]] const Type& getArrayElementType(const Type& type);
 
 [[nodiscard]] const Type& getVectorElementType(const Type& type);
+
+[[nodiscard]] const Type& getPointerElementType(const Type& type);
 
 [[nodiscard]] Type adjustParameterType(Type type);
 
@@ -2400,6 +2406,8 @@ Program analyse(const Syntax::TranslationUnit& parseTree, CSourceObject&& cToken
 [[nodiscard]] bool isArithmetic(const Type& type);
 
 [[nodiscard]] bool isScalar(const Type& type);
+
+[[nodiscard]] bool isPointer(const Type& type);
 
 [[nodiscard]] bool isRecord(const Type& type);
 
@@ -2418,6 +2426,8 @@ Program analyse(const Syntax::TranslationUnit& parseTree, CSourceObject&& cToken
 [[nodiscard]] bool isAggregate(const Type& type);
 
 [[nodiscard]] bool isVector(const Type& type);
+
+[[nodiscard]] bool isFunctionType(const Type& type);
 
 [[nodiscard]] bool isVariablyModified(const Type& type);
 
@@ -2566,3 +2576,171 @@ struct hash<cld::Semantics::VectorType>
 };
 
 } // namespace std
+
+inline bool cld::Semantics::isVoid(const cld::Semantics::Type& type)
+{
+    auto* primitive = std::get_if<PrimitiveType>(&type.getVariant());
+    if (!primitive)
+    {
+        return false;
+    }
+    return primitive->getKind() == PrimitiveType::Kind::Void;
+}
+
+inline bool cld::Semantics::isArray(const Type& type)
+{
+    return std::holds_alternative<ArrayType>(type.getVariant())
+           || std::holds_alternative<ValArrayType>(type.getVariant())
+           || std::holds_alternative<AbstractArrayType>(type.getVariant());
+}
+
+inline bool cld::Semantics::isArrayType(const Type& type)
+{
+    return std::holds_alternative<ArrayType>(type.getVariant());
+}
+
+inline bool cld::Semantics::isAbstractArray(const Type& type)
+{
+    return std::holds_alternative<AbstractArrayType>(type.getVariant());
+}
+
+inline bool cld::Semantics::isCharArray(const Type& type, const LanguageOptions& options)
+{
+    if (!isArray(type))
+    {
+        return false;
+    }
+    return isCharacterLikeType(getArrayElementType(type), options);
+}
+
+inline const cld::Semantics::Type& cld::Semantics::getArrayElementType(const Type& type)
+{
+    return cld::match(
+        type.getVariant(), [](const auto&) -> const Type& { CLD_UNREACHABLE; },
+        [](const ArrayType& arrayType) -> const Type& { return arrayType.getType(); },
+        [](const AbstractArrayType& abstractArrayType) -> const Type& { return abstractArrayType.getType(); },
+        [](const ValArrayType& arrayType) -> const Type& { return arrayType.getType(); });
+}
+
+inline const cld::Semantics::Type& cld::Semantics::getVectorElementType(const Type& type)
+{
+    return cld::get<VectorType>(type.getVariant()).getType();
+}
+
+inline const cld::Semantics::Type& cld::Semantics::getPointerElementType(const Type& type)
+{
+    return cld::get<PointerType>(type.getVariant()).getElementType();
+}
+
+inline bool cld::Semantics::isInteger(const Type& type)
+{
+    return std::holds_alternative<PrimitiveType>(type.getVariant())
+           && !cld::get<PrimitiveType>(type.getVariant()).isFloatingPoint()
+           && cld::get<PrimitiveType>(type.getVariant()).getBitCount() != 0;
+}
+
+inline bool cld::Semantics::isArithmetic(const Type& type)
+{
+    return (std::holds_alternative<PrimitiveType>(type.getVariant())
+            && cld::get<PrimitiveType>(type.getVariant()).getBitCount() != 0)
+           || std::holds_alternative<EnumType>(type.getVariant());
+}
+
+inline bool cld::Semantics::isScalar(const Type& type)
+{
+    return isArithmetic(type) || std::holds_alternative<PointerType>(type.getVariant());
+}
+
+inline bool cld::Semantics::isPointer(const cld::Semantics::Type& type)
+{
+    return std::holds_alternative<PointerType>(type.getVariant());
+}
+
+inline bool cld::Semantics::isRecord(const cld::Semantics::Type& type)
+{
+    return isUnion(type) || isStruct(type);
+}
+
+inline bool cld::Semantics::isStruct(const cld::Semantics::Type& type)
+{
+    return std::holds_alternative<StructType>(type.getVariant());
+}
+
+inline bool cld::Semantics::isUnion(const cld::Semantics::Type& type)
+{
+    return std::holds_alternative<UnionType>(type.getVariant());
+}
+
+inline bool cld::Semantics::isAnonymous(const Type& type)
+{
+    return (std::holds_alternative<EnumType>(type.getVariant()) && cld::get<EnumType>(type.getVariant()).isAnonymous())
+           || (std::holds_alternative<StructType>(type.getVariant())
+               && cld::get<StructType>(type.getVariant()).isAnonymous())
+           || (std::holds_alternative<UnionType>(type.getVariant())
+               && cld::get<UnionType>(type.getVariant()).isAnonymous());
+}
+
+inline bool cld::Semantics::isEnum(const Type& type)
+{
+    return std::holds_alternative<EnumType>(type.getVariant());
+}
+
+inline bool cld::Semantics::isBool(const cld::Semantics::Type& type)
+{
+    auto* primitive = std::get_if<PrimitiveType>(&type.getVariant());
+    if (!primitive)
+    {
+        return false;
+    }
+    return primitive->getKind() == PrimitiveType::Kind::Bool;
+}
+
+inline bool cld::Semantics::isCharType(const cld::Semantics::Type& type)
+{
+    auto* primitive = std::get_if<PrimitiveType>(&type.getVariant());
+    if (!primitive)
+    {
+        return false;
+    }
+    return primitive->getKind() == PrimitiveType::Kind::Char
+           || primitive->getKind() == PrimitiveType::Kind::UnsignedChar
+           || primitive->getKind() == PrimitiveType::Kind::SignedChar;
+}
+
+inline bool cld::Semantics::isCharacterLikeType(const Type& type, const LanguageOptions& options)
+{
+    if (isCharType(type))
+    {
+        return true;
+    }
+    return removeQualifiers(type) == PrimitiveType::createWcharT(false, false, options);
+}
+
+inline bool cld::Semantics::isAggregate(const Type& type)
+{
+    return isRecord(type) || isArray(type);
+}
+
+inline bool cld::Semantics::isVector(const Type& type)
+{
+    return std::holds_alternative<VectorType>(type.getVariant());
+}
+
+inline bool cld::Semantics::isFunctionType(const Type& type)
+{
+    return std::holds_alternative<FunctionType>(type.getVariant());
+}
+
+inline cld::Semantics::Type cld::Semantics::removeQualifiers(Type type)
+{
+    if (type.isConst() || type.isVolatile()
+        || (isPointer(type) && cld::get<PointerType>(type.getVariant()).isRestricted()))
+    {
+        if (!isPointer(type) || !cld::get<PointerType>(type.getVariant()).isRestricted())
+        {
+            return Type(false, false, std::move(type).getVariant());
+        }
+        return PointerType::create(false, false, false, getPointerElementType(type));
+    }
+    return type;
+}
