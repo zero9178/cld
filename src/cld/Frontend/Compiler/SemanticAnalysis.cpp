@@ -124,7 +124,8 @@ std::vector<cld::IntrVarPtr<cld::Semantics::Useable>>
     auto type = declaratorsToType(
         node.getDeclarationSpecifiers(), node.getDeclarator(), node.getDeclarations(),
         [&](Type paramType, Lexer::CTokenIterator loc,
-            const std::vector<Syntax::DeclarationSpecifier>& declarationSpecifiers, bool) {
+            const std::vector<Syntax::DeclarationSpecifier>& declarationSpecifiers,
+            std::vector<GNUAttribute>&& attributes) {
             if (loc->getText() == "__func__")
             {
                 log(Errors::Semantics::DECLARING_PARAMETERS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR.args(
@@ -155,6 +156,11 @@ std::vector<cld::IntrVarPtr<cld::Semantics::Useable>>
                 log(Errors::REDEFINITION_OF_SYMBOL_N.args(*loc, m_sourceInterface, *loc));
                 log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
                                                          *prev->second.identifier));
+            }
+            else
+            {
+                attributes = applyAttributes(ptr.get(), std::move(attributes));
+                reportNotApplicableAttributes(attributes);
             }
         },
         &attributes);
@@ -294,7 +300,7 @@ std::vector<cld::IntrVarPtr<cld::Semantics::Useable>>
             prev.value() = DeclarationInScope{loc, &ptr};
         }
     }
-    applyAttributes(&ptr, attributes);
+    attributes = applyAttributes(&ptr, std::move(attributes));
 
     Type funcType =
         ArrayType::create(false, false, false, false, PrimitiveType::createChar(true, false, getLanguageOptions()),
@@ -500,7 +506,8 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
             }
             else
             {
-                applyAttributes(declaration.get(), thisAttributes);
+                thisAttributes = applyAttributes(declaration.get(), std::move(thisAttributes));
+                reportNotApplicableAttributes(thisAttributes);
                 decls.push_back(std::move(declaration));
             }
         }
@@ -601,7 +608,9 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                     continue;
                 }
                 result.setName(loc->getText());
-                applyAttributes(std::pair{&result, diag::getPointRange(*loc)}, thisAttributes);
+                thisAttributes =
+                    applyAttributes(std::pair{&result, diag::getPointRange(*loc)}, std::move(thisAttributes));
+                reportNotApplicableAttributes(thisAttributes);
                 auto [prev, noRedefinition] =
                     getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, result}});
                 if (!noRedefinition
@@ -789,7 +798,8 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                                   *declaration->getNameToken()));
             }
 
-            applyAttributes(declaration.get(), thisAttributes);
+            thisAttributes = applyAttributes(declaration.get(), std::move(thisAttributes));
+            reportNotApplicableAttributes(thisAttributes);
             decls.push_back(std::move(declaration));
         }
     }
@@ -2124,7 +2134,8 @@ std::vector<cld::Semantics::SemanticAnalysis::GNUAttribute>
         std::vector<std::shared_ptr<ExpressionBase>> parameters;
         std::transform(iter.arguments.begin(), iter.arguments.end(), std::back_inserter(parameters),
                        [this](auto&& expr) -> std::shared_ptr<ExpressionBase> { return visit(expr); });
-        result.push_back(GNUAttribute{iter.nameToken, iter.optionalFirstIdentifierArgument, std::move(parameters)});
+        result.push_back(GNUAttribute{GNUAttribute::Nothing, iter.nameToken, iter.optionalFirstIdentifierArgument,
+                                      std::move(parameters)});
     }
     return result;
 }

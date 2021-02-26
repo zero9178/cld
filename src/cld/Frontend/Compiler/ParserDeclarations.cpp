@@ -1697,15 +1697,16 @@ cld::Syntax::ParameterList cld::Parser::parseParameterList(Lexer::CTokenIterator
                                                                 std::move(result));
                 });
         }
+        auto attributes = parseGNUAttributes(begin, end, context);
         cld::match(
             std::move(foundDeclarator), [](std::monostate) { CLD_UNREACHABLE; },
             [&](std::unique_ptr<Declarator>&& declarator) {
                 parameterDeclarations.emplace_back(parameterBegin, begin, std::move(declarationSpecifiers),
-                                                   std::move(declarator));
+                                                   std::move(declarator), std::move(attributes));
             },
             [&](std::unique_ptr<AbstractDeclarator>&& abstractDeclarator) {
                 parameterDeclarations.emplace_back(parameterBegin, begin, std::move(declarationSpecifiers),
-                                                   std::move(abstractDeclarator));
+                                                   std::move(abstractDeclarator), std::move(attributes));
             });
     }
     if (first)

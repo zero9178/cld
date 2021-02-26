@@ -1649,19 +1649,26 @@ public:
  *                          | <DeclarationSpecifier> { <DeclarationSpecifier> } [ <AbstractDeclarator> ]
  *
  * [GNU]: <ParameterDeclaration> ::= <DeclarationSpecifier> { <DeclarationSpecifier> } <Declarator> [<GNUAttribute>]
- *                                 | <DeclarationSpecifier> { <DeclarationSpecifier> } [ <AbstractDeclarator> ]
+ *                                 | <DeclarationSpecifier> { <DeclarationSpecifier> }
+ *                                 | <DeclarationSpecifier> { <DeclarationSpecifier> } <AbstractDeclarator>
  *                                   [<GNUAttribute>]
+ *
  */
 struct ParameterDeclaration : public Node
 {
     std::vector<DeclarationSpecifier> declarationSpecifiers;
     std::variant<std::unique_ptr<Declarator>, std::unique_ptr<AbstractDeclarator>> declarator;
+    std::optional<GNUAttributes> optionalAttributes;
 
     ParameterDeclaration(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                          std::vector<DeclarationSpecifier> declarationSpecifiers,
                          std::variant<std::unique_ptr<Declarator>, std::unique_ptr<AbstractDeclarator>> variant =
-                             std::unique_ptr<AbstractDeclarator>{})
-        : Node(begin, end), declarationSpecifiers(std::move(declarationSpecifiers)), declarator(std::move(variant))
+                             std::unique_ptr<AbstractDeclarator>{},
+                         std::optional<GNUAttributes>&& optionalAttributes = {})
+        : Node(begin, end),
+          declarationSpecifiers(std::move(declarationSpecifiers)),
+          declarator(std::move(variant)),
+          optionalAttributes(std::move(optionalAttributes))
     {
     }
 };

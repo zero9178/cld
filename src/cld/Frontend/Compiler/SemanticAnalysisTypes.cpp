@@ -7,9 +7,9 @@
 
 void cld::Semantics::SemanticAnalysis::handleParameterList(
     Type& type, const Syntax::ParameterTypeList* parameterTypeList, const diag::PointRange& returnTypeLoc,
-    cld::function_ref<void(const Type&, Lexer::CTokenIterator, const std::vector<Syntax::DeclarationSpecifier>&, bool)>
-        paramCallback,
-    std::vector<GNUAttribute>* attributes)
+    cld::function_ref<void(const Type&, Lexer::CTokenIterator, const std::vector<Syntax::DeclarationSpecifier>&,
+                           std::vector<GNUAttribute>&&)>
+        paramCallback)
 {
     if (isFunctionType(type))
     {
@@ -33,6 +33,7 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
     std::vector<std::pair<Type, std::string_view>> parameters;
     for (auto& iter : parameterTypeList->getParameters())
     {
+        std::vector<GNUAttribute> attributes;
         for (auto& specs : iter.declarationSpecifiers)
         {
             auto* storageSpec = std::get_if<cld::Syntax::StorageClassSpecifier>(&specs);
@@ -50,16 +51,19 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
         m_inParameter = true;
         auto paramType = cld::match(
             iter.declarator,
-            [&](const std::unique_ptr<cld::Syntax::Declarator>& ptr)
-            { return declaratorsToType(iter.declarationSpecifiers, *ptr, {}, {}, attributes); },
-            [&](const std::unique_ptr<cld::Syntax::AbstractDeclarator>& ptr)
-            { return declaratorsToType(iter.declarationSpecifiers, ptr.get(), attributes); });
+            [&](const std::unique_ptr<cld::Syntax::Declarator>& ptr) {
+                return declaratorsToType(iter.declarationSpecifiers, *ptr, {}, {}, &attributes);
+            },
+            [&](const std::unique_ptr<cld::Syntax::AbstractDeclarator>& ptr) {
+                return declaratorsToType(iter.declarationSpecifiers, ptr.get(), &attributes);
+            });
         if (isVoid(paramType) && !paramType.isConst() && !paramType.isVolatile()
             && !std::holds_alternative<std::unique_ptr<cld::Syntax::Declarator>>(iter.declarator)
             && !cld::get<std::unique_ptr<cld::Syntax::AbstractDeclarator>>(iter.declarator)
             && parameterTypeList->getParameters().size() == 1 && !parameterTypeList->hasEllipse())
         {
             type = FunctionType::create(std::move(type), {}, false, false);
+            reportNotApplicableAttributes(attributes);
             return;
         }
         if (isVoid(paramType))
@@ -67,6 +71,11 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
             log(Errors::Semantics::VOID_TYPE_NOT_ALLOWED_AS_FUNCTION_PARAMETER.args(
                 iter.declarationSpecifiers, m_sourceInterface, iter.declarationSpecifiers));
             paramType = Type{};
+        }
+        if (iter.optionalAttributes)
+        {
+            auto result = visit(*iter.optionalAttributes);
+            attributes.insert(attributes.end(), std::move_iterator(result.begin()), std::move_iterator(result.end()));
         }
         // C99 6.7.5.2§1:
         // The optional type qualifiers and the keyword static shall appear only in a
@@ -161,10 +170,12 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
         {
             paramType = PointerType::create(false, false, false, std::move(paramType));
         }
+        attributes = applyAttributes(std::pair{&paramType, diag::getPointRange(iter.declarationSpecifiers)},
+                                     std::move(attributes));
         auto& ret = parameters.emplace_back(std::move(paramType), name);
         if (paramCallback && loc)
         {
-            paramCallback(ret.first, loc, iter.declarationSpecifiers, true);
+            paramCallback(ret.first, loc, iter.declarationSpecifiers, std::move(attributes));
         }
     }
     type = FunctionType::create(std::move(type), std::move(parameters), parameterTypeList->hasEllipse(), false);
@@ -172,11 +183,12 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
 
 cld::Semantics::Type cld::Semantics::SemanticAnalysis::qualifiersToTypeImpl(
     const std::vector<DeclarationOrSpecifierQualifier>& directAbstractDeclaratorParentheses,
-    std::vector<GNUAttribute>* attributes)
+    std::vector<GNUAttribute>* attributesOut)
 {
     bool isConst = false;
     bool isVolatile = false;
     std::vector<const Syntax::TypeSpecifier*> typeSpecs;
+    std::vector<GNUAttribute> attributes;
     for (auto& iter : directAbstractDeclaratorParentheses)
     {
         if (auto* typeSpec = std::get_if<const Syntax::TypeSpecifier*>(&iter))
@@ -198,11 +210,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::qualifiersToTypeImpl(
         else if (auto* gnuAttributes = std::get_if<const Syntax::GNUAttributes*>(&iter))
         {
             auto result = visit(**gnuAttributes);
-            if (attributes)
-            {
-                attributes->insert(attributes->end(), std::move_iterator(result.begin()),
-                                   std::move_iterator(result.end()));
-            }
+            attributes.insert(attributes.end(), std::move_iterator(result.begin()), std::move_iterator(result.end()));
         }
     }
     if (typeSpecs.empty())
@@ -211,14 +219,27 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::qualifiersToTypeImpl(
             directAbstractDeclaratorParentheses, m_sourceInterface, directAbstractDeclaratorParentheses));
         return Type{};
     }
-    return typeSpecifiersToType(isConst, isVolatile, std::move(typeSpecs));
+    auto result = typeSpecifiersToType(isConst, isVolatile, std::move(typeSpecs));
+    if (attributesOut)
+    {
+        auto temp = applyAttributes(std::pair{&result, diag::getPointRange(directAbstractDeclaratorParentheses)},
+                                    std::move(attributes));
+        attributesOut->insert(attributesOut->end(), std::move_iterator(temp.begin()), std::move_iterator(temp.end()));
+    }
+    else
+    {
+        (void)applyAttributes(std::pair{&result, diag::getPointRange(directAbstractDeclaratorParentheses)},
+                              std::move(attributes));
+    }
+    return result;
 }
 
 cld::Semantics::Type cld::Semantics::SemanticAnalysis::applyDeclaratorsImpl(
     Type&& type, const PossiblyAbstractQualifierRef& declarator, const std::vector<Syntax::Declaration>& declarations,
-    cld::function_ref<void(const Type&, Lexer::CTokenIterator, const std::vector<Syntax::DeclarationSpecifier>&, bool)>
+    cld::function_ref<void(const Type&, Lexer::CTokenIterator, const std::vector<Syntax::DeclarationSpecifier>&,
+                           std::vector<GNUAttribute>&&)>
         paramCallback,
-    std::vector<GNUAttribute>* attributes)
+    std::vector<GNUAttribute>* attributesOut)
 {
     if (!cld::match(declarator, [](auto&& value) -> bool { return value; }))
     {
@@ -264,10 +285,13 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::applyDeclaratorsImpl(
                 if (parentheses.getOptionalAttributes())
                 {
                     auto result = visit(*parentheses.getOptionalAttributes());
-                    if (attributes)
+                    result = applyAttributes(
+                        std::pair{&type, diag::getPointRange(parentheses.getDeclarator().getDirectDeclarator())},
+                        std::move(result));
+                    if (attributesOut)
                     {
-                        attributes->insert(attributes->end(), std::move_iterator(result.begin()),
-                                           std::move_iterator(result.end()));
+                        attributesOut->insert(attributesOut->end(), std::move_iterator(result.begin()),
+                                              std::move_iterator(result.end()));
                     }
                 }
                 for (auto& iter : parentheses.getDeclarator().getPointers())
@@ -293,6 +317,22 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::applyDeclaratorsImpl(
                         restricted = false;
                     }
                     type = PointerType::create(isConst, isVolatile, restricted, std::move(type));
+                    for (auto& iter2 : iter.getTypeQualifiers())
+                    {
+                        if (auto* attribute = std::get_if<Syntax::GNUAttributes>(&iter2))
+                        {
+                            auto result = visit(*attribute);
+                            result = applyAttributes(
+                                std::pair{&type,
+                                          diag::getPointRange(parentheses.getDeclarator().getDirectDeclarator())},
+                                std::move(result));
+                            if (attributesOut)
+                            {
+                                attributesOut->insert(attributesOut->end(), std::move_iterator(result.begin()),
+                                                      std::move_iterator(result.end()));
+                            }
+                        }
+                    }
                 }
                 cld::match(parentheses.getDeclarator().getDirectDeclarator(), self);
             },
@@ -385,6 +425,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::applyDeclaratorsImpl(
 
                 for (auto& iter : declarations)
                 {
+                    std::vector<GNUAttribute> attributes;
                     for (auto& specs : iter.getDeclarationSpecifiers())
                     {
                         auto* storageSpec = std::get_if<Syntax::StorageClassSpecifier>(&specs);
@@ -398,19 +439,34 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::applyDeclaratorsImpl(
                                     .args(*storageSpec, m_sourceInterface, *storageSpec));
                         }
                     }
+                    auto baseType = qualifiersToType(iter.getDeclarationSpecifiers(), &attributes);
                     if (iter.getInitDeclarators().empty())
                     {
                         log(Errors::Semantics::DECLARATION_OF_IDENTIFIER_LIST_MUST_DECLARE_AT_LEAST_ONE_IDENTIFIER.args(
                             iter, m_sourceInterface, iter));
+                        continue;
                     }
                     for (auto& iter2 : iter.getInitDeclarators())
                     {
+                        auto thisAttributes = attributes;
                         if (iter2.optionalInitializer)
                         {
                             log(Errors::Semantics::DECLARATION_OF_IDENTIFIER_LIST_NOT_ALLOWED_TO_HAVE_AN_INITIALIZER
                                     .args(*iter2.optionalInitializer, m_sourceInterface, *iter2.optionalInitializer));
                         }
-                        auto paramType = declaratorsToType(iter.getDeclarationSpecifiers(), *iter2.declarator);
+                        auto paramType = applyDeclarator(baseType, *iter2.declarator, {}, {}, &thisAttributes);
+                        if (iter2.optionalBeforeAttributes)
+                        {
+                            auto vector = visit(*iter2.optionalBeforeAttributes);
+                            thisAttributes.insert(thisAttributes.end(), std::move_iterator(vector.begin()),
+                                                  std::move_iterator(vector.end()));
+                        }
+                        if (iter2.optionalAfterAttributes)
+                        {
+                            auto vector = visit(*iter2.optionalAfterAttributes);
+                            thisAttributes.insert(thisAttributes.end(), std::move_iterator(vector.begin()),
+                                                  std::move_iterator(vector.end()));
+                        }
                         const auto* loc = declaratorToLoc(*iter2.declarator);
                         auto result = paramNames.find(loc->getText());
                         if (result == paramNames.end())
@@ -442,7 +498,11 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::applyDeclaratorsImpl(
                             if (paramCallback)
                             {
                                 paramCallback(parameters[result->second].first, loc, iter.getDeclarationSpecifiers(),
-                                              false);
+                                              std::move(attributes));
+                            }
+                            else
+                            {
+                                reportNotApplicableAttributes(thisAttributes);
                             }
                         }
                     }
@@ -499,10 +559,11 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::applyDeclaratorsImpl(
                 if (parentheses.getOptionalAttributes())
                 {
                     auto result = visit(*parentheses.getOptionalAttributes());
-                    if (attributes)
+                    result = applyAttributes(std::pair{&type, diag::getPointRange(parentheses)}, std::move(result));
+                    if (attributesOut)
                     {
-                        attributes->insert(attributes->end(), std::move_iterator(result.begin()),
-                                           std::move_iterator(result.end()));
+                        attributesOut->insert(attributesOut->end(), std::move_iterator(result.begin()),
+                                              std::move_iterator(result.end()));
                     }
                 }
                 for (auto& iter : parentheses.getAbstractDeclarator().getPointers())
@@ -529,6 +590,20 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::applyDeclaratorsImpl(
                         continue;
                     }
                     type = PointerType::create(isConst, isVolatile, restricted, std::move(type));
+                    for (auto& iter2 : iter.getTypeQualifiers())
+                    {
+                        if (auto* attribute = std::get_if<Syntax::GNUAttributes>(&iter2))
+                        {
+                            auto result = visit(*attribute);
+                            result =
+                                applyAttributes(std::pair{&type, diag::getPointRange(parentheses)}, std::move(result));
+                            if (attributesOut)
+                            {
+                                attributesOut->insert(attributesOut->end(), std::move_iterator(result.begin()),
+                                                      std::move_iterator(result.end()));
+                            }
+                        }
+                    }
                 }
                 if (parentheses.getAbstractDeclarator().getDirectAbstractDeclarator())
                 {

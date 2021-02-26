@@ -1777,7 +1777,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                 visit(*cast.cast);
                 return std::make_unique<ErrorExpression>(node);
             }
-            applyAttributes(std::pair{&type, diag::getPointRange(cast.typeName)}, attributes);
+            reportNotApplicableAttributes(attributes);
             auto value = visit(*cast.cast);
             if (value->isUndefined())
             {

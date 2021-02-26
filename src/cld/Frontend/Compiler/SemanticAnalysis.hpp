@@ -118,18 +118,26 @@ class SemanticAnalysis final : public ProgramInterface
 public:
     struct GNUAttribute
     {
+        enum TriedOn
+        {
+            Nothing = 0,
+            Function = 0b1,
+            Type = 0b10,
+            Variable = 0b100,
+        };
+        std::underlying_type_t<TriedOn> attempts;
         Lexer::CTokenIterator name;
         const Lexer::CToken* firstParamName;
         std::vector<std::shared_ptr<ExpressionBase>> paramExpressions;
     };
 
 private:
-    void handleParameterList(Type& type, const Syntax::ParameterTypeList* CLD_NULLABLE parameterTypeList,
-                             const diag::PointRange& returnTypeLoc,
-                             cld::function_ref<void(const Type&, Lexer::CTokenIterator,
-                                                    const std::vector<Syntax::DeclarationSpecifier>&, bool)>
-                                 paramCallback = {},
-                             std::vector<GNUAttribute>* attributes = nullptr);
+    void handleParameterList(
+        Type& type, const Syntax::ParameterTypeList* CLD_NULLABLE parameterTypeList,
+        const diag::PointRange& returnTypeLoc,
+        cld::function_ref<void(const Type&, Lexer::CTokenIterator, const std::vector<Syntax::DeclarationSpecifier>&,
+                               std::vector<GNUAttribute>&&)>
+            paramCallback = {});
 
     void handleArray(Type& type, const std::vector<Syntax::TypeQualifier>& typeQualifiers,
                      const Syntax::AssignmentExpression* CLD_NULLABLE assignmentExpression,
@@ -168,15 +176,16 @@ private:
     Type typeSpecifiersToType(bool isConst, bool isVolatile,
                               const std::vector<const Syntax::TypeSpecifier * CLD_NON_NULL>& typeSpec);
 
-    Type applyDeclaratorsImpl(Type&& type, const PossiblyAbstractQualifierRef& parameterList,
-                              const std::vector<Syntax::Declaration>& declarations = {},
-                              cld::function_ref<void(const Type&, Lexer::CTokenIterator,
-                                                     const std::vector<Syntax::DeclarationSpecifier>&, bool)>
-                                  paramCallback = {},
-                              std::vector<GNUAttribute>* attributes = nullptr);
+    Type applyDeclaratorsImpl(
+        Type&& type, const PossiblyAbstractQualifierRef& parameterList,
+        const std::vector<Syntax::Declaration>& declarations = {},
+        cld::function_ref<void(const Type&, Lexer::CTokenIterator, const std::vector<Syntax::DeclarationSpecifier>&,
+                               std::vector<GNUAttribute>&&)>
+            paramCallback = {},
+        std::vector<GNUAttribute>* attributesOut = nullptr);
 
     Type qualifiersToTypeImpl(const std::vector<DeclarationOrSpecifierQualifier>& directAbstractDeclaratorParentheses,
-                              std::vector<GNUAttribute>* attributes = nullptr);
+                              std::vector<GNUAttribute>* attributesOut = nullptr);
 
     Type primitiveTypeSpecifiersToType(bool isConst, bool isVolatile,
                                        const std::vector<const Syntax::TypeSpecifier * CLD_NON_NULL>& typeSpecs);
@@ -221,6 +230,8 @@ private:
 
     void reportNoMember(const Type& recordType, const Lexer::CToken& identifier);
 
+    void reportNotApplicableAttributes(const std::vector<GNUAttribute>& attributes);
+
     std::optional<std::pair<Type, const Field * CLD_NON_NULL>>
         checkMemberAccess(const Type& recordType, const Syntax::PostFixExpression& postFixExpr,
                           const Lexer::CToken& identifier);
@@ -263,12 +274,13 @@ private:
     }
 
     template <class T>
-    Type declaratorsToType(const std::vector<T>& declarationOrSpecifierQualifiers, const Syntax::Declarator& declarator,
-                           const std::vector<Syntax::Declaration>& declarations = {},
-                           cld::function_ref<void(const Type&, Lexer::CTokenIterator,
-                                                  const std::vector<Syntax::DeclarationSpecifier>&, bool)>
-                               paramCallback = {},
-                           std::vector<GNUAttribute>* attributes = nullptr)
+    Type declaratorsToType(
+        const std::vector<T>& declarationOrSpecifierQualifiers, const Syntax::Declarator& declarator,
+        const std::vector<Syntax::Declaration>& declarations = {},
+        cld::function_ref<void(const Type&, Lexer::CTokenIterator, const std::vector<Syntax::DeclarationSpecifier>&,
+                               std::vector<GNUAttribute>&&)>
+            paramCallback = {},
+        std::vector<GNUAttribute>* attributes = nullptr)
     {
         auto type = qualifiersToType(declarationOrSpecifierQualifiers, attributes);
         return applyDeclarator(std::move(type), declarator, declarations, std::move(paramCallback), attributes);
@@ -295,12 +307,12 @@ private:
         return applyDeclaratorsImpl(std::move(type), declarator, {}, {}, attributes);
     }
 
-    Type applyDeclarator(Type type, const Syntax::Declarator& declarator,
-                         const std::vector<Syntax::Declaration>& declarations = {},
-                         cld::function_ref<void(const Type&, Lexer::CTokenIterator,
-                                                const std::vector<Syntax::DeclarationSpecifier>&, bool)>
-                             paramCallback = {},
-                         std::vector<GNUAttribute>* attributes = nullptr)
+    Type applyDeclarator(
+        Type type, const Syntax::Declarator& declarator, const std::vector<Syntax::Declaration>& declarations = {},
+        cld::function_ref<void(const Type&, Lexer::CTokenIterator, const std::vector<Syntax::DeclarationSpecifier>&,
+                               std::vector<GNUAttribute>&&)>
+            paramCallback = {},
+        std::vector<GNUAttribute>* attributes = nullptr)
     {
         return applyDeclaratorsImpl(std::move(type), &declarator, declarations, std::move(paramCallback), attributes);
     }
@@ -489,7 +501,8 @@ public:
     using AffectsVariableFunction = std::variant<VariableDeclaration * CLD_NON_NULL, FunctionDeclaration * CLD_NON_NULL,
                                                  FunctionDefinition * CLD_NON_NULL>;
 
-    void applyAttributes(AffectsAll applicant, const std::vector<GNUAttribute>& attributes);
+    [[nodiscard]] std::vector<GNUAttribute> applyAttributes(AffectsAll applicant,
+                                                            std::vector<GNUAttribute>&& attributes);
 
     void applyAlignAttribute(AffectsAll applicant, const GNUAttribute& attribute);
 

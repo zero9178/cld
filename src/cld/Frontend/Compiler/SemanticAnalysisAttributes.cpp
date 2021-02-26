@@ -51,8 +51,8 @@ bool tryMatch(cld::Semantics::SemanticAnalysis& analysis, cld::Semantics::Semant
 }
 } // namespace
 
-void cld::Semantics::SemanticAnalysis::applyAttributes(AffectsAll applicant,
-                                                       const std::vector<GNUAttribute>& attributes)
+std::vector<cld::Semantics::SemanticAnalysis::GNUAttribute>
+    cld::Semantics::SemanticAnalysis::applyAttributes(AffectsAll applicant, std::vector<GNUAttribute>&& attributes)
 {
     using UnorderedMap =
         std::unordered_map<std::string, std::function<bool(const GNUAttribute&, SemanticAnalysis&, AffectsAll)>>;
@@ -69,6 +69,7 @@ void cld::Semantics::SemanticAnalysis::applyAttributes(AffectsAll applicant,
         unixSpelling("vector_size", cld::bind_front(lambda, &SemanticAnalysis::applyVectorSizeAttribute));
         return result;
     }();
+    std::vector<GNUAttribute> results;
     for (auto& iter : attributes)
     {
         auto name = Lexer::normalizeSpelling(iter.name->getRepresentation(m_sourceInterface));
@@ -78,28 +79,59 @@ void cld::Semantics::SemanticAnalysis::applyAttributes(AffectsAll applicant,
             if (!applied)
             {
                 cld::match(
-                    applicant,
-                    [&](VariableDeclaration* decl) {
-                        log(Warnings::Semantics::ATTRIBUTE_N_DOES_NOT_APPLY_TO_VARIABLES.args(
-                            *iter.name, m_sourceInterface, *iter.name, *decl->getNameToken()));
-                    },
-                    [&](FunctionDeclaration* decl) {
-                        log(Warnings::Semantics::ATTRIBUTE_N_DOES_NOT_APPLY_TO_FUNCTIONS.args(
-                            *iter.name, m_sourceInterface, *iter.name, *decl->getNameToken()));
-                    },
-                    [&](FunctionDefinition* def) {
-                        log(Warnings::Semantics::ATTRIBUTE_N_DOES_NOT_APPLY_TO_VARIABLES.args(
-                            *iter.name, m_sourceInterface, *iter.name, *def->getNameToken()));
-                    },
-                    [&](const std::pair<Type*, diag::PointRange>& pair) {
-                        log(Warnings::Semantics::ATTRIBUTE_N_DOES_NOT_APPLY_TO_TYPES.args(*iter.name, m_sourceInterface,
-                                                                                          *iter.name, pair.second));
-                    });
+                    applicant, [&](VariableDeclaration*) { iter.attempts |= GNUAttribute::Variable; },
+                    [&](FunctionDeclaration*) { iter.attempts |= GNUAttribute::Function; },
+                    [&](FunctionDefinition*) { iter.attempts |= GNUAttribute::Function; },
+                    [&](const std::pair<Type*, diag::PointRange>&) { iter.attempts |= GNUAttribute::Type; });
+                results.push_back(std::move(iter));
             }
         }
         else
         {
             log(Warnings::Semantics::UNKNOWN_ATTRIBUTE_N_IGNORED.args(*iter.name, m_sourceInterface, *iter.name));
+        }
+    }
+    return results;
+}
+
+void cld::Semantics::SemanticAnalysis::reportNotApplicableAttributes(const std::vector<GNUAttribute>& attributes)
+{
+    for (auto& iter : attributes)
+    {
+        switch (iter.attempts)
+        {
+            case GNUAttribute::Nothing:
+                log(Warnings::Semantics::UNKNOWN_ATTRIBUTE_N_IGNORED.args(*iter.name, m_sourceInterface, *iter.name));
+                break;
+            case GNUAttribute::Type:
+                log(Warnings::Semantics::ATTRIBUTE_N_DOES_NOT_APPLY_TO_TYPES.args(*iter.name, m_sourceInterface,
+                                                                                  *iter.name));
+                break;
+            case GNUAttribute::Variable:
+                log(Warnings::Semantics::ATTRIBUTE_N_DOES_NOT_APPLY_TO_VARIABLES.args(*iter.name, m_sourceInterface,
+                                                                                      *iter.name));
+                break;
+            case GNUAttribute::Function:
+                log(Warnings::Semantics::ATTRIBUTE_N_DOES_NOT_APPLY_TO_FUNCTIONS.args(*iter.name, m_sourceInterface,
+                                                                                      *iter.name));
+                break;
+            case GNUAttribute::Variable | GNUAttribute::Type:
+                log(Warnings::Semantics::ATTRIBUTE_N_DOES_NOT_APPLY_TO_TYPES_OR_VARIABLES.args(
+                    *iter.name, m_sourceInterface, *iter.name));
+                break;
+            case GNUAttribute::Function | GNUAttribute::Type:
+                log(Warnings::Semantics::ATTRIBUTE_N_DOES_NOT_APPLY_TO_TYPES_OR_FUNCTIONS.args(
+                    *iter.name, m_sourceInterface, *iter.name));
+                break;
+            case GNUAttribute::Variable | GNUAttribute::Function:
+                log(Warnings::Semantics::ATTRIBUTE_N_DOES_NOT_APPLY_TO_VARIABLES_OR_FUNCTIONS.args(
+                    *iter.name, m_sourceInterface, *iter.name));
+                break;
+            case GNUAttribute::Variable | GNUAttribute::Function | GNUAttribute::Type:
+                log(Warnings::Semantics::ATTRIBUTE_N_DOES_NOT_APPLY_TO_TYPES_VARIABLES_OR_FUNCTIONS.args(
+                    *iter.name, m_sourceInterface, *iter.name));
+                break;
+            default: break;
         }
     }
 }

@@ -4853,6 +4853,31 @@ TEST_CASE("Semantics __attribute__", "[semantics]")
 {
     SEMA_PRODUCES("int i __attribute__((thisAttributeShouldIdeallyNeverExit));",
                   ProducesWarning(UNKNOWN_ATTRIBUTE_N_IGNORED, "'thisAttributeShouldIdeallyNeverExit'"));
+    SECTION("Attribute positioning")
+    {
+        SECTION("Function return type")
+        {
+            auto [translationUnit, errors] =
+                generateSemantics("static int __attribute__((vector_size(8),used)) foo(void);");
+            REQUIRE_THAT(errors, ProducesNoErrors());
+            REQUIRE(translationUnit->getGlobals().size() == 1);
+            REQUIRE(translationUnit->getGlobals()[0]->is<FunctionDeclaration>());
+            auto* decl = &translationUnit->getGlobals()[0]->cast<FunctionDeclaration>();
+            CHECK(decl->hasAttribute<UsedAttribute>());
+            CHECK(std::holds_alternative<VectorType>(
+                cld::get<FunctionType>(decl->getType().getVariant()).getReturnType().getVariant()));
+            SEMA_PRODUCES("static __attribute__((used)) int foo(void);",
+                          ProducesNoErrors() && !ProducesWarning(UNUSED_FUNCTION_N, "'foo'"));
+        }
+        SECTION("Function parameter")
+        {
+            SEMA_PRODUCES("static int foo(int i __attribute__((used))) {\n"
+                          "\n"
+                          "}",
+                          ProducesWarning(ATTRIBUTE_USED_ONLY_APPLIES_TO_GLOBAL_VARIABLES_WITH_INTERNAL_LINKAGE)
+                              && ProducesWarning(UNUSED_FUNCTION_N, "'foo'"));
+        }
+    }
 }
 
 TEST_CASE("Semantics __attribute__((used))", "[semantics]")

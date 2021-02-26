@@ -1122,13 +1122,25 @@ CREATE_WARNING(UNUSED_FUNCTION_N, "unused-function", "Unused function %0", Point
 // __attribute__
 
 CREATE_WARNING(ATTRIBUTE_N_DOES_NOT_APPLY_TO_TYPES, "ignored-attributes", "Attribute %0 does not apply to types",
-               Underline<0>, Underline<1>);
+               Underline<0>);
 
 CREATE_WARNING(ATTRIBUTE_N_DOES_NOT_APPLY_TO_VARIABLES, "ignored-attributes",
-               "Attribute %0 does not apply to variables", Underline<0>, Underline<1>);
+               "Attribute %0 does not apply to variables", Underline<0>);
 
 CREATE_WARNING(ATTRIBUTE_N_DOES_NOT_APPLY_TO_FUNCTIONS, "ignored-attributes",
-               "Attribute %0 does not apply to functions", Underline<0>, Underline<1>);
+               "Attribute %0 does not apply to functions", Underline<0>);
+
+CREATE_WARNING(ATTRIBUTE_N_DOES_NOT_APPLY_TO_TYPES_OR_VARIABLES, "ignored-attributes",
+               "Attribute %0 does not apply to types or variables", Underline<0>);
+
+CREATE_WARNING(ATTRIBUTE_N_DOES_NOT_APPLY_TO_TYPES_OR_FUNCTIONS, "ignored-attributes",
+               "Attribute %0 does not apply to types or functions", Underline<0>);
+
+CREATE_WARNING(ATTRIBUTE_N_DOES_NOT_APPLY_TO_VARIABLES_OR_FUNCTIONS, "ignored-attributes",
+               "Attribute %0 does not apply to variables or functions", Underline<0>);
+
+CREATE_WARNING(ATTRIBUTE_N_DOES_NOT_APPLY_TO_TYPES_VARIABLES_OR_FUNCTIONS, "ignored-attributes",
+               "Attribute %0 does not apply to types, variables or functions", Underline<0>);
 
 CREATE_WARNING(UNKNOWN_ATTRIBUTE_N_IGNORED, "unknown-attributes", "Unknown attribute %0 ignored", Underline<0>);
 
