@@ -467,12 +467,6 @@ CREATE_ERROR(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_NULL_2, "Expected right 
 CREATE_ERROR(EXPECTED_OTHER_OPERAND_OF_OPERATOR_N_TO_BE_OF_INTEGER_TYPE,
              "Expected other operand of operator %0 to be of integer type", PointAt<0>, AnnotateExpr<1>);
 
-CREATE_ERROR(CANNOT_SUBTRACT_POINTER_FROM_ARITHMETIC_TYPE, "Cannot subtract pointer from arithmetic type",
-             AnnotateExpr<0>, PointAt<1>, AnnotateExpr<2>);
-
-CREATE_ERROR(CANNOT_SUBTRACT_POINTERS_OF_INCOMPATIBLE_TYPES, "Cannot subtract pointers of incompatible types",
-             AnnotateExpr<0>, PointAt<1>, AnnotateExpr<2>);
-
 CREATE_ERROR(CANNOT_COMPARE_POINTERS_OF_INCOMPATIBLE_TYPES, "Cannot compare pointers of incompatible types",
              AnnotateExpr<0>, PointAt<1>, AnnotateExpr<2>);
 
@@ -490,6 +484,17 @@ CREATE_ERROR(TYPE_OF_VECTOR_OPERANDS_OF_BINARY_OPERATOR_N_MUST_MATCH,
 
 CREATE_ERROR(CONVERSION_OF_SCALAR_IN_VECTOR_OPERATION_COULD_CAUSE_TRUNCATION,
              "Conversion of scalar in vector operation could cause truncation", AnnotateExpr<0>, AnnotateExpr<1>);
+
+// Addittive expression
+
+CREATE_ERROR(CANNOT_SUBTRACT_POINTER_FROM_ARITHMETIC_TYPE, "Cannot subtract pointer from arithmetic type",
+             AnnotateExpr<0>, PointAt<1>, AnnotateExpr<2>);
+
+CREATE_ERROR(CANNOT_SUBTRACT_POINTERS_OF_INCOMPATIBLE_TYPES, "Cannot subtract pointers of incompatible types",
+             AnnotateExpr<0>, PointAt<1>, AnnotateExpr<2>);
+
+CREATE_ERROR(POINTER_ARITHMETIC_WITH_VECTORS_IS_NOT_ALLOWED, "Pointer arithmetic with vectors is not allowed",
+             AnnotateExpr<0>, PointAt<1>, AnnotateExpr<2>);
 
 // Conditional expression
 

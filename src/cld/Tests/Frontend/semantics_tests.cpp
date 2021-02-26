@@ -5084,4 +5084,176 @@ TEST_CASE("Semantics vectors", "[semantics]")
                       "}",
                       ProducesNoErrors());
     }
+    SECTION("Mod")
+    {
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) int i,i2;\n"
+                      "i % i2;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) int i;\n"
+                      "__attribute__((vector_size(8))) short i2;\n"
+                      "i % i2;\n"
+                      "}",
+                      ProducesError(TYPE_OF_VECTOR_OPERANDS_OF_BINARY_OPERATOR_N_MUST_MATCH, "'%'"));
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) float i;\n"
+                      "i % 12;\n"
+                      "}",
+                      ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE, "'%'"));
+    }
+    SECTION("Add and Sub")
+    {
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) int i,i2;\n"
+                      "i + i2;\n"
+                      "i - i2;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) int i;\n"
+                      "__attribute__((vector_size(8))) short i2;\n"
+                      "i + i2;\n"
+                      "}",
+                      ProducesError(TYPE_OF_VECTOR_OPERANDS_OF_BINARY_OPERATOR_N_MUST_MATCH, "'+'"));
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) int i;\n"
+                      "int *f;\n"
+                      "i + f;\n"
+                      "}",
+                      ProducesError(POINTER_ARITHMETIC_WITH_VECTORS_IS_NOT_ALLOWED));
+    }
+    SECTION("Shift")
+    {
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) int i,i2;\n"
+                      "i << i2;\n"
+                      "i >> i2;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) int i;\n"
+                      "i << 5;\n"
+                      "i >> 5;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) int i;\n"
+                      "__attribute__((vector_size(8))) short i2;\n"
+                      "i << i2;\n"
+                      "}",
+                      ProducesError(TYPE_OF_VECTOR_OPERANDS_OF_BINARY_OPERATOR_N_MUST_MATCH, "'<<'"));
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) float i;\n"
+                      "i << 12;\n"
+                      "}",
+                      ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE, "'<<'"));
+    }
+    SECTION("Relational")
+    {
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) int i,i2;\n"
+                      "i < i2;\n"
+                      "i > i2;\n"
+                      "i <= i2;\n"
+                      "i >= i2;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) int i;\n"
+                      "i < 5;\n"
+                      "i > 5;\n"
+                      "i <= 5;\n"
+                      "i >= 5;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) int i;\n"
+                      "__attribute__((vector_size(8))) short i2;\n"
+                      "i < i2;\n"
+                      "}",
+                      ProducesError(TYPE_OF_VECTOR_OPERANDS_OF_BINARY_OPERATOR_N_MUST_MATCH, "'<'"));
+        SECTION("Floating point result")
+        {
+            auto& exp = generateExpression("void foo(void) {\n"
+                                           "__attribute__((vector_size(16))) float f;\n"
+                                           "f < 5;\n"
+                                           "}");
+            auto& type = exp.getType();
+            REQUIRE(isVector(type));
+            auto& elementType = getVectorElementType(type);
+            REQUIRE(std::holds_alternative<PrimitiveType>(elementType.getVariant()));
+            auto& primType = cld::get<PrimitiveType>(elementType.getVariant());
+            CHECK(primType.getBitCount() == 32);
+            CHECK(primType.isSigned());
+            CHECK_FALSE(primType.isFloatingPoint());
+        }
+        SECTION("Unsigned integer result")
+        {
+            auto& exp = generateExpression("void foo(void) {\n"
+                                           "__attribute__((vector_size(16))) unsigned long f;\n"
+                                           "f < 5;\n"
+                                           "}");
+            auto& type = exp.getType();
+            REQUIRE(isVector(type));
+            auto& elementType = getVectorElementType(type);
+            REQUIRE(std::holds_alternative<PrimitiveType>(elementType.getVariant()));
+            auto& primType = cld::get<PrimitiveType>(elementType.getVariant());
+            CHECK(primType.getKind() == PrimitiveType::Long);
+            CHECK(primType.isSigned());
+            CHECK_FALSE(primType.isFloatingPoint());
+        }
+    }
+    SECTION("Equality")
+    {
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) int i,i2;\n"
+                      "i == i2;\n"
+                      "i != i2;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) int i;\n"
+                      "i == 5;\n"
+                      "i != 5;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) int i;\n"
+                      "__attribute__((vector_size(8))) short i2;\n"
+                      "i == i2;\n"
+                      "}",
+                      ProducesError(TYPE_OF_VECTOR_OPERANDS_OF_BINARY_OPERATOR_N_MUST_MATCH, "'=='"));
+        SECTION("Floating point result")
+        {
+            auto& exp = generateExpression("void foo(void) {\n"
+                                           "__attribute__((vector_size(16))) float f;\n"
+                                           "f == 5;\n"
+                                           "}");
+            auto& type = exp.getType();
+            REQUIRE(isVector(type));
+            auto& elementType = getVectorElementType(type);
+            REQUIRE(std::holds_alternative<PrimitiveType>(elementType.getVariant()));
+            auto& primType = cld::get<PrimitiveType>(elementType.getVariant());
+            CHECK(primType.getBitCount() == 32);
+            CHECK(primType.isSigned());
+            CHECK_FALSE(primType.isFloatingPoint());
+        }
+        SECTION("Unsigned integer result")
+        {
+            auto& exp = generateExpression("void foo(void) {\n"
+                                           "__attribute__((vector_size(16))) unsigned long f;\n"
+                                           "f == 5;\n"
+                                           "}");
+            auto& type = exp.getType();
+            REQUIRE(isVector(type));
+            auto& elementType = getVectorElementType(type);
+            REQUIRE(std::holds_alternative<PrimitiveType>(elementType.getVariant()));
+            auto& primType = cld::get<PrimitiveType>(elementType.getVariant());
+            CHECK(primType.getKind() == PrimitiveType::Long);
+            CHECK(primType.isSigned());
+            CHECK_FALSE(primType.isFloatingPoint());
+        }
+    }
 }

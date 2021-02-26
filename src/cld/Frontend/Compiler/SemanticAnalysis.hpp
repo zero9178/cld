@@ -240,6 +240,9 @@ private:
                                                           IntrVarPtr<ExpressionBase>&& value,
                                                           Lexer::CTokenIterator opToken);
 
+    void checkVectorBinaryOp(const IntrVarPtr<ExpressionBase>& lhs, Lexer::CTokenIterator token,
+                             const IntrVarPtr<ExpressionBase>& rhs, bool* errors = nullptr);
+
     std::unique_ptr<BinaryOperator> doBitOperators(IntrVarPtr<ExpressionBase>&& lhs, BinaryOperator::Kind kind,
                                                    Lexer::CTokenIterator token, IntrVarPtr<ExpressionBase>&& rhs);
 
