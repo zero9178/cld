@@ -186,7 +186,10 @@ CREATE_ERROR(INLINE_FUNCTION_N_WITH_EXTERNAL_LINKAGE_IS_NOT_ALLOWED_TO_CONTAIN_O
              "Inline function %0 with external linkage is not allowed to contain or access the internal identifier %1",
              PointAt<1>);
 
-CREATE_ERROR(NO_DEFINITION_FOR_INLINE_FUNCTION_N_FOUND, "No definition for inline function %0 found", PointAt<0>);
+CREATE_ERROR(NO_DEFINITION_FOR_INLINE_FUNCTION_N_FOUND, "No definition for inline function %0 found", Underline<0>);
+
+CREATE_ERROR(REDEFINITION_OF_FUNCTION_N_WITH_INTERNAL_LINKAGE, "Redefinition of function %0 with internal linkage",
+             Underline<0>);
 
 // Declarations
 
@@ -215,6 +218,9 @@ CREATE_ERROR(DECLARING_TYPEDEFS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR,
 CREATE_ERROR(TYPEDEF_DECLARATION_DOES_NOT_HAVE_A_NAME, "Typedef declaration does not have a name", Underline<0>);
 
 CREATE_ERROR(STATIC_VARIABLE_N_REDEFINED_WITHOUT_STATIC, "Static variable %0 redefined without static", Underline<0>);
+
+CREATE_ERROR(REDECLARATION_OF_FUNCTION_N_WITH_INTERNAL_LINKAGE, "Redefinition of function %0 with internal linkage",
+             Underline<0>);
 
 // Arrays
 

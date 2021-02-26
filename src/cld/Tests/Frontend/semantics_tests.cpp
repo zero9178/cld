@@ -141,18 +141,44 @@ TEST_CASE("Semantics declarations", "[semantics]")
         }
         SECTION("Prior internal linkage overwrites external")
         {
-            auto [translationUnit, errors] = generateSemantics("static int i;\n"
-                                                               "extern int i;");
-            REQUIRE_THAT(errors, ProducesNoErrors());
-            REQUIRE(translationUnit->getGlobals().size() == 2);
-            REQUIRE(translationUnit->getGlobals()[1]->is<cld::Semantics::VariableDeclaration>());
-            auto* decl = &translationUnit->getGlobals()[1]->cast<cld::Semantics::VariableDeclaration>();
-            CHECK(decl->getLinkage() == cld::Semantics::Linkage::Internal);
-            CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
-            CHECK(decl->getKind() == cld::Semantics::VariableDeclaration::Kind::TentativeDefinition);
-            SEMA_PRODUCES("static int i;\n"
-                          "int i;",
-                          ProducesError(STATIC_VARIABLE_N_REDEFINED_WITHOUT_STATIC, "'i'"));
+            SECTION("Variable")
+            {
+                auto [translationUnit, errors] = generateSemantics("static int i;\n"
+                                                                   "extern int i;");
+                REQUIRE_THAT(errors, ProducesNoErrors());
+                REQUIRE(translationUnit->getGlobals().size() == 2);
+                REQUIRE(translationUnit->getGlobals()[1]->is<cld::Semantics::VariableDeclaration>());
+                auto* decl = &translationUnit->getGlobals()[1]->cast<cld::Semantics::VariableDeclaration>();
+                CHECK(decl->getLinkage() == cld::Semantics::Linkage::Internal);
+                CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
+                CHECK(decl->getKind() == cld::Semantics::VariableDeclaration::Kind::TentativeDefinition);
+                SEMA_PRODUCES("static int i;\n"
+                              "int i;",
+                              ProducesError(STATIC_VARIABLE_N_REDEFINED_WITHOUT_STATIC, "'i'"));
+            }
+            SECTION("Function")
+            {
+                auto [translationUnit, errors] = generateSemantics("static int foo(void);\n"
+                                                                   "extern int foo(void);\n"
+                                                                   "int foo(void) { }");
+                REQUIRE_THAT(errors, ProducesNoErrors());
+                REQUIRE(translationUnit->getGlobals().size() == 3);
+                REQUIRE(translationUnit->getGlobals()[2]->is<cld::Semantics::FunctionDefinition>());
+                auto* def = &translationUnit->getGlobals()[2]->cast<cld::Semantics::FunctionDefinition>();
+                CHECK(def->getLinkage() == cld::Semantics::Linkage::Internal);
+            }
+        }
+        SECTION("Static re-definition/declaration")
+        {
+            SEMA_PRODUCES("extern int foo(void);\n"
+                          "static int foo(void);",
+                          ProducesError(REDECLARATION_OF_FUNCTION_N_WITH_INTERNAL_LINKAGE, "'foo'"));
+            SEMA_PRODUCES("int foo(void) { }\n"
+                          "static int foo(void);",
+                          ProducesError(REDECLARATION_OF_FUNCTION_N_WITH_INTERNAL_LINKAGE, "'foo'"));
+            SEMA_PRODUCES("int foo(void);\n"
+                          "static int foo(void) { }",
+                          ProducesError(REDEFINITION_OF_FUNCTION_N_WITH_INTERNAL_LINKAGE, "'foo'"));
         }
         SECTION("External definitions with static linkage")
         {

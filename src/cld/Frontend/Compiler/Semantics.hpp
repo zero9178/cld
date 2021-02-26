@@ -2244,14 +2244,24 @@ public:
         return m_nameToken;
     }
 
-    [[nodiscard]] const Type& getType() const
+    [[nodiscard]] const Type& getType() const&
     {
         return m_type;
     }
 
-    [[nodiscard]] const std::vector<std::unique_ptr<VariableDeclaration>>& getParameterDeclarations() const
+    [[nodiscard]] Type&& getType() &&
+    {
+        return std::move(m_type);
+    }
+
+    [[nodiscard]] const std::vector<std::unique_ptr<VariableDeclaration>>& getParameterDeclarations() const&
     {
         return m_parameterDeclarations;
+    }
+
+    [[nodiscard]] std::vector<std::unique_ptr<VariableDeclaration>>&& getParameterDeclarations() &&
+    {
+        return std::move(m_parameterDeclarations);
     }
 
     [[nodiscard]] bool isKandR() const
@@ -2264,9 +2274,14 @@ public:
         return m_linkage;
     }
 
-    [[nodiscard]] const CompoundStatement& getCompoundStatement() const
+    [[nodiscard]] const CompoundStatement& getCompoundStatement() const&
     {
         return m_compoundStatement;
+    }
+
+    [[nodiscard]] CompoundStatement&& getCompoundStatement() &&
+    {
+        return std::move(m_compoundStatement);
     }
 
     void setCompoundStatement(CompoundStatement&& compoundStatement)
@@ -2282,11 +2297,6 @@ public:
     [[nodiscard]] InlineKind getInlineKind() const noexcept
     {
         return m_inlineKind;
-    }
-
-    void setInlineKind(InlineKind inlineKind) noexcept
-    {
-        m_inlineKind = inlineKind;
     }
 };
 
