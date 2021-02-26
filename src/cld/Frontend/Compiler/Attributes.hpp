@@ -37,9 +37,14 @@ class AttributeHolder
     std::vector<T> m_attributes;
 
 public:
-    [[nodiscard]] const std::vector<T>& getAttributes() const
+    [[nodiscard]] const std::vector<T>& getAttributes() const&
     {
         return m_attributes;
+    }
+
+    [[nodiscard]] std::vector<T>&& getAttributes() &&
+    {
+        return std::move(m_attributes);
     }
 
     template <class U>
@@ -71,9 +76,46 @@ public:
                != m_attributes.end();
     }
 
-    void addAttribute(T&& attribute)
+    T& addAttribute(T&& attribute)
     {
         m_attributes.push_back(std::move(attribute));
+        return m_attributes.back();
+    }
+
+    template <class U>
+    void tryAddFromOther(AttributeHolder<U>&& other)
+    {
+        auto attributes = std::move(other).getAttributes();
+        m_attributes.reserve(m_attributes.size() + attributes.size());
+        for (auto& iter : attributes)
+        {
+            cld::match(std::move(iter), [&](auto&& value) {
+                using W = std::decay_t<decltype(value)>;
+                static_assert(std::is_move_constructible_v<W>);
+                if constexpr (std::is_constructible_v<T, W&&>)
+                {
+                    m_attributes.emplace_back(std::move(value));
+                }
+            });
+        }
+    }
+
+    template <class U>
+    void tryAddFromOther(const AttributeHolder<U>& other)
+    {
+        auto& attributes = other.getAttributes();
+        m_attributes.reserve(m_attributes.size() + attributes.size());
+        for (auto& iter : attributes)
+        {
+            cld::match(iter, [&](auto&& value) {
+                using W = std::decay_t<decltype(value)>;
+                static_assert(std::is_copy_constructible_v<W>);
+                if constexpr (std::is_constructible_v<T, W>)
+                {
+                    m_attributes.emplace_back(value);
+                }
+            });
+        }
     }
 };
 
