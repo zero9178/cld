@@ -5303,4 +5303,34 @@ TEST_CASE("Semantics vectors", "[semantics]")
                       "}",
                       ProducesError(TYPE_OF_VECTOR_OPERANDS_IN_CONDITIONAL_OPERATOR_MUST_MATCH));
     }
+    SECTION("Assignment")
+    {
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) int i;\n"
+                      "__attribute__((vector_size(8))) short i2;\n"
+                      "i = i2;\n"
+                      "}",
+                      ProducesError(CANNOT_ASSIGN_INCOMPATIBLE_TYPES));
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) int i;\n"
+                      "i += 5;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(float s) {\n"
+                      "__attribute__((vector_size(8))) int i;\n"
+                      "i += s;\n"
+                      "}",
+                      ProducesError(CONVERSION_OF_SCALAR_IN_VECTOR_OPERATION_COULD_CAUSE_TRUNCATION));
+        SEMA_PRODUCES("void foo() {\n"
+                      "__attribute__((vector_size(8))) int i;\n"
+                      "__attribute__((vector_size(8))) short s;\n"
+                      "i += s;\n"
+                      "}",
+                      ProducesError(TYPE_OF_VECTOR_OPERANDS_OF_BINARY_OPERATOR_N_MUST_MATCH, "'+='"));
+        SEMA_PRODUCES("void foo(int s) {\n"
+                      "__attribute__((vector_size(8))) int i;\n"
+                      "s |= i;\n"
+                      "}",
+                      ProducesError(CANNOT_ASSIGN_INCOMPATIBLE_TYPES));
+    }
 }

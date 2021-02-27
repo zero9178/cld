@@ -220,9 +220,8 @@ private:
 
     static std::unique_ptr<Conversion> toBool(IntrVarPtr<ExpressionBase>&& expression);
 
-    void arithmeticConversion(IntrVarPtr<ExpressionBase>& lhs, IntrVarPtr<ExpressionBase>& rhs);
-
-    void arithmeticConversion(Type& lhs, IntrVarPtr<ExpressionBase>& rhs);
+    void arithmeticConversion(std::variant<IntrVarPtr<ExpressionBase> * CLD_NON_NULL, Type * CLD_NON_NULL> lhs,
+                              IntrVarPtr<ExpressionBase>& rhs);
 
     bool isModifiableLValue(const ExpressionBase& expression) const;
 
@@ -242,6 +241,9 @@ private:
 
     void checkVectorBinaryOp(const IntrVarPtr<ExpressionBase>& lhs, Lexer::CTokenIterator token,
                              const IntrVarPtr<ExpressionBase>& rhs, bool* errors = nullptr);
+
+    void checkVectorCompoundAssign(const IntrVarPtr<ExpressionBase>& lhs, const Type& lhsType,
+                                   Lexer::CTokenIterator token, const IntrVarPtr<ExpressionBase>& rhs);
 
     std::unique_ptr<BinaryOperator> doBitOperators(IntrVarPtr<ExpressionBase>&& lhs, BinaryOperator::Kind kind,
                                                    Lexer::CTokenIterator token, IntrVarPtr<ExpressionBase>&& rhs);
