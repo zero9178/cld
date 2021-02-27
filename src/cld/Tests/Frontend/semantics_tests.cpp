@@ -5333,4 +5333,10 @@ TEST_CASE("Semantics vectors", "[semantics]")
                       "}",
                       ProducesError(CANNOT_ASSIGN_INCOMPATIBLE_TYPES));
     }
+    SECTION("Initialization")
+    {
+        SEMA_PRODUCES("int r __attribute__((vector_size(sizeof(int) * 4))) = {3,3,53,34};", ProducesNoErrors());
+        SEMA_PRODUCES("int r __attribute__((vector_size(sizeof(int) * 4))) = {3,3,53,34,3};",
+                      ProducesError(NO_MORE_SUB_OBJECTS_TO_INITIALIZE));
+    }
 }

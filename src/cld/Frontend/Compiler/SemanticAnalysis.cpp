@@ -280,6 +280,7 @@ std::vector<cld::IntrVarPtr<cld::Semantics::Useable>>
                         std::move(type), loc, std::move(parameterDeclarations), linkage, inlineKind,
                         CompoundStatement(m_currentScope, loc, {}, loc)))
                     ->cast<FunctionDefinition>();
+    attributes = applyAttributes(&ptr, std::move(attributes));
     // We are currently in block scope. Functions are always at file scope though so we can't use getCurrentScope
     auto [prev, notRedefinition] = m_scopes[0].declarations.insert({loc->getText(), DeclarationInScope{loc, &ptr}});
     if (!notRedefinition)
@@ -313,7 +314,6 @@ std::vector<cld::IntrVarPtr<cld::Semantics::Useable>>
             prev.value() = DeclarationInScope{loc, &ptr};
         }
     }
-    attributes = applyAttributes(&ptr, std::move(attributes));
 
     Type funcType =
         ArrayType::create(false, false, false, false, PrimitiveType::createChar(true, false, getLanguageOptions()),
@@ -696,6 +696,8 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
             }
 
             auto declaration = std::make_unique<VariableDeclaration>(std::move(result), linkage, lifetime, loc, kind);
+            thisAttributes = applyAttributes(declaration.get(), std::move(thisAttributes));
+            reportNotApplicableAttributes(thisAttributes);
             auto [prev, notRedefinition] =
                 getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, declaration.get()}});
             if (!notRedefinition)
@@ -830,8 +832,6 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                                   *declaration->getNameToken()));
             }
 
-            thisAttributes = applyAttributes(declaration.get(), std::move(thisAttributes));
-            reportNotApplicableAttributes(thisAttributes);
             decls.push_back(std::move(declaration));
         }
     }

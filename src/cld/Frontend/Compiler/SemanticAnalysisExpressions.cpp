@@ -3265,7 +3265,7 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
     {
         return visit(node.getNonCommaExpressionsAndBlocks()[0].first, type, staticLifetime, size);
     }
-    if (!type.isUndefined() && !isArray(type) && !isRecord(type))
+    if (!type.isUndefined() && !isAggregate(type))
     {
         log(Errors::Semantics::CANNOT_INITIALIZE_ARITHMETIC_OR_POINTER_TYPE_WITH_INITIALIZER_LIST.args(
             node, m_sourceInterface, node));
@@ -3423,6 +3423,21 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const cld::S
                 if (isAggregate(arrayType.getType()))
                 {
                     self(arrayType.getType(), parent.at(i));
+                }
+            }
+        }
+        if (isVector(type))
+        {
+            auto& vectorType = cld::get<VectorType>(type.getVariant());
+            parent.resize(vectorType.getSize());
+            for (std::size_t i = 0; i < vectorType.getSize(); i++)
+            {
+                parent.at(i).type = &vectorType.getType();
+                parent.at(i).index = i;
+                parent.at(i).parent = &parent;
+                if (isAggregate(vectorType.getType()))
+                {
+                    self(vectorType.getType(), parent.at(i));
                 }
             }
         }

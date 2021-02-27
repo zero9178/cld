@@ -2728,7 +2728,7 @@ inline bool cld::Semantics::isCharacterLikeType(const Type& type, const Language
 
 inline bool cld::Semantics::isAggregate(const Type& type)
 {
-    return isRecord(type) || isArray(type);
+    return isRecord(type) || isArray(type) || isVector(type);
 }
 
 inline bool cld::Semantics::isVector(const Type& type)

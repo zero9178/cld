@@ -1379,7 +1379,7 @@ public:
 /**
  * <InitDeclarator> ::= <Declarator> [ <TokenType::Assignment> <Initializer> ]
  *
- * [GNU]: <InitDeclarator> ::= <Declarator> [ <TokenType::Assignment> <Initializer> ] [<GNUSimpleASM>] [<GNUAttribute>]
+ * [GNU]: <InitDeclarator> ::= <Declarator> [<GNUSimpleASM>] [<GNUAttribute>] [ <TokenType::Assignment> <Initializer> ]
  *
  * <Declaration> ::= <DeclarationSpecifier> {<DeclarationSpecifier>} [<InitDeclarator>
  *                   { <TokenType::Comma> [<GNUAttribute>] <InitDeclarator> } ] <TokenType::SemiColon>

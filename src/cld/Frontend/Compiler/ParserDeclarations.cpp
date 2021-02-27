@@ -130,16 +130,17 @@ std::optional<cld::Syntax::Declaration> finishDeclaration(
             const auto* loc = Semantics::declaratorToLoc(*alreadyParsedDeclarator->first);
             context.addToScope(loc->getText(), {start, begin, loc});
         }
+        // GNU Attribute for this case may have already been parsed by the caller if there was no asm statement
+        // but attributes
+        std::optional<GNUSimpleASM> simpleASM;
+        auto attributes = std::move(alreadyParsedDeclarator->second);
+        if (!attributes)
+        {
+            simpleASM = parseGNUSimpleASM(begin, end, context);
+            attributes = parseGNUAttributes(begin, end, context);
+        }
         if (begin == end || begin->getTokenType() != Lexer::TokenType::Assignment)
         {
-            // GNU Attribute for this case may have already been parsed by the caller if there was no asm statement
-            // but attributes
-            auto simpleASM = parseGNUSimpleASM(begin, end, context);
-            auto attributes = std::move(alreadyParsedDeclarator->second);
-            if (!attributes)
-            {
-                attributes = parseGNUAttributes(begin, end, context);
-            }
             if (alreadyParsedDeclarator->first)
             {
                 initDeclarators.push_back({std::make_unique<Declarator>(std::move(*alreadyParsedDeclarator->first)),
@@ -152,8 +153,6 @@ std::optional<cld::Syntax::Declaration> finishDeclaration(
             auto initializer = parseInitializer(begin, end,
                                                 context.withRecoveryTokens(Context::fromTokenTypes(
                                                     Lexer::TokenType::SemiColon, Lexer::TokenType::Comma)));
-            auto simpleASM = parseGNUSimpleASM(begin, end, context);
-            auto attributes = parseGNUAttributes(begin, end, context);
             if (alreadyParsedDeclarator->first && initializer)
             {
                 initDeclarators.push_back({std::make_unique<Declarator>(std::move(*alreadyParsedDeclarator->first)),
