@@ -5256,4 +5256,51 @@ TEST_CASE("Semantics vectors", "[semantics]")
             CHECK_FALSE(primType.isFloatingPoint());
         }
     }
+    SECTION("Bitops")
+    {
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) int i,i2;\n"
+                      "i | i2;\n"
+                      "i & i2;\n"
+                      "i ^ i2;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) int i;\n"
+                      "i | 5;\n"
+                      "i & 5;\n"
+                      "i ^ 5;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) int i;\n"
+                      "__attribute__((vector_size(8))) short i2;\n"
+                      "i | i2;\n"
+                      "}",
+                      ProducesError(TYPE_OF_VECTOR_OPERANDS_OF_BINARY_OPERATOR_N_MUST_MATCH, "'|'"));
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) float i;\n"
+                      "i | 12;\n"
+                      "}",
+                      ProducesError(LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE, "'|'"));
+    }
+    SECTION("Conditional expression")
+    {
+        SEMA_PRODUCES("void foo(int b) {\n"
+                      "__attribute__((vector_size(8))) int i,i2;\n"
+                      "b ? i : i2;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(int b) {\n"
+                      "__attribute__((vector_size(8))) int i;\n"
+                      "b ? i : 5;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(int b) {\n"
+                      "__attribute__((vector_size(8))) int i;\n"
+                      "__attribute__((vector_size(8))) short i2;\n"
+                      "b ? i : i2;\n"
+                      "}",
+                      ProducesError(TYPE_OF_VECTOR_OPERANDS_IN_CONDITIONAL_OPERATOR_MUST_MATCH));
+    }
 }

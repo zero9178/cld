@@ -527,6 +527,10 @@ CREATE_ERROR(TYPES_IN_CONDITIONAL_EXPRESSION_MUST_BE_OF_COMPATIBLE_TYPES,
              "Types in conditional expression must be of compatible types", PointAt<0>, AnnotateExpr<1>, PointAt<2>,
              AnnotateExpr<3>);
 
+CREATE_ERROR(TYPE_OF_VECTOR_OPERANDS_IN_CONDITIONAL_OPERATOR_MUST_MATCH,
+             "Type of vector operands in conditional operator must match", PointAt<0>, AnnotateExpr<1>, PointAt<2>,
+             AnnotateExpr<3>);
+
 // Simple assignment
 
 CREATE_ERROR(CANNOT_ASSIGN_TO_ARRAY_TYPE_N, "Cannot assign to array type %fullType0", AnnotateExpr<0>, PointAt<1>);

@@ -299,6 +299,10 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                         arithmeticConversion(lhsType, rhsValue);
                     }
                 }
+                else if (isVector(lhsValue->getType()))
+                {
+                    arithmeticConversion(lhsType, rhsValue);
+                }
                 break;
             }
                 // Doing a simple check is redundant in compound assignments. Either we had a diagnostic saying that at
@@ -2450,22 +2454,32 @@ std::unique_ptr<cld::Semantics::BinaryOperator>
     cld::Semantics::SemanticAnalysis::doBitOperators(IntrVarPtr<ExpressionBase>&& lhs, BinaryOperator::Kind kind,
                                                      Lexer::CTokenIterator token, IntrVarPtr<ExpressionBase>&& rhs)
 {
-    if (isArithmetic(lhs->getType()) && isArithmetic(rhs->getType()))
+    if ((isArithmetic(lhs->getType()) && isArithmetic(rhs->getType())) || isVector(lhs->getType())
+        || isVector(rhs->getType()))
     {
         arithmeticConversion(lhs, rhs);
     }
-    if (!lhs->isUndefined() && !isInteger(lhs->getType()))
+    bool errors = false;
+    if (!lhs->isUndefined() && !isInteger(lhs->getType())
+        && (!isVector(lhs->getType()) || !isInteger(getVectorElementType(lhs->getType()))))
     {
         log(Errors::Semantics::LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE.args(*lhs, m_sourceInterface, *token,
                                                                                        *lhs));
+        errors = true;
     }
-    if (!rhs->isUndefined() && !isInteger(rhs->getType()))
+    if (!rhs->isUndefined() && !isInteger(rhs->getType())
+        && (!isVector(rhs->getType()) || !isInteger(getVectorElementType(rhs->getType()))))
     {
         log(Errors::Semantics::RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE.args(*rhs, m_sourceInterface, *token,
                                                                                         *rhs));
+        errors = true;
     }
-    auto type = isInteger(lhs->getType()) ? lhs->getType() : Type{};
-    return std::make_unique<BinaryOperator>(std::move(type), std::move(lhs), kind, token, std::move(rhs));
+    checkVectorBinaryOp(lhs, token, rhs, &errors);
+    if (errors)
+    {
+        return std::make_unique<BinaryOperator>(Type{}, std::move(lhs), kind, token, std::move(rhs));
+    }
+    return std::make_unique<BinaryOperator>(lhs->getType(), std::move(lhs), kind, token, std::move(rhs));
 }
 
 cld::IntrVarPtr<cld::Semantics::ExpressionBase>
@@ -2584,7 +2598,8 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     condition = toBool(std::move(condition));
     auto second = visit(*node.getOptionalExpression());
     auto third = visit(*node.getOptionalConditionalExpression());
-    if (isArithmetic(second->getType()) && isArithmetic(third->getType()))
+    if ((isArithmetic(second->getType()) && isArithmetic(third->getType())) || isVector(second->getType())
+        || isVector(third->getType()))
     {
         arithmeticConversion(second, third);
     }
@@ -2594,7 +2609,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         third = lvalueConversion(std::move(third));
     }
     Type resultType;
-    if (isArithmetic(second->getType()))
+    if (isArithmetic(second->getType()) && !isVector(third->getType()))
     {
         if (isPointer(third->getType()) && isInteger(second->getType()))
         {
@@ -2687,6 +2702,23 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         else
         {
             resultType = second->getType();
+        }
+    }
+    else if (isVector(second->getType()) || isVector(third->getType()))
+    {
+        if (isVector(second->getType()) && isVector(third->getType()))
+        {
+            if (second->getType() != third->getType())
+            {
+                log(Errors::Semantics::TYPE_OF_VECTOR_OPERANDS_IN_CONDITIONAL_OPERATOR_MUST_MATCH.args(
+                    *node.getOptionalQuestionMark(), m_sourceInterface, *node.getOptionalQuestionMark(), *second,
+                    *node.getOptionalColon(), *third));
+            }
+        }
+        else
+        {
+            log(Errors::Semantics::CONVERSION_OF_SCALAR_IN_VECTOR_OPERATION_COULD_CAUSE_TRUNCATION.args(
+                *node.getOptionalColon(), m_sourceInterface, *second, *third));
         }
     }
     return std::make_unique<Conditional>(std::move(resultType), std::move(condition), node.getOptionalQuestionMark(),
