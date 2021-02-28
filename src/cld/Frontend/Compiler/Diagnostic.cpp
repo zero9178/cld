@@ -268,8 +268,7 @@ cld::Message
                                                    const SourceInterface& sourceInterface) const
 {
     if (m_severity == Severity::Warning
-        && (!sourceInterface.getLanguageOptions().enabledWarnings.count(to_string(m_name))
-            || sourceInterface.getFiles()[location.first.fileId].systemHeader))
+        && !sourceInterface.getLanguageOptions().enabledWarnings.count(to_string(m_name)))
     {
         return {};
     }
@@ -315,6 +314,10 @@ cld::Message
     }
 
     location = toMacroId0Range(location, sourceInterface);
+    if (m_severity == Severity::Warning && sourceInterface.getFiles()[location.first.fileId].systemHeader)
+    {
+        return {};
+    }
     const auto [line, column] = getLineCol(location.first, sourceInterface);
     {
         const auto& range = sourceInterface.getFiles()[location.first.fileId].lineAndFileMapping;
