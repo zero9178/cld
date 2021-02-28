@@ -397,6 +397,8 @@ CREATE_ERROR(CANNOT_TAKE_ADDRESS_OF_DECLARATION_ANNOTATED_WITH_REGISTER,
 
 CREATE_ERROR(CANNOT_TAKE_ADDRESS_OF_BITFIELD, "Cannot take address of bit-field", PointAt<0>, Underline<1>);
 
+CREATE_ERROR(CANNOT_TAKE_ADDRESS_OF_VECTOR_ELEMENT, "Cannot take address of vector element", PointAt<0>, Underline<1>);
+
 // Dereference
 
 CREATE_ERROR(CANNOT_DEREFERENCE_NON_POINTER_TYPE_N, "Cannot dereference non pointer type %fullType1", PointAt<0>,

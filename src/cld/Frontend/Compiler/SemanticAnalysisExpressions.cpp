@@ -1621,6 +1621,12 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                         *value, m_sourceInterface, *node.getUnaryToken(), *value));
                 }
             }
+            if (auto* subscript = value->get_if<SubscriptOperator>();
+                subscript && isVector(subscript->getPointerExpression().getType()))
+            {
+                log(Errors::Semantics::CANNOT_TAKE_ADDRESS_OF_VECTOR_ELEMENT.args(*value, m_sourceInterface,
+                                                                                  *node.getUnaryToken(), *value));
+            }
             if (isBitfieldAccess(*value))
             {
                 log(Errors::Semantics::CANNOT_TAKE_ADDRESS_OF_BITFIELD.args(*value, m_sourceInterface,

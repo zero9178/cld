@@ -4969,6 +4969,11 @@ TEST_CASE("Semantics vectors", "[semantics]")
                       "i[3.0] = 1;\n"
                       "}",
                       ProducesError(EXPECTED_OTHER_OPERAND_TO_BE_OF_INTEGER_TYPE));
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(16))) int i;\n"
+                      "&i[0];\n"
+                      "}",
+                      ProducesError(CANNOT_TAKE_ADDRESS_OF_VECTOR_ELEMENT));
     }
     SECTION("Unary minus")
     {

@@ -292,8 +292,7 @@ private:
     }
 
     template <class T>
-    Type qualifiersToType(const std::vector<T>& declarationOrSpecifierQualifiers,
-                          std::vector<GNUAttribute>* attributes = nullptr)
+    Type qualifiersToType(const std::vector<T>& declarationOrSpecifierQualifiers, std::vector<GNUAttribute>* attributes)
     {
         std::vector<DeclarationOrSpecifierQualifier> temp(declarationOrSpecifierQualifiers.size());
         std::transform(declarationOrSpecifierQualifiers.begin(), declarationOrSpecifierQualifiers.end(), temp.begin(),

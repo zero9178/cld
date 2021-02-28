@@ -5892,4 +5892,59 @@ TEST_CASE("LLVM codegen vectors", "[LLVM]")
         REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
         CHECK(cld::Tests::computeInJIT<int(int)>(std::move(module), "foo", 2) == 2);
     }
+    SECTION("Initialization")
+    {
+        SECTION("Vector only")
+        {
+            auto program = generateProgram("int foo(int in) {\n"
+                                           "    int __attribute__((vector_size(8))) i = {3,in};\n"
+                                           "    return i[0] + i[1];\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int(int)>(std::move(module), "foo", 2) == 5);
+        }
+        SECTION("As part of a struct")
+        {
+            auto program = generateProgram("struct A {\n"
+                                           "    int __attribute__((vector_size(8))) i;\n"
+                                           "};\n"
+                                           "\n"
+                                           "int foo(int in) {\n"
+                                           "    struct A i = {3,in};\n"
+                                           "    return i.i[0] + i.i[1];\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int(int)>(std::move(module), "foo", 2) == 5);
+        }
+        SECTION("Static initialization")
+        {
+            auto program = generateProgram("int foo(void) {\n"
+                                           "    static int __attribute__((vector_size(8))) i = {3,2};\n"
+                                           "    return i[0] + i[1];\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "foo") == 5);
+        }
+        SECTION("Static initialization as part of a struct")
+        {
+            auto program = generateProgram("struct A {\n"
+                                           "    int __attribute__((vector_size(8))) i;\n"
+                                           "};\n"
+                                           "\n"
+                                           "int foo() {\n"
+                                           "    static struct A i = {3,2};\n"
+                                           "    return i.i[0] + i.i[1];\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "foo") == 5);
+        }
+    }
 }

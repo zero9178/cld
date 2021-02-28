@@ -927,15 +927,18 @@ cld::Semantics::Type
                 }
                 continue;
             }
-            auto baseType = qualifiersToType(specifiers);
+            std::vector<GNUAttribute> attributes;
+            auto baseType = qualifiersToType(specifiers, &attributes);
             for (auto iter2 = declarators.begin(); iter2 != declarators.end(); iter2++)
             {
+                auto thisAttributes = attributes;
                 bool last = iter2 + 1 == declarators.end() && iter + 1 == structOrUnion->getStructDeclarations().end();
                 bool first = iter2 == declarators.begin() && iter == structOrUnion->getStructDeclarations().begin();
 
                 auto& declarator = iter2->optionalDeclarator;
                 auto& size = iter2->optionalBitfield;
-                auto type = declarator ? applyDeclarator(baseType, *declarator) : baseType;
+                auto type = declarator ? applyDeclarator(baseType, *declarator, {}, {}, &thisAttributes) : baseType;
+                reportNotApplicableAttributes(thisAttributes);
                 if (isVoid(type))
                 {
                     if (structOrUnion->isUnion())

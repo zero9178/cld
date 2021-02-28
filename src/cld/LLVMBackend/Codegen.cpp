@@ -902,6 +902,11 @@ class CodeGenerator final
                     }
                     aggregate.vector.resize(array.getSize(), value);
                 }
+                else if (cld::Semantics::isVector(type))
+                {
+                    auto& vector = cld::get<cld::Semantics::VectorType>(type.getVariant());
+                    aggregate.vector.resize(vector.getSize());
+                }
             }};
         genAggregate(type, constants);
 
@@ -938,6 +943,10 @@ class CodeGenerator final
                     else if (cld::Semantics::isArray(*currentType))
                     {
                         currentType = &cld::Semantics::getArrayElementType(*currentType);
+                    }
+                    else if (cld::Semantics::isVector(*currentType))
+                    {
+                        currentType = &cld::Semantics::getVectorElementType(*currentType);
                     }
                     current = &cld::get<Aggregate>(current->vector[iter]);
                 }
@@ -1106,24 +1115,39 @@ class CodeGenerator final
                 }
                 return llvm::ConstantStruct::get(llvm::StructType::get(m_module.getContext(), elementTypes), elements);
             }
-            // Union
-            auto fields = m_programInterface.getFieldLayout(type);
-            auto* llvmSubType = visit(*fields[*aggregate.unionIndex].type);
-            llvm::Constant* element = cld::match(
-                aggregate.vector[0], [](llvm::Constant* constant) -> llvm::Constant* { return constant; },
-                [&](const Aggregate& subAggregate) -> llvm::Constant* {
-                    return self(*fields[*aggregate.unionIndex].type, llvmSubType, subAggregate);
-                });
-            auto paddingSize = m_module.getDataLayout().getTypeAllocSize(llvmType).getKnownMinSize()
-                               - m_module.getDataLayout().getTypeAllocSize(element->getType()).getKnownMinSize();
-            if (paddingSize == 0)
+            if (cld::Semantics::isUnion(type))
             {
-                return llvm::ConstantStruct::get(llvm::StructType::get(element->getType()), element);
-            }
-            auto* padding = llvm::ArrayType::get(m_builder.getInt8Ty(), paddingSize);
-            auto* newType = llvm::StructType::get(element->getType(), padding);
+                // Union
+                auto fields = m_programInterface.getFieldLayout(type);
+                auto* llvmSubType = visit(*fields[*aggregate.unionIndex].type);
+                llvm::Constant* element = cld::match(
+                    aggregate.vector[0], [](llvm::Constant* constant) -> llvm::Constant* { return constant; },
+                    [&](const Aggregate& subAggregate) -> llvm::Constant* {
+                        return self(*fields[*aggregate.unionIndex].type, llvmSubType, subAggregate);
+                    });
+                auto paddingSize = m_module.getDataLayout().getTypeAllocSize(llvmType).getKnownMinSize()
+                                   - m_module.getDataLayout().getTypeAllocSize(element->getType()).getKnownMinSize();
+                if (paddingSize == 0)
+                {
+                    return llvm::ConstantStruct::get(llvm::StructType::get(element->getType()), element);
+                }
+                auto* padding = llvm::ArrayType::get(m_builder.getInt8Ty(), paddingSize);
+                auto* newType = llvm::StructType::get(element->getType(), padding);
 
-            return llvm::ConstantStruct::get(newType, {element, llvm::UndefValue::get(padding)});
+                return llvm::ConstantStruct::get(newType, {element, llvm::UndefValue::get(padding)});
+            }
+            // Vector
+            CLD_ASSERT(cld::Semantics::isVector(type));
+            std::vector<llvm::Constant*> elements;
+            for (std::size_t i = 0; i < aggregate.vector.size(); i++)
+            {
+                elements.push_back(cld::get<llvm::Constant*>(aggregate.vector[i]));
+                if (!elements.back())
+                {
+                    elements.back() = llvm::Constant::getNullValue(llvmType->getScalarType());
+                }
+            }
+            return llvm::ConstantVector::get(elements);
         }}(type, llvmType, constants);
     }
 
@@ -4397,12 +4421,27 @@ public:
                                 createBitCast(currentPointer, llvm::PointerType::getUnqual(visit(*currentType)));
                             bitFieldBounds = fields[iter].bitFieldBounds;
                         }
-                        else
+                        else if (cld::Semantics::isArray(*currentType))
                         {
                             currentType = &cld::Semantics::getArrayElementType(*currentType);
                             currentPointer =
                                 createInBoundsGEP(currentPointer, {m_builder.getInt64(0), m_builder.getInt64(iter)});
                         }
+                        else
+                        {
+                            CLD_ASSERT(cld::Semantics::isVector(*currentType));
+                            auto loaded = createLoad(currentPointer, currentType->isVolatile());
+                            auto* inserted = m_builder.CreateInsertElement(loaded, subValue, iter);
+                            createStore(inserted, currentPointer, currentType->isVolatile());
+                            currentType = nullptr;
+                            // Vectors cannot contain aggregate types and are therefore always the end of the chain.
+                            // Since we also can't take pointer to a vector element we need to handle it specially
+                            // and insert here already. currentType is set to null to signify that we are done here
+                        }
+                    }
+                    if (!currentType)
+                    {
+                        continue;
                     }
                     if (!bitFieldBounds)
                     {
@@ -4413,10 +4452,10 @@ public:
                                                    expression->getType().getSizeOf(m_programInterface));
                             continue;
                         }
-                        createStore(subValue, currentPointer, type.isVolatile());
+                        createStore(subValue, currentPointer, currentType->isVolatile());
                         continue;
                     }
-                    llvm::Value* loaded = createLoad(currentPointer, type.isVolatile());
+                    llvm::Value* loaded = createLoad(currentPointer, currentType->isVolatile());
                     auto size = bitFieldBounds->second - bitFieldBounds->first;
                     llvm::Value* mask = llvm::ConstantInt::get(subValue.value->getType(), (1u << size) - 1);
                     subValue = m_builder.CreateAnd(subValue, mask);
