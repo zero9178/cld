@@ -77,6 +77,68 @@ CLD_CLI_OPT(G2, ("-g2", "-g", "--debug"))("Generated debugging info");
 
 CLD_CLI_OPT(G3, ("-g3"))("Generated extded debugging info");
 
+CLD_CLI_OPT(MMX, ("-m[no-]mx"))("Enable x86 MMX extensions");
+
+CLD_CLI_OPT(SSE, ("-m[no-]sse"))("Enable x86 SSE extensions");
+
+CLD_CLI_OPT(THREEDNOWA, ("-m[no-]3dnowa"))("Enable x86 3DNowA! extensions");
+
+CLD_CLI_OPT(SSE2, ("-m[no-]sse2"))("Enable x86 SSE 2 extensions");
+
+CLD_CLI_OPT(SSE3, ("-m[no-]sse3"))("Enable x86 SSE 3 extensions");
+
+CLD_CLI_OPT(SSSE3, ("-m[no-]ssse3"))("Enable x86 SSSE 3 extensions");
+
+CLD_CLI_OPT(SSE4_1, ("-m[no-]sse4.1"))("Enable x86 SSE 4.1 extensions");
+
+CLD_CLI_OPT(SSE4_2, ("-m[no-]sse4.2"))("Enable x86 SSE 4.2 extensions");
+
+CLD_CLI_OPT(AVX, ("-m[no-]avx"))("Enable x86 AVX extensions");
+
+CLD_CLI_OPT(AVX2, ("-m[no-]avx2"))("Enable x86 AVX 2 extensions");
+
+CLD_CLI_OPT(AES, ("-m[no-]aes"))("Enable x86 AES extensions");
+
+CLD_CLI_OPT(PCLMUL, ("-m[no-]pclmul"))("Enable x86 PCLMUL extensions");
+
+CLD_CLI_OPT(FSGSBASE, ("-m[no-]fsgsbase"))("Enable x86 FSGSBASE extensions");
+
+CLD_CLI_OPT(RDRND, ("-m[no-]frdrnd"))("Enable x86 RDRND extensions");
+
+CLD_CLI_OPT(PTWRITE, ("-m[no-]ptwrite"))("Enable x86 PTWRITE extensions");
+
+CLD_CLI_OPT(SSE4A, ("-m[no-]sse4a"))("Enable x86 SSE 4a extensions");
+
+CLD_CLI_OPT(XOPA, ("-m[no-]xop"))("Enable x86 XOP extensions");
+
+CLD_CLI_OPT(FMA4, ("-m[no-]fma4"))("Enable x86 FMA4 extensions");
+
+CLD_CLI_OPT(LWP, ("-m[no-]lwp"))("Enable x86 LWP extensions");
+
+CLD_CLI_OPT(BMI, ("-m[no-]bmi"))("Enable x86 BMI extensions");
+
+CLD_CLI_OPT(BMI2, ("-m[no-]bmi2"))("Enable x86 BMI 2 extensions");
+
+CLD_CLI_OPT(LZCNT, ("-m[no-]lzcnt"))("Enable x86 LZCNT extensions");
+
+CLD_CLI_OPT(FXSR, ("-m[no-]fxsr"))("Enable x86 FXSR extensions");
+
+CLD_CLI_OPT(XSAVE, ("-m[no-]xsave"))("Enable x86 XSAVE extensions");
+
+CLD_CLI_OPT(XSAVEOPT, ("-m[no-]xsaveopt"))("Enable x86 XSAVEOPT extensions");
+
+CLD_CLI_OPT(TBM, ("-m[no-]tbm"))("Enable x86 TBM extensions");
+
+CLD_CLI_OPT(THREEDNOW, ("-m[no-]3dnow"))("Enable x86 3DNow! extensions");
+
+CLD_CLI_OPT(RTM, ("-m[no-]rtm"))("Enable x86 RTM extensions");
+
+CLD_CLI_OPT(MWAITX, ("-m[no-]mwaitx"))("Enable x86 MWAITX extensions");
+
+CLD_CLI_OPT(CLZERO, ("-m[no-]mwaitx"))("Enable x86 CLZERO extensions");
+
+CLD_CLI_OPT(PKU, ("-m[no-]pku"))("Enable x86 PKU extensions");
+
 namespace cld::cli
 {
 template <>
@@ -295,6 +357,141 @@ cld::PP::Options getTargetSpecificPreprocessorOptions(const cld::LanguageOptions
         result.additionalMacros.emplace_back("__STRICT_ANSI__", "1");
     }
     return result;
+}
+
+template <auto& Value>
+struct ValueIdentity
+{
+    constexpr static auto& value = Value;
+};
+
+template <class CL>
+void setTargetFeatures(cld::TargetFeatures& targetFeatures, const CL& cli, llvm::raw_ostream* reporter)
+{
+    auto tryApply = [&](auto opt, cld::TargetFeatures::Features feature) {
+        constexpr auto& Opt = std::decay_t<decltype(opt)>::value;
+        if (cli.template pos<Opt>() >= 0)
+        {
+            if (!targetFeatures.setFeature(feature, cli.template get<Opt>()))
+            {
+                if (reporter)
+                {
+                    *reporter << cld::Warnings::CLI::FLAG_N_IS_NOT_APPLICABLE_FOR_CURRENT_TARGET_ARCHITECTURE.argsCLI(
+                        Opt.getFirstOptionString());
+                }
+            }
+            else
+            {
+                return cli.template get<Opt>();
+            }
+        }
+        return false;
+    };
+
+    tryApply(ValueIdentity<MMX>{}, cld::TargetFeatures::MMX);
+    tryApply(ValueIdentity<SSE>{}, cld::TargetFeatures::SSE);
+    if (tryApply(ValueIdentity<THREEDNOWA>{}, cld::TargetFeatures::ThreeDNowA))
+    {
+        targetFeatures.setFeature(cld::TargetFeatures::ThreeDNow, true);
+        targetFeatures.setFeature(cld::TargetFeatures::MMX, true);
+    }
+    if (tryApply(ValueIdentity<SSE2>{}, cld::TargetFeatures::SSE2))
+    {
+        targetFeatures.setFeature(cld::TargetFeatures::SSE, true);
+    }
+    if (tryApply(ValueIdentity<SSE3>{}, cld::TargetFeatures::SSE3)
+        || tryApply(ValueIdentity<AES>{}, cld::TargetFeatures::AES)
+        || tryApply(ValueIdentity<AES>{}, cld::TargetFeatures::PCLMUL))
+    {
+        targetFeatures.setFeature(cld::TargetFeatures::SSE, true);
+        targetFeatures.setFeature(cld::TargetFeatures::SSE2, true);
+    }
+    if (tryApply(ValueIdentity<SSSE3>{}, cld::TargetFeatures::SSSE3)
+        || tryApply(ValueIdentity<SSSE3>{}, cld::TargetFeatures::SSE4a))
+    {
+        targetFeatures.setFeature(cld::TargetFeatures::SSE, true);
+        targetFeatures.setFeature(cld::TargetFeatures::SSE2, true);
+        targetFeatures.setFeature(cld::TargetFeatures::SSE3, true);
+    }
+    if (tryApply(ValueIdentity<SSE4_1>{}, cld::TargetFeatures::SSE4_1))
+    {
+        targetFeatures.setFeature(cld::TargetFeatures::SSE, true);
+        targetFeatures.setFeature(cld::TargetFeatures::SSE2, true);
+        targetFeatures.setFeature(cld::TargetFeatures::SSE3, true);
+        targetFeatures.setFeature(cld::TargetFeatures::SSSE3, true);
+    }
+    if (tryApply(ValueIdentity<SSE4_2>{}, cld::TargetFeatures::SSE4_2))
+    {
+        targetFeatures.setFeature(cld::TargetFeatures::SSE, true);
+        targetFeatures.setFeature(cld::TargetFeatures::SSE2, true);
+        targetFeatures.setFeature(cld::TargetFeatures::SSE3, true);
+        targetFeatures.setFeature(cld::TargetFeatures::SSSE3, true);
+        targetFeatures.setFeature(cld::TargetFeatures::SSE4_1, true);
+    }
+    if (tryApply(ValueIdentity<AVX>{}, cld::TargetFeatures::AVX))
+    {
+        targetFeatures.setFeature(cld::TargetFeatures::SSE, true);
+        targetFeatures.setFeature(cld::TargetFeatures::SSE2, true);
+        targetFeatures.setFeature(cld::TargetFeatures::SSE3, true);
+        targetFeatures.setFeature(cld::TargetFeatures::SSSE3, true);
+        targetFeatures.setFeature(cld::TargetFeatures::SSE4_1, true);
+        targetFeatures.setFeature(cld::TargetFeatures::SSE4_2, true);
+    }
+    if (tryApply(ValueIdentity<AVX>{}, cld::TargetFeatures::AVX2))
+    {
+        targetFeatures.setFeature(cld::TargetFeatures::SSE, true);
+        targetFeatures.setFeature(cld::TargetFeatures::SSE2, true);
+        targetFeatures.setFeature(cld::TargetFeatures::SSE3, true);
+        targetFeatures.setFeature(cld::TargetFeatures::SSSE3, true);
+        targetFeatures.setFeature(cld::TargetFeatures::SSE4_1, true);
+        targetFeatures.setFeature(cld::TargetFeatures::SSE4_2, true);
+        targetFeatures.setFeature(cld::TargetFeatures::AVX, true);
+    }
+    if (tryApply(ValueIdentity<FMA4>{}, cld::TargetFeatures::Fma4))
+    {
+        targetFeatures.setFeature(cld::TargetFeatures::SSE, true);
+        targetFeatures.setFeature(cld::TargetFeatures::SSE2, true);
+        targetFeatures.setFeature(cld::TargetFeatures::SSE3, true);
+        targetFeatures.setFeature(cld::TargetFeatures::SSSE3, true);
+        targetFeatures.setFeature(cld::TargetFeatures::SSE4_1, true);
+        targetFeatures.setFeature(cld::TargetFeatures::SSE4_2, true);
+        targetFeatures.setFeature(cld::TargetFeatures::SSE4a, true);
+        targetFeatures.setFeature(cld::TargetFeatures::AVX, true);
+    }
+    if (tryApply(ValueIdentity<XOPA>{}, cld::TargetFeatures::XOP))
+    {
+        targetFeatures.setFeature(cld::TargetFeatures::SSE, true);
+        targetFeatures.setFeature(cld::TargetFeatures::SSE2, true);
+        targetFeatures.setFeature(cld::TargetFeatures::SSE3, true);
+        targetFeatures.setFeature(cld::TargetFeatures::SSSE3, true);
+        targetFeatures.setFeature(cld::TargetFeatures::SSE4_1, true);
+        targetFeatures.setFeature(cld::TargetFeatures::SSE4_2, true);
+        targetFeatures.setFeature(cld::TargetFeatures::SSE4a, true);
+        targetFeatures.setFeature(cld::TargetFeatures::AVX, true);
+        targetFeatures.setFeature(cld::TargetFeatures::Fma4, true);
+    }
+    if (tryApply(ValueIdentity<XSAVEOPT>{}, cld::TargetFeatures::XSaveOpt))
+    {
+        targetFeatures.setFeature(cld::TargetFeatures::XSave, true);
+    }
+    if (tryApply(ValueIdentity<THREEDNOW>{}, cld::TargetFeatures::ThreeDNow))
+    {
+        targetFeatures.setFeature(cld::TargetFeatures::MMX, true);
+    }
+    tryApply(ValueIdentity<FSGSBASE>{}, cld::TargetFeatures::FSGSBase);
+    tryApply(ValueIdentity<RDRND>{}, cld::TargetFeatures::RDrnd);
+    tryApply(ValueIdentity<PTWRITE>{}, cld::TargetFeatures::PTWrite);
+    tryApply(ValueIdentity<LWP>{}, cld::TargetFeatures::LWP);
+    tryApply(ValueIdentity<BMI>{}, cld::TargetFeatures::BMI);
+    tryApply(ValueIdentity<BMI2>{}, cld::TargetFeatures::BMI2);
+    tryApply(ValueIdentity<LZCNT>{}, cld::TargetFeatures::LZCnt);
+    tryApply(ValueIdentity<FXSR>{}, cld::TargetFeatures::FXSr);
+    tryApply(ValueIdentity<XSAVE>{}, cld::TargetFeatures::XSave);
+    tryApply(ValueIdentity<TBM>{}, cld::TargetFeatures::TBM);
+    tryApply(ValueIdentity<RTM>{}, cld::TargetFeatures::RTM);
+    tryApply(ValueIdentity<MWAITX>{}, cld::TargetFeatures::MWaitX);
+    tryApply(ValueIdentity<CLZERO>{}, cld::TargetFeatures::CLZero);
+    tryApply(ValueIdentity<PKU>{}, cld::TargetFeatures::PKU);
 }
 
 enum class Action
@@ -646,10 +843,12 @@ int cld::main(llvm::MutableArrayRef<std::string_view> elements, llvm::raw_ostrea
     llvm::InitializeAllAsmPrinters();
     llvm::InitializeAllAsmParsers();
 
-    auto cli =
-        cld::parseCommandLine<OUTPUT_FILE, COMPILE_ONLY, ASSEMBLY_OUTPUT, PREPROCESS_ONLY, TARGET, EMIT_LLVM, OPT,
-                              DEFINE_MACRO, INCLUDES, PIE, PIC, FREESTANDING, HELP, VERSION, STANDARD_VERSION, WARNINGS,
-                              ISYSTEM, EMIT_ALL_DECLS, G0, G1, G2, G3, SYNTAX_ONLY, TIME>(elements);
+    auto cli = cld::parseCommandLine<OUTPUT_FILE, COMPILE_ONLY, ASSEMBLY_OUTPUT, PREPROCESS_ONLY, TARGET, EMIT_LLVM,
+                                     OPT, DEFINE_MACRO, INCLUDES, PIE, PIC, FREESTANDING, HELP, VERSION,
+                                     STANDARD_VERSION, WARNINGS, ISYSTEM, EMIT_ALL_DECLS, G0, G1, G2, G3, SYNTAX_ONLY,
+                                     TIME, MMX, SSE, THREEDNOWA, SSE2, SSE3, SSSE3, SSE4_1, SSE4_2, AVX, AVX2, AES,
+                                     PCLMUL, FSGSBASE, RDRND, PTWRITE, SSE4A, XOPA, FMA4, LWP, BMI, BMI2, LZCNT, FXSR,
+                                     XSAVE, XSAVEOPT, TBM, THREEDNOW, RTM, MWAITX, CLZERO, PKU>(elements);
     if (cli.get<HELP>())
     {
         if (out)
@@ -702,6 +901,7 @@ int cld::main(llvm::MutableArrayRef<std::string_view> elements, llvm::raw_ostrea
     }
     options.enabledWarnings = cli.get<WARNINGS>();
     options.freeStanding = cli.get<FREESTANDING>();
+    setTargetFeatures(*options.targetFeatures, cli, reporter);
 
     if (cli.getUnrecognized().empty())
     {

@@ -17,7 +17,8 @@ std::unique_ptr<cld::TargetFeatures> tripleToFeatures(const cld::Triple& triple)
         auto result = std::make_unique<cld::X86TargetFeatures>();
         if (triple.getArchitecture() == cld::Architecture::x86_64)
         {
-
+            result->setFeature(cld::TargetFeatures::SSE, true);
+            result->setFeature(cld::TargetFeatures::SSE2, true);
         }
         return result;
     }

@@ -2021,7 +2021,6 @@ constexpr auto createBuiltin(cld::Semantics::BuiltinFunction::Kind kind)
 
 #define HANDLE_BUILTIN(a, b) DECL_BUILTIN(a, b)
 #include "Builtins.def"
-#undef HANDLE_BUILTIN
 
 const cld::Semantics::ProgramInterface::DeclarationInScope::Variant* CLD_NULLABLE
     cld::Semantics::SemanticAnalysis::getBuiltinFuncDecl(std::string_view name)
@@ -2056,16 +2055,28 @@ const cld::Semantics::ProgramInterface::DeclarationInScope::Variant* CLD_NULLABL
         }
         CLD_UNREACHABLE;
     };
+
 #define HANDLE_BUILTIN(a, b) DEF_BUILTIN(b)
+#define HANDLE_X86(signature, name, feature)                                                      \
+    if (m_sourceInterface.getLanguageOptions().targetFeatures->hasFeature(TargetFeatures::IsX86)) \
+    {                                                                                             \
+        std::initializer_list<TargetFeatures::Features> featuresRequired = feature;               \
+        if (std::any_of(featuresRequired.begin(), featuresRequired.end(), [&](auto value) {       \
+                return m_sourceInterface.getLanguageOptions().targetFeatures->hasFeature(value);  \
+            }))                                                                                   \
+        {                                                                                         \
+            DEF_BUILTIN(name);                                                                    \
+        }                                                                                         \
+    }
+
 #include "Builtins.def"
-#undef HANDLE_BUILTIN
     return nullptr;
 }
 
 #undef DEF_BUILTIN
 #undef DECL_BUILTIN
 
-void cld::Semantics::SemanticAnalysis::createBuiltins()
+void cld::Semantics::SemanticAnalysis::createBuiltinTypes()
 {
     switch (m_sourceInterface.getLanguageOptions().vaListKind)
     {

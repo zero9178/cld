@@ -47,6 +47,9 @@ HANDLE_BUILTIN("void __builtin___clear_cache(void*,void*)", ClearCache);
 HANDLE_BUILTIN("void __builtin_trap()", Trap);
 HANDLE_BUILTIN("void __builtin_unreachable()", Unreachable);
 
-HANDLE_X86("void __builtin_cpu_init()",x86CpuInit,0);
-HANDLE_X86("int __builtin_cpu_is(const char*)",x86CpuIs,0);
-HANDLE_X86("int __builtin_cpu_supports(const char*)",x86CpuSupports,0);
+HANDLE_X86("void __builtin_cpu_init()",x86CpuInit,{});
+HANDLE_X86("int __builtin_cpu_is(const char*)",x86CpuIs,{});
+HANDLE_X86("int __builtin_cpu_supports(const char*)",x86CpuSupports,{});
+
+#undef HANDLE_X86
+#undef HANDLE_BUILTIN

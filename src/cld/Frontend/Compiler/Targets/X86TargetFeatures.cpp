@@ -5,6 +5,7 @@ bool cld::X86TargetFeatures::hasFeature(cld::TargetFeatures::Features features) 
     switch (features)
     {
         default: return false;
+        case TargetFeatures::IsX86: return true;
 #define HANDLE_VALUE(x) \
     case x: return m_##x;
 //

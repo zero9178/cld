@@ -153,12 +153,12 @@ constexpr const char* skipWhitespace(std::string_view arg)
 
 constexpr const char* skipLetters(std::string_view arg)
 {
-    const char* start = arg.data();
-    while (start != arg.data() + arg.size() && (*start != '<' && *start != ' ' && *start != '[' && *start != '.'))
+    while (!arg.empty()
+           && (arg.front() != '<' && arg.front() != ' ' && arg.front() != '[' && arg.substr(0, 3) != "..."))
     {
-        start++;
+        arg.remove_prefix(1);
     }
-    return start;
+    return arg.data();
 }
 
 constexpr const char* findClosingSquareBracket(std::string_view arg)

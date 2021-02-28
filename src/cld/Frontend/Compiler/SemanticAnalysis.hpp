@@ -337,7 +337,7 @@ private:
     void checkForIllegalSwitchJumps(std::tuple<const Lexer::CToken&, const Lexer::CToken&> loc,
                                     const SwitchStatement& switchStatement, bool isCaseOrDefault);
 
-    void createBuiltins();
+    void createBuiltinTypes();
 
     [[nodiscard]] ValueReset<bool> enableExtensions(bool extensions);
 
@@ -368,7 +368,7 @@ public:
           m_errors(errors),
           m_definedCallback(std::move(definedCallback))
     {
-        createBuiltins();
+        createBuiltinTypes();
     }
 
     Expected<ConstValue, std::vector<Message>> evaluateConstantExpression(const ExpressionBase& constantExpression,

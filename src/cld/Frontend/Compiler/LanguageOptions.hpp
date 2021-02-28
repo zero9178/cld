@@ -17,6 +17,7 @@ public:
 
     enum Features
     {
+        IsX86,
     // x86 features
 #define HANDLE_VALUE(x) x,
 #include "Targets/X86Features.def"

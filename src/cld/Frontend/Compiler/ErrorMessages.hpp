@@ -1191,6 +1191,11 @@ CREATE_WARNING(TOKEN_CONCATENATION_RESULTING_IN_AN_INVALID_TOKEN_IS_UB, "token-c
 CREATE_WARNING(MACRO_EXPANSION_PRODUCING_DEFINED_IS_NOT_PORTABLE, "expansion-to-defined",
                "Macro expansion producing 'defined' is not portable", Underline<0>);
 } // namespace PP
+namespace CLI
+{
+CREATE_WARNING(FLAG_N_IS_NOT_APPLICABLE_FOR_CURRENT_TARGET_ARCHITECTURE, "unused-command-line-argument",
+               "Flag '%0' is not applicable for current target architecture");
+}
 } // namespace Warnings
 
 namespace Notes
