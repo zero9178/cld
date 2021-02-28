@@ -1841,6 +1841,24 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             type = lvalueConversion(std::move(type));
             if (isVector(type) || isVector(value->getType()))
             {
+                if (isVector(type) != isVector(value->getType()))
+                {
+                    // Only one of them is a vector
+                    if (!isInteger(type) && !isInteger(value->getType()))
+                    {
+                        if (isVector(value->getType()))
+                        {
+                            log(Errors::Semantics::CANNOT_CAST_FROM_VECTOR_TYPE_TO_NON_INTEGER_OR_VECTOR_TYPE.args(
+                                *value, m_sourceInterface, cast.typeName, type, *value));
+                        }
+                        else
+                        {
+                            log(Errors::Semantics::CANNOT_CAST_TO_VECTOR_TYPE_FROM_NON_INTEGER_OR_VECTOR_TYPE.args(
+                                *value, m_sourceInterface, cast.typeName, type, *value));
+                        }
+                        return std::make_unique<ErrorExpression>(node);
+                    }
+                }
                 auto toSize = type.getSizeOf(*this);
                 auto fromSize = value->getType().getSizeOf(*this);
                 if (toSize != fromSize)

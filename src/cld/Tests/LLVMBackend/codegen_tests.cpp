@@ -6226,4 +6226,25 @@ TEST_CASE("LLVM codegen vectors", "[LLVM]")
         CHECK(array[0] == 7);
         CHECK(array[1] == 8);
     }
+    SECTION("Casts")
+    {
+        auto program = generateProgram("void foo(unsigned int x1,unsigned int x2,unsigned short* out) {\n"
+                                       "    unsigned int __attribute__((vector_size(8))) x = {x1,x2};\n"
+                                       "    typedef __attribute__((vector_size(8))) unsigned short fourShorts;\n"
+                                       "    fourShorts y = (fourShorts)x;\n"
+                                       "    for (unsigned short* iter = out;iter < out + 4; iter++) {\n"
+                                       "        *iter = y[iter - out];\n"
+                                       "    }\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        std::array<unsigned short, 4> array;
+        cld::Tests::computeInJIT<void(unsigned int, unsigned int, unsigned short*)>(
+            std::move(module), "foo", 0xAAAA5555, 0xAAAA5555, array.data());
+        CHECK(array[0] == 0x5555);
+        CHECK(array[1] == 0xAAAA);
+        CHECK(array[2] == 0x5555);
+        CHECK(array[3] == 0xAAAA);
+    }
 }

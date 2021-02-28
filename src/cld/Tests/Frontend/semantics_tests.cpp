@@ -5023,6 +5023,16 @@ TEST_CASE("Semantics vectors", "[semantics]")
                       "(__attribute__((vector_size(8))) short)i;\n"
                       "}",
                       ProducesNoErrors());
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "__attribute__((vector_size(8))) int i;\n"
+                      "(int*)i;\n"
+                      "}",
+                      ProducesError(CANNOT_CAST_FROM_VECTOR_TYPE_TO_NON_INTEGER_OR_VECTOR_TYPE));
+        SEMA_PRODUCES("void foo(void) {\n"
+                      "int* i;\n"
+                      "(__attribute__((vector_size(8))) int)i;\n"
+                      "}",
+                      ProducesError(CANNOT_CAST_TO_VECTOR_TYPE_FROM_NON_INTEGER_OR_VECTOR_TYPE));
     }
     SECTION("Scalar conversion")
     {

@@ -700,6 +700,12 @@ CREATE_ERROR(CANNOT_CAST_TO_VECTOR_TYPE_FROM_TYPE_OF_DIFFERING_SIZE,
 CREATE_ERROR(CANNOT_CAST_FROM_VECTOR_TYPE_TO_TYPE_OF_DIFFERING_SIZE,
              "Cannot cast from vector type to type of differing size", Annotate<0, 1>, Annotate<2, 3>);
 
+CREATE_ERROR(CANNOT_CAST_TO_VECTOR_TYPE_FROM_NON_INTEGER_OR_VECTOR_TYPE,
+             "Cannot cast to vector type from non integer or vector type", Annotate<0, 1>, AnnotateExpr<2>);
+
+CREATE_ERROR(CANNOT_CAST_FROM_VECTOR_TYPE_TO_NON_INTEGER_OR_VECTOR_TYPE,
+             "Cannot cast from vector type to non integer or vector type", Annotate<0, 1>, AnnotateExpr<2>);
+
 // Initializer
 
 CREATE_ERROR(EXPECTED_INITIALIZER_TO_BE_AN_ARITHMETIC_TYPE, "Expected initializer to be an arithmetic type",

@@ -735,7 +735,11 @@ class CodeGenerator final
 
     Value cast(Value value, const cld::Semantics::Type& from, const cld::Semantics::Type& to)
     {
-        if (std::holds_alternative<cld::Semantics::PointerType>(to.getVariant()))
+        if (cld::Semantics::isVector(from) || cld::Semantics::isVector(to))
+        {
+            return m_builder.CreateBitCast(value, visit(to));
+        }
+        if (cld::Semantics::isPointer(to))
         {
             if (cld::Semantics::isInteger(from))
             {
