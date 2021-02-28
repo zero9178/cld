@@ -5875,3 +5875,21 @@ TEST_CASE("LLVM codegen __attribute__((used))", "[LLVM]")
         REQUIRE(global);
     }
 }
+
+TEST_CASE("LLVM codegen vectors", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    auto module = std::make_unique<llvm::Module>("", context);
+    SECTION("Subscript")
+    {
+        auto program = generateProgram("int foo(int in) {\n"
+                                       "    int __attribute__((vector_size(8))) i;\n"
+                                       "    i[1] = in;\n"
+                                       "    return i[1];\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int(int)>(std::move(module), "foo", 2) == 2);
+    }
+}

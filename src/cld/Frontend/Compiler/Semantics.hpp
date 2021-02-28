@@ -855,15 +855,18 @@ public:
 
 class SubscriptOperator final : public ExpressionBase
 {
+    bool m_leftIsPointer;
     IntrVarPtr<ExpressionBase> m_leftExpr;
     Lexer::CTokenIterator m_openBracket;
     IntrVarPtr<ExpressionBase> m_rightExpr;
     Lexer::CTokenIterator m_closeBracket;
 
 public:
-    SubscriptOperator(Type type, IntrVarPtr<ExpressionBase>&& leftExpr, Lexer::CTokenIterator openBracket,
-                      IntrVarPtr<ExpressionBase>&& rightExpr, Lexer::CTokenIterator closeBracket)
+    SubscriptOperator(Type type, bool leftIsPointer, IntrVarPtr<ExpressionBase>&& leftExpr,
+                      Lexer::CTokenIterator openBracket, IntrVarPtr<ExpressionBase>&& rightExpr,
+                      Lexer::CTokenIterator closeBracket)
         : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Lvalue),
+          m_leftIsPointer(leftIsPointer),
           m_leftExpr(std::move(leftExpr)),
           m_openBracket(openBracket),
           m_rightExpr(std::move(rightExpr)),
@@ -879,6 +882,16 @@ public:
     [[nodiscard]] const ExpressionBase& getRightExpression() const
     {
         return *m_rightExpr;
+    }
+
+    [[nodiscard]] const ExpressionBase& getPointerExpression() const
+    {
+        return m_leftIsPointer ? *m_leftExpr : *m_rightExpr;
+    }
+
+    [[nodiscard]] const ExpressionBase& getIntegerExpression() const
+    {
+        return m_leftIsPointer ? *m_rightExpr : *m_leftExpr;
     }
 
     [[nodiscard]] Lexer::CTokenIterator getOpenBracket() const

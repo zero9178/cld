@@ -778,8 +778,8 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             return std::make_unique<ErrorExpression>(node);
         }
         auto elementType = getVectorElementType(vectorExpr->getType());
-        return std::make_unique<SubscriptOperator>(std::move(elementType), std::move(first), node.getOpenBracket(),
-                                                   std::move(second), node.getCloseBracket());
+        return std::make_unique<SubscriptOperator>(std::move(elementType), &vectorExpr == &first, std::move(first),
+                                                   node.getOpenBracket(), std::move(second), node.getCloseBracket());
     }
 
     auto& pointerExpr = isPointer(first->getType()) ? first : second;
@@ -804,8 +804,8 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         return std::make_unique<ErrorExpression>(node);
     }
     auto pointerType = pointerExpr->getType();
-    return std::make_unique<SubscriptOperator>(std::move(elementType), std::move(first), node.getOpenBracket(),
-                                               std::move(second), node.getCloseBracket());
+    return std::make_unique<SubscriptOperator>(std::move(elementType), &pointerExpr == &first, std::move(first),
+                                               node.getOpenBracket(), std::move(second), node.getCloseBracket());
 }
 
 void cld::Semantics::SemanticAnalysis::reportNoMember(const Type& recordType, const Lexer::CToken& identifier)

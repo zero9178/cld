@@ -2748,6 +2748,14 @@ public:
 
     Value visit(const cld::Semantics::Conversion& conversion)
     {
+        if (auto* subScript = conversion.getExpression().get_if<cld::Semantics::SubscriptOperator>();
+            conversion.getKind() == cld::Semantics::Conversion::LValue && subScript
+            && cld::Semantics::isVector(subScript->getPointerExpression().getType()))
+        {
+            auto vector = visit(subScript->getPointerExpression());
+            auto integer = visit(subScript->getIntegerExpression());
+            return m_builder.CreateExtractElement(vector, integer);
+        }
         auto value = visit(conversion.getExpression());
         switch (conversion.getKind())
         {
@@ -2758,8 +2766,7 @@ public:
                 {
                     return createInBoundsGEP(value, {m_builder.getInt64(0), m_builder.getInt64(0)});
                 }
-                if (std::holds_alternative<cld::Semantics::FunctionType>(
-                        conversion.getExpression().getType().getVariant())
+                if (cld::Semantics::isFunctionType(conversion.getExpression().getType())
                     || m_programInterface.isBitfieldAccess(conversion.getExpression())
                     || cld::Semantics::isVariableLengthArray(conversion.getExpression().getType()))
                 {
@@ -3353,12 +3360,8 @@ public:
 
     Value visit(const cld::Semantics::SubscriptOperator& subscriptOperator)
     {
-        auto& integer = cld::Semantics::isInteger(subscriptOperator.getLeftExpression().getType()) ?
-                            subscriptOperator.getLeftExpression() :
-                            subscriptOperator.getRightExpression();
-        auto* pointer = &integer == &subscriptOperator.getLeftExpression() ? &subscriptOperator.getRightExpression() :
-                                                                             &subscriptOperator.getLeftExpression();
-
+        auto& integer = subscriptOperator.getIntegerExpression();
+        auto* pointer = &subscriptOperator.getPointerExpression();
         if (!pointer->is<cld::Semantics::Conversion>()
             || pointer->cast<cld::Semantics::Conversion>().getKind() != cld::Semantics::Conversion::LValue
             || !std::holds_alternative<cld::Semantics::ValArrayType>(
@@ -3386,17 +3389,14 @@ public:
                 break;
             }
             auto& subOp = subExpr.cast<cld::Semantics::SubscriptOperator>();
-            auto& subPointer = cld::Semantics::isInteger(subOp.getLeftExpression().getType()) ?
-                                   subOp.getRightExpression() :
-                                   subOp.getLeftExpression();
-            auto& subInteger =
-                &subPointer == &subOp.getLeftExpression() ? subOp.getRightExpression() : subOp.getLeftExpression();
+            auto& subPointer = subOp.getPointerExpression();
+            auto& subInteger = subOp.getIntegerExpression();
             llvm::Value* newInt = visit(subInteger);
             newInt = m_builder.CreateIntCast(
                 newInt, m_builder.getInt64Ty(),
                 cld::get<cld::Semantics::PrimitiveType>(subInteger.getType().getVariant()).isSigned());
             llvm::Value* newDimension;
-            if (std::holds_alternative<cld::Semantics::ArrayType>(subExpr.getType().getVariant()))
+            if (cld::Semantics::isArrayType(subExpr.getType()))
             {
                 newDimension =
                     m_builder.getInt64(cld::get<cld::Semantics::ArrayType>(subExpr.getType().getVariant()).getSize());
@@ -3465,7 +3465,19 @@ public:
     {
         if (!m_programInterface.isBitfieldAccess(assignment.getLeftExpression()))
         {
-            auto lhs = visit(assignment.getLeftExpression());
+            auto lhs = [&] {
+                if (auto* subscript = assignment.getLeftExpression().get_if<cld::Semantics::SubscriptOperator>();
+                    subscript && cld::Semantics::isVector(subscript->getPointerExpression().getType()))
+                {
+                    auto vector = visit(subscript->getPointerExpression());
+                    auto* load = llvm::cast<llvm::LoadInst>(vector.value);
+                    vector = valueOf(load->getPointerOperand(), load->getAlign());
+                    load->eraseFromParent();
+                    return vector;
+                }
+                return visit(assignment.getLeftExpression());
+            }();
+
             auto rhs = visit(assignment.getRightExpression());
             if (assignment.getKind() != cld::Semantics::Assignment::Simple)
             {
@@ -3503,6 +3515,13 @@ public:
                     case cld::Semantics::Assignment::BitXor: rhs = m_builder.CreateXor(load, rhs); break;
                 }
                 rhs = cast(rhs, assignment.getRightExpression().getType(), assignment.getLeftExpression().getType());
+            }
+            if (auto* subscript = assignment.getLeftExpression().get_if<cld::Semantics::SubscriptOperator>();
+                subscript && cld::Semantics::isVector(subscript->getPointerExpression().getType()))
+            {
+                auto load = createLoad(lhs, assignment.getLeftExpression().getType().isVolatile());
+                auto integer = visit(subscript->getIntegerExpression());
+                rhs = m_builder.CreateInsertElement(load, rhs, integer);
             }
             createStore(rhs, lhs, assignment.getLeftExpression().getType().isVolatile());
             return createLoad(lhs, assignment.getLeftExpression().getType().isVolatile());
