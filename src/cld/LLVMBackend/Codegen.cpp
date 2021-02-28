@@ -2889,6 +2889,19 @@ public:
             {
                 auto& prevType = conversion.getExpression().getType();
                 auto& newType = conversion.getType();
+                if (cld::Semantics::isVector(newType))
+                {
+                    if (cld::Semantics::isArithmetic(prevType))
+                    {
+                        return m_builder.CreateVectorSplat(
+                            cld::get<cld::Semantics::VectorType>(newType.getVariant()).getSize(), value);
+                    }
+
+                    // signed to unsigned cast, only implicit cast allowed with vectors and is a noop in LLVM IR
+                    CLD_ASSERT(cld::Semantics::isVector(prevType)
+                               && cld::Semantics::isInteger(cld::Semantics::getVectorElementType(prevType)));
+                    return value;
+                }
                 if (cld::Semantics::isInteger(prevType) && cld::Semantics::isInteger(newType))
                 {
                     return valueOf(m_builder.CreateIntCast(

@@ -6210,4 +6210,20 @@ TEST_CASE("LLVM codegen vectors", "[LLVM]")
             CHECK(array[3] == 0);
         }
     }
+    SECTION("Scalar promotion")
+    {
+        auto program = generateProgram("void foo(int* x1,int* x2,int z) {\n"
+                                       "    int __attribute__((vector_size(8))) x = {*x1,*x2};\n"
+                                       "    x += z;\n"
+                                       "    *x1 = x[0];\n"
+                                       "    *x2 = x[1];"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        std::array<int, 2> array = {2, 3};
+        cld::Tests::computeInJIT<void(int*, int*, int)>(std::move(module), "foo", &array[0], &array[1], 5);
+        CHECK(array[0] == 7);
+        CHECK(array[1] == 8);
+    }
 }
