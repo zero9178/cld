@@ -556,6 +556,14 @@ class CodeGenerator final
 
             return m_builder.CreateFAdd(lhs, rhs);
         }
+        if (cld::Semantics::isVector(lhsType))
+        {
+            if (cld::Semantics::isInteger(cld::Semantics::getVectorElementType(lhsType)))
+            {
+                return m_builder.CreateAdd(lhs, rhs);
+            }
+            return m_builder.CreateFAdd(lhs, rhs);
+        }
 
         auto pointer = lhs.value->getType()->isPointerTy() ? lhs : rhs;
         auto integer = pointer.value == lhs.value ? rhs : lhs;
@@ -603,6 +611,14 @@ class CodeGenerator final
 
             return m_builder.CreateFSub(lhs, rhs);
         }
+        if (cld::Semantics::isVector(lhsType))
+        {
+            if (cld::Semantics::isInteger(cld::Semantics::getVectorElementType(lhsType)))
+            {
+                return m_builder.CreateSub(lhs, rhs);
+            }
+            return m_builder.CreateFSub(lhs, rhs);
+        }
 
         CLD_ASSERT(lhs.value->getType()->isPointerTy());
         if (rhs.value->getType()->isIntegerTy())
@@ -628,6 +644,14 @@ class CodeGenerator final
 
             return m_builder.CreateMul(lhs, rhs);
         }
+        if (cld::Semantics::isVector(lhsType))
+        {
+            if (cld::Semantics::isInteger(cld::Semantics::getVectorElementType(lhsType)))
+            {
+                return m_builder.CreateMul(lhs, rhs);
+            }
+            return m_builder.CreateFMul(lhs, rhs);
+        }
 
         return m_builder.CreateFMul(lhs, rhs);
     }
@@ -643,15 +667,34 @@ class CodeGenerator final
 
             return m_builder.CreateUDiv(lhs, rhs);
         }
+        if (cld::Semantics::isVector(lhsType)
+            && cld::Semantics::isInteger(cld::Semantics::getVectorElementType(lhsType)))
+        {
+            if (cld::get<cld::Semantics::PrimitiveType>(cld::Semantics::getVectorElementType(lhsType).getVariant())
+                    .isSigned())
+            {
+                return m_builder.CreateSDiv(lhs, rhs);
+            }
+            return m_builder.CreateUDiv(lhs, rhs);
+        }
 
         return m_builder.CreateFDiv(lhs, rhs);
     }
 
     Value mod(Value lhs, const cld::Semantics::Type& lhsType, Value rhs, const cld::Semantics::Type&)
     {
-        if (cld::get<cld::Semantics::PrimitiveType>(lhsType.getVariant()).isSigned())
+        if (cld::Semantics::isInteger(lhsType)
+            && cld::get<cld::Semantics::PrimitiveType>(lhsType.getVariant()).isSigned())
         {
             return m_builder.CreateSRem(lhs, rhs);
+        }
+        if (cld::Semantics::isVector(lhsType))
+        {
+            if (cld::get<cld::Semantics::PrimitiveType>(cld::Semantics::getVectorElementType(lhsType).getVariant())
+                    .isSigned())
+            {
+                return m_builder.CreateSRem(lhs, rhs);
+            }
         }
 
         return m_builder.CreateURem(lhs, rhs);
@@ -674,9 +717,18 @@ class CodeGenerator final
             rhs = m_builder.CreateIntCast(rhs, lhs.value->getType(),
                                           cld::get<cld::Semantics::PrimitiveType>(rhsType.getVariant()).isSigned());
         }
-        if (!cld::get<cld::Semantics::PrimitiveType>(lhsType.getVariant()).isSigned())
+        if (cld::Semantics::isInteger(lhsType)
+            && !cld::get<cld::Semantics::PrimitiveType>(lhsType.getVariant()).isSigned())
         {
             return m_builder.CreateLShr(lhs, rhs);
+        }
+        if (cld::Semantics::isVector(lhsType))
+        {
+            if (!cld::get<cld::Semantics::PrimitiveType>(cld::Semantics::getVectorElementType(lhsType).getVariant())
+                     .isSigned())
+            {
+                return m_builder.CreateLShr(lhs, rhs);
+            }
         }
         return m_builder.CreateAShr(lhs, rhs);
     }

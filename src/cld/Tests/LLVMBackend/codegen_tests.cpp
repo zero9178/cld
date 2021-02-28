@@ -5947,4 +5947,211 @@ TEST_CASE("LLVM codegen vectors", "[LLVM]")
             CHECK(cld::Tests::computeInJIT<int()>(std::move(module), "foo") == 5);
         }
     }
+    SECTION("Addition")
+    {
+        SECTION("Integers")
+        {
+            auto program = generateProgram("int foo(int x1,int x2,int y1,int y2) {\n"
+                                           "    int __attribute__((vector_size(8))) x = {x1,x2},y = {y1,y2};\n"
+                                           "    int __attribute__((vector_size(8))) z = x + y;\n"
+                                           "    return z[0] * z[1];\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int(int, int, int, int)>(std::move(module), "foo", 2, 3, 4, 5) == 48);
+        }
+        SECTION("Floating point")
+        {
+            auto program = generateProgram("float foo(float x1,float x2,float y1,float y2) {\n"
+                                           "    float __attribute__((vector_size(8))) x = {x1,x2},y = {y1,y2};\n"
+                                           "    float __attribute__((vector_size(8))) z = x + y;\n"
+                                           "    return z[0] * z[1];\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<float(float, float, float, float)>(std::move(module), "foo", 2, 3, 4, 5)
+                  == 48);
+        }
+    }
+    SECTION("Subtraction")
+    {
+        SECTION("Integers")
+        {
+            auto program = generateProgram("int foo(int x1,int x2,int y1,int y2) {\n"
+                                           "    int __attribute__((vector_size(8))) x = {x1,x2},y = {y1,y2};\n"
+                                           "    int __attribute__((vector_size(8))) z = x - y;\n"
+                                           "    return z[0] * z[1];\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int(int, int, int, int)>(std::move(module), "foo", 2, 3, 4, 5) == 4);
+        }
+        SECTION("Floating point")
+        {
+            auto program = generateProgram("float foo(float x1,float x2,float y1,float y2) {\n"
+                                           "    float __attribute__((vector_size(8))) x = {x1,x2},y = {y1,y2};\n"
+                                           "    float __attribute__((vector_size(8))) z = x - y;\n"
+                                           "    return z[0] * z[1];\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<float(float, float, float, float)>(std::move(module), "foo", 2, 3, 4, 5)
+                  == 4);
+        }
+    }
+    SECTION("Multiply")
+    {
+        SECTION("Integers")
+        {
+            auto program = generateProgram("int foo(int x1,int x2,int y1,int y2) {\n"
+                                           "    int __attribute__((vector_size(8))) x = {x1,x2},y = {y1,y2};\n"
+                                           "    int __attribute__((vector_size(8))) z = x * y;\n"
+                                           "    return z[0] + z[1];\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<int(int, int, int, int)>(std::move(module), "foo", 2, 3, 4, 5) == 23);
+        }
+        SECTION("Floating point")
+        {
+            auto program = generateProgram("float foo(float x1,float x2,float y1,float y2) {\n"
+                                           "    float __attribute__((vector_size(8))) x = {x1,x2},y = {y1,y2};\n"
+                                           "    float __attribute__((vector_size(8))) z = x * y;\n"
+                                           "    return z[0] + z[1];\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<float(float, float, float, float)>(std::move(module), "foo", 2, 3, 4, 5)
+                  == 23);
+        }
+    }
+    SECTION("Divide")
+    {
+        SECTION("Integers")
+        {
+            auto program = generateProgram("int foo(int x1,int x2,int y1,int y2) {\n"
+                                           "    int __attribute__((vector_size(8))) x = {x1,x2},y = {y1,y2};\n"
+                                           "    int __attribute__((vector_size(8))) z = y / x;\n"
+                                           "    return z[0] + z[1];\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK_THAT(*module, ContainsIR("sdiv"));
+            CHECK(cld::Tests::computeInJIT<int(int, int, int, int)>(std::move(module), "foo", 2, 3, 4, 5) == 3);
+        }
+        SECTION("Unsigned Integers")
+        {
+            auto program = generateProgram(
+                "unsigned int  foo(unsigned int  x1,unsigned int  x2,unsigned int  y1,unsigned int  y2) {\n"
+                "    unsigned int  __attribute__((vector_size(8))) x = {x1,x2},y = {y1,y2};\n"
+                "    unsigned int  __attribute__((vector_size(8))) z = y / x;\n"
+                "    return z[0] + z[1];\n"
+                "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK_THAT(*module, ContainsIR("udiv"));
+            CHECK(cld::Tests::computeInJIT<unsigned int(unsigned int, unsigned int, unsigned int, unsigned int)>(
+                      std::move(module), "foo", 2, 3, 4, 5)
+                  == 3);
+        }
+        SECTION("Floating point")
+        {
+            auto program = generateProgram("float foo(float x1,float x2,float y1,float y2) {\n"
+                                           "    float __attribute__((vector_size(8))) x = {x1,x2},y = {y1,y2};\n"
+                                           "    float __attribute__((vector_size(8))) z = y / x;\n"
+                                           "    return z[0] + z[1];\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(cld::Tests::computeInJIT<float(float, float, float, float)>(std::move(module), "foo", 2, 3, 4, 5)
+                  == ::Approx(5.0 / 3 + 2));
+        }
+    }
+    SECTION("Rem")
+    {
+        SECTION("Integers")
+        {
+            auto program = generateProgram("int foo(int x1,int x2,int y1,int y2) {\n"
+                                           "    int __attribute__((vector_size(8))) x = {x1,x2},y = {y1,y2};\n"
+                                           "    int __attribute__((vector_size(8))) z = y % x;\n"
+                                           "    return z[0] + z[1];\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK_THAT(*module, ContainsIR("srem"));
+            CHECK(cld::Tests::computeInJIT<int(int, int, int, int)>(std::move(module), "foo", 2, 3, 4, 5) == 2);
+        }
+        SECTION("Unsigned Integers")
+        {
+            auto program = generateProgram(
+                "unsigned int  foo(unsigned int  x1,unsigned int  x2,unsigned int  y1,unsigned int  y2) {\n"
+                "    unsigned int  __attribute__((vector_size(8))) x = {x1,x2},y = {y1,y2};\n"
+                "    unsigned int  __attribute__((vector_size(8))) z = y % x;\n"
+                "    return z[0] + z[1];\n"
+                "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK_THAT(*module, ContainsIR("urem"));
+            CHECK(cld::Tests::computeInJIT<unsigned int(unsigned int, unsigned int, unsigned int, unsigned int)>(
+                      std::move(module), "foo", 2, 3, 4, 5)
+                  == 2);
+        }
+    }
+    SECTION("Shift left")
+    {
+        auto program = generateProgram("int foo(int x1,int x2,int y1,int y2) {\n"
+                                       "    int __attribute__((vector_size(8))) x = {x1,x2},y = {y1,y2};\n"
+                                       "    int __attribute__((vector_size(8))) z = y << x;\n"
+                                       "    return z[0] + z[1];\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int(int, int, int, int)>(std::move(module), "foo", 2, 3, 4, 5)
+              == (4 << 2) + (5 << 3));
+    }
+    SECTION("Shift right")
+    {
+        SECTION("Integers")
+        {
+            auto program = generateProgram("int foo(int x1,int x2,int y1,int y2) {\n"
+                                           "    int __attribute__((vector_size(8))) x = {x1,x2},y = {y1,y2};\n"
+                                           "    int __attribute__((vector_size(8))) z = y >> x;\n"
+                                           "    return z[0] + z[1];\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK_THAT(*module, ContainsIR("ashr"));
+            CHECK(cld::Tests::computeInJIT<int(int, int, int, int)>(std::move(module), "foo", 2, 3, 4, 5)
+                  == (4 >> 2) + (5 >> 3));
+        }
+        SECTION("Unsigned Integers")
+        {
+            auto program = generateProgram(
+                "unsigned int  foo(unsigned int  x1,unsigned int  x2,unsigned int  y1,unsigned int  y2) {\n"
+                "    unsigned int  __attribute__((vector_size(8))) x = {x1,x2},y = {y1,y2};\n"
+                "    unsigned int  __attribute__((vector_size(8))) z = y >> x;\n"
+                "    return z[0] + z[1];\n"
+                "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK_THAT(*module, ContainsIR("lshr"));
+            CHECK(cld::Tests::computeInJIT<unsigned int(unsigned int, unsigned int, unsigned int, unsigned int)>(
+                      std::move(module), "foo", 2, 3, 4, 5)
+                  == (4 >> 2) + (5 >> 3));
+        }
+    }
 }
