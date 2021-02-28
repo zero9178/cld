@@ -6154,4 +6154,60 @@ TEST_CASE("LLVM codegen vectors", "[LLVM]")
                   == (4 >> 2) + (5 >> 3));
         }
     }
+    SECTION("Comparison")
+    {
+        SECTION("GCC Doc example equality")
+        {
+            // https://gcc.gnu.org/onlinedocs/gcc/Vector-Extensions.html#Vector-Extensions
+            auto program = generateProgram("void foo(int* x,int* y,int*z,int* w) {\n"
+                                           "typedef int v4si __attribute__ ((vector_size (16)));\n"
+                                           "\n"
+                                           "    v4si a = {1,2,3,4};\n"
+                                           "    v4si b = {3,2,1,4};\n"
+                                           "    v4si c;\n"
+                                           "    c = a == b;\n"
+                                           "    *x = c[0];\n"
+                                           "    *y = c[1];\n"
+                                           "    *z = c[2];\n"
+                                           "    *w = c[3];\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            std::array<int, 4> array;
+            cld::Tests::computeInJIT<void(int*, int*, int*, int*)>(std::move(module), "foo", &array[0], &array[1],
+                                                                   &array[2], &array[3]);
+            CHECK(array[0] == 0);
+            CHECK(array[1] == -1);
+            CHECK(array[2] == 0);
+            CHECK(array[3] == -1);
+        }
+        SECTION("GCC Doc example greater than")
+        {
+            // https://gcc.gnu.org/onlinedocs/gcc/Vector-Extensions.html#Vector-Extensions
+            auto program = generateProgram("void foo(int* x,int* y,int*z,int* w) {\n"
+                                           "typedef int v4si __attribute__ ((vector_size (16)));\n"
+                                           "\n"
+                                           "    v4si a = {1,2,3,4};\n"
+                                           "    v4si b = {3,2,1,4};\n"
+                                           "    v4si c;\n"
+                                           "    c = a > b;\n"
+                                           "    *x = c[0];\n"
+                                           "    *y = c[1];\n"
+                                           "    *z = c[2];\n"
+                                           "    *w = c[3];\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK_THAT(*module, ContainsIR("icmp sgt"));
+            std::array<int, 4> array;
+            cld::Tests::computeInJIT<void(int*, int*, int*, int*)>(std::move(module), "foo", &array[0], &array[1],
+                                                                   &array[2], &array[3]);
+            CHECK(array[0] == 0);
+            CHECK(array[1] == 0);
+            CHECK(array[2] == -1);
+            CHECK(array[3] == 0);
+        }
+    }
 }

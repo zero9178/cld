@@ -3006,49 +3006,43 @@ public:
     Value visit(const cld::Semantics::BinaryOperator& binaryExpression)
     {
         auto lhs = visit(binaryExpression.getLeftExpression());
+        const auto& lhsType = binaryExpression.getLeftExpression().getType();
         switch (binaryExpression.getKind())
         {
             case cld::Semantics::BinaryOperator::Addition:
             {
                 auto rhs = visit(binaryExpression.getRightExpression());
-                return add(lhs, binaryExpression.getLeftExpression().getType(), rhs,
-                           binaryExpression.getRightExpression().getType());
+                return add(lhs, lhsType, rhs, binaryExpression.getRightExpression().getType());
             }
             case cld::Semantics::BinaryOperator::Subtraction:
             {
                 auto rhs = visit(binaryExpression.getRightExpression());
-                return sub(lhs, binaryExpression.getLeftExpression().getType(), rhs,
-                           binaryExpression.getRightExpression().getType());
+                return sub(lhs, lhsType, rhs, binaryExpression.getRightExpression().getType());
             }
             case cld::Semantics::BinaryOperator::Multiply:
             {
                 auto rhs = visit(binaryExpression.getRightExpression());
-                return mul(lhs, binaryExpression.getLeftExpression().getType(), rhs,
-                           binaryExpression.getRightExpression().getType());
+                return mul(lhs, lhsType, rhs, binaryExpression.getRightExpression().getType());
             }
             case cld::Semantics::BinaryOperator::Divide:
             {
                 auto rhs = visit(binaryExpression.getRightExpression());
-                return div(lhs, binaryExpression.getLeftExpression().getType(), rhs,
-                           binaryExpression.getRightExpression().getType());
+                return div(lhs, lhsType, rhs, binaryExpression.getRightExpression().getType());
             }
             case cld::Semantics::BinaryOperator::Modulo:
             {
                 auto rhs = visit(binaryExpression.getRightExpression());
-                return mod(lhs, binaryExpression.getLeftExpression().getType(), rhs,
-                           binaryExpression.getRightExpression().getType());
+                return mod(lhs, lhsType, rhs, binaryExpression.getRightExpression().getType());
             }
             case cld::Semantics::BinaryOperator::LeftShift:
             {
                 auto rhs = visit(binaryExpression.getRightExpression());
-                return shl(lhs, binaryExpression.getLeftExpression().getType(), rhs,
-                           binaryExpression.getRightExpression().getType());
+                return shl(lhs, lhsType, rhs, binaryExpression.getRightExpression().getType());
             }
             case cld::Semantics::BinaryOperator::RightShift:
             {
                 auto rhs = visit(binaryExpression.getRightExpression());
-                return shr(lhs, binaryExpression.getLeftExpression().getType(), rhs,
-                           binaryExpression.getRightExpression().getType());
+                return shr(lhs, lhsType, rhs, binaryExpression.getRightExpression().getType());
             }
             case cld::Semantics::BinaryOperator::GreaterThan:
             case cld::Semantics::BinaryOperator::LessOrEqual:
@@ -3059,12 +3053,24 @@ public:
             {
                 auto rhs = visit(binaryExpression.getRightExpression());
                 llvm::CmpInst::Predicate predicate;
-                bool fp = cld::Semantics::isArithmetic(binaryExpression.getLeftExpression().getType())
-                          && !cld::Semantics::isInteger(binaryExpression.getLeftExpression().getType());
-                bool isSigned = cld::Semantics::isInteger(binaryExpression.getLeftExpression().getType())
-                                && cld::get<cld::Semantics::PrimitiveType>(
-                                       binaryExpression.getLeftExpression().getType().getVariant())
-                                       .isSigned();
+                bool fp;
+                bool isSigned;
+                if (cld::Semantics::isVector(lhsType))
+                {
+                    fp = cld::Semantics::isArithmetic(cld::Semantics::getVectorElementType(lhsType))
+                         && !cld::Semantics::isInteger(cld::Semantics::getVectorElementType(lhsType));
+                    isSigned = cld::Semantics::isInteger(cld::Semantics::getVectorElementType(lhsType))
+                               && cld::get<cld::Semantics::PrimitiveType>(
+                                      cld::Semantics::getVectorElementType(lhsType).getVariant())
+                                      .isSigned();
+                }
+                else
+                {
+                    fp = cld::Semantics::isArithmetic(lhsType) && !cld::Semantics::isInteger(lhsType);
+                    isSigned = cld::Semantics::isInteger(lhsType)
+                               && cld::get<cld::Semantics::PrimitiveType>(lhsType.getVariant()).isSigned();
+                }
+
                 switch (binaryExpression.getKind())
                 {
                     case cld::Semantics::BinaryOperator::GreaterThan:
@@ -3146,8 +3152,11 @@ public:
                     default: CLD_UNREACHABLE;
                 }
                 auto* value = m_builder.CreateCmp(predicate, lhs, rhs);
-                return m_builder.CreateZExt(value, visit(cld::Semantics::PrimitiveType::createInt(
-                                                       false, false, m_sourceInterface.getLanguageOptions())));
+                if (cld::Semantics::isVector(lhsType))
+                {
+                    return m_builder.CreateSExt(value, visit(binaryExpression.getType()));
+                }
+                return m_builder.CreateZExt(value, visit(binaryExpression.getType()));
             }
             case cld::Semantics::BinaryOperator::BitOr:
             {
