@@ -639,10 +639,10 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                         *loc, m_sourceInterface, *loc));
                     continue;
                 }
-                result.setName(loc->getText());
                 thisAttributes =
                     applyAttributes(std::pair{&result, diag::getPointRange(*loc)}, std::move(thisAttributes));
                 reportNotApplicableAttributes(thisAttributes);
+                result.setName(loc->getText());
                 auto [prev, noRedefinition] =
                     getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, result}});
                 if (!noRedefinition
