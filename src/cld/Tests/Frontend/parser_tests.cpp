@@ -925,6 +925,12 @@ void parse(const std::string& source)
 
 TEST_CASE("Parser fuzzer discoveries", "[parser]")
 {
+    parse("s \n"
+          "WWWW    S((S((((((long(foz\n"
+          "[");
+    parse(" |s __extension__    ");
+    parse("__attribute~_%= (");
+    parse("  ...L __attribute__");
     parse("__attribute__;*=e");
     parse(
         " un union u union{A^union\\\n"

@@ -311,7 +311,7 @@ std::optional<cld::Syntax::ExternalDeclaration>
     }
 
     auto attributes = parseGNUAttributes(begin, end, context);
-    if (begin->getTokenType() == Lexer::TokenType::OpenBrace || firstIsInDeclaration(*begin, context))
+    if (begin != end && (begin->getTokenType() == Lexer::TokenType::OpenBrace || firstIsInDeclaration(*begin, context)))
     {
         std::vector<Declaration> declarations;
         while (begin < end && firstIsInDeclaration(*begin, context))
@@ -627,6 +627,7 @@ std::optional<cld::Syntax::DeclarationSpecifier>
 std::optional<cld::Syntax::StructOrUnionSpecifier>
     cld::Parser::parseStructOrUnionSpecifier(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, Context& context)
 {
+    CLD_ASSERT(begin != end);
     const auto* start = begin;
     const auto* temp = begin;
     begin = std::find_if_not(
@@ -647,10 +648,17 @@ std::optional<cld::Syntax::StructOrUnionSpecifier>
     }
     else
     {
-        context.log(Errors::Parser::EXPECTED_N_OR_N_INSTEAD_OF_N.args(*start, context.getSourceInterface(),
-                                                                      Lexer::TokenType::StructKeyword,
-                                                                      Lexer::TokenType::UnionKeyword, *begin));
-        context.skipUntil(begin, end);
+        if (begin != end)
+        {
+            context.log(Errors::Parser::EXPECTED_N_OR_N_INSTEAD_OF_N.args(*begin, context.getSourceInterface(),
+                                                                          Lexer::TokenType::StructKeyword,
+                                                                          Lexer::TokenType::UnionKeyword, *begin));
+            context.skipUntil(begin, end);
+            return {};
+        }
+        context.log(Errors::Parser::EXPECTED_N_OR_N.args(*start, context.getSourceInterface(),
+                                                         Lexer::TokenType::StructKeyword,
+                                                         Lexer::TokenType::UnionKeyword, *start));
         return {};
     }
 
@@ -1678,8 +1686,12 @@ cld::Syntax::ParameterList cld::Parser::parseParameterList(Lexer::CTokenIterator
             foundDeclarator = cld::match(
                 std::move(foundDeclarator), [](std::monostate) -> DeclaratorVariant { CLD_UNREACHABLE; },
                 [&](std::unique_ptr<Declarator>&& declarator) -> DeclaratorVariant {
-                    auto parentheses = std::make_unique<DirectDeclarator>(DirectDeclaratorParentheses(
-                        iter->openParentheses, begin, std::move(iter->attributes), std::move(declarator)));
+                    std::unique_ptr<DirectDeclarator> parentheses;
+                    if (declarator)
+                    {
+                        parentheses = std::make_unique<DirectDeclarator>(DirectDeclaratorParentheses(
+                            iter->openParentheses, begin, std::move(iter->attributes), std::move(declarator)));
+                    }
                     auto result = parseDirectDeclaratorSuffix(begin, end, context, std::move(parentheses));
                     if (result)
                     {
@@ -2781,7 +2793,10 @@ std::optional<cld::Syntax::GNUAttributes> cld::Parser::parseGNUAttributes(Lexer:
             }
             if (!requireExpressions && (begin == end || begin->getTokenType() == Lexer::TokenType::CloseParentheses))
             {
-                begin++;
+                if (begin != end)
+                {
+                    begin++;
+                }
                 attributes.push_back({attributeName, optionalIdentifier, {}});
                 continue;
             }
