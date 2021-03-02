@@ -360,6 +360,11 @@ private:
     bool checkFunctionCount(const ExpressionBase& function, const FunctionType& ft,
                             const Syntax::PostFixExpressionFunctionCall& node);
 
+    std::unique_ptr<FunctionDeclaration>
+        visitFunctionDeclaration(Lexer::CTokenIterator loc, Type&& type,
+                                 const Syntax::StorageClassSpecifier* storageClassSpecifier, bool isInline,
+                                 std::vector<GNUAttribute>&& attributes);
+
 public:
     explicit SemanticAnalysis(const SourceInterface& sourceInterface, llvm::raw_ostream* reporter = &llvm::errs(),
                               bool* errors = nullptr, std::function<bool(std::string_view)> definedCallback = {})

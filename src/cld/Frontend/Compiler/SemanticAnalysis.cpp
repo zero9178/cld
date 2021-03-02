@@ -63,6 +63,10 @@ cld::Semantics::TranslationUnit cld::Semantics::SemanticAnalysis::visit(const Sy
         (void)name;
         if (auto* decl = std::get_if<FunctionDeclaration*>(&declared.declared))
         {
+            // C99 6.7.4§6:
+            // For a function with external linkage, the following restrictions apply:
+            // If a function is declared with an inline function specifier, then it shall also be defined in the
+            // same translation unit
             if ((*decl)->isInline() && (*decl)->getLinkage() == Linkage::External)
             {
                 log(Errors::Semantics::NO_DEFINITION_FOR_INLINE_FUNCTION_N_FOUND.args(
@@ -354,32 +358,27 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
             continue;
         }
         auto& storage = cld::get<Syntax::StorageClassSpecifier>(iter);
-        if (!storageClassSpecifier)
-        {
-            storageClassSpecifier = &storage;
-        }
-        else
+        if (storageClassSpecifier)
         {
             log(Errors::Semantics::ONLY_ONE_STORAGE_SPECIFIER.args(storage, m_sourceInterface, storage));
             log(Notes::Semantics::PREVIOUS_STORAGE_SPECIFIER_HERE.args(*storageClassSpecifier, m_sourceInterface,
                                                                        *storageClassSpecifier));
+            continue;
         }
-        if (m_currentScope == 0
-            && (storage.getSpecifier() == Syntax::StorageClassSpecifier::Auto
-                || storage.getSpecifier() == Syntax::StorageClassSpecifier::Register))
+        storageClassSpecifier = &storage;
+        if (m_currentScope == 0 && storage.getSpecifier() == Syntax::StorageClassSpecifier::Auto)
         {
-            if (storage.getSpecifier() == Syntax::StorageClassSpecifier::Auto)
-            {
-                log(Errors::Semantics::DECLARATIONS_AT_FILE_SCOPE_CANNOT_BE_AUTO.args(storage, m_sourceInterface,
+            log(Errors::Semantics::DECLARATIONS_AT_FILE_SCOPE_CANNOT_BE_AUTO.args(storage, m_sourceInterface, storage));
+        }
+        else if (m_currentScope == 0 && storage.getSpecifier() == Syntax::StorageClassSpecifier::Register)
+        {
+            log(Errors::Semantics::DECLARATIONS_AT_FILE_SCOPE_CANNOT_BE_REGISTER.args(storage, m_sourceInterface,
                                                                                       storage));
-            }
-            else
-            {
-                log(Errors::Semantics::DECLARATIONS_AT_FILE_SCOPE_CANNOT_BE_REGISTER.args(storage, m_sourceInterface,
-                                                                                          storage));
-            }
         }
     }
+    bool isTypedef =
+        storageClassSpecifier && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Typedef;
+
     // C99 6.7§2:
     // A declaration shall declare at least a declarator (other than the parameters of a function or
     // the members of a structure or union), a tag, or the members of an enumeration
@@ -406,8 +405,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
         }
         else
         {
-            if (storageClassSpecifier
-                && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Typedef)
+            if (isTypedef)
             {
                 log(Errors::Semantics::TYPEDEF_DECLARATION_DOES_NOT_HAVE_A_NAME.args(
                     *storageClassSpecifier, m_sourceInterface, *storageClassSpecifier));
@@ -416,6 +414,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
         }
         return decls;
     }
+
     std::vector<GNUAttribute> attributes;
     auto baseType = qualifiersToType(node.getDeclarationSpecifiers(), &attributes);
     for (auto& iter : node.getInitDeclarators())
@@ -435,407 +434,431 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
             thisAttributes.insert(thisAttributes.end(), std::move_iterator(vector.begin()),
                                   std::move_iterator(vector.end()));
         }
-        if (auto* functionType = std::get_if<FunctionType>(&result.getVariant());
-            functionType
-            && (!storageClassSpecifier
-                || storageClassSpecifier->getSpecifier() != Syntax::StorageClassSpecifier::Typedef))
+
+        if (isFunctionType(result) && !isTypedef)
         {
             if (iter.optionalInitializer)
             {
                 log(Errors::Semantics::FUNCTION_PROTOTYPE_MUST_NOT_HAVE_AN_INITIALIZER.args(
                     *iter.optionalInitializer, m_sourceInterface, *iter.optionalInitializer));
             }
-            Linkage linkage = Linkage::External;
-            // C99 6.7.1§5:
-            // The declaration of an identifier for a function that has block scope shall have no explicit
-            // storage-class specifier other than extern.
-            if (m_currentScope != 0 && storageClassSpecifier
-                && storageClassSpecifier->getSpecifier() != Syntax::StorageClassSpecifier::Extern)
-            {
-                log(Errors::Semantics::FUNCTION_PROTOTYPE_AT_BLOCK_SCOPE_MAY_ONLY_BE_EXTERN.args(
-                    *storageClassSpecifier, m_sourceInterface, *storageClassSpecifier));
-            }
-            else if (storageClassSpecifier
-                     && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Static)
-            {
-                linkage = Linkage::Internal;
-            }
-            if (loc->getText() == "__func__")
-            {
-                log(Errors::Semantics::DECLARING_FUNCTIONS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR.args(
-                    *loc, m_sourceInterface, *loc));
-                continue;
-            }
-            if (loc->getText() == "main" && isInline && !m_sourceInterface.getLanguageOptions().freeStanding)
-            {
-                log(Errors::Semantics::INLINE_MAIN_IS_NOT_ALLOWED_IN_A_HOSTED_ENVIRONMENT.args(*loc, m_sourceInterface,
-                                                                                               *loc));
-            }
-            InlineKind inlineKind = InlineKind::None;
-            if (isInline && storageClassSpecifier
-                && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Extern)
-            {
-                inlineKind = InlineKind::Inline;
-            }
-            else if (isInline)
-            {
-                inlineKind = InlineKind::InlineDefinition;
-            }
-            auto declaration = std::make_unique<FunctionDeclaration>(std::move(result), linkage, loc, inlineKind);
-            thisAttributes = applyAttributes(declaration.get(), std::move(thisAttributes));
-            reportNotApplicableAttributes(thisAttributes);
-
-            auto [prev, notRedefinition] =
-                getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, declaration.get()}});
-            if (!notRedefinition)
-            {
-                if ((!std::holds_alternative<FunctionDeclaration*>(prev->second.declared)
-                     || !typesAreCompatible(declaration->getType(),
-                                            cld::get<FunctionDeclaration*>(prev->second.declared)->getType()))
-                    && (!std::holds_alternative<FunctionDefinition*>(prev->second.declared)
-                        || !typesAreCompatible(declaration->getType(),
-                                               cld::get<FunctionDefinition*>(prev->second.declared)->getType())))
-                {
-                    log(Errors::REDEFINITION_OF_SYMBOL_N.args(*loc, m_sourceInterface, *loc));
-                    log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
-                                                             *prev->second.identifier));
-                }
-                else if (std::holds_alternative<FunctionDeclaration*>(prev->second.declared))
-                {
-                    auto& prevDecl = *cld::get<FunctionDeclaration*>(prev->second.declared);
-                    auto& otherType = prevDecl.getType();
-                    auto composite = compositeType(otherType, declaration->getType());
-                    if (prevDecl.getLinkage() == Linkage::Internal)
-                    {
-                        linkage = Linkage::Internal;
-                    }
-                    else if (linkage == Linkage::Internal)
-                    {
-                        log(Errors::Semantics::REDECLARATION_OF_FUNCTION_N_WITH_INTERNAL_LINKAGE.args(
-                            *loc, m_sourceInterface, *loc));
-                        log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
-                                                                 *prev->second.identifier));
-                    }
-                    *declaration = FunctionDeclaration(std::move(composite), linkage, loc,
-                                                       std::max(inlineKind, prevDecl.getInlineKind()));
-                    declaration->setUses(prevDecl.getUses());
-                    prev.value().declared = declaration.get();
-                    decls.push_back(std::move(declaration));
-                }
-                else if (std::holds_alternative<FunctionDefinition*>(prev->second.declared))
-                {
-                    auto& fd = *cld::get<FunctionDefinition*>(prev->second.declared);
-                    if (linkage == Linkage::Internal && fd.getLinkage() == Linkage::External)
-                    {
-                        log(Errors::Semantics::REDECLARATION_OF_FUNCTION_N_WITH_INTERNAL_LINKAGE.args(
-                            *loc, m_sourceInterface, *loc));
-                        log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
-                                                                 *prev->second.identifier));
-                    }
-                    inlineKind = std::max(fd.getInlineKind(), inlineKind);
-                    fd = FunctionDefinition(std::move(fd).getType(), fd.getNameToken(),
-                                            std::move(fd).getParameterDeclarations(), fd.getLinkage(), inlineKind,
-                                            std::move(fd).getCompoundStatement());
-                }
-            }
-            else
+            if (auto declaration = visitFunctionDeclaration(loc, std::move(result), storageClassSpecifier, isInline,
+                                                            std::move(thisAttributes)))
             {
                 decls.push_back(std::move(declaration));
             }
+            continue;
         }
-        else
-        {
-            for (auto& type : node.getDeclarationSpecifiers())
-            {
-                if (auto* funcSpec = std::get_if<Syntax::FunctionSpecifier>(&type))
-                {
-                    log(Errors::Semantics::INLINE_ONLY_ALLOWED_FOR_FUNCTIONS.args(*funcSpec, m_sourceInterface,
-                                                                                  *funcSpec));
-                }
-            }
-            bool errors = false;
-            // C99 6.2.2§5:
-            // If the declaration of an identifier for an object has file scope and no storage-class specifier,
-            // its linkage is external.
-            Linkage linkage = m_currentScope == 0 ? Linkage::External : Linkage::None;
-            Lifetime lifetime = m_currentScope == 0 ? Lifetime::Static : Lifetime::Automatic;
-            if (storageClassSpecifier && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Static)
-            {
-                // C99 6.2.2§3:
-                // If the declaration of a file scope identifier for an object or a function contains the storage-
-                // class specifier static, the identifier has internal linkage
-                if (m_currentScope == 0)
-                {
-                    linkage = Linkage::Internal;
-                }
-                lifetime = Lifetime::Static;
-            }
-            else if (storageClassSpecifier
-                     && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Extern)
-            {
-                linkage = Linkage::External;
-                lifetime = Lifetime::Static;
-            }
 
-            if (isVariablyModified(result))
+        for (auto& type : node.getDeclarationSpecifiers())
+        {
+            if (auto* funcSpec = std::get_if<Syntax::FunctionSpecifier>(&type))
             {
-                if (m_currentScope == 0)
-                {
-                    if (storageClassSpecifier
-                        && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Typedef)
-                    {
-                        log(Errors::Semantics::VARIABLY_MODIFIED_TYPEDEF_NOT_ALLOWED_AT_FILE_SCOPE.args(
-                            *loc, m_sourceInterface, *loc));
-                    }
-                    else
-                    {
-                        log(Errors::Semantics::VARIABLY_MODIFIED_TYPE_NOT_ALLOWED_AT_FILE_SCOPE.args(
-                            *loc, m_sourceInterface, *loc));
-                    }
-                    errors = true;
-                }
-                else if (linkage != Linkage::None)
-                {
-                    if (storageClassSpecifier)
-                    {
-                        log(Errors::Semantics::VARIABLY_MODIFIED_TYPE_MUST_NOT_HAVE_ANY_LINKAGE.args(
-                            *loc, m_sourceInterface, *storageClassSpecifier));
-                    }
-                    else
-                    {
-                        log(Errors::Semantics::VARIABLY_MODIFIED_TYPE_MUST_NOT_HAVE_ANY_LINKAGE.args(
-                            *loc, m_sourceInterface, *loc));
-                    }
-                    errors = true;
-                }
+                log(Errors::Semantics::INLINE_ONLY_ALLOWED_FOR_FUNCTIONS.args(*funcSpec, m_sourceInterface, *funcSpec));
             }
-            if (isVariableLengthArray(result))
+        }
+        bool errors = false;
+        // C99 6.2.2§5:
+        // If the declaration of an identifier for an object has file scope and no storage-class specifier,
+        // its linkage is external.
+        Linkage linkage = m_currentScope == 0 ? Linkage::External : Linkage::None;
+        Lifetime lifetime = m_currentScope == 0 ? Lifetime::Static : Lifetime::Automatic;
+        if (storageClassSpecifier && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Static)
+        {
+            // C99 6.2.2§3:
+            // If the declaration of a file scope identifier for an object or a function contains the storage-
+            // class specifier static, the identifier has internal linkage
+            if (m_currentScope == 0)
             {
-                if (lifetime == Lifetime::Static)
-                {
-                    if (storageClassSpecifier)
-                    {
-                        log(Errors::Semantics::VARIABLE_LENGTH_ARRAY_MUST_NOT_HAVE_STATIC_LIFETIME.args(
-                            *loc, m_sourceInterface, *storageClassSpecifier));
-                    }
-                    else
-                    {
-                        log(Errors::Semantics::VARIABLE_LENGTH_ARRAY_MUST_NOT_HAVE_STATIC_LIFETIME.args(
-                            *loc, m_sourceInterface, *loc));
-                    }
-                    errors = true;
-                }
+                linkage = Linkage::Internal;
             }
-            if (errors)
+            lifetime = Lifetime::Static;
+        }
+        else if (storageClassSpecifier
+                 && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Extern)
+        {
+            linkage = Linkage::External;
+            lifetime = Lifetime::Static;
+        }
+
+        if (isVariablyModified(result))
+        {
+            if (m_currentScope == 0)
             {
-                result = Type{};
-            }
-            if (storageClassSpecifier
-                && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Typedef)
-            {
-                if (loc->getText() == "__func__")
+                if (isTypedef)
                 {
-                    log(Errors::Semantics::DECLARING_TYPEDEFS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR.args(
+                    log(Errors::Semantics::VARIABLY_MODIFIED_TYPEDEF_NOT_ALLOWED_AT_FILE_SCOPE.args(
                         *loc, m_sourceInterface, *loc));
-                    continue;
                 }
-                thisAttributes =
-                    applyAttributes(std::pair{&result, diag::getPointRange(*loc)}, std::move(thisAttributes));
-                reportNotApplicableAttributes(thisAttributes);
-                result.setName(loc->getText());
-                auto [prev, noRedefinition] =
-                    getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, result}});
-                if (!noRedefinition
-                    && (!std::holds_alternative<Type>(prev->second.declared)
-                        || !typesAreCompatible(result, cld::get<Type>(prev->second.declared))))
+                else
                 {
-                    log(Errors::REDEFINITION_OF_SYMBOL_N.args(*loc, m_sourceInterface, *loc));
-                    log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
-                                                             *prev->second.identifier));
+                    log(Errors::Semantics::VARIABLY_MODIFIED_TYPE_NOT_ALLOWED_AT_FILE_SCOPE.args(
+                        *loc, m_sourceInterface, *loc));
                 }
-                for (auto& type : RecursiveVisitor(result, TYPE_NEXT_FN))
-                {
-                    if (std::holds_alternative<ValArrayType>(type.getVariant()))
-                    {
-                        decls.push_back(cld::get<ValArrayType>(type.getVariant()).getExpression());
-                    }
-                }
-                continue;
+                errors = true;
             }
+            else if (linkage != Linkage::None)
+            {
+                if (storageClassSpecifier)
+                {
+                    log(Errors::Semantics::VARIABLY_MODIFIED_TYPE_MUST_NOT_HAVE_ANY_LINKAGE.args(
+                        *loc, m_sourceInterface, *storageClassSpecifier));
+                }
+                else
+                {
+                    log(Errors::Semantics::VARIABLY_MODIFIED_TYPE_MUST_NOT_HAVE_ANY_LINKAGE.args(
+                        *loc, m_sourceInterface, *loc));
+                }
+                errors = true;
+            }
+        }
+        if (isVariableLengthArray(result))
+        {
+            if (lifetime == Lifetime::Static)
+            {
+                if (storageClassSpecifier)
+                {
+                    log(Errors::Semantics::VARIABLE_LENGTH_ARRAY_MUST_NOT_HAVE_STATIC_LIFETIME.args(
+                        *loc, m_sourceInterface, *storageClassSpecifier));
+                }
+                else
+                {
+                    log(Errors::Semantics::VARIABLE_LENGTH_ARRAY_MUST_NOT_HAVE_STATIC_LIFETIME.args(
+                        *loc, m_sourceInterface, *loc));
+                }
+                errors = true;
+            }
+        }
+        if (errors)
+        {
+            result = Type{};
+        }
+        if (isTypedef)
+        {
             if (loc->getText() == "__func__")
             {
-                log(Errors::Semantics::DECLARING_VARIABLES_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR.args(
+                log(Errors::Semantics::DECLARING_TYPEDEFS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR.args(
                     *loc, m_sourceInterface, *loc));
                 continue;
             }
-            VariableDeclaration::Kind kind;
-            // C99 6.8.2§1:
-            // If the declaration of an identifier for an object has file scope and an initializer, the
-            // declaration is an external definition for the identifier.
-            if (m_currentScope == 0 && iter.optionalInitializer
-                && (!storageClassSpecifier || *storageClassSpecifier != Syntax::StorageClassSpecifier::Extern))
+            thisAttributes = applyAttributes(std::pair{&result, diag::getPointRange(*loc)}, std::move(thisAttributes));
+            reportNotApplicableAttributes(thisAttributes);
+            result.setName(loc->getText());
+            auto [prev, noRedefinition] =
+                getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, result}});
+            if (!noRedefinition
+                && (!std::holds_alternative<Type>(prev->second.declared)
+                    || !typesAreCompatible(result, cld::get<Type>(prev->second.declared))))
             {
-                kind = VariableDeclaration::Definition;
+                log(Errors::REDEFINITION_OF_SYMBOL_N.args(*loc, m_sourceInterface, *loc));
+                log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
+                                                         *prev->second.identifier));
             }
-            else if (m_currentScope == 0
-                     && (!storageClassSpecifier || *storageClassSpecifier == Syntax::StorageClassSpecifier::Static))
+            for (auto& type : RecursiveVisitor(result, TYPE_NEXT_FN))
             {
-                // C99 6.9.2§2:
-                // A declaration of an identifier for an object that has file scope without an initializer, and
-                // without a storage-class specifier or with the storage-class specifier static, constitutes a
-                // tentative definition
-                kind = VariableDeclaration::TentativeDefinition;
+                if (std::holds_alternative<ValArrayType>(type.getVariant()))
+                {
+                    decls.push_back(cld::get<ValArrayType>(type.getVariant()).getExpression());
+                }
             }
-            else if (storageClassSpecifier && *storageClassSpecifier == Syntax::StorageClassSpecifier::Extern)
+            continue;
+        }
+        if (loc->getText() == "__func__")
+        {
+            log(Errors::Semantics::DECLARING_VARIABLES_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR.args(
+                *loc, m_sourceInterface, *loc));
+            continue;
+        }
+        VariableDeclaration::Kind kind;
+        // C99 6.8.2§1:
+        // If the declaration of an identifier for an object has file scope and an initializer, the
+        // declaration is an external definition for the identifier.
+        if (m_currentScope == 0 && iter.optionalInitializer
+            && (!storageClassSpecifier || *storageClassSpecifier != Syntax::StorageClassSpecifier::Extern))
+        {
+            kind = VariableDeclaration::Definition;
+        }
+        else if (m_currentScope == 0
+                 && (!storageClassSpecifier || *storageClassSpecifier == Syntax::StorageClassSpecifier::Static))
+        {
+            // C99 6.9.2§2:
+            // A declaration of an identifier for an object that has file scope without an initializer, and
+            // without a storage-class specifier or with the storage-class specifier static, constitutes a
+            // tentative definition
+            kind = VariableDeclaration::TentativeDefinition;
+        }
+        else if (storageClassSpecifier && *storageClassSpecifier == Syntax::StorageClassSpecifier::Extern)
+        {
+            kind = VariableDeclaration::DeclarationOnly;
+        }
+        else
+        {
+            kind = VariableDeclaration::Definition;
+        }
+
+        auto declaration = std::make_unique<VariableDeclaration>(std::move(result), linkage, lifetime, loc, kind);
+        thisAttributes = applyAttributes(declaration.get(), std::move(thisAttributes));
+        reportNotApplicableAttributes(thisAttributes);
+        auto [prev, notRedefinition] =
+            getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, declaration.get()}});
+        if (!notRedefinition)
+        {
+            if (!std::holds_alternative<VariableDeclaration*>(prev->second.declared)
+                // C99 6.7§3:
+                // If an identifier has no linkage, there shall be no more than one declaration of the identifier
+                // (in a declarator or type specifier) with the same scope and in the same name space, except
+                // for tags as specified in 6.7.2.3.
+                || cld::get<VariableDeclaration*>(prev->second.declared)->getLinkage() == Linkage::None
+                || declaration->getLinkage() == Linkage::None
+                // C99 6.7§2:
+                // All declarations in the same scope that refer to the same object or function shall specify
+                // compatible types.
+                || !typesAreCompatible(declaration->getType(),
+                                       cld::get<VariableDeclaration*>(prev->second.declared)->getType())
+                // C99 6.9§3:
+                // There shall be no more than one external definition for each identifier declared with
+                // internal linkage in a translation unit.
+                || (m_currentScope == 0 && (kind == VariableDeclaration::Definition && linkage == Linkage::Internal)
+                    && (cld::get<VariableDeclaration*>(prev->second.declared)->getKind()
+                            == VariableDeclaration::Definition
+                        && cld::get<VariableDeclaration*>(prev->second.declared)->getLinkage() == Linkage::Internal)))
             {
-                kind = VariableDeclaration::DeclarationOnly;
+                log(Errors::REDEFINITION_OF_SYMBOL_N.args(*loc, m_sourceInterface, *loc));
+                log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
+                                                         *prev->second.identifier));
             }
             else
             {
-                kind = VariableDeclaration::Definition;
-            }
-
-            auto declaration = std::make_unique<VariableDeclaration>(std::move(result), linkage, lifetime, loc, kind);
-            thisAttributes = applyAttributes(declaration.get(), std::move(thisAttributes));
-            reportNotApplicableAttributes(thisAttributes);
-            auto [prev, notRedefinition] =
-                getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, declaration.get()}});
-            if (!notRedefinition)
-            {
-                if (!std::holds_alternative<VariableDeclaration*>(prev->second.declared)
-                    // C99 6.7§3:
-                    // If an identifier has no linkage, there shall be no more than one declaration of the identifier
-                    // (in a declarator or type specifier) with the same scope and in the same name space, except
-                    // for tags as specified in 6.7.2.3.
-                    || cld::get<VariableDeclaration*>(prev->second.declared)->getLinkage() == Linkage::None
-                    || declaration->getLinkage() == Linkage::None
-                    // C99 6.7§2:
-                    // All declarations in the same scope that refer to the same object or function shall specify
-                    // compatible types.
-                    || !typesAreCompatible(declaration->getType(),
-                                           cld::get<VariableDeclaration*>(prev->second.declared)->getType())
-                    // C99 6.9§3:
-                    // There shall be no more than one external definition for each identifier declared with
-                    // internal linkage in a translation unit.
-                    || (m_currentScope == 0 && (kind == VariableDeclaration::Definition && linkage == Linkage::Internal)
-                        && (cld::get<VariableDeclaration*>(prev->second.declared)->getKind()
-                                == VariableDeclaration::Definition
-                            && cld::get<VariableDeclaration*>(prev->second.declared)->getLinkage()
-                                   == Linkage::Internal)))
+                auto& prevDecl = cld::get<VariableDeclaration*>(prev->second.declared);
+                auto composite = compositeType(prevDecl->getType(), declaration->getType());
+                // C99 6.2.2§4:
+                // For an identifier declared with the storage-class specifier extern in a scope in which a
+                // prior declaration of that identifier is visible, if the prior declaration specifies internal or
+                // external linkage, the linkage of the identifier at the later declaration is the same as the
+                // linkage specified at the prior declaration. If no prior declaration is visible, or if the prior
+                // declaration specifies no linkage, then the identifier has external linkage.
+                if (storageClassSpecifier && *storageClassSpecifier == Syntax::StorageClassSpecifier::Extern
+                    && prevDecl->getLinkage() != Linkage::None)
                 {
-                    log(Errors::REDEFINITION_OF_SYMBOL_N.args(*loc, m_sourceInterface, *loc));
+                    linkage = prevDecl->getLinkage();
+                }
+                else if (linkage != Linkage::Internal && prevDecl->getLinkage() == Linkage::Internal)
+                {
+                    // C99 6.2.2§7:
+                    // If, within a translation unit, the same identifier appears with both internal and external
+                    // linkage, the behavior is undefined.
+
+                    // We error like clang does, will allow the composite type to be formed with internal linkage
+                    // tho
+                    log(Errors::Semantics::STATIC_VARIABLE_N_REDEFINED_WITHOUT_STATIC.args(*loc, m_sourceInterface,
+                                                                                           *loc));
                     log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
                                                              *prev->second.identifier));
+                    linkage = Linkage::Internal;
                 }
-                else
-                {
-                    auto& prevDecl = cld::get<VariableDeclaration*>(prev->second.declared);
-                    auto composite = compositeType(prevDecl->getType(), declaration->getType());
-                    // C99 6.2.2§4:
-                    // For an identifier declared with the storage-class specifier extern in a scope in which a
-                    // prior declaration of that identifier is visible, if the prior declaration specifies internal or
-                    // external linkage, the linkage of the identifier at the later declaration is the same as the
-                    // linkage specified at the prior declaration. If no prior declaration is visible, or if the prior
-                    // declaration specifies no linkage, then the identifier has external linkage.
-                    if (storageClassSpecifier && *storageClassSpecifier == Syntax::StorageClassSpecifier::Extern
-                        && prevDecl->getLinkage() != Linkage::None)
-                    {
-                        linkage = prevDecl->getLinkage();
-                    }
-                    else if (linkage != Linkage::Internal && prevDecl->getLinkage() == Linkage::Internal)
-                    {
-                        // C99 6.2.2§7:
-                        // If, within a translation unit, the same identifier appears with both internal and external
-                        // linkage, the behavior is undefined.
-
-                        // We error like clang does, will allow the composite type to be formed with internal linkage
-                        // tho
-                        log(Errors::Semantics::STATIC_VARIABLE_N_REDEFINED_WITHOUT_STATIC.args(*loc, m_sourceInterface,
-                                                                                               *loc));
-                        log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
-                                                                 *prev->second.identifier));
-                        linkage = Linkage::Internal;
-                    }
-                    *declaration = VariableDeclaration(std::move(composite), linkage, lifetime, loc,
-                                                       std::max(prevDecl->getKind(), kind));
-                    prev.value().declared = declaration.get();
-                }
+                *declaration = VariableDeclaration(std::move(composite), linkage, lifetime, loc,
+                                                   std::max(prevDecl->getKind(), kind));
+                prev.value().declared = declaration.get();
             }
-
-            if (iter.optionalInitializer)
-            {
-                // C99 6.7.5$5:
-                // If the declaration of an identifier has block scope, and the identifier has external or
-                // internal linkage, the declaration shall have no initializer for the identifier.
-                if (m_currentScope != 0 && linkage != Linkage::None)
-                {
-                    log(Errors::Semantics::CANNOT_INITIALIZE_STATIC_OR_EXTERN_VARIABLE_AT_BLOCK_SCOPE.args(
-                        *loc, m_sourceInterface, *loc));
-                }
-                if (isVariableLengthArray(declaration->getType()))
-                {
-                    log(Errors::Semantics::CANNOT_INITIALIZE_VARIABLE_LENGTH_ARRAY_TYPE.args(
-                        *loc, m_sourceInterface, *loc, declaration->getType()));
-                    visit(*iter.optionalInitializer, Type{}, declaration->getLifetime() == Lifetime::Static);
-                }
-                else
-                {
-                    m_inStaticInitializer = lifetime == Lifetime::Static;
-                    auto prevType = declaration->getType();
-                    std::size_t size = 0;
-                    auto expr = visit(*iter.optionalInitializer, declaration->getType(),
-                                      declaration->getLifetime() == Lifetime::Static, &size);
-                    if (std::holds_alternative<AbstractArrayType>(declaration->getType().getVariant()))
-                    {
-                        prevType =
-                            ArrayType::create(prevType.isConst(), prevType.isVolatile(),
-                                              cld::get<AbstractArrayType>(prevType.getVariant()).isRestricted(), false,
-                                              cld::get<AbstractArrayType>(prevType.getVariant()).getType(), size);
-                    }
-                    *declaration =
-                        VariableDeclaration(std::move(prevType), linkage, lifetime, loc, kind, std::move(expr));
-                    m_inStaticInitializer = false;
-                }
-            }
-
-            // C99 6.7§7:
-            // If an identifier for an object is declared with no linkage, the type for the object shall be
-            // complete by the end of its declarator, or by the end of its init-declarator if it has an
-            // initializer;
-            //
-            // C99 6.9.2§3:
-            // If the declaration of an identifier for an object is a tentative definition and has internal
-            // linkage, the declared type shall not be an incomplete type.
-            if (linkage == Linkage::None
-                || (kind == VariableDeclaration::Kind::TentativeDefinition && linkage == Linkage::Internal))
-            {
-                if (isVoid(declaration->getType()))
-                {
-                    log(Errors::Semantics::DECLARATION_MUST_NOT_BE_VOID.args(*loc, m_sourceInterface, *loc));
-                }
-                else if (!isCompleteType(declaration->getType()))
-                {
-                    log(Errors::Semantics::DECLARATION_MUST_HAVE_A_COMPLETE_TYPE.args(*loc, m_sourceInterface, *loc,
-                                                                                      declaration->getType()));
-                }
-            }
-
-            if (getCurrentFunctionScope() && getCurrentFunctionScope()->currentFunction->isInline()
-                && getCurrentFunctionScope()->currentFunction->getLinkage() == Linkage::External
-                && declaration->getKind() == VariableDeclaration::Definition
-                && declaration->getLifetime() == Lifetime::Static && !declaration->getType().isConst())
-            {
-                log(Errors::Semantics::
-                        INLINE_FUNCTION_N_WITH_EXTERNAL_LINKAGE_IS_NOT_ALLOWED_TO_CONTAIN_OR_ACCESS_THE_INTERNAL_IDENTIFIER_N
-                            .args(*declaration->getNameToken(), m_sourceInterface,
-                                  *getCurrentFunctionScope()->currentFunction->getNameToken(),
-                                  *declaration->getNameToken()));
-            }
-
-            decls.push_back(std::move(declaration));
         }
+
+        if (iter.optionalInitializer)
+        {
+            // C99 6.7.5$5:
+            // If the declaration of an identifier has block scope, and the identifier has external or
+            // internal linkage, the declaration shall have no initializer for the identifier.
+            if (m_currentScope != 0 && linkage != Linkage::None)
+            {
+                log(Errors::Semantics::CANNOT_INITIALIZE_STATIC_OR_EXTERN_VARIABLE_AT_BLOCK_SCOPE.args(
+                    *loc, m_sourceInterface, *loc));
+            }
+            if (isVariableLengthArray(declaration->getType()))
+            {
+                log(Errors::Semantics::CANNOT_INITIALIZE_VARIABLE_LENGTH_ARRAY_TYPE.args(*loc, m_sourceInterface, *loc,
+                                                                                         declaration->getType()));
+                visit(*iter.optionalInitializer, Type{}, declaration->getLifetime() == Lifetime::Static);
+            }
+            else
+            {
+                m_inStaticInitializer = lifetime == Lifetime::Static;
+                auto prevType = declaration->getType();
+                std::size_t size = 0;
+                auto expr = visit(*iter.optionalInitializer, declaration->getType(),
+                                  declaration->getLifetime() == Lifetime::Static, &size);
+                if (isAbstractArray(declaration->getType()))
+                {
+                    prevType =
+                        ArrayType::create(prevType.isConst(), prevType.isVolatile(),
+                                          cld::get<AbstractArrayType>(prevType.getVariant()).isRestricted(), false,
+                                          cld::get<AbstractArrayType>(prevType.getVariant()).getType(), size);
+                }
+                *declaration = VariableDeclaration(std::move(prevType), linkage, lifetime, loc, kind, std::move(expr));
+                m_inStaticInitializer = false;
+            }
+        }
+
+        // C99 6.7§7:
+        // If an identifier for an object is declared with no linkage, the type for the object shall be
+        // complete by the end of its declarator, or by the end of its init-declarator if it has an
+        // initializer;
+        //
+        // C99 6.9.2§3:
+        // If the declaration of an identifier for an object is a tentative definition and has internal
+        // linkage, the declared type shall not be an incomplete type.
+        if (linkage == Linkage::None
+            || (kind == VariableDeclaration::Kind::TentativeDefinition && linkage == Linkage::Internal))
+        {
+            if (isVoid(declaration->getType()))
+            {
+                log(Errors::Semantics::DECLARATION_MUST_NOT_BE_VOID.args(*loc, m_sourceInterface, *loc));
+            }
+            else if (!isCompleteType(declaration->getType()))
+            {
+                log(Errors::Semantics::DECLARATION_MUST_HAVE_A_COMPLETE_TYPE.args(*loc, m_sourceInterface, *loc,
+                                                                                  declaration->getType()));
+            }
+        }
+
+        // C99 6.7.4§3:
+        // An inline definition of a function with external linkage shall not contain a definition of a
+        // modifiable object with static storage duration, and shall not contain a reference to an
+        // identifier with internal linkage.
+        if (getCurrentFunctionScope() && getCurrentFunctionScope()->currentFunction->isInline()
+            && getCurrentFunctionScope()->currentFunction->getLinkage() == Linkage::External
+            && declaration->getKind() == VariableDeclaration::Definition
+            && declaration->getLifetime() == Lifetime::Static && !declaration->getType().isConst())
+        {
+            log(Errors::Semantics::
+                    INLINE_FUNCTION_N_WITH_EXTERNAL_LINKAGE_IS_NOT_ALLOWED_TO_CONTAIN_OR_ACCESS_THE_INTERNAL_IDENTIFIER_N
+                        .args(*declaration->getNameToken(), m_sourceInterface,
+                              *getCurrentFunctionScope()->currentFunction->getNameToken(),
+                              *declaration->getNameToken()));
+        }
+
+        decls.push_back(std::move(declaration));
     }
     return decls;
+}
+
+std::unique_ptr<cld::Semantics::FunctionDeclaration> cld::Semantics::SemanticAnalysis::visitFunctionDeclaration(
+    Lexer::CTokenIterator loc, Type&& type, const Syntax::StorageClassSpecifier* storageClassSpecifier, bool isInline,
+    std::vector<GNUAttribute>&& attributes)
+{
+    Linkage linkage = Linkage::External;
+    // C99 6.7.1§5:
+    // The declaration of an identifier for a function that has block scope shall have no explicit
+    // storage-class specifier other than extern.
+    if (m_currentScope != 0 && storageClassSpecifier
+        && storageClassSpecifier->getSpecifier() != Syntax::StorageClassSpecifier::Extern)
+    {
+        log(Errors::Semantics::FUNCTION_PROTOTYPE_AT_BLOCK_SCOPE_MAY_ONLY_BE_EXTERN.args(
+            *storageClassSpecifier, m_sourceInterface, *storageClassSpecifier));
+    }
+    else if (storageClassSpecifier && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Static)
+    {
+        linkage = Linkage::Internal;
+    }
+    if (loc->getText() == "__func__")
+    {
+        log(Errors::Semantics::DECLARING_FUNCTIONS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR.args(
+            *loc, m_sourceInterface, *loc));
+        return {};
+    }
+
+    // C99 6.7.4§4:
+    // In a hosted environment, the inline function specifier shall not appear in a declaration
+    // of main
+    if (loc->getText() == "main" && isInline && !m_sourceInterface.getLanguageOptions().freeStanding)
+    {
+        log(Errors::Semantics::INLINE_MAIN_IS_NOT_ALLOWED_IN_A_HOSTED_ENVIRONMENT.args(*loc, m_sourceInterface, *loc));
+    }
+
+    InlineKind inlineKind = InlineKind::None;
+    // C99 6.7.4§6:
+    // If all of the file scope declarations for a function in a translation unit include the inline function
+    // specifier without extern, then the definition in that translation unit is an inline definition.
+    if (isInline && storageClassSpecifier
+        && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Extern)
+    {
+        inlineKind = InlineKind::Inline;
+    }
+    else if (isInline)
+    {
+        inlineKind = InlineKind::InlineDefinition;
+    }
+
+    auto declaration = std::make_unique<FunctionDeclaration>(std::move(type), linkage, loc, inlineKind);
+    attributes = applyAttributes(declaration.get(), std::move(attributes));
+    reportNotApplicableAttributes(attributes);
+
+    auto [prev, notRedefinition] =
+        getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, declaration.get()}});
+    if (!notRedefinition)
+    {
+        if ((!std::holds_alternative<FunctionDeclaration*>(prev->second.declared)
+             || !typesAreCompatible(declaration->getType(),
+                                    cld::get<FunctionDeclaration*>(prev->second.declared)->getType()))
+            && (!std::holds_alternative<FunctionDefinition*>(prev->second.declared)
+                || !typesAreCompatible(declaration->getType(),
+                                       cld::get<FunctionDefinition*>(prev->second.declared)->getType())))
+        {
+            log(Errors::REDEFINITION_OF_SYMBOL_N.args(*loc, m_sourceInterface, *loc));
+            log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
+                                                     *prev->second.identifier));
+        }
+        else if (std::holds_alternative<FunctionDeclaration*>(prev->second.declared))
+        {
+            auto& prevDecl = *cld::get<FunctionDeclaration*>(prev->second.declared);
+            auto& otherType = prevDecl.getType();
+            auto composite = compositeType(otherType, declaration->getType());
+            // C99 6.2.2§4:
+            // For an identifier declared with the storage-class specifier extern in a scope in which a
+            // prior declaration of that identifier is visible, if the prior declaration specifies internal or
+            // external linkage, the linkage of the identifier at the later declaration is the same as the
+            // linkage specified at the prior declaration. If no prior declaration is visible, or if the prior
+            // declaration specifies no linkage, then the identifier has external linkage.
+            if (prevDecl.getLinkage() == Linkage::Internal)
+            {
+                linkage = Linkage::Internal;
+            }
+            else if (linkage == Linkage::Internal)
+            {
+                // C99 6.2.2§7:
+                // If, within a translation unit, the same identifier appears with both internal and external
+                // linkage, the behavior is undefined.
+                log(Errors::Semantics::REDECLARATION_OF_FUNCTION_N_WITH_INTERNAL_LINKAGE.args(*loc, m_sourceInterface,
+                                                                                              *loc));
+                log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
+                                                         *prev->second.identifier));
+            }
+            *declaration =
+                FunctionDeclaration(std::move(composite), linkage, loc, std::max(inlineKind, prevDecl.getInlineKind()));
+            declaration->setUses(prevDecl.getUses());
+            prev.value().declared = declaration.get();
+            return declaration;
+        }
+        else if (std::holds_alternative<FunctionDefinition*>(prev->second.declared))
+        {
+            auto& fd = *cld::get<FunctionDefinition*>(prev->second.declared);
+
+            // C99 6.2.2§7:
+            // If, within a translation unit, the same identifier appears with both internal and external
+            // linkage, the behavior is undefined.
+            if (linkage == Linkage::Internal && fd.getLinkage() == Linkage::External)
+            {
+                log(Errors::Semantics::REDECLARATION_OF_FUNCTION_N_WITH_INTERNAL_LINKAGE.args(*loc, m_sourceInterface,
+                                                                                              *loc));
+                log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
+                                                         *prev->second.identifier));
+            }
+            inlineKind = std::max(fd.getInlineKind(), inlineKind);
+            fd =
+                FunctionDefinition(std::move(fd).getType(), fd.getNameToken(), std::move(fd).getParameterDeclarations(),
+                                   fd.getLinkage(), inlineKind, std::move(fd).getCompoundStatement());
+        }
+        return {};
+    }
+    return declaration;
 }
 
 std::unique_ptr<cld::Semantics::CompoundStatement>
