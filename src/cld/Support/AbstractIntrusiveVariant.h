@@ -85,7 +85,8 @@ public:
     template <class T>
     [[nodiscard]] constexpr const T* get_if() const noexcept
     {
-        if (index() != detail::getIndex<T, 0, Args...>())
+        constexpr auto var = detail::getIndex<T, 0, Args...>();
+        if (index() != var)
         {
             return nullptr;
         }
@@ -95,7 +96,8 @@ public:
     template <class T>
     [[nodiscard]] constexpr T* get_if() noexcept
     {
-        if (index() != detail::getIndex<T, 0, Args...>())
+        constexpr auto var = detail::getIndex<T, 0, Args...>();
+        if (index() != var)
         {
             return nullptr;
         }
@@ -178,18 +180,16 @@ public:
 
     void operator()(Base* pointer) const noexcept
     {
-        constexpr std::array<void (*)(Base*), sizeof...(SubClasses)> deleteFuncs = {
-            {+[](Base* ptr)
-             {
-                 if constexpr (std::is_base_of_v<Base, SubClasses>)
-                 {
-                     delete static_cast<SubClasses*>(ptr);
-                 }
-                 else
-                 {
-                     CLD_UNREACHABLE;
-                 }
-             }...}};
+        constexpr std::array<void (*)(Base*), sizeof...(SubClasses)> deleteFuncs = {{+[](Base* ptr) {
+            if constexpr (std::is_base_of_v<Base, SubClasses>)
+            {
+                delete static_cast<SubClasses*>(ptr);
+            }
+            else
+            {
+                CLD_UNREACHABLE;
+            }
+        }...}};
         deleteFuncs[pointer->index()](pointer);
     }
 };

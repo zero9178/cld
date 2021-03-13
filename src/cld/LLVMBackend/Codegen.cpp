@@ -278,9 +278,9 @@ class CodeGenerator final
                 {
                     ret[retIndex++] = type;
                 }
-                if (std::holds_alternative<ABITransformations::MultipleArgs>(dest))
+                if (auto* multiArgs = std::get_if<ABITransformations::MultipleArgs>(&dest))
                 {
-                    cld::get<ABITransformations::MultipleArgs>(dest).size++;
+                    multiArgs->size++;
                 }
 
                 continue;
@@ -318,9 +318,9 @@ class CodeGenerator final
                 dest = ABITransformations::MultipleArgs{};
             }
             ret[retIndex++] = *begin;
-            if (std::holds_alternative<ABITransformations::MultipleArgs>(dest))
+            if (auto* multiArgs = std::get_if<ABITransformations::MultipleArgs>(&dest))
             {
-                cld::get<ABITransformations::MultipleArgs>(dest).size++;
+                multiArgs->size++;
             }
         }
         if (takenFloats)
@@ -393,8 +393,8 @@ class CodeGenerator final
                 std::pair<llvm::Type*, llvm::Type*> types;
                 std::tie(dest, types.first, types.second) =
                     flattenSingleArg(*arg, &takenIntegerRegisters, &takenFloatingPointRegisters);
-                if (std::holds_alternative<ABITransformations::Change>(dest)
-                    && cld::get<ABITransformations::Change>(dest) == ABITransformations::OnStack)
+                if (auto* change = std::get_if<ABITransformations::Change>(&dest);
+                    change && *change == ABITransformations::OnStack)
                 {
                     *arg = llvm::PointerType::getUnqual(*arg);
                 }
@@ -408,8 +408,6 @@ class CodeGenerator final
                     }
                 }
             }
-            takenIntegerRegisters = 0;
-            takenFloatingPointRegisters = 0;
             if (!returnType->isVoidTy())
             {
                 std::uint32_t size = m_module.getDataLayout().getTypeAllocSizeInBits(returnType);
@@ -422,8 +420,7 @@ class CodeGenerator final
                 else
                 {
                     auto* prevReturnType = returnType;
-                    auto [temp, firstType, secondType] =
-                        flattenSingleArg(returnType, &takenIntegerRegisters, &takenFloatingPointRegisters);
+                    auto [temp, firstType, secondType] = flattenSingleArg(returnType);
                     if (secondType)
                     {
                         returnType = llvm::StructType::get(firstType, secondType);
@@ -577,12 +574,12 @@ class CodeGenerator final
         {
             return createGEP(pointer, integer.value);
         }
-        auto& array = cld::get<cld::Semantics::PointerType>(pointerType.getVariant()).getElementType();
+        auto& array = cld::Semantics::getPointerElementType(pointerType);
         Value product = integer;
         for (auto& iter : cld::Semantics::RecursiveVisitor(array, cld::Semantics::ARRAY_TYPE_NEXT_FN))
         {
             llvm::Value* value;
-            if (std::holds_alternative<cld::Semantics::ArrayType>(iter.getVariant()))
+            if (cld::Semantics::isArrayType(iter))
             {
                 value = m_builder.getInt64(cld::get<cld::Semantics::ArrayType>(iter.getVariant()).getSize());
             }
@@ -768,7 +765,7 @@ class CodeGenerator final
         }
         if (cld::Semantics::isInteger(to))
         {
-            if (std::holds_alternative<cld::Semantics::PointerType>(from.getVariant()))
+            if (cld::Semantics::isPointer(from))
             {
                 return m_builder.CreatePtrToInt(value, visit(to));
             }
@@ -1215,14 +1212,14 @@ class CodeGenerator final
             for (auto iter = m_programInterface.getScopes()[from].declarations.rbegin();
                  iter != m_programInterface.getScopes()[from].declarations.rend(); iter++)
             {
-                if (!std::holds_alternative<cld::Semantics::VariableDeclaration*>(iter->second.declared))
+                const auto* decl = std::get_if<cld::Semantics::VariableDeclaration*>(&iter->second.declared);
+                if (!decl)
                 {
                     continue;
                 }
-                const auto* decl = cld::get<cld::Semantics::VariableDeclaration*>(iter->second.declared);
-                if (cld::Semantics::isVariableLengthArray(decl->getType()))
+                if (cld::Semantics::isVariableLengthArray((*decl)->getType()))
                 {
-                    auto* alloca = m_stackSaves[decl];
+                    auto* alloca = m_stackSaves[*decl];
                     if (alloca)
                     {
                         auto loaded = createLoad(alloca, false);
@@ -1876,8 +1873,7 @@ public:
         {
             iter->match(
                 [&](const cld::Semantics::FunctionDefinition& functionDefinition) { visit(functionDefinition); },
-                [&](const cld::Semantics::VariableDeclaration& declaration)
-                {
+                [&](const cld::Semantics::VariableDeclaration& declaration) {
                     auto global = visit(declaration);
                     if (llvm::isa_and_nonnull<llvm::GlobalVariable>(global.value))
                     {
@@ -1899,7 +1895,7 @@ public:
             case cld::Semantics::Linkage::External: linkageType = llvm::GlobalValue::ExternalLinkage; break;
             case cld::Semantics::Linkage::None: break;
         }
-        CLD_ASSERT(std::holds_alternative<cld::Semantics::FunctionType>(declaration.getType().getVariant()));
+        CLD_ASSERT(cld::Semantics::isFunctionType(declaration.getType()));
         if (!m_options.emitAllDecls && !declaration.isUsed()
             && !declaration.hasAttribute<cld::Semantics::UsedAttribute>())
         {
@@ -1940,8 +1936,7 @@ public:
             {
                 return nullptr;
             }
-            auto& declType = [&]() -> decltype(auto)
-            {
+            auto& declType = [&]() -> decltype(auto) {
                 if (m_currentFunction)
                 {
                     return declaration.getType();
@@ -1981,12 +1976,10 @@ public:
                 global = new llvm::GlobalVariable(
                     m_module, type, declType.isConst() && linkageType != llvm::GlobalValue::CommonLinkage, linkageType,
                     constant, llvm::StringRef{declaration.getNameToken()->getText()});
-                if (m_programInterface.isCompleteType(declType)
-                    || std::holds_alternative<cld::Semantics::AbstractArrayType>(declType.getVariant()))
+                if (m_programInterface.isCompleteType(declType) || cld::Semantics::isAbstractArray(declType))
                 {
                     if (m_triple.getArchitecture() == cld::Architecture::x86_64 && cld::Semantics::isArray(declType)
-                        && !std::holds_alternative<cld::Semantics::AbstractArrayType>(declType.getVariant())
-                        && declType.getSizeOf(m_programInterface) >= 16)
+                        && !cld::Semantics::isAbstractArray(declType) && declType.getSizeOf(m_programInterface) >= 16)
                     {
                         global->setAlignment(llvm::Align(16));
                     }
@@ -2029,16 +2022,15 @@ public:
             bool valSeen = false;
             for (auto& iter : visitor)
             {
-                if (std::holds_alternative<cld::Semantics::ValArrayType>(iter.getVariant()))
+                if (auto* valArray = std::get_if<cld::Semantics::ValArrayType>(&iter.getVariant()))
                 {
                     valSeen = true;
                     if (!value)
                     {
-                        value = m_valSizes[cld::get<cld::Semantics::ValArrayType>(iter.getVariant()).getExpression()];
+                        value = m_valSizes[valArray->getExpression()];
                         continue;
                     }
-                    value = m_builder.CreateMul(
-                        value, m_valSizes[cld::get<cld::Semantics::ValArrayType>(iter.getVariant()).getExpression()]);
+                    value = m_builder.CreateMul(value, m_valSizes[valArray->getExpression()]);
                 }
                 else
                 {
@@ -2339,32 +2331,27 @@ public:
         }
         for (auto& iter : compoundStatement.getCompoundItems())
         {
-            if (std::holds_alternative<std::shared_ptr<const cld::Semantics::ExpressionBase>>(iter))
-            {
-                auto& expr = cld::get<std::shared_ptr<const cld::Semantics::ExpressionBase>>(iter);
-                auto result = m_valSizes.emplace(
-                    expr, m_builder.CreateIntCast(
-                              visit(*expr).value, m_builder.getInt64Ty(),
-                              cld::get<cld::Semantics::PrimitiveType>(expr->getType().getVariant()).isSigned()));
-                (void)result;
-                CLD_ASSERT(result.second);
-            }
-            else if (std::holds_alternative<cld::IntrVarPtr<cld::Semantics::Declaration>>(iter))
-            {
-                auto& decl = cld::get<cld::IntrVarPtr<cld::Semantics::Declaration>>(iter);
-                if (auto* varDecl = decl->get_if<cld::Semantics::VariableDeclaration>())
-                {
-                    visit(*varDecl);
-                }
-                else if (auto* funcDecl = decl->get_if<cld::Semantics::FunctionDeclaration>())
-                {
-                    visit(*funcDecl);
-                }
-            }
-            else if (std::holds_alternative<cld::IntrVarPtr<cld::Semantics::Statement>>(iter))
-            {
-                visit(*cld::get<cld::IntrVarPtr<cld::Semantics::Statement>>(iter));
-            }
+            cld::match(
+                iter,
+                [&](const std::shared_ptr<const cld::Semantics::ExpressionBase>& expr) {
+                    auto result = m_valSizes.emplace(
+                        expr, m_builder.CreateIntCast(
+                                  visit(*expr).value, m_builder.getInt64Ty(),
+                                  cld::get<cld::Semantics::PrimitiveType>(expr->getType().getVariant()).isSigned()));
+                    (void)result;
+                    CLD_ASSERT(result.second);
+                },
+                [&](const cld::IntrVarPtr<cld::Semantics::Declaration>& decl) {
+                    if (auto* varDecl = decl->get_if<cld::Semantics::VariableDeclaration>())
+                    {
+                        visit(*varDecl);
+                    }
+                    else if (auto* funcDecl = decl->get_if<cld::Semantics::FunctionDeclaration>())
+                    {
+                        visit(*funcDecl);
+                    }
+                },
+                [&](const cld::IntrVarPtr<cld::Semantics::Statement>& statement) { visit(*statement); });
         }
         if (m_builder.GetInsertBlock())
         {
@@ -2441,8 +2428,7 @@ public:
         std::optional<cld::ValueReset<llvm::DIScope*>> reset;
         cld::match(
             forStatement.getInitial(), [](std::monostate) {},
-            [&](const std::vector<cld::IntrVarPtr<cld::Semantics::Declaration>>& declaration)
-            {
+            [&](const std::vector<cld::IntrVarPtr<cld::Semantics::Declaration>>& declaration) {
                 if (m_options.debugEmission != cld::CGLLVM::DebugEmission::None)
                 {
                     if (!m_scopeIdToScope[forStatement.getScope()])
@@ -2847,7 +2833,7 @@ public:
                     return createInBoundsGEP(value, {m_builder.getInt64(0), m_builder.getInt64(0)});
                 }
                 if (cld::Semantics::isFunctionType(conversion.getExpression().getType())
-                    || m_programInterface.isBitfieldAccess(conversion.getExpression())
+                    || cld::Semantics::isBitfieldAccess(conversion.getExpression())
                     || cld::Semantics::isVariableLengthArray(conversion.getExpression().getType()))
                 {
                     return value;
@@ -3565,7 +3551,7 @@ public:
 
     Value visit(const cld::Semantics::Assignment& assignment)
     {
-        if (!m_programInterface.isBitfieldAccess(assignment.getLeftExpression()))
+        if (!cld::Semantics::isBitfieldAccess(assignment.getLeftExpression()))
         {
             auto lhs = [&] {
                 if (auto* subscript = assignment.getLeftExpression().get_if<cld::Semantics::SubscriptOperator>();

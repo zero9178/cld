@@ -483,6 +483,16 @@ bool cld::Semantics::isStringLiteralExpr(const ExpressionBase& expression)
            || std::holds_alternative<Lexer::NonCharString>(constant->getValue());
 }
 
+bool cld::Semantics::isBitfieldAccess(const ExpressionBase& expression)
+{
+    if (!expression.is<MemberAccess>())
+    {
+        return false;
+    }
+    auto& mem = expression.cast<MemberAccess>();
+    return static_cast<bool>(mem.getField().bitFieldBounds);
+}
+
 bool cld::Semantics::isVariablyModified(const Type& type)
 {
     auto typeVisitor = RecursiveVisitor(type, TYPE_NEXT_FN);

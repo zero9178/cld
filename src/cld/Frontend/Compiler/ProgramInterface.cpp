@@ -62,16 +62,6 @@ llvm::ArrayRef<cld::Semantics::MemoryLayout>
     CLD_UNREACHABLE;
 }
 
-bool cld::Semantics::ProgramInterface::isBitfieldAccess(const ExpressionBase& expression) const
-{
-    if (!expression.is<MemberAccess>())
-    {
-        return false;
-    }
-    auto& mem = expression.cast<MemberAccess>();
-    return static_cast<bool>(mem.getField().bitFieldBounds);
-}
-
 llvm::ArrayRef<cld::Semantics::FieldInLayout>
     cld::Semantics::ProgramInterface::getFieldLayout(const cld::Semantics::Type& recordType) const
 {

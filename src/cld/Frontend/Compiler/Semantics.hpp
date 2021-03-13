@@ -650,6 +650,8 @@ public:
 
 bool isStringLiteralExpr(const ExpressionBase& expression);
 
+bool isBitfieldAccess(const ExpressionBase& expression);
+
 class Constant final : public ExpressionBase
 {
 public:
