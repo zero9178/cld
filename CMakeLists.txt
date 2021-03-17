@@ -32,7 +32,7 @@ endif ()
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" AND MSVC AND (CLD_COVERAGE OR CLD_FUZZER OR CLD_SANITIZER))
     execute_process(
-            COMMAND ${CMAKE_CXX_COMPILER} /clang:-print-libgcc-file-name
+            COMMAND ${CMAKE_CXX_COMPILER} /clang:-print-libgcc-file-name /clang:--rtlib=compiler-rt
             OUTPUT_VARIABLE clang_compiler_rt_file
             ERROR_VARIABLE clang_cl_stderr
             OUTPUT_STRIP_TRAILING_WHITESPACE
