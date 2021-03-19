@@ -4,287 +4,6 @@
 #include <llvm/IR/Intrinsics.h>
 #include <llvm/IR/IntrinsicsX86.h>
 
-llvm::Value* cld::CGLLVM::CodeGenerator::visitStaticInitializerList(const Semantics::InitializerList& initializerList,
-                                                                    const Semantics::Type& type, llvm::Type* llvmType)
-{
-    struct Aggregate
-    {
-        std::vector<std::variant<llvm::Constant*, Aggregate>> vector;
-        std::optional<std::uint32_t> unionIndex;
-    };
-    Aggregate constants;
-    auto genAggregate = cld::YComb{[&](auto&& self, const Semantics::Type& type, Aggregate& aggregate) -> void {
-        if (Semantics::isStruct(type))
-        {
-            auto fields = m_programInterface.getFieldLayout(type);
-            aggregate.vector.resize(fields.size());
-            for (const auto* iter = fields.begin(); iter != fields.end(); iter++)
-            {
-                if (!Semantics::isAggregate(*iter->type))
-                {
-                    continue;
-                }
-                auto& vector = aggregate.vector[iter - fields.begin()].emplace<Aggregate>();
-                self(*iter->type, vector);
-            }
-        }
-        else if (Semantics::isArray(type))
-        {
-            auto& array = cld::get<Semantics::ArrayType>(type.getVariant());
-            std::variant<llvm::Constant*, Aggregate> value;
-            if (Semantics::isAggregate(array.getType()))
-            {
-                auto& vector = value.emplace<Aggregate>();
-                self(array.getType(), vector);
-            }
-            aggregate.vector.resize(array.getSize(), value);
-        }
-        else if (Semantics::isVector(type))
-        {
-            auto& vector = cld::get<Semantics::VectorType>(type.getVariant());
-            aggregate.vector.resize(vector.getSize());
-        }
-    }};
-    genAggregate(type, constants);
-
-    for (auto& [path, expression] : initializerList.getFields())
-    {
-        auto replacement = visit(*expression);
-        llvm::Constant** value = [&, &path = path, &expression = expression]() -> llvm::Constant** {
-            Aggregate* current = &constants;
-            const Semantics::Type* currentType = &type;
-            for (auto& iter : llvm::ArrayRef(path).drop_back())
-            {
-                if (Semantics::isUnion(*currentType))
-                {
-                    auto fields = m_programInterface.getFieldLayout(*currentType);
-                    if (current->vector.empty() || current->unionIndex != iter)
-                    {
-                        current->vector.resize(1);
-                        current->vector[0] = {};
-                        current->unionIndex = iter;
-                        if (Semantics::isAggregate(*fields[iter].type))
-                        {
-                            auto& vector = current->vector.back().emplace<Aggregate>();
-                            genAggregate(*fields[iter].type, vector);
-                        }
-                    }
-                    currentType = fields[iter].type.get();
-                    current = &cld::get<Aggregate>(current->vector[0]);
-                    continue;
-                }
-                if (Semantics::isStruct(*currentType))
-                {
-                    currentType = m_programInterface.getFieldLayout(*currentType)[iter].type.get();
-                }
-                else if (Semantics::isArray(*currentType))
-                {
-                    currentType = &Semantics::getArrayElementType(*currentType);
-                }
-                else if (Semantics::isVector(*currentType))
-                {
-                    currentType = &Semantics::getVectorElementType(*currentType);
-                }
-                current = &cld::get<Aggregate>(current->vector[iter]);
-            }
-            if (Semantics::isStringLiteralExpr(*expression))
-            {
-                auto& constant = expression->cast<Semantics::Constant>();
-                auto& aggregate = cld::get<Aggregate>(current->vector[path.back()]);
-                auto size = std::min(aggregate.vector.size(),
-                                     cld::match(
-                                         constant.getValue(),
-                                         [](const std::string& str) -> std::size_t { return str.size() + 1; },
-                                         [](const Lexer::NonCharString& nonCharString) -> std::size_t {
-                                             return nonCharString.characters.size();
-                                         },
-                                         [](const auto&) -> std::size_t { CLD_UNREACHABLE; }));
-                auto* elementType = cld::match(
-                    constant.getValue(),
-                    [&](const std::string&) -> llvm::Type* {
-                        return visit(Semantics::PrimitiveType::createChar(false, false,
-                                                                          m_programInterface.getLanguageOptions()));
-                    },
-                    [&](const Lexer::NonCharString&) -> llvm::Type* {
-                        return visit(Semantics::PrimitiveType::createWcharT(false, false,
-                                                                            m_programInterface.getLanguageOptions()));
-                    },
-                    [](const auto&) -> llvm::Type* { CLD_UNREACHABLE; });
-                for (std::size_t i = 0; i < size; i++)
-                {
-                    auto* constantValue = cld::match(
-                        constant.getValue(),
-                        [&](const std::string& str) -> llvm::Constant* {
-                            if (i == str.size())
-                            {
-                                return llvm::ConstantInt::get(elementType, 0);
-                            }
-                            return llvm::ConstantInt::get(elementType, str[i], true);
-                        },
-                        [&](const Lexer::NonCharString& str) -> llvm::Constant* {
-                            return llvm::ConstantInt::get(elementType, str.characters[i], false);
-                        },
-                        [](const auto&) -> llvm::Constant* { CLD_UNREACHABLE; });
-                    aggregate.vector[i] = constantValue;
-                }
-                return nullptr;
-            }
-            if (Semantics::isUnion(*currentType))
-            {
-                auto fields = m_programInterface.getFieldLayout(*currentType);
-                if (current->vector.empty() || current->unionIndex != path.back())
-                {
-                    current->vector.resize(1);
-                    current->vector[0] = {};
-                    current->unionIndex = path.back();
-                    if (Semantics::isAggregate(*fields[path.back()].type))
-                    {
-                        auto& vector = current->vector.back().emplace<Aggregate>();
-                        genAggregate(*fields[path.back()].type, vector);
-                    }
-                }
-                return &cld::get<llvm::Constant*>(current->vector[0]);
-            }
-            return &cld::get<llvm::Constant*>(current->vector[path.back()]);
-        }();
-        if (value)
-        {
-            *value = llvm::cast<llvm::Constant>(replacement.value);
-        }
-    }
-
-    return cld::YComb{[&](auto&& self, const Semantics::Type& type, llvm::Type* llvmType,
-                          const Aggregate& aggregate) -> llvm::Constant* {
-        if (Semantics::isStruct(type))
-        {
-            std::vector<llvm::Constant*> elements;
-            std::vector<llvm::Type*> elementTypes;
-            auto fields = m_programInterface.getFieldLayout(type);
-            for (std::size_t i = 0; i < aggregate.vector.size();)
-            {
-                if (!fields[i].bitFieldBounds)
-                {
-                    elements.push_back(cld::match(
-                        aggregate.vector[i],
-                        [&](const Aggregate& subAggregate) -> llvm::Constant* {
-                            return self(*fields[i].type, llvmType->getStructElementType(fields[i].layoutIndex),
-                                        subAggregate);
-                        },
-                        [&](llvm::Constant* constant) {
-                            if (constant)
-                            {
-                                return constant;
-                            }
-                            return llvm::Constant::getNullValue(llvmType->getStructElementType(fields[i].layoutIndex));
-                        }));
-                    elementTypes.push_back(elements.back()->getType());
-                    i++;
-                    continue;
-                }
-                elements.push_back(llvm::Constant::getNullValue(llvmType->getStructElementType(fields[i].layoutIndex)));
-                elementTypes.push_back(elements.back()->getType());
-                for (; i < aggregate.vector.size() && fields[i].bitFieldBounds; i++)
-                {
-                    auto* value = cld::match(
-                        aggregate.vector[i],
-                        [&](const Aggregate& subAggregate) -> llvm::Constant* {
-                            return self(*fields[i].type, llvmType->getStructElementType(fields[i].layoutIndex),
-                                        subAggregate);
-                        },
-                        [&](llvm::Constant* constant) -> llvm::Constant* {
-                            if (constant)
-                            {
-                                return constant;
-                            }
-                            return llvm::Constant::getNullValue(llvmType->getStructElementType(fields[i].layoutIndex));
-                        });
-                    auto size = fields[i].bitFieldBounds->second - fields[i].bitFieldBounds->first;
-                    auto* mask = llvm::ConstantInt::get(value->getType(), (1u << size) - 1);
-                    value = llvm::ConstantExpr::getAnd(value, mask);
-                    value = llvm::ConstantExpr::getShl(
-                        value, llvm::ConstantInt::get(value->getType(), fields[i].bitFieldBounds->first));
-                    mask = llvm::ConstantExpr::getShl(
-                        mask, llvm::ConstantInt::get(mask->getType(), fields[i].bitFieldBounds->first));
-                    mask = llvm::ConstantExpr::getNot(mask);
-                    elements.back() = llvm::ConstantExpr::getAnd(elements.back(), mask);
-                    elements.back() = llvm::ConstantExpr::getOr(elements.back(), value);
-                }
-            }
-            return llvm::ConstantStruct::get(llvm::StructType::get(m_module.getContext(), elementTypes), elements);
-        }
-        if (Semantics::isArray(type))
-        {
-            bool isSame = true;
-            llvm::Type* elementType = nullptr;
-            std::vector<llvm::Type*> elementTypes;
-            std::vector<llvm::Constant*> elements;
-            for (std::size_t i = 0; i < aggregate.vector.size(); i++)
-            {
-                elements.push_back(cld::match(
-                    aggregate.vector[i],
-                    [&](llvm::Constant* constant) {
-                        if (constant)
-                        {
-                            return constant;
-                        }
-                        return llvm::Constant::getNullValue(llvmType->getArrayElementType());
-                    },
-                    [&](const Aggregate& subAggregate) -> llvm::Constant* {
-                        return self(cld::get<Semantics::ArrayType>(type.getVariant()).getType(),
-                                    llvmType->getArrayElementType(), subAggregate);
-                    }));
-                elementTypes.push_back(elements.back()->getType());
-                if (elementType == nullptr)
-                {
-                    elementType = elementTypes.back();
-                }
-                else
-                {
-                    isSame = isSame && elementType == elementTypes.back();
-                }
-            }
-            if (isSame)
-            {
-                return llvm::ConstantArray::get(llvm::ArrayType::get(elementType, elements.size()), elements);
-            }
-            return llvm::ConstantStruct::get(llvm::StructType::get(m_module.getContext(), elementTypes), elements);
-        }
-        if (Semantics::isUnion(type))
-        {
-            // Union
-            auto fields = m_programInterface.getFieldLayout(type);
-            auto* llvmSubType = visit(*fields[*aggregate.unionIndex].type);
-            llvm::Constant* element = cld::match(
-                aggregate.vector[0], [](llvm::Constant* constant) -> llvm::Constant* { return constant; },
-                [&](const Aggregate& subAggregate) -> llvm::Constant* {
-                    return self(*fields[*aggregate.unionIndex].type, llvmSubType, subAggregate);
-                });
-            auto paddingSize = m_module.getDataLayout().getTypeAllocSize(llvmType).getKnownMinSize()
-                               - m_module.getDataLayout().getTypeAllocSize(element->getType()).getKnownMinSize();
-            if (paddingSize == 0)
-            {
-                return llvm::ConstantStruct::get(llvm::StructType::get(element->getType()), element);
-            }
-            auto* padding = llvm::ArrayType::get(m_builder.getInt8Ty(), paddingSize);
-            auto* newType = llvm::StructType::get(element->getType(), padding);
-
-            return llvm::ConstantStruct::get(newType, {element, llvm::UndefValue::get(padding)});
-        }
-        // Vector
-        CLD_ASSERT(Semantics::isVector(type));
-        std::vector<llvm::Constant*> elements;
-        for (std::size_t i = 0; i < aggregate.vector.size(); i++)
-        {
-            elements.push_back(cld::get<llvm::Constant*>(aggregate.vector[i]));
-            if (!elements.back())
-            {
-                elements.back() = llvm::Constant::getNullValue(llvmType->getScalarType());
-            }
-        }
-        return llvm::ConstantVector::get(elements);
-    }}(type, llvmType, constants);
-}
-
 cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::ExpressionBase& expression)
 {
     if (m_currentDebugScope && !llvm::isa<llvm::DICompileUnit>(m_currentDebugScope))
@@ -1516,8 +1235,6 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::CallExpres
             .getElementType()
             .getVariant());
     auto* ft = llvm::cast<llvm::FunctionType>(function.value->getType()->getPointerElementType());
-    auto transformation = m_functionABITransformations.find(cldFt);
-    CLD_ASSERT(transformation != m_functionABITransformations.end());
     bool isKandR = cldFt.isKandR();
     if (isKandR || cldFt.isLastVararg())
     {
@@ -1529,127 +1246,135 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::CallExpres
         auto callerFt = Semantics::FunctionType::create(cldFt.getReturnType(), std::move(arguments), false, false);
         ft = llvm::cast<llvm::FunctionType>(visit(callerFt));
         cldFt = cld::get<Semantics::FunctionType>(callerFt.getVariant());
-        transformation = m_functionABITransformations.find(cldFt);
-        CLD_ASSERT(transformation != m_functionABITransformations.end());
-    }
-
-    std::size_t llvmFnI = 0;
-    std::vector<llvm::Value*> arguments;
-    llvm::AllocaInst* returnSlot = nullptr;
-    if (transformation->second.returnType == ABITransformations::PointerToTemporary)
-    {
-        llvmFnI = 1;
-
-        returnSlot = createAllocaAtTop(ft->getParamType(0)->getPointerElementType(), "ret");
-        returnSlot->setAlignment(llvm::Align(call.getType().getAlignOf(m_programInterface)));
-        m_builder.CreateLifetimeStart(returnSlot, m_builder.getInt64(call.getType().getSizeOf(m_programInterface)));
-        arguments.emplace_back(returnSlot);
-    }
-
-    for (auto iter = call.getArgumentExpressions().begin(); iter != call.getArgumentExpressions().end(); iter++)
-    {
-        const std::size_t currentIndex = iter - call.getArgumentExpressions().begin();
-        auto value = visit(**iter);
-        if (std::holds_alternative<ABITransformations::Change>(transformation->second.arguments[currentIndex]))
-        {
-            llvmFnI++;
-            auto change = cld::get<ABITransformations::Change>(transformation->second.arguments[currentIndex]);
-            if (change == ABITransformations::Unchanged)
-            {
-                arguments.emplace_back(value);
-                continue;
-            }
-            if (change == ABITransformations::OnStack)
-            {
-                // structs rvalues don't exist in LLVM IR so this should be sound?
-                auto* load = llvm::cast<llvm::LoadInst>(value.value);
-                arguments.emplace_back(load->getPointerOperand());
-                load->eraseFromParent();
-                continue;
-            }
-            if (change == ABITransformations::PointerToTemporary)
-            {
-                auto* ret = createAllocaAtTop(value.value->getType());
-                ret->setAlignment(llvm::Align((*iter)->getType().getAlignOf(m_programInterface)));
-                m_builder.CreateLifetimeStart(ret,
-                                              m_builder.getInt64((*iter)->getType().getSizeOf(m_programInterface)));
-                if (value.value->getType()->isX86_FP80Ty())
-                {
-                    createStore(value, ret, false);
-                }
-                else
-                {
-                    auto* load = llvm::cast<llvm::LoadInst>(value.value);
-                    m_builder.CreateMemCpy(ret, ret->getAlign(), load->getPointerOperand(), load->getAlign(),
-                                           (*iter)->getType().getSizeOf(m_programInterface));
-                    load->eraseFromParent();
-                }
-                arguments.emplace_back(ret);
-                continue;
-            }
-            // Integer register
-            auto* load = llvm::cast<llvm::LoadInst>(value.value);
-            auto integer = createBitCast(valueOf(load->getPointerOperand(), load->getAlign()),
-                                         llvm::PointerType::getUnqual(m_builder.getIntNTy(
-                                             m_module.getDataLayout().getTypeAllocSizeInBits(load->getType()))),
-                                         false);
-            arguments.emplace_back(createLoad(integer, load->isVolatile()));
-            load->eraseFromParent();
-            continue;
-        }
-        auto* load = llvm::cast<llvm::LoadInst>(value.value);
-        auto& multiIndex = cld::get<ABITransformations::MultipleArgs>(transformation->second.arguments[currentIndex]);
-        if (multiIndex.size == 1)
-        {
-            auto* paramType = ft->getParamType(llvmFnI);
-            auto cast = createSafeBitCast(valueOf(load->getPointerOperand(), load->getAlign()),
-                                          llvm::PointerType::getUnqual(paramType));
-            arguments.emplace_back(createLoad(cast, load->isVolatile()));
-        }
-        else
-        {
-            CLD_ASSERT(multiIndex.size == 2);
-            auto* firstType = ft->getParamType(llvmFnI);
-            auto* secondType = ft->getParamType(llvmFnI + 1);
-            auto cast = createSafeBitCast(valueOf(load->getPointerOperand(), load->getAlign()),
-                                          llvm::PointerType::getUnqual(llvm::StructType::get(firstType, secondType)));
-            auto firstValue = createInBoundsGEP(cast, {m_builder.getInt64(0), m_builder.getInt32(0)});
-            auto secondValue = createInBoundsGEP(cast, {m_builder.getInt64(0), m_builder.getInt32(1)});
-            arguments.emplace_back(createLoad(firstValue, load->isVolatile()));
-            arguments.emplace_back(createLoad(secondValue, load->isVolatile()));
-        }
-        load->eraseFromParent();
-        llvmFnI += multiIndex.size;
     }
     if (isKandR)
     {
         function = createBitCast(function, llvm::PointerType::getUnqual(ft));
     }
-    auto* result = m_builder.CreateCall(
-        isKandR ? ft : llvm::cast<llvm::FunctionType>(function.value->getType()->getPointerElementType()), function,
-        arguments);
-    applyFunctionAttributes(*result, ft, cldFt);
-    switch (transformation->second.returnType)
+    std::vector<llvm::Value*> arguments;
+    for (auto& iter : call.getArgumentExpressions())
     {
-        case ABITransformations::Unchanged: return valueOf(result);
-        case ABITransformations::PointerToTemporary:
-        {
-            return createLoad(returnSlot, false);
-        }
-        case ABITransformations::IntegerRegister:
-        case ABITransformations::Flattened:
-        {
-            auto* intValue = createAllocaAtTop(result->getType());
-            intValue->setAlignment(llvm::Align(m_module.getDataLayout().getABITypeAlign(result->getType())));
-            m_builder.CreateLifetimeStart(
-                intValue, m_builder.getInt64(m_module.getDataLayout().getTypeAllocSize(result->getType())));
-            createStore(result, intValue, false);
-
-            auto cast = createSafeBitCast(intValue, llvm::PointerType::getUnqual(visit(call.getType())));
-            return createLoad(cast, false);
-        }
-        default: CLD_UNREACHABLE;
+        arguments.push_back(visit(*iter));
     }
+    return m_abi->generateFunctionCall(*this, function, ft, cldFt, std::move(arguments));
+
+    //
+    //    std::size_t llvmFnI = 0;
+    //    std::vector<llvm::Value*> arguments;
+    //    llvm::AllocaInst* returnSlot = nullptr;
+    //    if (transformation->second.returnType == ABITransformations::PointerToTemporary)
+    //    {
+    //        llvmFnI = 1;
+    //
+    //        returnSlot = createAllocaAtTop(ft->getParamType(0)->getPointerElementType(), "ret");
+    //        returnSlot->setAlignment(llvm::Align(call.getType().getAlignOf(m_programInterface)));
+    //        m_builder.CreateLifetimeStart(returnSlot,
+    //        m_builder.getInt64(call.getType().getSizeOf(m_programInterface))); arguments.emplace_back(returnSlot);
+    //    }
+    //
+    //    for (auto iter = call.getArgumentExpressions().begin(); iter != call.getArgumentExpressions().end(); iter++)
+    //    {
+    //        const std::size_t currentIndex = iter - call.getArgumentExpressions().begin();
+    //        auto value = visit(**iter);
+    //        if (std::holds_alternative<ABITransformations::Change>(transformation->second.arguments[currentIndex]))
+    //        {
+    //            llvmFnI++;
+    //            auto change = cld::get<ABITransformations::Change>(transformation->second.arguments[currentIndex]);
+    //            if (change == ABITransformations::Unchanged)
+    //            {
+    //                arguments.emplace_back(value);
+    //                continue;
+    //            }
+    //            if (change == ABITransformations::OnStack)
+    //            {
+    //                // structs rvalues don't exist in LLVM IR so this should be sound?
+    //                auto* load = llvm::cast<llvm::LoadInst>(value.value);
+    //                arguments.emplace_back(load->getPointerOperand());
+    //                load->eraseFromParent();
+    //                continue;
+    //            }
+    //            if (change == ABITransformations::PointerToTemporary)
+    //            {
+    //                auto* ret = createAllocaAtTop(value.value->getType());
+    //                ret->setAlignment(llvm::Align((*iter)->getType().getAlignOf(m_programInterface)));
+    //                m_builder.CreateLifetimeStart(ret,
+    //                                              m_builder.getInt64((*iter)->getType().getSizeOf(m_programInterface)));
+    //                if (value.value->getType()->isX86_FP80Ty())
+    //                {
+    //                    createStore(value, ret, false);
+    //                }
+    //                else
+    //                {
+    //                    auto* load = llvm::cast<llvm::LoadInst>(value.value);
+    //                    m_builder.CreateMemCpy(ret, ret->getAlign(), load->getPointerOperand(), load->getAlign(),
+    //                                           (*iter)->getType().getSizeOf(m_programInterface));
+    //                    load->eraseFromParent();
+    //                }
+    //                arguments.emplace_back(ret);
+    //                continue;
+    //            }
+    //            // Integer register
+    //            auto* load = llvm::cast<llvm::LoadInst>(value.value);
+    //            auto integer = createBitCast(valueOf(load->getPointerOperand(), load->getAlign()),
+    //                                         llvm::PointerType::getUnqual(m_builder.getIntNTy(
+    //                                             m_module.getDataLayout().getTypeAllocSizeInBits(load->getType()))),
+    //                                         false);
+    //            arguments.emplace_back(createLoad(integer, load->isVolatile()));
+    //            load->eraseFromParent();
+    //            continue;
+    //        }
+    //        auto* load = llvm::cast<llvm::LoadInst>(value.value);
+    //        auto& multiIndex =
+    //        cld::get<ABITransformations::MultipleArgs>(transformation->second.arguments[currentIndex]); if
+    //        (multiIndex.size == 1)
+    //        {
+    //            auto* paramType = ft->getParamType(llvmFnI);
+    //            auto cast = createSafeBitCast(valueOf(load->getPointerOperand(), load->getAlign()),
+    //                                          llvm::PointerType::getUnqual(paramType));
+    //            arguments.emplace_back(createLoad(cast, load->isVolatile()));
+    //        }
+    //        else
+    //        {
+    //            CLD_ASSERT(multiIndex.size == 2);
+    //            auto* firstType = ft->getParamType(llvmFnI);
+    //            auto* secondType = ft->getParamType(llvmFnI + 1);
+    //            auto cast = createSafeBitCast(valueOf(load->getPointerOperand(), load->getAlign()),
+    //                                          llvm::PointerType::getUnqual(llvm::StructType::get(firstType,
+    //                                          secondType)));
+    //            auto firstValue = createInBoundsGEP(cast, {m_builder.getInt64(0), m_builder.getInt32(0)});
+    //            auto secondValue = createInBoundsGEP(cast, {m_builder.getInt64(0), m_builder.getInt32(1)});
+    //            arguments.emplace_back(createLoad(firstValue, load->isVolatile()));
+    //            arguments.emplace_back(createLoad(secondValue, load->isVolatile()));
+    //        }
+    //        load->eraseFromParent();
+    //        llvmFnI += multiIndex.size;
+    //    }
+
+    //    auto* result = m_builder.CreateCall(
+    //        isKandR ? ft : llvm::cast<llvm::FunctionType>(function.value->getType()->getPointerElementType()),
+    //        function, arguments);
+    //    applyFunctionAttributes(*result, ft, cldFt);
+    //    switch (transformation->second.returnType)
+    //    {
+    //        case ABITransformations::Unchanged: return valueOf(result);
+    //        case ABITransformations::PointerToTemporary:
+    //        {
+    //            return createLoad(returnSlot, false);
+    //        }
+    //        case ABITransformations::IntegerRegister:
+    //        case ABITransformations::Flattened:
+    //        {
+    //            auto* intValue = createAllocaAtTop(result->getType());
+    //            intValue->setAlignment(llvm::Align(m_module.getDataLayout().getABITypeAlign(result->getType())));
+    //            m_builder.CreateLifetimeStart(
+    //                intValue, m_builder.getInt64(m_module.getDataLayout().getTypeAllocSize(result->getType())));
+    //            createStore(result, intValue, false);
+    //
+    //            auto cast = createSafeBitCast(intValue, llvm::PointerType::getUnqual(visit(call.getType())));
+    //            return createLoad(cast, false);
+    //        }
+    //        default: CLD_UNREACHABLE;
+    //    }
 }
 
 cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::CompoundLiteral& compoundLiteral)
@@ -1704,222 +1429,511 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::x64LoadFromStack(Value vaList, ll
 cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::BuiltinVAArg& vaArg)
 {
     auto vaList = visit(vaArg.getExpression());
-    std::size_t sizeOf = vaArg.getType().getSizeOf(m_programInterface);
+    return m_abi->generateVAArg(*this, vaList, vaArg.getType());
+    // std::size_t sizeOf = vaArg.getType().getSizeOf(m_programInterface);
 
-    switch (m_programInterface.getLanguageOptions().vaListKind)
-    {
-        case cld::LanguageOptions::BuiltInVaList::CharPtr:
-        case cld::LanguageOptions::BuiltInVaList::VoidPtr:
-        {
-            auto increment =
-                createInBoundsGEP(vaList, {m_builder.getInt64(m_module.getDataLayout().getPointerSize(0))});
-            vaList.alignment = llvm::Align(8);
-            createStore(increment,
-                        Value(llvm::cast<llvm::LoadInst>(vaList.value)->getPointerOperand(),
-                              llvm::cast<llvm::LoadInst>(vaList.value)->getAlign()),
-                        false);
-            auto* destType = visit(vaArg.getType());
-
-            auto exprAlign = vaArg.getType().getAlignOf(m_programInterface);
-            if (m_triple.getPlatform() == cld::Platform::Windows
-                && m_triple.getArchitecture() == cld::Architecture::x86_64)
-            {
-                if (!destType->isStructTy() && !destType->isX86_FP80Ty())
-                {
-                    vaList = createBitCast(vaList, llvm::PointerType::getUnqual(destType));
-                    return createLoad(vaList, false);
-                }
-                if (!m_module.getDataLayout().isLegalInteger(sizeOf * 8))
-                {
-                    vaList =
-                        createBitCast(vaList, llvm::PointerType::getUnqual(llvm::PointerType::getUnqual(destType)));
-                    vaList = createLoad(vaList, false);
-                }
-            }
-
-            auto* allocaInst = createAllocaAtTop(destType, "va_arg.ret");
-            allocaInst->setAlignment(llvm::Align(exprAlign));
-            m_builder.CreateLifetimeStart(allocaInst, m_builder.getInt64(sizeOf));
-            m_builder.CreateMemCpy(allocaInst, allocaInst->getAlign(), vaList, *vaList.alignment, sizeOf);
-            return createLoad(allocaInst, false);
-        }
-        case cld::LanguageOptions::BuiltInVaList::x86_64ABI:
-        {
-            auto* destType = visit(vaArg.getType());
-            if (m_module.getDataLayout().getTypeAllocSizeInBits(destType) > 128)
-            {
-            OnStack:
-                auto loadedStackPointer = x64LoadFromStack(vaList, destType);
-
-                auto* allocaInst = createAllocaAtTop(destType, "va_arg.ret");
-                allocaInst->setAlignment(llvm::Align(vaArg.getType().getAlignOf(m_programInterface)));
-                m_builder.CreateLifetimeStart(allocaInst, m_builder.getInt64(sizeOf));
-                m_builder.CreateMemCpy(allocaInst, allocaInst->getAlign(), loadedStackPointer,
-                                       *loadedStackPointer.alignment, sizeOf);
-                return createLoad(allocaInst, false);
-            }
-            auto [transform, first, second] = flattenSingleArg(destType);
-            if (auto* change = std::get_if<ABITransformations::Change>(&transform);
-                change && *change == ABITransformations::OnStack)
-            {
-                // I have yet to decide what is the lesser evil. Not repeating myself, or using goto...
-                goto OnStack;
-            }
-
-            Value gpOffset = nullptr;
-            llvm::Value* gpCount = nullptr;
-            Value fpOffset = nullptr;
-            llvm::Value* fpCount = nullptr;
-
-            llvm::Value* cond = nullptr;
-
-            if (first->isIntOrPtrTy() || (second && second->isIntOrPtrTy()))
-            {
-                gpOffset = createInBoundsGEP(vaList, {m_builder.getInt64(0), m_builder.getInt32(0)});
-                gpCount = createLoad(gpOffset, false);
-                // if the offset is 48 bytes it is full (8 Bytes * 6 Integer registers). To fit two integers we
-                // need an offset of 32, to fit one we need max 40
-                auto maxOffset = first->isIntOrPtrTy() && second && second->isIntOrPtrTy() ? 32 : 40;
-                cond = m_builder.CreateICmpULE(gpCount, m_builder.getInt32(maxOffset));
-            }
-            if (first->isFPOrFPVectorTy() || (second && second->isFPOrFPVectorTy()))
-            {
-                fpOffset = createInBoundsGEP(vaList, {m_builder.getInt64(0), m_builder.getInt32(1)});
-                fpCount = createLoad(fpOffset, false);
-                // fpOffset comes after gpOffset therefore all fp registers are used when fpOffset
-                // is 8 Bytes * 6 Integer registers + 16 Bytes * 8 Floating point registers
-                auto maxOffset = (first->isFPOrFPVectorTy() && second && second->isFPOrFPVectorTy()) ? 144 : 160;
-                if (!cond)
-                {
-                    cond = m_builder.CreateICmpULE(fpCount, m_builder.getInt32(maxOffset));
-                }
-                else
-                {
-                    cond = m_builder.CreateAnd(cond, m_builder.CreateICmpULE(fpCount, m_builder.getInt32(maxOffset)));
-                }
-            }
-            CLD_ASSERT(cond);
-
-            auto* inRegister = llvm::BasicBlock::Create(m_module.getContext(), "va_arg.inRegister", m_currentFunction);
-            auto* onStack = llvm::BasicBlock::Create(m_module.getContext(), "va_arg.onStack", m_currentFunction);
-            auto* contBlock = llvm::BasicBlock::Create(m_module.getContext(), "va_arg.continue", m_currentFunction);
-            m_builder.CreateCondBr(cond, inRegister, onStack);
-
-            m_builder.SetInsertPoint(inRegister);
-            auto regArea = createInBoundsGEP(vaList, {m_builder.getInt64(0), m_builder.getInt32(3)});
-            regArea = createLoad(regArea, false);
-            Value regValue = nullptr;
-            if (!second)
-            {
-                if (first->isIntOrPtrTy())
-                {
-                    // TODO: Handle case where types is aligned higher than 8 bytes;
-                    regArea = createGEP(regArea, gpCount);
-                    regArea.alignment = llvm::Align(8);
-                    regValue = createBitCast(regArea, llvm::PointerType::getUnqual(destType));
-                    auto* incremented = m_builder.CreateAdd(gpCount, m_builder.getInt32(8));
-                    createStore(incremented, gpOffset, false);
-                    m_builder.CreateBr(contBlock);
-                }
-                else
-                {
-                    // TODO: Handle case where types is aligned higher than 16 bytes
-                    regArea = createGEP(regArea, fpCount);
-                    regArea.alignment = llvm::Align(16);
-                    regValue = createBitCast(regArea, llvm::PointerType::getUnqual(destType));
-
-                    auto* incremented = m_builder.CreateAdd(fpCount, m_builder.getInt32(16));
-                    createStore(incremented, fpOffset, false);
-                    m_builder.CreateBr(contBlock);
-                }
-            }
-            else
-            {
-                auto* allocaInst = createAllocaAtTop(destType, "va_arg.temp");
-                allocaInst->setAlignment(llvm::Align(vaArg.getType().getAlignOf(m_programInterface)));
-                m_builder.CreateLifetimeStart(allocaInst, m_builder.getInt64(sizeOf));
-                auto dest = createBitCast(allocaInst,
-                                          llvm::PointerType::getUnqual(llvm::StructType::get(first, second)), false);
-
-                auto regAreaOfFirst = createGEP(regArea, first->isFPOrFPVectorTy() ? fpCount : gpCount);
-                regAreaOfFirst.alignment = llvm::Align(first->isFPOrFPVectorTy() ? 16 : 8);
-                regAreaOfFirst = createBitCast(regAreaOfFirst, llvm::PointerType::getUnqual(first));
-
-                regAreaOfFirst = createLoad(regAreaOfFirst, false);
-                auto destFirst = createInBoundsGEP(dest, {m_builder.getInt64(0), m_builder.getInt32(0)});
-                createStore(regAreaOfFirst, destFirst, false);
-
-                llvm::Value* offsetOfSecond = second->isFPOrFPVectorTy() ? fpCount : gpCount;
-                // If both are initialized then we are loading from one floating point and one integer register.
-                // Otherwise we are loading from two registers. In that case we need to apply an extra offset
-                // as we have already loaded previously
-                if (static_cast<bool>(fpOffset) != static_cast<bool>(gpOffset))
-                {
-                    offsetOfSecond = m_builder.CreateAdd(
-                        offsetOfSecond, llvm::ConstantInt::get(offsetOfSecond->getType(), fpOffset ? 16 : 8));
-                }
-
-                auto regAreaOfSecond = createGEP(regArea, offsetOfSecond);
-                regAreaOfSecond.alignment = llvm::Align(second->isFPOrFPVectorTy() ? 16 : 8);
-                regAreaOfSecond = createBitCast(regAreaOfSecond, llvm::PointerType::getUnqual(second));
-
-                regAreaOfSecond = createLoad(regAreaOfSecond, false);
-                auto destSecond = createInBoundsGEP(dest, {m_builder.getInt64(0), m_builder.getInt32(1)});
-                createStore(regAreaOfSecond, destSecond, false);
-
-                if (static_cast<bool>(fpOffset) != static_cast<bool>(gpOffset))
-                {
-                    if (fpOffset)
-                    {
-                        fpCount = m_builder.CreateAdd(fpCount, llvm::ConstantInt::get(fpCount->getType(), 32));
-                        createStore(fpCount, fpOffset, false);
-                    }
-                    else
-                    {
-                        gpCount = m_builder.CreateAdd(gpCount, llvm::ConstantInt::get(gpCount->getType(), 16));
-                        createStore(gpCount, gpOffset, false);
-                    }
-                }
-                else
-                {
-                    fpCount = m_builder.CreateAdd(fpCount, llvm::ConstantInt::get(fpCount->getType(), 16));
-                    createStore(fpCount, fpOffset, false);
-                    gpCount = m_builder.CreateAdd(gpCount, llvm::ConstantInt::get(gpCount->getType(), 8));
-                    createStore(gpCount, gpOffset, false);
-                }
-                regValue = allocaInst;
-                m_builder.CreateBr(contBlock);
-            }
-
-            m_builder.SetInsertPoint(onStack);
-            auto stackValue = x64LoadFromStack(vaList, destType);
-            m_builder.CreateBr(contBlock);
-
-            m_builder.SetInsertPoint(contBlock);
-            auto* phi = m_builder.CreatePHI(llvm::PointerType::getUnqual(destType), 2);
-            phi->addIncoming(regValue, inRegister);
-            phi->addIncoming(stackValue, onStack);
-
-            if (!Semantics::isRecord(vaArg.getType()))
-            {
-                return createLoad(valueOf(phi, std::min(*regValue.alignment, *stackValue.alignment)), false);
-            }
-
-            auto* allocaInst = createAllocaAtTop(destType, "va_arg.ret");
-            allocaInst->setAlignment(llvm::Align(vaArg.getType().getAlignOf(m_programInterface)));
-            m_builder.CreateLifetimeStart(allocaInst, m_builder.getInt64(sizeOf));
-            m_builder.CreateMemCpy(allocaInst, allocaInst->getAlign(), phi,
-                                   std::min(*regValue.alignment, *stackValue.alignment), sizeOf);
-            return createLoad(allocaInst, false);
-        }
-    }
-    CLD_UNREACHABLE;
+    //    switch (m_programInterface.getLanguageOptions().vaListKind)
+    //    {
+    //        case cld::LanguageOptions::BuiltInVaList::CharPtr:
+    //        case cld::LanguageOptions::BuiltInVaList::VoidPtr:
+    //        {
+    //            auto increment =
+    //                createInBoundsGEP(vaList, {m_builder.getInt64(m_module.getDataLayout().getPointerSize(0))});
+    //            vaList.alignment = llvm::Align(8);
+    //            createStore(increment,
+    //                        Value(llvm::cast<llvm::LoadInst>(vaList.value)->getPointerOperand(),
+    //                              llvm::cast<llvm::LoadInst>(vaList.value)->getAlign()),
+    //                        false);
+    //            auto* destType = visit(vaArg.getType());
+    //
+    //            auto exprAlign = vaArg.getType().getAlignOf(m_programInterface);
+    //            if (m_triple.getPlatform() == cld::Platform::Windows
+    //                && m_triple.getArchitecture() == cld::Architecture::x86_64)
+    //            {
+    //                if (!destType->isStructTy() && !destType->isX86_FP80Ty())
+    //                {
+    //                    vaList = createBitCast(vaList, llvm::PointerType::getUnqual(destType));
+    //                    return createLoad(vaList, false);
+    //                }
+    //                if (!m_module.getDataLayout().isLegalInteger(sizeOf * 8))
+    //                {
+    //                    vaList =
+    //                        createBitCast(vaList,
+    //                        llvm::PointerType::getUnqual(llvm::PointerType::getUnqual(destType)));
+    //                    vaList = createLoad(vaList, false);
+    //                }
+    //            }
+    //
+    //            auto* allocaInst = createAllocaAtTop(destType, "va_arg.ret");
+    //            allocaInst->setAlignment(llvm::Align(exprAlign));
+    //            m_builder.CreateLifetimeStart(allocaInst, m_builder.getInt64(sizeOf));
+    //            m_builder.CreateMemCpy(allocaInst, allocaInst->getAlign(), vaList, *vaList.alignment, sizeOf);
+    //            return createLoad(allocaInst, false);
+    //        }
+    //        case cld::LanguageOptions::BuiltInVaList::x86_64ABI:
+    //        {
+    //            auto* destType = visit(vaArg.getType());
+    //            if (m_module.getDataLayout().getTypeAllocSizeInBits(destType) > 128)
+    //            {
+    //            OnStack:
+    //                auto loadedStackPointer = x64LoadFromStack(vaList, destType);
+    //
+    //                auto* allocaInst = createAllocaAtTop(destType, "va_arg.ret");
+    //                allocaInst->setAlignment(llvm::Align(vaArg.getType().getAlignOf(m_programInterface)));
+    //                m_builder.CreateLifetimeStart(allocaInst, m_builder.getInt64(sizeOf));
+    //                m_builder.CreateMemCpy(allocaInst, allocaInst->getAlign(), loadedStackPointer,
+    //                                       *loadedStackPointer.alignment, sizeOf);
+    //                return createLoad(allocaInst, false);
+    //            }
+    //            auto [transform, first, second] = flattenSingleArg(destType);
+    //            if (auto* change = std::get_if<ABITransformations::Change>(&transform);
+    //                change && *change == ABITransformations::OnStack)
+    //            {
+    //                // I have yet to decide what is the lesser evil. Not repeating myself, or using goto...
+    //                goto OnStack;
+    //            }
+    //
+    //            Value gpOffset = nullptr;
+    //            llvm::Value* gpCount = nullptr;
+    //            Value fpOffset = nullptr;
+    //            llvm::Value* fpCount = nullptr;
+    //
+    //            llvm::Value* cond = nullptr;
+    //
+    //            if (first->isIntOrPtrTy() || (second && second->isIntOrPtrTy()))
+    //            {
+    //                gpOffset = createInBoundsGEP(vaList, {m_builder.getInt64(0), m_builder.getInt32(0)});
+    //                gpCount = createLoad(gpOffset, false);
+    //                // if the offset is 48 bytes it is full (8 Bytes * 6 Integer registers). To fit two integers we
+    //                // need an offset of 32, to fit one we need max 40
+    //                auto maxOffset = first->isIntOrPtrTy() && second && second->isIntOrPtrTy() ? 32 : 40;
+    //                cond = m_builder.CreateICmpULE(gpCount, m_builder.getInt32(maxOffset));
+    //            }
+    //            if (first->isFPOrFPVectorTy() || (second && second->isFPOrFPVectorTy()))
+    //            {
+    //                fpOffset = createInBoundsGEP(vaList, {m_builder.getInt64(0), m_builder.getInt32(1)});
+    //                fpCount = createLoad(fpOffset, false);
+    //                // fpOffset comes after gpOffset therefore all fp registers are used when fpOffset
+    //                // is 8 Bytes * 6 Integer registers + 16 Bytes * 8 Floating point registers
+    //                auto maxOffset = (first->isFPOrFPVectorTy() && second && second->isFPOrFPVectorTy()) ? 144 : 160;
+    //                if (!cond)
+    //                {
+    //                    cond = m_builder.CreateICmpULE(fpCount, m_builder.getInt32(maxOffset));
+    //                }
+    //                else
+    //                {
+    //                    cond = m_builder.CreateAnd(cond, m_builder.CreateICmpULE(fpCount,
+    //                    m_builder.getInt32(maxOffset)));
+    //                }
+    //            }
+    //            CLD_ASSERT(cond);
+    //
+    //            auto* inRegister = llvm::BasicBlock::Create(m_module.getContext(), "va_arg.inRegister",
+    //            m_currentFunction); auto* onStack = llvm::BasicBlock::Create(m_module.getContext(), "va_arg.onStack",
+    //            m_currentFunction); auto* contBlock = llvm::BasicBlock::Create(m_module.getContext(),
+    //            "va_arg.continue", m_currentFunction); m_builder.CreateCondBr(cond, inRegister, onStack);
+    //
+    //            m_builder.SetInsertPoint(inRegister);
+    //            auto regArea = createInBoundsGEP(vaList, {m_builder.getInt64(0), m_builder.getInt32(3)});
+    //            regArea = createLoad(regArea, false);
+    //            Value regValue = nullptr;
+    //            if (!second)
+    //            {
+    //                if (first->isIntOrPtrTy())
+    //                {
+    //                    // TODO: Handle case where types is aligned higher than 8 bytes;
+    //                    regArea = createGEP(regArea, gpCount);
+    //                    regArea.alignment = llvm::Align(8);
+    //                    regValue = createBitCast(regArea, llvm::PointerType::getUnqual(destType));
+    //                    auto* incremented = m_builder.CreateAdd(gpCount, m_builder.getInt32(8));
+    //                    createStore(incremented, gpOffset, false);
+    //                    m_builder.CreateBr(contBlock);
+    //                }
+    //                else
+    //                {
+    //                    // TODO: Handle case where types is aligned higher than 16 bytes
+    //                    regArea = createGEP(regArea, fpCount);
+    //                    regArea.alignment = llvm::Align(16);
+    //                    regValue = createBitCast(regArea, llvm::PointerType::getUnqual(destType));
+    //
+    //                    auto* incremented = m_builder.CreateAdd(fpCount, m_builder.getInt32(16));
+    //                    createStore(incremented, fpOffset, false);
+    //                    m_builder.CreateBr(contBlock);
+    //                }
+    //            }
+    //            else
+    //            {
+    //                auto* allocaInst = createAllocaAtTop(destType, "va_arg.temp");
+    //                allocaInst->setAlignment(llvm::Align(vaArg.getType().getAlignOf(m_programInterface)));
+    //                m_builder.CreateLifetimeStart(allocaInst, m_builder.getInt64(sizeOf));
+    //                auto dest = createBitCast(allocaInst,
+    //                                          llvm::PointerType::getUnqual(llvm::StructType::get(first, second)),
+    //                                          false);
+    //
+    //                auto regAreaOfFirst = createGEP(regArea, first->isFPOrFPVectorTy() ? fpCount : gpCount);
+    //                regAreaOfFirst.alignment = llvm::Align(first->isFPOrFPVectorTy() ? 16 : 8);
+    //                regAreaOfFirst = createBitCast(regAreaOfFirst, llvm::PointerType::getUnqual(first));
+    //
+    //                regAreaOfFirst = createLoad(regAreaOfFirst, false);
+    //                auto destFirst = createInBoundsGEP(dest, {m_builder.getInt64(0), m_builder.getInt32(0)});
+    //                createStore(regAreaOfFirst, destFirst, false);
+    //
+    //                llvm::Value* offsetOfSecond = second->isFPOrFPVectorTy() ? fpCount : gpCount;
+    //                // If both are initialized then we are loading from one floating point and one integer register.
+    //                // Otherwise we are loading from two registers. In that case we need to apply an extra offset
+    //                // as we have already loaded previously
+    //                if (static_cast<bool>(fpOffset) != static_cast<bool>(gpOffset))
+    //                {
+    //                    offsetOfSecond = m_builder.CreateAdd(
+    //                        offsetOfSecond, llvm::ConstantInt::get(offsetOfSecond->getType(), fpOffset ? 16 : 8));
+    //                }
+    //
+    //                auto regAreaOfSecond = createGEP(regArea, offsetOfSecond);
+    //                regAreaOfSecond.alignment = llvm::Align(second->isFPOrFPVectorTy() ? 16 : 8);
+    //                regAreaOfSecond = createBitCast(regAreaOfSecond, llvm::PointerType::getUnqual(second));
+    //
+    //                regAreaOfSecond = createLoad(regAreaOfSecond, false);
+    //                auto destSecond = createInBoundsGEP(dest, {m_builder.getInt64(0), m_builder.getInt32(1)});
+    //                createStore(regAreaOfSecond, destSecond, false);
+    //
+    //                if (static_cast<bool>(fpOffset) != static_cast<bool>(gpOffset))
+    //                {
+    //                    if (fpOffset)
+    //                    {
+    //                        fpCount = m_builder.CreateAdd(fpCount, llvm::ConstantInt::get(fpCount->getType(), 32));
+    //                        createStore(fpCount, fpOffset, false);
+    //                    }
+    //                    else
+    //                    {
+    //                        gpCount = m_builder.CreateAdd(gpCount, llvm::ConstantInt::get(gpCount->getType(), 16));
+    //                        createStore(gpCount, gpOffset, false);
+    //                    }
+    //                }
+    //                else
+    //                {
+    //                    fpCount = m_builder.CreateAdd(fpCount, llvm::ConstantInt::get(fpCount->getType(), 16));
+    //                    createStore(fpCount, fpOffset, false);
+    //                    gpCount = m_builder.CreateAdd(gpCount, llvm::ConstantInt::get(gpCount->getType(), 8));
+    //                    createStore(gpCount, gpOffset, false);
+    //                }
+    //                regValue = allocaInst;
+    //                m_builder.CreateBr(contBlock);
+    //            }
+    //
+    //            m_builder.SetInsertPoint(onStack);
+    //            auto stackValue = x64LoadFromStack(vaList, destType);
+    //            m_builder.CreateBr(contBlock);
+    //
+    //            m_builder.SetInsertPoint(contBlock);
+    //            auto* phi = m_builder.CreatePHI(llvm::PointerType::getUnqual(destType), 2);
+    //            phi->addIncoming(regValue, inRegister);
+    //            phi->addIncoming(stackValue, onStack);
+    //
+    //            if (!Semantics::isRecord(vaArg.getType()))
+    //            {
+    //                return createLoad(valueOf(phi, std::min(*regValue.alignment, *stackValue.alignment)), false);
+    //            }
+    //
+    //            auto* allocaInst = createAllocaAtTop(destType, "va_arg.ret");
+    //            allocaInst->setAlignment(llvm::Align(vaArg.getType().getAlignOf(m_programInterface)));
+    //            m_builder.CreateLifetimeStart(allocaInst, m_builder.getInt64(sizeOf));
+    //            m_builder.CreateMemCpy(allocaInst, allocaInst->getAlign(), phi,
+    //                                   std::min(*regValue.alignment, *stackValue.alignment), sizeOf);
+    //            return createLoad(allocaInst, false);
+    //        }
+    //    }
 }
 
 cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::BuiltinOffsetOf& offsetOf)
 {
     return llvm::ConstantInt::get(visit(offsetOf.getType()), offsetOf.getOffset());
 }
+
+namespace
+{
+llvm::Value* visitStaticInitializerList(cld::CGLLVM::CodeGenerator& codeGenerator,
+                                        const cld::Semantics::InitializerList& initializerList,
+                                        const cld::Semantics::Type& type, llvm::Type* llvmType)
+{
+    struct Aggregate
+    {
+        std::vector<std::variant<llvm::Constant*, Aggregate>> vector;
+        std::optional<std::uint32_t> unionIndex;
+    };
+    Aggregate constants;
+    auto genAggregate = cld::YComb{[&](auto&& self, const cld::Semantics::Type& type, Aggregate& aggregate) -> void {
+        if (cld::Semantics::isStruct(type))
+        {
+            auto fields = codeGenerator.getProgramInterface().getFieldLayout(type);
+            aggregate.vector.resize(fields.size());
+            for (const auto* iter = fields.begin(); iter != fields.end(); iter++)
+            {
+                if (!cld::Semantics::isAggregate(*iter->type))
+                {
+                    continue;
+                }
+                auto& vector = aggregate.vector[iter - fields.begin()].emplace<Aggregate>();
+                self(*iter->type, vector);
+            }
+        }
+        else if (cld::Semantics::isArray(type))
+        {
+            auto& array = cld::get<cld::Semantics::ArrayType>(type.getVariant());
+            std::variant<llvm::Constant*, Aggregate> value;
+            if (cld::Semantics::isAggregate(array.getType()))
+            {
+                auto& vector = value.emplace<Aggregate>();
+                self(array.getType(), vector);
+            }
+            aggregate.vector.resize(array.getSize(), value);
+        }
+        else if (cld::Semantics::isVector(type))
+        {
+            auto& vector = cld::get<cld::Semantics::VectorType>(type.getVariant());
+            aggregate.vector.resize(vector.getSize());
+        }
+    }};
+    genAggregate(type, constants);
+
+    for (auto& [path, expression] : initializerList.getFields())
+    {
+        auto replacement = codeGenerator.visit(*expression);
+        llvm::Constant** value = [&, &path = path, &expression = expression]() -> llvm::Constant** {
+            Aggregate* current = &constants;
+            const cld::Semantics::Type* currentType = &type;
+            for (auto& iter : llvm::ArrayRef(path).drop_back())
+            {
+                if (cld::Semantics::isUnion(*currentType))
+                {
+                    auto fields = codeGenerator.getProgramInterface().getFieldLayout(*currentType);
+                    if (current->vector.empty() || current->unionIndex != iter)
+                    {
+                        current->vector.resize(1);
+                        current->vector[0] = {};
+                        current->unionIndex = iter;
+                        if (cld::Semantics::isAggregate(*fields[iter].type))
+                        {
+                            auto& vector = current->vector.back().emplace<Aggregate>();
+                            genAggregate(*fields[iter].type, vector);
+                        }
+                    }
+                    currentType = fields[iter].type.get();
+                    current = &cld::get<Aggregate>(current->vector[0]);
+                    continue;
+                }
+                if (cld::Semantics::isStruct(*currentType))
+                {
+                    currentType = codeGenerator.getProgramInterface().getFieldLayout(*currentType)[iter].type.get();
+                }
+                else if (cld::Semantics::isArray(*currentType))
+                {
+                    currentType = &cld::Semantics::getArrayElementType(*currentType);
+                }
+                else if (cld::Semantics::isVector(*currentType))
+                {
+                    currentType = &cld::Semantics::getVectorElementType(*currentType);
+                }
+                current = &cld::get<Aggregate>(current->vector[iter]);
+            }
+            if (cld::Semantics::isStringLiteralExpr(*expression))
+            {
+                auto& constant = expression->cast<cld::Semantics::Constant>();
+                auto& aggregate = cld::get<Aggregate>(current->vector[path.back()]);
+                auto size = std::min(aggregate.vector.size(),
+                                     cld::match(
+                                         constant.getValue(),
+                                         [](const std::string& str) -> std::size_t { return str.size() + 1; },
+                                         [](const cld::Lexer::NonCharString& nonCharString) -> std::size_t {
+                                             return nonCharString.characters.size();
+                                         },
+                                         [](const auto&) -> std::size_t { CLD_UNREACHABLE; }));
+                auto* elementType = cld::match(
+                    constant.getValue(),
+                    [&](const std::string&) -> llvm::Type* {
+                        return codeGenerator.visit(cld::Semantics::PrimitiveType::createChar(
+                            false, false, codeGenerator.getProgramInterface().getLanguageOptions()));
+                    },
+                    [&](const cld::Lexer::NonCharString&) -> llvm::Type* {
+                        return codeGenerator.visit(cld::Semantics::PrimitiveType::createWcharT(
+                            false, false, codeGenerator.getProgramInterface().getLanguageOptions()));
+                    },
+                    [](const auto&) -> llvm::Type* { CLD_UNREACHABLE; });
+                for (std::size_t i = 0; i < size; i++)
+                {
+                    auto* constantValue = cld::match(
+                        constant.getValue(),
+                        [&](const std::string& str) -> llvm::Constant* {
+                            if (i == str.size())
+                            {
+                                return llvm::ConstantInt::get(elementType, 0);
+                            }
+                            return llvm::ConstantInt::get(elementType, str[i], true);
+                        },
+                        [&](const cld::Lexer::NonCharString& str) -> llvm::Constant* {
+                            return llvm::ConstantInt::get(elementType, str.characters[i], false);
+                        },
+                        [](const auto&) -> llvm::Constant* { CLD_UNREACHABLE; });
+                    aggregate.vector[i] = constantValue;
+                }
+                return nullptr;
+            }
+            if (cld::Semantics::isUnion(*currentType))
+            {
+                auto fields = codeGenerator.getProgramInterface().getFieldLayout(*currentType);
+                if (current->vector.empty() || current->unionIndex != path.back())
+                {
+                    current->vector.resize(1);
+                    current->vector[0] = {};
+                    current->unionIndex = path.back();
+                    if (cld::Semantics::isAggregate(*fields[path.back()].type))
+                    {
+                        auto& vector = current->vector.back().emplace<Aggregate>();
+                        genAggregate(*fields[path.back()].type, vector);
+                    }
+                }
+                return &cld::get<llvm::Constant*>(current->vector[0]);
+            }
+            return &cld::get<llvm::Constant*>(current->vector[path.back()]);
+        }();
+        if (value)
+        {
+            *value = llvm::cast<llvm::Constant>(replacement.value);
+        }
+    }
+
+    return cld::YComb{[&](auto&& self, const cld::Semantics::Type& type, llvm::Type* llvmType,
+                          const Aggregate& aggregate) -> llvm::Constant* {
+        const llvm::Module& module = codeGenerator.getModule();
+        if (cld::Semantics::isStruct(type))
+        {
+            std::vector<llvm::Constant*> elements;
+            std::vector<llvm::Type*> elementTypes;
+            auto fields = codeGenerator.getProgramInterface().getFieldLayout(type);
+            for (std::size_t i = 0; i < aggregate.vector.size();)
+            {
+                if (!fields[i].bitFieldBounds)
+                {
+                    elements.push_back(cld::match(
+                        aggregate.vector[i],
+                        [&](const Aggregate& subAggregate) -> llvm::Constant* {
+                            return self(*fields[i].type, llvmType->getStructElementType(fields[i].layoutIndex),
+                                        subAggregate);
+                        },
+                        [&](llvm::Constant* constant) {
+                            if (constant)
+                            {
+                                return constant;
+                            }
+                            return llvm::Constant::getNullValue(llvmType->getStructElementType(fields[i].layoutIndex));
+                        }));
+                    elementTypes.push_back(elements.back()->getType());
+                    i++;
+                    continue;
+                }
+                elements.push_back(llvm::Constant::getNullValue(llvmType->getStructElementType(fields[i].layoutIndex)));
+                elementTypes.push_back(elements.back()->getType());
+                for (; i < aggregate.vector.size() && fields[i].bitFieldBounds; i++)
+                {
+                    auto* value = cld::match(
+                        aggregate.vector[i],
+                        [&](const Aggregate& subAggregate) -> llvm::Constant* {
+                            return self(*fields[i].type, llvmType->getStructElementType(fields[i].layoutIndex),
+                                        subAggregate);
+                        },
+                        [&](llvm::Constant* constant) -> llvm::Constant* {
+                            if (constant)
+                            {
+                                return constant;
+                            }
+                            return llvm::Constant::getNullValue(llvmType->getStructElementType(fields[i].layoutIndex));
+                        });
+                    auto size = fields[i].bitFieldBounds->second - fields[i].bitFieldBounds->first;
+                    auto* mask = llvm::ConstantInt::get(value->getType(), (1u << size) - 1);
+                    value = llvm::ConstantExpr::getAnd(value, mask);
+                    value = llvm::ConstantExpr::getShl(
+                        value, llvm::ConstantInt::get(value->getType(), fields[i].bitFieldBounds->first));
+                    mask = llvm::ConstantExpr::getShl(
+                        mask, llvm::ConstantInt::get(mask->getType(), fields[i].bitFieldBounds->first));
+                    mask = llvm::ConstantExpr::getNot(mask);
+                    elements.back() = llvm::ConstantExpr::getAnd(elements.back(), mask);
+                    elements.back() = llvm::ConstantExpr::getOr(elements.back(), value);
+                }
+            }
+            return llvm::ConstantStruct::get(llvm::StructType::get(module.getContext(), elementTypes), elements);
+        }
+        if (cld::Semantics::isArray(type))
+        {
+            bool isSame = true;
+            llvm::Type* elementType = nullptr;
+            std::vector<llvm::Type*> elementTypes;
+            std::vector<llvm::Constant*> elements;
+            for (std::size_t i = 0; i < aggregate.vector.size(); i++)
+            {
+                elements.push_back(cld::match(
+                    aggregate.vector[i],
+                    [&](llvm::Constant* constant) {
+                        if (constant)
+                        {
+                            return constant;
+                        }
+                        return llvm::Constant::getNullValue(llvmType->getArrayElementType());
+                    },
+                    [&](const Aggregate& subAggregate) -> llvm::Constant* {
+                        return self(cld::get<cld::Semantics::ArrayType>(type.getVariant()).getType(),
+                                    llvmType->getArrayElementType(), subAggregate);
+                    }));
+                elementTypes.push_back(elements.back()->getType());
+                if (elementType == nullptr)
+                {
+                    elementType = elementTypes.back();
+                }
+                else
+                {
+                    isSame = isSame && elementType == elementTypes.back();
+                }
+            }
+            if (isSame)
+            {
+                return llvm::ConstantArray::get(llvm::ArrayType::get(elementType, elements.size()), elements);
+            }
+            return llvm::ConstantStruct::get(llvm::StructType::get(module.getContext(), elementTypes), elements);
+        }
+        if (cld::Semantics::isUnion(type))
+        {
+            // Union
+            auto fields = codeGenerator.getProgramInterface().getFieldLayout(type);
+            auto* llvmSubType = codeGenerator.visit(*fields[*aggregate.unionIndex].type);
+            llvm::Constant* element = cld::match(
+                aggregate.vector[0], [](llvm::Constant* constant) -> llvm::Constant* { return constant; },
+                [&](const Aggregate& subAggregate) -> llvm::Constant* {
+                    return self(*fields[*aggregate.unionIndex].type, llvmSubType, subAggregate);
+                });
+            auto paddingSize = module.getDataLayout().getTypeAllocSize(llvmType).getKnownMinSize()
+                               - module.getDataLayout().getTypeAllocSize(element->getType()).getKnownMinSize();
+            if (paddingSize == 0)
+            {
+                return llvm::ConstantStruct::get(llvm::StructType::get(element->getType()), element);
+            }
+            auto* padding = llvm::ArrayType::get(llvm::IntegerType::getInt8Ty(module.getContext()), paddingSize);
+            auto* newType = llvm::StructType::get(element->getType(), padding);
+
+            return llvm::ConstantStruct::get(newType, {element, llvm::UndefValue::get(padding)});
+        }
+        // Vector
+        CLD_ASSERT(cld::Semantics::isVector(type));
+        std::vector<llvm::Constant*> elements;
+        for (std::size_t i = 0; i < aggregate.vector.size(); i++)
+        {
+            elements.push_back(cld::get<llvm::Constant*>(aggregate.vector[i]));
+            if (!elements.back())
+            {
+                elements.back() = llvm::Constant::getNullValue(llvmType->getScalarType());
+            }
+        }
+        return llvm::ConstantVector::get(elements);
+    }}(type, llvmType, constants);
+}
+} // namespace
 
 cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::Initializer& initializer,
                                                      const Semantics::Type& type,
@@ -1950,7 +1964,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::Initialize
         [&](const Semantics::InitializerList& initializerList) -> Value {
             if (std::holds_alternative<llvm::Type*>(pointer))
             {
-                return visitStaticInitializerList(initializerList, type, cld::get<llvm::Type*>(pointer));
+                return visitStaticInitializerList(*this, initializerList, type, cld::get<llvm::Type*>(pointer));
             }
             auto value = cld::get<Value>(pointer);
             m_builder.CreateMemSet(value, m_builder.getInt8(0), type.getSizeOf(m_programInterface), value.alignment,

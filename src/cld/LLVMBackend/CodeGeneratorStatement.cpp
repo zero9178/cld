@@ -72,41 +72,51 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::ReturnStatement& returnS
         return;
     }
 
-    auto* function = m_currentFunction;
+    // auto* function = m_currentFunction;
     auto value = visit(*returnStatement.getExpression());
-    if (m_currentFunctionABI->returnType == ABITransformations::PointerToTemporary)
+    auto* ret = m_abi->generateValueReturn(*this, value);
+    runDestructors(returnStatement.getScope(), 0);
+    if (ret)
     {
-        createStore(value.value, valueOf(function->getArg(0), function->getParamAlign(0)), false);
-        runDestructors(returnStatement.getScope(), 0);
-        m_builder.CreateRetVoid();
-    }
-    else if (m_currentFunctionABI->returnType == ABITransformations::Flattened
-             || m_currentFunctionABI->returnType == ABITransformations::IntegerRegister)
-    {
-        // TODO: Check this again
-        if (m_returnSlot->getAlign() == value.alignment)
-        {
-            m_builder.CreateAlignedStore(
-                value.value, createBitCast(m_returnSlot, llvm::PointerType::getUnqual(value.value->getType())),
-                m_returnSlot->getAlign());
-        }
-        else
-        {
-            auto* ptr = llvm::cast<llvm::LoadInst>(value.value)->getPointerOperand();
-            m_builder.CreateMemCpy(m_returnSlot, m_returnSlot->getAlign(), ptr,
-                                   llvm::cast<llvm::LoadInst>(value.value)->getAlign(),
-                                   returnStatement.getExpression()->getType().getSizeOf(m_programInterface));
-            llvm::cast<llvm::LoadInst>(value.value)->eraseFromParent();
-        }
-        auto ret = createLoad(m_returnSlot, false);
-        runDestructors(returnStatement.getScope(), 0);
         m_builder.CreateRet(ret);
     }
     else
     {
-        runDestructors(returnStatement.getScope(), 0);
-        m_builder.CreateRet(value.value);
+        m_builder.CreateRetVoid();
     }
+    //    if (m_currentFunctionABI->returnType == ABITransformations::PointerToTemporary)
+    //    {
+    //        createStore(value.value, valueOf(function->getArg(0), function->getParamAlign(0)), false);
+    //        runDestructors(returnStatement.getScope(), 0);
+    //        m_builder.CreateRetVoid();
+    //    }
+    //    else if (m_currentFunctionABI->returnType == ABITransformations::Flattened
+    //             || m_currentFunctionABI->returnType == ABITransformations::IntegerRegister)
+    //    {
+    //        // TODO: Check this again
+    //        if (m_returnSlot->getAlign() == value.alignment)
+    //        {
+    //            m_builder.CreateAlignedStore(
+    //                value.value, createBitCast(m_returnSlot, llvm::PointerType::getUnqual(value.value->getType())),
+    //                m_returnSlot->getAlign());
+    //        }
+    //        else
+    //        {
+    //            auto* ptr = llvm::cast<llvm::LoadInst>(value.value)->getPointerOperand();
+    //            m_builder.CreateMemCpy(m_returnSlot, m_returnSlot->getAlign(), ptr,
+    //                                   llvm::cast<llvm::LoadInst>(value.value)->getAlign(),
+    //                                   returnStatement.getExpression()->getType().getSizeOf(m_programInterface));
+    //            llvm::cast<llvm::LoadInst>(value.value)->eraseFromParent();
+    //        }
+    //        auto ret = createLoad(m_returnSlot, false);
+    //        runDestructors(returnStatement.getScope(), 0);
+    //        m_builder.CreateRet(ret);
+    //    }
+    //    else
+    //    {
+    //        runDestructors(returnStatement.getScope(), 0);
+    //        m_builder.CreateRet(value.value);
+    //    }
     m_builder.ClearInsertionPoint();
 }
 

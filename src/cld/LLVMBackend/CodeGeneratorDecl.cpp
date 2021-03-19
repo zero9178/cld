@@ -59,8 +59,7 @@ llvm::Type* cld::CGLLVM::CodeGenerator::visit(const Semantics::Type& type)
                 (void)name;
                 args.push_back(visit(Semantics::adjustParameterType(type)));
             }
-            auto transformation = applyPlatformABI(returnType, args);
-            m_functionABITransformations.emplace(functionType, transformation);
+            m_abi->applyPlatformABI(functionType, returnType, args);
             return llvm::FunctionType::get(returnType, args, functionType.isLastVararg());
         },
         [&](const Semantics::PointerType& pointerType) -> llvm::Type* {
@@ -521,7 +520,10 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDe
     auto* ft = llvm::cast<llvm::FunctionType>(visit(declaration.getType()));
     function =
         llvm::Function::Create(ft, linkageType, -1, llvm::StringRef{declaration.getNameToken()->getText()}, &m_module);
-    applyFunctionAttributes(*function, ft, cld::get<Semantics::FunctionType>(declaration.getType().getVariant()));
+    auto attributes = function->getAttributes();
+    attributes = m_abi->generateFunctionAttributes(
+        std::move(attributes), ft, cld::get<Semantics::FunctionType>(declaration.getType().getVariant()));
+    function->setAttributes(std::move(attributes));
     if (!m_options.reloc)
     {
         function->setDSOLocal(true);
@@ -730,10 +732,12 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDefinition& func
     }
     m_lvalues.emplace(&functionDefinition, valueOf(function));
     auto& ft = cld::get<Semantics::FunctionType>(functionDefinition.getType().getVariant());
+    auto attributes = function->getAttributes();
+    attributes = m_abi->generateFunctionAttributes(std::move(attributes), function->getFunctionType(), ft);
+    function->setAttributes(std::move(attributes));
     if (functionDefinition.getInlineKind() == Semantics::InlineKind::InlineDefinition
         && functionDefinition.getLinkage() == Semantics::Linkage::External)
     {
-        applyFunctionAttributes(*function, function->getFunctionType(), ft);
         return;
     }
 
@@ -795,84 +799,86 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDefinition& func
         m_builder.SetCurrentDebugLocation({});
     }
 
-    applyFunctionAttributes(*m_currentFunction, m_currentFunction->getFunctionType(), ft,
-                            &functionDefinition.getParameterDeclarations());
+    m_abi->generateFunctionEntry(*this, m_currentFunction, ft, functionDefinition.getParameterDeclarations());
 
-    auto transformations = m_functionABITransformations.find(ft);
-    CLD_ASSERT(transformations != m_functionABITransformations.end());
-    m_currentFunctionABI = &transformations->second;
-    cld::ValueReset currentFunctionABIReset(m_currentFunctionABI, nullptr);
-    if (transformations->second.returnType == ABITransformations::Flattened
-        || transformations->second.returnType == ABITransformations::IntegerRegister)
-    {
-        m_returnSlot = createAllocaAtTop(function->getReturnType());
-        m_returnSlot->setAlignment(llvm::Align(ft.getReturnType().getAlignOf(m_programInterface)));
-    }
-    else
-    {
-        m_returnSlot = nullptr;
-    }
-
-    std::size_t argStart = 0;
-    if (transformations->second.returnType == ABITransformations::PointerToTemporary)
-    {
-        argStart = 1;
-    }
-    std::size_t origArgI = 0;
-    for (std::size_t i = argStart; i < function->arg_size(); origArgI++)
-    {
-        auto& paramDecl = functionDefinition.getParameterDeclarations()[origArgI];
-        if (std::holds_alternative<ABITransformations::Change>(transformations->second.arguments[origArgI]))
-        {
-            auto* operand = function->getArg(i);
-            i++;
-            auto change = cld::get<ABITransformations::Change>(transformations->second.arguments[origArgI]);
-            if (change == ABITransformations::PointerToTemporary || change == ABITransformations::OnStack)
-            {
-                if (operand->getType()->isPointerTy())
-                {
-                    m_lvalues.emplace(paramDecl.get(),
-                                      Value(operand, operand->getPointerAlignment(m_module.getDataLayout())));
-                }
-                else
-                {
-                    m_lvalues.emplace(paramDecl.get(), valueOf(operand, operand->getParamAlign()));
-                }
-                continue;
-            }
-            auto alloc = m_lvalues.at(paramDecl.get());
-            if (change == ABITransformations::Unchanged)
-            {
-                createStore(operand, alloc, paramDecl->getType().isVolatile());
-                continue;
-            }
-
-            auto cast = createBitCast(alloc, llvm::PointerType::getUnqual(operand->getType()), false);
-            createStore(operand, cast, paramDecl->getType().isVolatile());
-        }
-        else
-        {
-            auto& multiArg = cld::get<ABITransformations::MultipleArgs>(transformations->second.arguments[origArgI]);
-            CLD_ASSERT(multiArg.size <= 2 && multiArg.size > 0);
-            auto alloc = m_lvalues.at(paramDecl.get());
-            std::vector<llvm::Type*> elements;
-            elements.push_back(function->getArg(i)->getType());
-            if (multiArg.size == 2)
-            {
-                elements.push_back(function->getArg(i + 1)->getType());
-            }
-            auto structType = createBitCast(
-                alloc, llvm::PointerType::getUnqual(llvm::StructType::get(m_builder.getContext(), elements)), false);
-            auto firstElement = createInBoundsGEP(structType, {m_builder.getInt32(0), m_builder.getInt32(0)});
-            createStore(function->getArg(i), firstElement, paramDecl->getType().isVolatile());
-            if (multiArg.size == 2)
-            {
-                auto secondElement = createInBoundsGEP(structType, {m_builder.getInt32(0), m_builder.getInt32(1)});
-                createStore(function->getArg(i + 1), secondElement, paramDecl->getType().isVolatile());
-            }
-            i += multiArg.size;
-        }
-    }
+    //    auto transformations = m_functionABITransformations.find(ft);
+    //    CLD_ASSERT(transformations != m_functionABITransformations.end());
+    //    m_currentFunctionABI = &transformations->second;
+    //    cld::ValueReset currentFunctionABIReset(m_currentFunctionABI, nullptr);
+    //    if (transformations->second.returnType == ABITransformations::Flattened
+    //        || transformations->second.returnType == ABITransformations::IntegerRegister)
+    //    {
+    //        m_returnSlot = createAllocaAtTop(function->getReturnType());
+    //        m_returnSlot->setAlignment(llvm::Align(ft.getReturnType().getAlignOf(m_programInterface)));
+    //    }
+    //    else
+    //    {
+    //        m_returnSlot = nullptr;
+    //    }
+    //
+    //    std::size_t argStart = 0;
+    //    if (transformations->second.returnType == ABITransformations::PointerToTemporary)
+    //    {
+    //        argStart = 1;
+    //    }
+    //    std::size_t origArgI = 0;
+    //    for (std::size_t i = argStart; i < function->arg_size(); origArgI++)
+    //    {
+    //        auto& paramDecl = functionDefinition.getParameterDeclarations()[origArgI];
+    //        if (std::holds_alternative<ABITransformations::Change>(transformations->second.arguments[origArgI]))
+    //        {
+    //            auto* operand = function->getArg(i);
+    //            i++;
+    //            auto change = cld::get<ABITransformations::Change>(transformations->second.arguments[origArgI]);
+    //            if (change == ABITransformations::PointerToTemporary || change == ABITransformations::OnStack)
+    //            {
+    //                if (operand->getType()->isPointerTy())
+    //                {
+    //                    m_lvalues.emplace(paramDecl.get(),
+    //                                      Value(operand, operand->getPointerAlignment(m_module.getDataLayout())));
+    //                }
+    //                else
+    //                {
+    //                    m_lvalues.emplace(paramDecl.get(), valueOf(operand, operand->getParamAlign()));
+    //                }
+    //                continue;
+    //            }
+    //            auto alloc = m_lvalues.at(paramDecl.get());
+    //            if (change == ABITransformations::Unchanged)
+    //            {
+    //                createStore(operand, alloc, paramDecl->getType().isVolatile());
+    //                continue;
+    //            }
+    //
+    //            auto cast = createBitCast(alloc, llvm::PointerType::getUnqual(operand->getType()), false);
+    //            createStore(operand, cast, paramDecl->getType().isVolatile());
+    //        }
+    //        else
+    //        {
+    //            auto& multiArg =
+    //            cld::get<ABITransformations::MultipleArgs>(transformations->second.arguments[origArgI]);
+    //            CLD_ASSERT(multiArg.size <= 2 && multiArg.size > 0);
+    //            auto alloc = m_lvalues.at(paramDecl.get());
+    //            std::vector<llvm::Type*> elements;
+    //            elements.push_back(function->getArg(i)->getType());
+    //            if (multiArg.size == 2)
+    //            {
+    //                elements.push_back(function->getArg(i + 1)->getType());
+    //            }
+    //            auto structType = createBitCast(
+    //                alloc, llvm::PointerType::getUnqual(llvm::StructType::get(m_builder.getContext(), elements)),
+    //                false);
+    //            auto firstElement = createInBoundsGEP(structType, {m_builder.getInt32(0), m_builder.getInt32(0)});
+    //            createStore(function->getArg(i), firstElement, paramDecl->getType().isVolatile());
+    //            if (multiArg.size == 2)
+    //            {
+    //                auto secondElement = createInBoundsGEP(structType, {m_builder.getInt32(0),
+    //                m_builder.getInt32(1)}); createStore(function->getArg(i + 1), secondElement,
+    //                paramDecl->getType().isVolatile());
+    //            }
+    //            i += multiArg.size;
+    //        }
+    //    }
     for (auto& [type, name] : ft.getArguments())
     {
         // Go through the visit of each parameter again in case one them of was a variably modified type.

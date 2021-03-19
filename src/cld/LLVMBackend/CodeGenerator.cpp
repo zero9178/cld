@@ -1,5 +1,79 @@
 #include "CodeGenerator.hpp"
 
+#include "WinX64ABI.hpp"
+#include "X64ABI.hpp"
+
+cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::boolToi1(Value value)
+{
+    if (auto* cast = llvm::dyn_cast<llvm::CastInst>(value.value);
+        cast && cast->getSrcTy() == m_builder.getInt1Ty() && cast->getNumUses() == 0)
+    {
+        auto* result = cast->getOperand(0);
+        cast->eraseFromParent();
+        return result;
+    }
+    return m_builder.CreateTrunc(value.value, m_builder.getInt1Ty());
+}
+
+cld::CGLLVM::CodeGenerator::CodeGenerator(llvm::Module& module,
+                                          const cld::Semantics::ProgramInterface& programInterface,
+                                          const cld::SourceInterface& sourceInterface, cld::Triple triple,
+                                          const cld::CGLLVM::Options& options)
+    : m_module(module),
+      m_programInterface(programInterface),
+      m_sourceInterface(sourceInterface),
+      m_options(options),
+      m_triple(triple)
+{
+    if (triple.getArchitecture() == Architecture::x86_64 && triple.getPlatform() == Platform::Windows)
+    {
+        m_abi = std::make_unique<WinX64ABI>(m_module.getDataLayout());
+    }
+    else if (triple.getArchitecture() == Architecture::x86_64)
+    {
+        m_abi = std::make_unique<X64ABI>(m_module.getDataLayout());
+    }
+    else
+    {
+        llvm::errs() << "ABI for this platform has not yet been implemented. Sorry";
+        std::terminate();
+    }
+    auto fullPath = cld::fs::u8path(m_sourceInterface.getFiles()[1].path);
+    module.setSourceFileName(fullPath.filename().u8string());
+    if (m_options.debugEmission == cld::CGLLVM::DebugEmission::None)
+    {
+        return;
+    }
+    m_debugInfo.emplace(m_module);
+    llvm::DIFile* mainFile;
+    for (auto& iter : m_sourceInterface.getFiles())
+    {
+        auto path = cld::fs::u8path(iter.path);
+        auto dir = path;
+        dir.remove_filename();
+        auto* file = m_debugInfo->createFile(path.filename().u8string(), dir.u8string());
+        if (path == fullPath)
+        {
+            mainFile = file;
+        }
+        m_fileIdToFile.push_back(file);
+    }
+    if (!mainFile)
+    {
+        return;
+    }
+    llvm::DICompileUnit::DebugEmissionKind kind = llvm::DICompileUnit::NoDebug;
+    switch (m_options.debugEmission)
+    {
+        case cld::CGLLVM::DebugEmission::None: kind = llvm::DICompileUnit::NoDebug; break;
+        case cld::CGLLVM::DebugEmission::Line: kind = llvm::DICompileUnit::LineTablesOnly; break;
+        case cld::CGLLVM::DebugEmission::Default:
+        case cld::CGLLVM::DebugEmission::Extended: kind = llvm::DICompileUnit::FullDebug; break;
+    }
+    m_currentDebugScope = m_debugInfo->createCompileUnit(llvm::dwarf::DW_LANG_C99, mainFile, "cld",
+                                                         options.ol != llvm::CodeGenOpt::None, "", 0, {}, kind);
+}
+
 llvm::Value* cld::CGLLVM::CodeGenerator::toBool(llvm::Value* value)
 {
     if (value->getType()->isIntegerTy())
@@ -279,7 +353,9 @@ llvm::AllocaInst* cld::CGLLVM::CodeGenerator::createAllocaAtTop(llvm::Type* type
     return m_builder.CreateAlloca(type, nullptr, llvm::StringRef{name});
 }
 
-llvm::Align cld::CGLLVM::CodeGenerator::calcAlign(llvm::Value* gep, llvm::Align alignment)
+namespace
+{
+llvm::Align calcAlign(const llvm::DataLayout& dataLayout, llvm::Value* gep, llvm::Align alignment)
 {
     bool deleteInst = false;
     cld::ScopeExit exit([&] {
@@ -297,10 +373,10 @@ llvm::Align cld::CGLLVM::CodeGenerator::calcAlign(llvm::Value* gep, llvm::Align 
     auto* gepInst = llvm::dyn_cast<llvm::GetElementPtrInst>(gep);
     if (!gepInst)
     {
-        return m_module.getDataLayout().getABITypeAlign(gep->getType()->getPointerElementType());
+        return dataLayout.getABITypeAlign(gep->getType()->getPointerElementType());
     }
-    llvm::APInt integer(m_module.getDataLayout().getPointerSizeInBits(0), 0);
-    if (gepInst->accumulateConstantOffset(m_module.getDataLayout(), integer))
+    llvm::APInt integer(dataLayout.getPointerSizeInBits(0), 0);
+    if (gepInst->accumulateConstantOffset(dataLayout, integer))
     {
         for (std::uint64_t value = alignment.value(); value > 0; value >>= 1)
         {
@@ -311,19 +387,21 @@ llvm::Align cld::CGLLVM::CodeGenerator::calcAlign(llvm::Value* gep, llvm::Align 
         }
         CLD_UNREACHABLE;
     }
-    return m_module.getDataLayout().getABITypeAlign(gep->getType()->getPointerElementType());
+    return dataLayout.getABITypeAlign(gep->getType()->getPointerElementType());
 }
+
+} // namespace
 
 cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::createGEP(Value ptr, llvm::ArrayRef<llvm::Value*> indices)
 {
     auto* result = m_builder.CreateGEP(ptr.value, indices);
-    return valueOf(result, calcAlign(result, *ptr.alignment));
+    return valueOf(result, calcAlign(m_module.getDataLayout(), result, *ptr.alignment));
 }
 
 cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::createInBoundsGEP(Value ptr, llvm::ArrayRef<llvm::Value*> indices)
 {
     auto* result = m_builder.CreateInBoundsGEP(ptr.value, indices);
-    return valueOf(result, calcAlign(result, *ptr.alignment));
+    return valueOf(result, calcAlign(m_module.getDataLayout(), result, *ptr.alignment));
 }
 
 cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::createPointerCast(Value ptr, llvm::Type* pointerType)
@@ -425,14 +503,8 @@ void cld::CGLLVM::CodeGenerator::runDestructors(std::size_t from, std::size_t to
     }
 }
 
-cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::boolToi1(Value value)
+void cld::CGLLVM::CodeGenerator::addLValue(const cld::Semantics::Useable& lvalue, Value value)
 {
-    if (auto* cast = llvm::dyn_cast<llvm::CastInst>(value.value);
-        cast && cast->getSrcTy() == m_builder.getInt1Ty() && cast->getNumUses() == 0)
-    {
-        auto* result = cast->getOperand(0);
-        cast->eraseFromParent();
-        return result;
-    }
-    return m_builder.CreateTrunc(value.value, m_builder.getInt1Ty());
+    [[maybe_unused]] auto inserted = m_lvalues.insert({&lvalue, std::move(value)}).second;
+    CLD_ASSERT(inserted);
 }
