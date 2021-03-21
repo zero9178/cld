@@ -3,38 +3,13 @@
 
 #include "CodeGenerator.hpp"
 
-cld::CGLLVM::WinX64ABI::WinX64ABI(const llvm::DataLayout& dataLayout) : ABIImplementation(dataLayout) {}
+cld::CGLLVM::WinX64ABI::WinX64ABI(const llvm::DataLayout& dataLayout) : CommonABIImpl(dataLayout) {}
 
-void cld::CGLLVM::WinX64ABI::applyPlatformABI(const Semantics::FunctionType& functionType, llvm::Type*& returnType,
-                                              std::vector<llvm::Type*>& arguments)
+cld::CGLLVM::WinX64Impl::Adjustments cld::CGLLVM::WinX64ABI::applyPlatformABIImpl(llvm::Type*& returnType,
+                                                                                  std::vector<llvm::Type*>& arguments)
 {
-    auto result = m_adjustments.find(functionType);
-    if (result != m_adjustments.end())
-    {
-        switch (result->second.returnType)
-        {
-            case IntegerRegister:
-                returnType =
-                    llvm::IntegerType::get(returnType->getContext(), m_dataLayout.getTypeAllocSizeInBits(returnType));
-                break;
-            case PointerToTemporary: returnType = returnType->getPointerTo(0); break;
-            default: break;
-        }
-        for (auto& iter : arguments)
-        {
-            switch (result->second.returnType)
-            {
-                case IntegerRegister:
-                    iter = llvm::IntegerType::get(iter->getContext(), m_dataLayout.getTypeAllocSizeInBits(iter));
-                    break;
-                case PointerToTemporary: iter = iter->getPointerTo(0); break;
-                default: break;
-            }
-        }
-        return;
-    }
-    Adjustments adjustments;
-    adjustments.arguments.resize(arguments.size(), Nothing);
+    WinX64Impl::Adjustments adjustments;
+    adjustments.arguments.resize(arguments.size(), WinX64Impl::Nothing);
     for (auto iter = arguments.begin(); iter != arguments.end(); iter++)
     {
         if (!(*iter)->isStructTy() && !(*iter)->isX86_FP80Ty())
@@ -45,12 +20,12 @@ void cld::CGLLVM::WinX64ABI::applyPlatformABI(const Semantics::FunctionType& fun
         if (m_dataLayout.isLegalInteger(size))
         {
             *iter = llvm::IntegerType::get((*iter)->getContext(), size);
-            adjustments.arguments[iter - arguments.begin()] = IntegerRegister;
+            adjustments.arguments[iter - arguments.begin()] = WinX64Impl::IntegerRegister;
         }
         else
         {
             *iter = (*iter)->getPointerTo(0);
-            adjustments.arguments[iter - arguments.begin()] = PointerToTemporary;
+            adjustments.arguments[iter - arguments.begin()] = WinX64Impl::PointerToTemporary;
         }
     }
     if (!returnType->isVoidTy())
@@ -59,25 +34,25 @@ void cld::CGLLVM::WinX64ABI::applyPlatformABI(const Semantics::FunctionType& fun
         if (m_dataLayout.isLegalInteger(size) && returnType->isStructTy())
         {
             returnType = llvm::IntegerType::get(returnType->getContext(), size);
-            adjustments.returnType = IntegerRegister;
+            adjustments.returnType = WinX64Impl::IntegerRegister;
         }
         else if (!m_dataLayout.isLegalInteger(size))
         {
             arguments.insert(arguments.begin(), returnType->getPointerTo(0));
             returnType = llvm::Type::getVoidTy(returnType->getContext());
-            adjustments.returnType = PointerToTemporary;
+            adjustments.returnType = WinX64Impl::PointerToTemporary;
         }
     }
-    m_adjustments[functionType] = adjustments;
+    return adjustments;
 }
 
 llvm::AttributeList cld::CGLLVM::WinX64ABI::generateFunctionAttributes(llvm::AttributeList attributesIn,
                                                                        const llvm::FunctionType* llvmFunctionType,
-                                                                       const Semantics::FunctionType& functionType)
+                                                                       const Semantics::FunctionType& functionType,
+                                                                       const Semantics::ProgramInterface&)
 {
-    auto adjustments = m_adjustments.find(functionType);
-    CLD_ASSERT(adjustments != m_adjustments.end());
-    if (adjustments->second.returnType == PointerToTemporary)
+    auto& adjustments = getAdjustment(functionType);
+    if (adjustments.returnType == WinX64Impl::PointerToTemporary)
     {
         attributesIn = attributesIn.addAttribute(llvmFunctionType->getContext(), 1, llvm::Attribute::StructRet);
         attributesIn = attributesIn.addAttribute(llvmFunctionType->getContext(), 1, llvm::Attribute::NoAlias);
@@ -89,15 +64,14 @@ void cld::CGLLVM::WinX64ABI::generateFunctionEntry(
     CodeGenerator& codeGenerator, const llvm::Function* llvmFunction, const Semantics::FunctionType& functionType,
     const std::vector<std::unique_ptr<Semantics::VariableDeclaration>>& paramDecls)
 {
-    auto adjustments = m_adjustments.find(functionType);
-    CLD_ASSERT(adjustments != m_adjustments.end());
-    m_currentFunctionABI = &adjustments->second;
+    auto& adjustments = getAdjustment(functionType);
+    m_currentFunctionABI = &adjustments;
     std::size_t argStart = 0;
-    if (m_currentFunctionABI->returnType == PointerToTemporary)
+    if (m_currentFunctionABI->returnType == WinX64Impl::PointerToTemporary)
     {
         argStart = 1;
     }
-    else if (m_currentFunctionABI->returnType == IntegerRegister)
+    else if (m_currentFunctionABI->returnType == WinX64Impl::IntegerRegister)
     {
         m_returnSlot = codeGenerator.createAllocaAtTop(llvmFunction->getReturnType());
         m_returnSlot->setAlignment(
@@ -110,7 +84,7 @@ void cld::CGLLVM::WinX64ABI::generateFunctionEntry(
         auto* operand = llvmFunction->getArg(i);
         switch (m_currentFunctionABI->arguments[i - argStart])
         {
-            case Nothing:
+            case WinX64Impl::Nothing:
             {
                 auto* var = codeGenerator.createAllocaAtTop(operand->getType(), paramDecl->getNameToken()->getText());
                 var->setAlignment(llvm::Align(paramDecl->getType().getAlignOf(codeGenerator.getProgramInterface())));
@@ -118,7 +92,7 @@ void cld::CGLLVM::WinX64ABI::generateFunctionEntry(
                 codeGenerator.createStore(operand, var, paramDecl->getType().isVolatile());
                 break;
             }
-            case IntegerRegister:
+            case WinX64Impl::IntegerRegister:
             {
                 auto* var = codeGenerator.createAllocaAtTop(codeGenerator.visit(paramDecl->getType()),
                                                             paramDecl->getNameToken()->getText());
@@ -128,7 +102,7 @@ void cld::CGLLVM::WinX64ABI::generateFunctionEntry(
                 codeGenerator.createStore(operand, cast, paramDecl->getType().isVolatile());
                 break;
             }
-            case PointerToTemporary:
+            case WinX64Impl::PointerToTemporary:
                 codeGenerator.addLValue(*paramDecl, Value(operand, operand->getPointerAlignment(m_dataLayout)));
                 break;
         }
@@ -137,7 +111,7 @@ void cld::CGLLVM::WinX64ABI::generateFunctionEntry(
 
 llvm::Value* cld::CGLLVM::WinX64ABI::generateValueReturn(CodeGenerator& codeGenerator, Value value)
 {
-    if (m_currentFunctionABI->returnType == PointerToTemporary)
+    if (m_currentFunctionABI->returnType == WinX64Impl::PointerToTemporary)
     {
         codeGenerator.createStore(value.value,
                                   codeGenerator.valueOf(codeGenerator.getCurrentFunction()->getArg(0),
@@ -145,7 +119,7 @@ llvm::Value* cld::CGLLVM::WinX64ABI::generateValueReturn(CodeGenerator& codeGene
                                   false);
         return nullptr;
     }
-    if (m_currentFunctionABI->returnType == IntegerRegister)
+    if (m_currentFunctionABI->returnType == WinX64Impl::IntegerRegister)
     {
         codeGenerator.createStore(
             value, codeGenerator.createBitCast(m_returnSlot, value.value->getType()->getPointerTo(0)), false);
@@ -191,11 +165,10 @@ cld::CGLLVM::Value cld::CGLLVM::WinX64ABI::generateFunctionCall(CodeGenerator& c
                                                                 const Semantics::FunctionType& functionType,
                                                                 std::vector<llvm::Value*>&& arguments)
 {
-    auto adjustments = m_adjustments.find(functionType);
-    CLD_ASSERT(adjustments != m_adjustments.end());
+    auto& adjustments = getAdjustment(functionType);
     llvm::AllocaInst* returnSlot = nullptr;
     std::size_t llvmFnI = 0;
-    if (adjustments->second.returnType == PointerToTemporary)
+    if (adjustments.returnType == WinX64Impl::PointerToTemporary)
     {
         llvmFnI = 1;
         returnSlot = codeGenerator.createAllocaAtTop(llvmFunctionType->getParamType(0)->getPointerElementType(), "ret");
@@ -204,10 +177,10 @@ cld::CGLLVM::Value cld::CGLLVM::WinX64ABI::generateFunctionCall(CodeGenerator& c
     }
     for (std::size_t i = 0; i < arguments.size(); i++)
     {
-        switch (adjustments->second.arguments[i])
+        switch (adjustments.arguments[i])
         {
-            case Nothing: break;
-            case IntegerRegister:
+            case WinX64Impl::Nothing: break;
+            case WinX64Impl::IntegerRegister:
             {
                 auto* load = llvm::cast<llvm::LoadInst>(arguments[i]);
                 auto integer =
@@ -217,7 +190,7 @@ cld::CGLLVM::Value cld::CGLLVM::WinX64ABI::generateFunctionCall(CodeGenerator& c
                 load->eraseFromParent();
                 break;
             }
-            case PointerToTemporary:
+            case WinX64Impl::PointerToTemporary:
             {
                 auto* ret = codeGenerator.createAllocaAtTop(arguments[i]->getType());
                 ret->setAlignment(
@@ -246,17 +219,18 @@ cld::CGLLVM::Value cld::CGLLVM::WinX64ABI::generateFunctionCall(CodeGenerator& c
     auto* calleeFunctionType = llvm::cast<llvm::FunctionType>(callee.value->getType()->getPointerElementType());
     auto* result = codeGenerator.getBuilder().CreateCall(calleeFunctionType, callee.value, arguments);
     auto attributes = result->getAttributes();
-    attributes = generateFunctionAttributes(std::move(attributes), calleeFunctionType, functionType);
+    attributes = generateFunctionAttributes(std::move(attributes), calleeFunctionType, functionType,
+                                            codeGenerator.getProgramInterface());
     result->setAttributes(std::move(attributes));
-    switch (adjustments->second.returnType)
+    switch (adjustments.returnType)
     {
-        case Nothing: return codeGenerator.valueOf(result);
-        case PointerToTemporary:
+        case WinX64Impl::Nothing: return codeGenerator.valueOf(result);
+        case WinX64Impl::PointerToTemporary:
         {
             CLD_ASSERT(returnSlot);
             return codeGenerator.createLoad(returnSlot, false);
         }
-        case IntegerRegister:
+        case WinX64Impl::IntegerRegister:
         {
             auto* intValue = codeGenerator.createAllocaAtTop(result->getType());
             intValue->setAlignment(llvm::Align(m_dataLayout.getABITypeAlign(result->getType())));

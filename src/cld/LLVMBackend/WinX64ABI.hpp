@@ -1,5 +1,5 @@
 
-#include "ABIImplementation.hpp"
+#include "CommonABIImpl.hpp"
 
 #pragma once
 
@@ -10,38 +10,39 @@
 namespace llvm
 {
 class AllocaInst;
-}
+} // namespace llvm
 
 namespace cld::CGLLVM
 {
-class WinX64ABI final : public ABIImplementation
+namespace WinX64Impl
 {
-    enum Transformations
-    {
-        Nothing,
-        IntegerRegister,
-        PointerToTemporary
-    };
+enum Transformations
+{
+    Nothing,
+    IntegerRegister,
+    PointerToTemporary
+};
 
-    struct Adjustments
-    {
-        Transformations returnType = Nothing;
-        std::vector<Transformations> arguments;
-    };
+struct Adjustments
+{
+    Transformations returnType = Nothing;
+    std::vector<Transformations> arguments;
+};
+} // namespace WinX64Impl
 
-    std::unordered_map<Semantics::FunctionType, Adjustments> m_adjustments;
-    const Adjustments* m_currentFunctionABI = nullptr;
+class WinX64ABI final : public CommonABIImpl<WinX64Impl::Adjustments>
+{
     llvm::AllocaInst* m_returnSlot = nullptr;
 
 public:
     WinX64ABI(const llvm::DataLayout& dataLayout);
 
-    void applyPlatformABI(const Semantics::FunctionType& functionType, llvm::Type*& returnType,
-                          std::vector<llvm::Type*>& arguments) override;
+    WinX64Impl::Adjustments applyPlatformABIImpl(llvm::Type*& returnType, std::vector<llvm::Type*>& arguments) override;
 
     llvm::AttributeList generateFunctionAttributes(llvm::AttributeList attributesIn,
                                                    const llvm::FunctionType* llvmFunctionType,
-                                                   const Semantics::FunctionType& functionType) override;
+                                                   const Semantics::FunctionType& functionType,
+                                                   const Semantics::ProgramInterface& programInterface) override;
 
     void generateFunctionEntry(CodeGenerator& codeGenerator, const llvm::Function* llvmFunction,
                                const Semantics::FunctionType& functionType,

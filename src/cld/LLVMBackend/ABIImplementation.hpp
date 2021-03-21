@@ -26,8 +26,9 @@ public:
                                   std::vector<llvm::Type*>& arguments) = 0;
 
     virtual llvm::AttributeList generateFunctionAttributes(llvm::AttributeList attributesIn,
-                                                           const llvm::FunctionType* CLD_NON_NULL llvmFunctionType,
-                                                           const Semantics::FunctionType& functionType) = 0;
+                                                           const llvm::FunctionType* llvmFunctionType,
+                                                           const Semantics::FunctionType& functionType,
+                                                           const Semantics::ProgramInterface& programInterface) = 0;
 
     virtual void
         generateFunctionEntry(CodeGenerator& codeGenerator, const llvm::Function* CLD_NON_NULL llvmFunction,
