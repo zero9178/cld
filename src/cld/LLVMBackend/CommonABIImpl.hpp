@@ -45,8 +45,7 @@ public:
         if (result == m_adjustments.end())
         {
             auto adjustments = applyPlatformABIImpl(returnType, arguments);
-            m_adjustments.template emplace(functionType,
-                                           std::make_pair(std::move(adjustments), Cache{returnType, arguments}));
+            m_adjustments.emplace(functionType, std::make_pair(std::move(adjustments), Cache{returnType, arguments}));
             return;
         }
         returnType = result->second.second.returnType;

@@ -241,4 +241,5 @@ cld::CGLLVM::Value cld::CGLLVM::WinX64ABI::generateFunctionCall(CodeGenerator& c
             return codeGenerator.createLoad(cast, false);
         }
     }
+    CLD_UNREACHABLE;
 }
