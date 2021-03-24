@@ -252,7 +252,7 @@ llvm::AttributeList cld::CGLLVM::X64ABI::generateFunctionAttributes(llvm::Attrib
     else if (std::holds_alternative<X64ABIImpl::Unchanged>(adjustment.returnType)
              && Semantics::isInteger(functionType.getReturnType()))
     {
-        auto& prim = cld::get<Semantics::PrimitiveType>(functionType.getReturnType().getVariant());
+        auto& prim = functionType.getReturnType().cast<Semantics::PrimitiveType>();
         if (prim.getBitCount() < 32)
         {
             if (prim.isSigned())
@@ -272,12 +272,12 @@ llvm::AttributeList cld::CGLLVM::X64ABI::generateFunctionAttributes(llvm::Attrib
             adjustment.arguments[origArgI],
             [&](X64ABIImpl::Unchanged) {
                 cld::ScopeExit exit{[&] { i++; }};
-                auto& arg = functionType.getArguments()[origArgI].first;
+                auto& arg = *functionType.getParameters()[origArgI].type;
                 if (!Semantics::isInteger(arg))
                 {
                     return;
                 }
-                auto& prim = cld::get<Semantics::PrimitiveType>(arg.getVariant());
+                auto& prim = arg.cast<Semantics::PrimitiveType>();
                 if (prim.getBitCount() >= 32)
                 {
                     return;
@@ -293,7 +293,7 @@ llvm::AttributeList cld::CGLLVM::X64ABI::generateFunctionAttributes(llvm::Attrib
             },
             [&](X64ABIImpl::OnStack) {
                 cld::ScopeExit exit{[&] { i++; }};
-                auto& arg = functionType.getArguments()[origArgI].first;
+                auto& arg = *functionType.getParameters()[origArgI].type;
                 attributesIn = attributesIn.addParamAttribute(
                     context, i,
                     llvm::Attribute::getWithByValType(context,

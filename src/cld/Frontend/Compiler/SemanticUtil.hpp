@@ -69,7 +69,10 @@ class RecursiveVisitor
     };
 
 public:
-    RecursiveVisitor(const TopType& start, Callable nextFunc) : m_start(start), m_nextFunc(std::move(nextFunc)) {}
+    RecursiveVisitor(const TopType& start, Callable nextFunc) : m_start(start), m_nextFunc(std::move(nextFunc))
+    {
+        static_assert(std::is_invocable_r_v<const TopType*, Callable, const TopType&>);
+    }
 
     using value_type = const TopType;
     using reference = const TopType&;
@@ -109,7 +112,7 @@ constexpr auto DIRECT_DECL_NEXT_FN = [](const Syntax::DirectDeclarator& value) -
 };
 
 constexpr auto ARRAY_TYPE_NEXT_FN = [](const Type& type) -> const Type* {
-    return cld::match(type.getVariant(), [](auto&& value) -> const Type* {
+    return type.match([](auto&& value) -> const Type* {
         using T = std::decay_t<decltype(value)>;
         if constexpr (std::is_same_v<ArrayType,
                                      T> || std::is_same_v<AbstractArrayType, T> || std::is_same_v<ValArrayType, T>)
@@ -124,8 +127,7 @@ constexpr auto ARRAY_TYPE_NEXT_FN = [](const Type& type) -> const Type* {
 };
 
 constexpr auto TYPE_NEXT_FN = [](const Type& type) -> const Type* {
-    return cld::match(
-        type.getVariant(),
+    return type.match(
         [](const auto& value) -> const Type* {
             using T = std::decay_t<decltype(value)>;
             if constexpr (std::is_same_v<ArrayType,

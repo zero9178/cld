@@ -6,9 +6,9 @@
 
 llvm::Type* cld::CGLLVM::CodeGenerator::visit(const Semantics::Type& type)
 {
-    return cld::match(
-        type.getVariant(),
-        [&](const Semantics::PrimitiveType& primitiveType) -> llvm::Type* {
+    return type.match(
+        [&](const Semantics::PrimitiveType& primitiveType) -> llvm::Type*
+        {
             switch (primitiveType.getKind())
             {
                 case Semantics::PrimitiveType::Char:
@@ -54,10 +54,10 @@ llvm::Type* cld::CGLLVM::CodeGenerator::visit(const Semantics::Type& type)
         [&](const Semantics::FunctionType& functionType) -> llvm::Type* {
             auto* returnType = visit(functionType.getReturnType());
             std::vector<llvm::Type*> args;
-            for (auto& [type, name] : functionType.getArguments())
+            for (auto& [type, name] : functionType.getParameters())
             {
                 (void)name;
-                args.push_back(visit(Semantics::adjustParameterType(type)));
+                args.push_back(visit(*Semantics::adjustParameterType(*type)));
             }
             m_abi->applyPlatformABI(functionType, returnType, args);
             return llvm::FunctionType::get(returnType, args, functionType.isLastVararg());
@@ -88,7 +88,7 @@ llvm::Type* cld::CGLLVM::CodeGenerator::visit(const Semantics::Type& type)
             std::vector<llvm::Type*> fields;
             for (auto& iter : structDef->getMemLayout())
             {
-                fields.push_back(visit(iter.type));
+                fields.push_back(visit(*iter.type));
             }
             type->setBody(fields);
             return type;
@@ -113,11 +113,11 @@ llvm::Type* cld::CGLLVM::CodeGenerator::visit(const Semantics::Type& type)
             {
                 if (!largestAlignment)
                 {
-                    largestAlignment = iter.type.get();
+                    largestAlignment = iter.type;
                 }
                 else if (largestAlignment->getAlignOf(m_programInterface) < iter.type->getAlignOf(m_programInterface))
                 {
-                    largestAlignment = iter.type.get();
+                    largestAlignment = iter.type;
                 }
                 largestSize = std::max(largestSize, iter.type->getSizeOf(m_programInterface));
             }
@@ -135,7 +135,8 @@ llvm::Type* cld::CGLLVM::CodeGenerator::visit(const Semantics::Type& type)
             m_types.insert({unionType, type});
             return type;
         },
-        [&](const Semantics::AbstractArrayType& arrayType) -> llvm::Type* {
+        [&](const Semantics::AbstractArrayType& arrayType) -> llvm::Type*
+        {
             auto* elementType = visit(arrayType.getType());
             if (Semantics::isVariableLengthArray(arrayType.getType()))
             {
@@ -143,21 +144,23 @@ llvm::Type* cld::CGLLVM::CodeGenerator::visit(const Semantics::Type& type)
             }
             return llvm::ArrayType::get(elementType, 0);
         },
-        [&](const Semantics::VectorType& vectorType) -> llvm::Type* {
+        [&](const Semantics::VectorType& vectorType) -> llvm::Type*
+        {
             auto* elementType = visit(vectorType.getType());
             return llvm::FixedVectorType::get(elementType, vectorType.getSize());
         },
-        [&](const std::monostate&) -> llvm::Type* { CLD_UNREACHABLE; },
+        [&](const Semantics::ErrorType&) -> llvm::Type* { CLD_UNREACHABLE; },
         [&](const Semantics::EnumType& enumType) -> llvm::Type* { return visit(enumType.getInfo().type.getType()); },
-        [&](const Semantics::ValArrayType& valArrayType) -> llvm::Type* {
+        [&](const Semantics::ValArrayType& valArrayType) -> llvm::Type*
+        {
             auto expression = m_valSizes.find(valArrayType.getExpression());
             if (expression == m_valSizes.end() && m_currentFunction && m_builder.GetInsertBlock())
             {
-                m_valSizes.emplace(valArrayType.getExpression(),
-                                   m_builder.CreateIntCast(visit(*valArrayType.getExpression()), m_builder.getInt64Ty(),
-                                                           cld::get<Semantics::PrimitiveType>(
-                                                               valArrayType.getExpression()->getType().getVariant())
-                                                               .isSigned()));
+                m_valSizes.emplace(
+                    valArrayType.getExpression(),
+                    m_builder.CreateIntCast(
+                        visit(*valArrayType.getExpression()), m_builder.getInt64Ty(),
+                        valArrayType.getExpression()->getType().cast<Semantics::PrimitiveType>().isSigned()));
             }
             return visit(valArrayType.getType());
         });
@@ -165,9 +168,10 @@ llvm::Type* cld::CGLLVM::CodeGenerator::visit(const Semantics::Type& type)
 
 llvm::DIType* cld::CGLLVM::CodeGenerator::visitDebug(const Semantics::Type& type)
 {
-    auto* result = cld::match(
-        type.getVariant(), [](std::monostate) -> llvm::DIType* { CLD_UNREACHABLE; },
-        [&](const Semantics::PrimitiveType& primitive) -> llvm::DIType* {
+    auto* result = type.match(
+        [](Semantics::ErrorType) -> llvm::DIType* { CLD_UNREACHABLE; },
+        [&](const Semantics::PrimitiveType& primitive) -> llvm::DIType*
+        {
             std::string_view name;
             unsigned encoding = 0;
             switch (primitive.getKind())
@@ -315,11 +319,11 @@ llvm::DIType* cld::CGLLVM::CodeGenerator::visitDebug(const Semantics::Type& type
                     {
                         const auto& memoryLayout = Semantics::getMemoryLayout(*currentType);
                         offset += memoryLayout[index].offset;
-                        currentType = &memoryLayout[index].type;
+                        currentType = memoryLayout[index].type;
                     }
                     else
                     {
-                        currentType = Semantics::getFieldLayout(*currentType)[index].type.get();
+                        currentType = Semantics::getFieldLayout(*currentType)[index].type;
                     }
                 }
                 if (!iter.second.bitFieldBounds)
@@ -378,11 +382,11 @@ llvm::DIType* cld::CGLLVM::CodeGenerator::visitDebug(const Semantics::Type& type
                     {
                         const auto& memoryLayout = Semantics::getMemoryLayout(*currentType);
                         offset += memoryLayout[index].offset;
-                        currentType = &memoryLayout[index].type;
+                        currentType = memoryLayout[index].type;
                     }
                     else
                     {
-                        currentType = Semantics::getFieldLayout(*currentType)[index].type.get();
+                        currentType = Semantics::getFieldLayout(*currentType)[index].type;
                     }
                 }
                 if (!iter.second.bitFieldBounds)
@@ -420,10 +424,10 @@ llvm::DIType* cld::CGLLVM::CodeGenerator::visitDebug(const Semantics::Type& type
             {
                 parameters.push_back(visitDebug(functionType.getReturnType()));
             }
-            for (auto& [type, name] : functionType.getArguments())
+            for (auto& [type, name] : functionType.getParameters())
             {
                 (void)name;
-                parameters.push_back(visitDebug(type));
+                parameters.push_back(visitDebug(*type));
             }
             return m_debugInfo->createSubroutineType(m_debugInfo->getOrCreateTypeArray(parameters));
         },
@@ -508,8 +512,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDe
         llvm::Function::Create(ft, linkageType, -1, llvm::StringRef{declaration.getNameToken()->getText()}, &m_module);
     auto attributes = function->getAttributes();
     attributes = m_abi->generateFunctionAttributes(
-        std::move(attributes), ft, cld::get<Semantics::FunctionType>(declaration.getType().getVariant()),
-        m_programInterface);
+        std::move(attributes), ft, declaration.getType().cast<Semantics::FunctionType>(), m_programInterface);
     function->setAttributes(std::move(attributes));
     if (!m_options.reloc)
     {
@@ -625,7 +628,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::VariableDe
         bool valSeen = false;
         for (auto& iter : visitor)
         {
-            if (auto* valArray = std::get_if<Semantics::ValArrayType>(&iter.getVariant()))
+            if (auto* valArray = iter.get_if<Semantics::ValArrayType>())
             {
                 valSeen = true;
                 if (!value)
@@ -639,13 +642,12 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::VariableDe
             {
                 if (!value)
                 {
-                    value = m_builder.getInt64(cld::get<Semantics::ArrayType>(iter.getVariant()).getSize());
+                    value = m_builder.getInt64(iter.cast<Semantics::ArrayType>().getSize());
                     continue;
                 }
                 if (!valSeen)
                 {
-                    value = m_builder.CreateMul(
-                        m_builder.getInt64(cld::get<Semantics::ArrayType>(iter.getVariant()).getSize()), value);
+                    value = m_builder.CreateMul(m_builder.getInt64(iter.cast<Semantics::ArrayType>().getSize()), value);
                     continue;
                 }
                 break;
@@ -723,7 +725,7 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDefinition& func
                                           llvm::StringRef{functionDefinition.getNameToken()->getText()}, &m_module);
     }
     m_lvalues.emplace(&functionDefinition, valueOf(function));
-    auto& ft = cld::get<Semantics::FunctionType>(functionDefinition.getType().getVariant());
+    auto& ft = functionDefinition.getType().cast<Semantics::FunctionType>();
     auto attributes = function->getAttributes();
     attributes =
         m_abi->generateFunctionAttributes(std::move(attributes), function->getFunctionType(), ft, m_programInterface);
@@ -780,10 +782,10 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDefinition& func
             {
                 parameters.push_back(visitDebug(ft.getReturnType()));
             }
-            for (auto& [type, name] : ft.getArguments())
+            for (auto& [type, name] : ft.getParameters())
             {
                 (void)name;
-                parameters.push_back(visitDebug(Semantics::adjustParameterType(type)));
+                parameters.push_back(visitDebug(*Semantics::adjustParameterType(*type)));
             }
         }
         auto* typeArray = llvm::MDTuple::get(m_module.getContext(), parameters);
@@ -792,15 +794,15 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDefinition& func
         m_builder.SetCurrentDebugLocation({});
     }
     m_abi->generateFunctionEntry(*this, m_currentFunction, ft, functionDefinition.getParameterDeclarations());
-    for (auto& [type, name] : ft.getArguments())
+    for (auto& [type, name] : ft.getParameters())
     {
         // Go through the visit of each parameter again in case one them of was a variably modified type.
         // The expressions of these could previously not be evaluated as there was no function block to
         // evaluate the expressions nor parameters transferred that's why we're doing it now
         (void)name;
-        if (Semantics::isVariablyModified(type))
+        if (Semantics::isVariablyModified(*type))
         {
-            visit(type);
+            visit(*type);
         }
     }
 

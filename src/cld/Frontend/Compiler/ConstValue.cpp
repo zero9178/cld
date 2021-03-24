@@ -69,8 +69,8 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::castTo(const cld::Semanti
     return match(
         m_value, [](std::monostate) -> ConstValue { return {}; }, [&](AddressConstant) -> ConstValue { return *this; },
         [&](VoidStar address) -> ConstValue {
-            return match(
-                type.getVariant(), [](const auto&) -> ConstValue { CLD_UNREACHABLE; },
+            return type.match(
+                [](const auto&) -> ConstValue { CLD_UNREACHABLE; },
                 [&](const PrimitiveType& primitiveType) -> ConstValue {
                     if (primitiveType.isFloatingPoint())
                     {
@@ -93,8 +93,8 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::castTo(const cld::Semanti
                 [&](const PointerType&) -> ConstValue { return {address}; });
         },
         [&](llvm::APFloat floating) -> ConstValue {
-            return match(
-                type.getVariant(), [](const auto&) -> ConstValue { CLD_UNREACHABLE; },
+            return type.match(
+                [](const auto&) -> ConstValue { CLD_UNREACHABLE; },
                 [&](const PrimitiveType& primitiveType) mutable -> ConstValue {
                     bool response;
                     llvm::APFloat::opStatus op;
@@ -137,8 +137,8 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::castTo(const cld::Semanti
                 });
         },
         [&](const llvm::APSInt& integer) -> ConstValue {
-            return match(
-                type.getVariant(), [](const auto&) -> ConstValue { CLD_UNREACHABLE; },
+            return type.match(
+                [](const auto&) -> ConstValue { CLD_UNREACHABLE; },
                 [&](const PrimitiveType& primitiveType) -> ConstValue {
                     if (primitiveType.isFloatingPoint())
                     {
@@ -190,8 +190,7 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::castTo(const cld::Semanti
                 },
                 [&](const PointerType& pointerType) -> ConstValue {
                     CLD_ASSERT(program);
-                    if (isCompleteType(pointerType.getElementType())
-                        && !std::holds_alternative<FunctionType>(pointerType.getElementType().getVariant()))
+                    if (isCompleteType(pointerType.getElementType()) && !type.is<FunctionType>())
                     {
                         return {VoidStar{integer.getZExtValue(),
                                          static_cast<std::uint32_t>(pointerType.getElementType().getSizeOf(*program))}};
@@ -324,10 +323,9 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::minus(const cld::Semantic
             if (std::holds_alternative<VoidStar>(rhs.getValue()))
             {
                 return {llvm::APSInt(
-                    llvm::APInt(
-                        cld::get<PrimitiveType>(PrimitiveType::createPtrdiffT(false, false, options).getVariant())
-                            .getBitCount(),
-                        (address.address - cld::get<VoidStar>(rhs.getValue()).address) / address.elementSize, true),
+                    llvm::APInt(PrimitiveType::createPtrdiffT(false, false, options).getBitCount(),
+                                (address.address - cld::get<VoidStar>(rhs.getValue()).address) / address.elementSize,
+                                true),
                     false)};
             }
             if (!std::holds_alternative<llvm::APSInt>(rhs.getValue()))

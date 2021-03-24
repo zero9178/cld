@@ -3,6 +3,7 @@
 #pragma once
 
 #include <cld/Support/AbstractIntrusiveVariant.hpp>
+#include <cld/Support/IntrVarValue.hpp>
 
 #include <map>
 #include <memory>
@@ -45,7 +46,7 @@ class EnumDefinition;
 
 class ProgramInterface;
 
-namespace details
+namespace detail
 {
 enum class TypeFlags : std::uint8_t
 {
@@ -235,17 +236,90 @@ inline TypeFlags& operator&=(TypeFlags& left, const TypeFlags right)
     return left;
 }
 
-} // namespace details
+} // namespace detail
 
-using details::TypeFlags;
+using detail::TypeFlags;
 
-constexpr auto NothingFlag = details::Constant<TypeFlags::Nothing>{};
-constexpr auto ConstFlag = details::Constant<TypeFlags::Const>{};
-constexpr auto VolatileFlag = details::Constant<TypeFlags::Volatile>{};
-constexpr auto RestrictedFlag = details::Constant<TypeFlags::Restricted>{};
-constexpr auto StaticFlag = details::Constant<TypeFlags::Static>{};
+constexpr auto NothingFlag = detail::Constant<TypeFlags::Nothing>{};
+constexpr auto ConstFlag = detail::Constant<TypeFlags::Const>{};
+constexpr auto VolatileFlag = detail::Constant<TypeFlags::Volatile>{};
+constexpr auto RestrictedFlag = detail::Constant<TypeFlags::Restricted>{};
+constexpr auto StaticFlag = detail::Constant<TypeFlags::Static>{};
 
-class PrimitiveType final
+class Type : public AbstractIntrusiveVariant<class PrimitiveType, class ArrayType, class AbstractArrayType,
+                                             class ValArrayType, class FunctionType, class StructType, class UnionType,
+                                             class EnumType, class PointerType, class VectorType, class ErrorType>,
+             public AttributeHolder<TypeAttribute>
+{
+    std::string_view m_name;
+    bool m_isConst : 1;
+    bool m_isVolatile : 1;
+
+protected:
+    template <class T>
+    explicit Type(std::in_place_type_t<T>, bool isConst, bool isVolatile)
+        : AbstractIntrusiveVariant(std::in_place_type<T>), m_isConst(isConst), m_isVolatile(isVolatile)
+    {
+    }
+
+    Type(const Type&) = default;
+    Type& operator=(const Type&) = default;
+    Type(Type&&) noexcept = default;
+    Type& operator=(Type&&) noexcept = default;
+
+    bool equals(const Type& rhs) const;
+
+public:
+    [[nodiscard]] bool isConst() const
+    {
+        return m_isConst;
+    }
+
+    [[nodiscard]] bool isVolatile() const
+    {
+        return m_isVolatile;
+    }
+
+    void setConst(bool isConst)
+    {
+        m_isConst = isConst;
+    }
+
+    void setVolatile(bool isVolatile)
+    {
+        m_isVolatile = isVolatile;
+    }
+
+    [[nodiscard]] std::string_view getName() const
+    {
+        return m_name;
+    }
+
+    void setName(std::string_view name)
+    {
+        m_name = name;
+    }
+
+    [[nodiscard]] bool isTypedef() const
+    {
+        return !m_name.empty();
+    }
+
+    [[nodiscard]] bool isUndefined() const
+    {
+        return is<class ErrorType>();
+    }
+
+    [[nodiscard]] bool operator==(const Type& rhs) const;
+
+    [[nodiscard]] bool operator!=(const Type& rhs) const;
+
+    [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface& program) const;
+
+    [[nodiscard]] std::uint64_t getAlignOf(const ProgramInterface& program) const;
+};
+
+class PrimitiveType final : public Type
 {
     std::uint8_t m_bitCount;
     std::uint8_t m_alignOf : 5;
@@ -278,57 +352,137 @@ public:
 private:
     Kind m_kind;
 
-    PrimitiveType(bool isFloatingPoint, bool isSigned, std::uint8_t bitCount, std::uint8_t alignOf, Kind kind);
+    PrimitiveType(bool isConst, bool isVolatile, bool isFloatingPoint, bool isSigned, std::uint8_t bitCount,
+                  std::uint8_t alignOf, Kind kind)
+        : Type(std::in_place_type<PrimitiveType>, isConst, isVolatile),
+          m_bitCount(bitCount),
+          m_alignOf(alignOf),
+          m_isFloatingPoint(isFloatingPoint),
+          m_isSigned(isSigned),
+          m_kind(kind)
+    {
+    }
 
 public:
-    [[nodiscard]] static Type create(bool isConst, bool isVolatile, bool isFloatingPoint, bool isSigned,
-                                     std::uint8_t bitCount, std::uint8_t alignOf, Kind kind);
+    [[nodiscard]] static PrimitiveType create(bool isConst, bool isVolatile, bool isFloatingPoint, bool isSigned,
+                                              std::uint8_t bitCount, std::uint8_t alignOf, Kind kind)
+    {
+        return PrimitiveType(isConst, isVolatile, isFloatingPoint, isSigned, bitCount, alignOf, kind);
+    }
 
-    [[nodiscard]] static Type createChar(bool isConst, bool isVolatile, const LanguageOptions& options);
+    [[nodiscard]] static PrimitiveType createChar(bool isConst, bool isVolatile, const LanguageOptions& options)
+    {
+        return create(isConst, isVolatile, false, options.charIsSigned, 8, 1, Kind::Char);
+    }
 
-    [[nodiscard]] static Type createSignedChar(bool isConst, bool isVolatile);
+    [[nodiscard]] static PrimitiveType createSignedChar(bool isConst, bool isVolatile)
+    {
+        return create(isConst, isVolatile, false, true, 8, 1, Kind::SignedChar);
+    }
 
-    [[nodiscard]] static Type createUnderlineBool(bool isConst, bool isVolatile);
+    [[nodiscard]] static PrimitiveType createUnderlineBool(bool isConst, bool isVolatile)
+    {
+        return create(isConst, isVolatile, false, false, 1, 1, Kind::Bool);
+    }
 
-    [[nodiscard]] static Type createUnsignedChar(bool isConst, bool isVolatile);
+    [[nodiscard]] static PrimitiveType createUnsignedChar(bool isConst, bool isVolatile)
+    {
+        return create(isConst, isVolatile, false, false, 8, 1, Kind::UnsignedChar);
+    }
 
-    [[nodiscard]] static Type createShort(bool isConst, bool isVolatile, const LanguageOptions& options);
+    [[nodiscard]] static PrimitiveType createShort(bool isConst, bool isVolatile, const LanguageOptions& options)
+    {
+        return create(isConst, isVolatile, false, true, options.sizeOfShort * 8, options.sizeOfShort, Kind::Short);
+    }
 
-    [[nodiscard]] static Type createUnsignedShort(bool isConst, bool isVolatile, const LanguageOptions& options);
+    [[nodiscard]] static PrimitiveType createUnsignedShort(bool isConst, bool isVolatile,
+                                                           const LanguageOptions& options)
+    {
+        return create(isConst, isVolatile, false, false, options.sizeOfShort * 8, options.sizeOfShort,
+                      Kind::UnsignedShort);
+    }
 
-    [[nodiscard]] static Type createInt(bool isConst, bool isVolatile, const LanguageOptions& options);
+    [[nodiscard]] static PrimitiveType createInt(bool isConst, bool isVolatile, const LanguageOptions& options)
+    {
+        return create(isConst, isVolatile, false, true, options.sizeOfInt * 8, options.sizeOfInt, Kind::Int);
+    }
 
-    [[nodiscard]] static Type createUnsignedInt(bool isConst, bool isVolatile, const LanguageOptions& options);
+    [[nodiscard]] static PrimitiveType createUnsignedInt(bool isConst, bool isVolatile, const LanguageOptions& options)
+    {
+        return create(isConst, isVolatile, false, false, options.sizeOfInt * 8, options.sizeOfInt, Kind::UnsignedInt);
+    }
 
-    [[nodiscard]] static Type createLong(bool isConst, bool isVolatile, const LanguageOptions& options);
+    [[nodiscard]] static PrimitiveType createLong(bool isConst, bool isVolatile, const LanguageOptions& options)
+    {
+        return create(isConst, isVolatile, false, true, options.sizeOfLong * 8, options.sizeOfLong, Kind::Long);
+    }
 
-    [[nodiscard]] static Type createUnsignedLong(bool isConst, bool isVolatile, const LanguageOptions& options);
+    [[nodiscard]] static PrimitiveType createUnsignedLong(bool isConst, bool isVolatile, const LanguageOptions& options)
+    {
+        return create(isConst, isVolatile, false, false, options.sizeOfLong * 8, options.sizeOfLong,
+                      Kind::UnsignedLong);
+    }
 
-    [[nodiscard]] static Type createLongLong(bool isConst, bool isVolatile, const LanguageOptions& options);
+    [[nodiscard]] static PrimitiveType createLongLong(bool isConst, bool isVolatile, const LanguageOptions& options)
+    {
+        return create(isConst, isVolatile, false, true, 64, options.alignOfLongLong, Kind::LongLong);
+    }
 
-    [[nodiscard]] static Type createUnsignedLongLong(bool isConst, bool isVolatile, const LanguageOptions& options);
+    [[nodiscard]] static PrimitiveType createUnsignedLongLong(bool isConst, bool isVolatile,
+                                                              const LanguageOptions& options)
+    {
+        return create(isConst, isVolatile, false, false, 64, options.alignOfLongLong, Kind::UnsignedLongLong);
+    }
 
-    [[nodiscard]] static Type createFloat(bool isConst, bool isVolatile);
+    [[nodiscard]] static PrimitiveType createFloat(bool isConst, bool isVolatile)
+    {
+        return create(isConst, isVolatile, true, true, 32, 4, Kind::Float);
+    }
 
-    [[nodiscard]] static Type createDouble(bool isConst, bool isVolatile, const LanguageOptions& options);
+    [[nodiscard]] static PrimitiveType createDouble(bool isConst, bool isVolatile, const LanguageOptions& options)
+    {
+        return create(isConst, isVolatile, true, true, 64, options.alignOfDouble, Kind::Double);
+    }
 
-    [[nodiscard]] static Type createLongDouble(bool isConst, bool isVolatile, const LanguageOptions& options);
+    [[nodiscard]] static PrimitiveType createLongDouble(bool isConst, bool isVolatile, const LanguageOptions& options)
+    {
+        return create(isConst, isVolatile, true, true, options.sizeOfLongDoubleBits, options.alignOfLongDouble,
+                      Kind::LongDouble);
+    }
 
-    [[nodiscard]] static Type createVoid(bool isConst, bool isVolatile);
+    [[nodiscard]] static PrimitiveType createVoid(bool isConst, bool isVolatile)
+    {
+        return create(isConst, isVolatile, false, true, 0, 0, Kind::Void);
+    }
 
-    [[nodiscard]] static Type createInt128(bool isConst, bool isVolatile);
+    [[nodiscard]] static PrimitiveType createInt128(bool isConst, bool isVolatile)
+    {
+        return create(isConst, isVolatile, false, true, 128, 16, Kind::Int128);
+    }
 
-    [[nodiscard]] static Type createUnsignedInt128(bool isConst, bool isVolatile);
+    [[nodiscard]] static PrimitiveType createUnsignedInt128(bool isConst, bool isVolatile)
+    {
+        return create(isConst, isVolatile, false, false, 128, 16, Kind::UnsignedInt128);
+    }
 
-    [[nodiscard]] static Type createPtrdiffT(bool isConst, bool isVolatile, const LanguageOptions& options);
+    [[nodiscard]] static PrimitiveType createPtrdiffT(bool isConst, bool isVolatile, const LanguageOptions& options)
+    {
+        return fromUnderlyingType(isConst, isVolatile, options.ptrdiffType, options);
+    }
 
-    [[nodiscard]] static Type createSizeT(bool isConst, bool isVolatile, const LanguageOptions& options);
+    [[nodiscard]] static PrimitiveType createSizeT(bool isConst, bool isVolatile, const LanguageOptions& options)
+    {
+        return fromUnderlyingType(isConst, isVolatile, options.sizeTType, options);
+    }
 
-    [[nodiscard]] static Type createWcharT(bool isConst, bool isVolatile, const LanguageOptions& options);
+    [[nodiscard]] static PrimitiveType createWcharT(bool isConst, bool isVolatile, const LanguageOptions& options)
+    {
+        return fromUnderlyingType(isConst, isVolatile, options.wcharUnderlyingType, options);
+    }
 
-    [[nodiscard]] static Type fromUnderlyingType(bool isConst, bool isVolatile,
-                                                 LanguageOptions::UnderlyingType underlyingType,
-                                                 const LanguageOptions& options);
+    [[nodiscard]] static PrimitiveType fromUnderlyingType(bool isConst, bool isVolatile,
+                                                          LanguageOptions::UnderlyingType underlyingType,
+                                                          const LanguageOptions& options);
 
     [[nodiscard]] bool isFloatingPoint() const
     {
@@ -340,7 +494,10 @@ public:
         return m_isSigned;
     }
 
-    [[nodiscard]] std::uint8_t getByteCount() const;
+    [[nodiscard]] std::uint8_t getByteCount() const
+    {
+        return cld::roundUpTo(m_bitCount, m_alignOf * 8) / 8;
+    }
 
     [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface&) const
     {
@@ -367,18 +524,23 @@ public:
     [[nodiscard]] bool operator!=(const PrimitiveType& rhs) const;
 };
 
-class ArrayType final
+class ArrayType final : public Type
 {
-    std::shared_ptr<const Type> m_type;
+    const Type* m_type;
     std::uint64_t m_size;
     bool m_restricted : 1;
     bool m_static : 1;
 
-    ArrayType(bool isRestricted, bool isStatic, std::shared_ptr<Type>&& type, std::uint64_t size);
-
 public:
-    [[nodiscard]] static Type create(bool isConst, bool isVolatile, bool isRestricted, bool isStatic, Type type,
-                                     std::uint64_t size);
+    ArrayType(bool isConst, bool isVolatile, bool isRestricted, bool isStatic, cld::not_null<const Type> type,
+              std::uint64_t size)
+        : Type(std::in_place_type<ArrayType>, isConst, isVolatile),
+          m_type(type),
+          m_size(size),
+          m_restricted(isRestricted),
+          m_static(isStatic)
+    {
+    }
 
     [[nodiscard]] const Type& getType() const
     {
@@ -409,15 +571,16 @@ public:
     [[nodiscard]] bool operator!=(const ArrayType& rhs) const;
 };
 
-class AbstractArrayType final
+class AbstractArrayType final : public Type
 {
-    std::shared_ptr<const Type> m_type;
+    const Type* m_type;
     bool m_restricted;
 
-    AbstractArrayType(bool isRestricted, std::shared_ptr<Type>&& type);
-
 public:
-    [[nodiscard]] static Type create(bool isConst, bool isVolatile, bool isRestricted, Type type);
+    [[nodiscard]] AbstractArrayType(bool isConst, bool isVolatile, bool isRestricted, cld::not_null<const Type> type)
+        : Type(std::in_place_type<AbstractArrayType>, isConst, isVolatile), m_type(type), m_restricted(isRestricted)
+    {
+    }
 
     [[nodiscard]] const Type& getType() const
     {
@@ -443,19 +606,23 @@ public:
 
 class ExpressionBase;
 
-class ValArrayType final
+class ValArrayType final : public Type
 {
-    std::shared_ptr<const Type> m_type;
+    const Type* m_type;
     bool m_restricted : 1;
     bool m_static : 1;
     std::shared_ptr<const ExpressionBase> m_expression;
 
-    ValArrayType(bool isRestricted, bool isStatic, std::shared_ptr<cld::Semantics::Type>&& type,
-                 std::shared_ptr<const ExpressionBase>&& expression);
-
 public:
-    [[nodiscard]] static Type create(bool isConst, bool isVolatile, bool isRestricted, bool isStatic, Type type,
-                                     std::shared_ptr<const ExpressionBase> expression);
+    [[nodiscard]] ValArrayType(bool isConst, bool isVolatile, bool isRestricted, bool isStatic,
+                               cld::not_null<const Type> type, std::shared_ptr<const ExpressionBase> expression)
+        : Type(std::in_place_type<ValArrayType>, isConst, isVolatile),
+          m_type(type),
+          m_restricted(isRestricted),
+          m_static(isStatic),
+          m_expression(std::move(expression))
+    {
+    }
 
     [[nodiscard]] const Type& getType() const
     {
@@ -490,35 +657,40 @@ public:
     [[nodiscard]] bool operator!=(const ValArrayType& rhs) const;
 };
 
-class FunctionType final
+class FunctionType final : public Type
 {
-    std::shared_ptr<const Type> m_returnType;
-    std::vector<std::pair<Type, std::string_view>> m_arguments;
+public:
+    struct Parameter
+    {
+        const Type* CLD_NON_NULL type;
+        std::string_view name;
+    };
+
+private:
+    const Type* m_returnType;
+    std::vector<Parameter> m_parameters;
     bool m_lastIsVararg : 1;
     bool m_isKandR : 1;
 
-    FunctionType(std::shared_ptr<const Type>&& returnType, std::vector<std::pair<Type, std::string_view>> arguments,
-                 bool lastIsVararg, bool isKandR)
-        : m_returnType(std::move(returnType)),
-          m_arguments(std::move(arguments)),
+public:
+    FunctionType(cld::not_null<const Type> returnType, std::vector<Parameter>&& parameters, bool lastIsVararg,
+                 bool isKandR)
+        : Type(std::in_place_type<FunctionType>, false, false),
+          m_returnType(returnType),
+          m_parameters(std::move(parameters)),
           m_lastIsVararg(lastIsVararg),
           m_isKandR(isKandR)
     {
     }
-
-public:
-    [[nodiscard]] static Type create(cld::Semantics::Type returnType,
-                                     std::vector<std::pair<Type, std::string_view>>&& arguments, bool lastIsVararg,
-                                     bool isKandR);
 
     [[nodiscard]] const Type& getReturnType() const
     {
         return *m_returnType;
     }
 
-    [[nodiscard]] const std::vector<std::pair<Type, std::string_view>>& getArguments() const
+    [[nodiscard]] const std::vector<Parameter>& getParameters() const
     {
-        return m_arguments;
+        return m_parameters;
     }
 
     [[nodiscard]] bool isLastVararg() const
@@ -546,15 +718,16 @@ public:
     [[nodiscard]] bool operator!=(const FunctionType& rhs) const;
 };
 
-class StructType final
+class StructType final : public Type
 {
     std::string_view m_name;
     const StructInfo* m_info;
 
-    StructType(std::string_view name, const StructInfo& info);
-
 public:
-    [[nodiscard]] static Type create(bool isConst, bool isVolatile, std::string_view name, const StructInfo& info);
+    StructType(bool isConst, bool isVolatile, std::string_view name, const StructInfo& info)
+        : Type(std::in_place_type<StructType>, isConst, isVolatile), m_name(name), m_info(&info)
+    {
+    }
 
     [[nodiscard]] std::string_view getName() const
     {
@@ -577,6 +750,10 @@ public:
 
     [[nodiscard]] bool operator==(const StructType& rhs) const
     {
+        if (!equals(rhs))
+        {
+            return false;
+        }
         return m_info == rhs.m_info;
     }
 
@@ -586,15 +763,16 @@ public:
     }
 };
 
-class UnionType final
+class UnionType final : public Type
 {
     std::string_view m_name;
     const UnionInfo* m_info;
 
-    UnionType(std::string_view name, const UnionInfo& info);
-
 public:
-    static Type create(bool isConst, bool isVolatile, std::string_view name, const UnionInfo& info);
+    UnionType(bool isConst, bool isVolatile, std::string_view name, const UnionInfo& info)
+        : Type(std::in_place_type<UnionType>, isConst, isVolatile), m_name(name), m_info(&info)
+    {
+    }
 
     [[nodiscard]] std::string_view getName() const
     {
@@ -617,6 +795,10 @@ public:
 
     [[nodiscard]] bool operator==(const UnionType& rhs) const
     {
+        if (!equals(rhs))
+        {
+            return false;
+        }
         return m_info == rhs.m_info;
     }
 
@@ -626,15 +808,16 @@ public:
     }
 };
 
-class EnumType final
+class EnumType final : public Type
 {
     std::string_view m_name;
     const EnumInfo* m_info;
 
-    EnumType(std::string_view name, const EnumInfo& info);
-
 public:
-    static Type create(bool isConst, bool isVolatile, std::string_view name, const EnumInfo& info);
+    EnumType(bool isConst, bool isVolatile, std::string_view name, const EnumInfo& info)
+        : Type(std::in_place_type<EnumType>, isConst, isVolatile), m_name(name), m_info(&info)
+    {
+    }
 
     [[nodiscard]] std::string_view getName() const
     {
@@ -657,6 +840,10 @@ public:
 
     [[nodiscard]] bool operator==(const EnumType& rhs) const
     {
+        if (!equals(rhs))
+        {
+            return false;
+        }
         return m_info == rhs.m_info;
     }
 
@@ -666,17 +853,20 @@ public:
     }
 };
 
-class PointerType final
+class PointerType final : public Type
 {
-    std::shared_ptr<const Type> m_elementType;
+    const Type* m_elementType;
     bool m_restricted;
 
-    PointerType(bool isRestricted, std::shared_ptr<Type>&& elementType);
-
 public:
-    static Type create(bool isConst, bool isVolatile, bool isRestricted, Type elementType);
+    PointerType(bool isConst, bool isVolatile, bool isRestricted, cld::not_null<const Type> elementType)
+        : Type(std::in_place_type<PointerType>, isConst, isVolatile),
+          m_elementType(elementType),
+          m_restricted(isRestricted)
+    {
+    }
 
-    [[nodiscard]] const Type& getElementType() const&
+    [[nodiscard]] const Type& getElementType() const
     {
         return *m_elementType;
     }
@@ -695,15 +885,16 @@ public:
     [[nodiscard]] bool operator!=(const PointerType& rhs) const;
 };
 
-class VectorType final
+class VectorType final : public Type
 {
-    std::shared_ptr<const Type> m_elementType;
+    const Type* m_elementType;
     std::uint64_t m_size;
 
-    VectorType(std::shared_ptr<Type>&& type, std::uint64_t size);
-
 public:
-    [[nodiscard]] static Type create(bool isConst, bool isVolatile, Type type, std::uint64_t size);
+    VectorType(bool isConst, bool isVolatile, cld::not_null<const Type> type, std::uint64_t size)
+        : Type(std::in_place_type<VectorType>, isConst, isVolatile), m_elementType(type), m_size(size)
+    {
+    }
 
     [[nodiscard]] const Type& getType() const
     {
@@ -724,72 +915,10 @@ public:
     [[nodiscard]] bool operator!=(const VectorType& rhs) const;
 };
 
-class Type final : public AttributeHolder<TypeAttribute>
+class ErrorType : public Type
 {
 public:
-    using Variant = std::variant<std::monostate, PrimitiveType, ArrayType, AbstractArrayType, ValArrayType,
-                                 FunctionType, StructType, UnionType, EnumType, PointerType, VectorType>;
-
-private:
-    Variant m_type;
-    std::string_view m_name;
-    bool m_isConst : 1;
-    bool m_isVolatile : 1;
-
-public:
-    explicit Type(bool isConst = false, bool isVolatile = false, Variant type = std::monostate{})
-        : m_type(std::move(type)), m_isConst(isConst), m_isVolatile(isVolatile)
-    {
-    }
-
-    [[nodiscard]] const Variant& getVariant() const&
-    {
-        return m_type;
-    }
-
-    [[nodiscard]] Variant&& getVariant() &&
-    {
-        return std::move(m_type);
-    }
-
-    [[nodiscard]] bool isConst() const
-    {
-        return m_isConst;
-    }
-
-    [[nodiscard]] bool isVolatile() const
-    {
-        return m_isVolatile;
-    }
-
-    [[nodiscard]] std::string_view getName() const
-    {
-        return m_name;
-    }
-
-    void setName(std::string_view name)
-    {
-        m_name = name;
-    }
-
-    [[nodiscard]] bool isTypedef() const
-    {
-        return !m_name.empty();
-    }
-
-    [[nodiscard]] bool operator==(const Type& rhs) const;
-
-    [[nodiscard]] bool operator!=(const Type& rhs) const;
-
-    [[nodiscard]] bool isUndefined() const
-    {
-        return std::holds_alternative<std::monostate>(m_type);
-    }
-
-    // Likely replaced with an interface soon?
-    [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface& program) const;
-
-    [[nodiscard]] std::uint64_t getAlignOf(const ProgramInterface& program) const;
+    ErrorType() : Type(std::in_place_type<ErrorType>, false, false) {}
 };
 
 enum class ValueCategory : std::uint8_t
@@ -805,13 +934,13 @@ class ExpressionBase
                                       class CommaExpression, class CallExpression, class CompoundLiteral,
                                       class BuiltinVAArg, class BuiltinOffsetOf, class ErrorExpression>
 {
-    Type m_type;
+    const Type* m_type;
     ValueCategory m_valueCategory;
 
 protected:
     template <class T>
-    ExpressionBase(std::in_place_type_t<T>, Type type, ValueCategory valueCategory)
-        : AbstractIntrusiveVariant(std::in_place_type<T>), m_type(std::move(type)), m_valueCategory(valueCategory)
+    ExpressionBase(std::in_place_type_t<T>, cld::not_null<const Type> type, ValueCategory valueCategory)
+        : AbstractIntrusiveVariant(std::in_place_type<T>), m_type(type), m_valueCategory(valueCategory)
     {
     }
 
@@ -836,7 +965,7 @@ public:
 
     [[nodiscard]] const Type& getType() const
     {
-        return m_type;
+        return *m_type;
     }
 
     [[nodiscard]] ValueCategory getValueCategory() const
@@ -869,8 +998,9 @@ private:
     Lexer::CTokenIterator m_valueEnd;
 
 public:
-    Constant(Type type, Variant value, Lexer::CTokenIterator valueBegin, Lexer::CTokenIterator valueEnd)
-        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Rvalue),
+    Constant(cld::not_null<const Type> type, Variant value, Lexer::CTokenIterator valueBegin,
+             Lexer::CTokenIterator valueEnd)
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, type, ValueCategory::Rvalue),
           m_value(std::move(value)),
           m_valueBegin(valueBegin),
           m_valueEnd(valueEnd)
@@ -911,8 +1041,9 @@ class DeclarationRead final : public ExpressionBase
     Lexer::CTokenIterator m_identifierToken;
 
 public:
-    explicit DeclarationRead(Type type, const Useable& useable, Lexer::CTokenIterator identifierToken)
-        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Lvalue),
+    explicit DeclarationRead(cld::not_null<const Type> type, const Useable& useable,
+                             Lexer::CTokenIterator identifierToken)
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, type, ValueCategory::Lvalue),
           m_declRead(&useable),
           m_identifierToken(identifierToken)
     {
@@ -956,8 +1087,8 @@ private:
     IntrVarPtr<ExpressionBase> m_expression;
 
 public:
-    Conversion(Type type, Kind kind, IntrVarPtr<ExpressionBase>&& expression)
-        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Rvalue),
+    Conversion(cld::not_null<const Type> type, Kind kind, IntrVarPtr<ExpressionBase>&& expression)
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, type, ValueCategory::Rvalue),
           m_kind(kind),
           m_expression(std::move(expression))
     {
@@ -985,9 +1116,9 @@ class Cast final : public ExpressionBase
     IntrVarPtr<ExpressionBase> m_expression;
 
 public:
-    Cast(Type type, Lexer::CTokenIterator openParentheses, Lexer::CTokenIterator closeParentheses,
+    Cast(cld::not_null<const Type> type, Lexer::CTokenIterator openParentheses, Lexer::CTokenIterator closeParentheses,
          IntrVarPtr<ExpressionBase>&& expression)
-        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Rvalue),
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, type, ValueCategory::Rvalue),
           m_openParentheses(openParentheses),
           m_closeParentheses(closeParentheses),
           m_expression(std::move(expression))
@@ -1019,12 +1150,12 @@ public:
 
 struct Field
 {
-    std::shared_ptr<const Type> type; // NOT NULL
+    const Type* CLD_NON_NULL type; // NOT NULL
     std::string_view name;
     const Lexer::CToken* nameToken;
     std::vector<std::size_t> indices;
     std::optional<std::pair<std::uint32_t, std::uint32_t>> bitFieldBounds;
-    std::vector<std::shared_ptr<const Type>> parentTypes;
+    std::vector<const Type*> parentTypes;
 };
 
 class MemberAccess final : public ExpressionBase
@@ -1034,9 +1165,9 @@ class MemberAccess final : public ExpressionBase
     Lexer::CTokenIterator m_memberIdentifier;
 
 public:
-    MemberAccess(Type type, ValueCategory valueCategory, IntrVarPtr<ExpressionBase>&& recordExpr, const Field& field,
-                 Lexer::CTokenIterator memberIdentifier)
-        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), valueCategory),
+    MemberAccess(cld::not_null<const Type> type, ValueCategory valueCategory, IntrVarPtr<ExpressionBase>&& recordExpr,
+                 const Field& field, Lexer::CTokenIterator memberIdentifier)
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, type, valueCategory),
           m_recordExpr(std::move(recordExpr)),
           m_field(&field),
           m_memberIdentifier(memberIdentifier)
@@ -1070,10 +1201,10 @@ class SubscriptOperator final : public ExpressionBase
     Lexer::CTokenIterator m_closeBracket;
 
 public:
-    SubscriptOperator(Type type, bool leftIsPointer, IntrVarPtr<ExpressionBase>&& leftExpr,
+    SubscriptOperator(cld::not_null<const Type> type, bool leftIsPointer, IntrVarPtr<ExpressionBase>&& leftExpr,
                       Lexer::CTokenIterator openBracket, IntrVarPtr<ExpressionBase>&& rightExpr,
                       Lexer::CTokenIterator closeBracket)
-        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Lvalue),
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, type, ValueCategory::Lvalue),
           m_leftIsPointer(leftIsPointer),
           m_leftExpr(std::move(leftExpr)),
           m_openBracket(openBracket),
@@ -1153,9 +1284,9 @@ private:
     IntrVarPtr<ExpressionBase> m_rightOperand;
 
 public:
-    BinaryOperator(Type type, IntrVarPtr<ExpressionBase>&& leftOperand, Kind kind, Lexer::CTokenIterator operatorToken,
-                   IntrVarPtr<ExpressionBase>&& rightOperand)
-        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Rvalue),
+    BinaryOperator(cld::not_null<const Type> type, IntrVarPtr<ExpressionBase>&& leftOperand, Kind kind,
+                   Lexer::CTokenIterator operatorToken, IntrVarPtr<ExpressionBase>&& rightOperand)
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, type, ValueCategory::Rvalue),
           m_leftOperand(std::move(leftOperand)),
           m_kind(kind),
           m_operatorToken(operatorToken),
@@ -1211,9 +1342,9 @@ private:
     IntrVarPtr<ExpressionBase> m_operand;
 
 public:
-    UnaryOperator(Type type, ValueCategory valueCategory, Kind kind, Lexer::CTokenIterator operatorToken,
-                  IntrVarPtr<ExpressionBase>&& operand)
-        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), valueCategory),
+    UnaryOperator(cld::not_null<const Type> type, ValueCategory valueCategory, Kind kind,
+                  Lexer::CTokenIterator operatorToken, IntrVarPtr<ExpressionBase>&& operand)
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, type, valueCategory),
           m_kind(kind),
           m_operatorToken(operatorToken),
           m_operand(std::move(operand))
@@ -1246,7 +1377,7 @@ public:
     struct TypeVariant
     {
         Lexer::CTokenIterator openParentheses;
-        Type type;
+        const Type* CLD_NON_NULL type;
         Lexer::CTokenIterator closeParentheses;
     };
 
@@ -1256,15 +1387,16 @@ private:
     Lexer::CTokenIterator m_sizeOfToken;
     std::optional<std::uint64_t> m_size;
     Variant m_variant;
+    PrimitiveType m_size_t;
 
 public:
     SizeofOperator(const LanguageOptions& options, Lexer::CTokenIterator sizeOfToken, std::optional<std::uint64_t> size,
                    Variant variant)
-        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>,
-                         PrimitiveType::createSizeT(false, false, options), ValueCategory::Rvalue),
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, &m_size_t, ValueCategory::Rvalue),
           m_sizeOfToken(sizeOfToken),
           m_size(size),
-          m_variant(std::move(variant))
+          m_variant(std::move(variant)),
+          m_size_t{PrimitiveType::createSizeT(false, false, options)}
     {
     }
 
@@ -1295,10 +1427,10 @@ class Conditional final : public ExpressionBase
     IntrVarPtr<ExpressionBase> m_falseExpression;
 
 public:
-    Conditional(Type type, IntrVarPtr<ExpressionBase>&& boolExpression, Lexer::CTokenIterator questionMark,
-                IntrVarPtr<ExpressionBase>&& trueExpression, Lexer::CTokenIterator colon,
-                IntrVarPtr<ExpressionBase>&& falseExpression)
-        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Rvalue),
+    Conditional(cld::not_null<const Type> type, IntrVarPtr<ExpressionBase>&& boolExpression,
+                Lexer::CTokenIterator questionMark, IntrVarPtr<ExpressionBase>&& trueExpression,
+                Lexer::CTokenIterator colon, IntrVarPtr<ExpressionBase>&& falseExpression)
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, type, ValueCategory::Rvalue),
           m_boolExpression(std::move(boolExpression)),
           m_questionMark(questionMark),
           m_trueExpression(std::move(trueExpression)),
@@ -1340,7 +1472,7 @@ public:
 class Assignment final : public ExpressionBase
 {
     IntrVarPtr<ExpressionBase> m_leftOperand;
-    Type m_leftCalcType;
+    const Type* m_leftCalcType;
 
 public:
     enum Kind
@@ -1364,11 +1496,12 @@ private:
     IntrVarPtr<ExpressionBase> m_rightOperand;
 
 public:
-    Assignment(Type type, IntrVarPtr<ExpressionBase>&& leftOperand, Type leftCalcType, Kind kind,
-               Lexer::CTokenIterator operatorToken, IntrVarPtr<ExpressionBase>&& rightOperand)
-        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Rvalue),
+    Assignment(cld::not_null<const Type> type, IntrVarPtr<ExpressionBase>&& leftOperand,
+               cld::not_null<const Type> leftCalcType, Kind kind, Lexer::CTokenIterator operatorToken,
+               IntrVarPtr<ExpressionBase>&& rightOperand)
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, type, ValueCategory::Rvalue),
           m_leftOperand(std::move(leftOperand)),
-          m_leftCalcType(std::move(leftCalcType)),
+          m_leftCalcType(leftCalcType),
           m_kind(kind),
           m_operatorToken(operatorToken),
           m_rightOperand(std::move(rightOperand))
@@ -1382,7 +1515,7 @@ public:
 
     [[nodiscard]] const Type& getLeftCalcType() const
     {
-        return m_leftCalcType;
+        return *m_leftCalcType;
     }
 
     [[nodiscard]] Kind getKind() const
@@ -1411,10 +1544,10 @@ class CommaExpression final : public ExpressionBase
     IntrVarPtr<ExpressionBase> m_lastExpression;
 
 public:
-    CommaExpression(Type type,
+    CommaExpression(cld::not_null<const Type> type,
                     std::vector<std::pair<IntrVarPtr<ExpressionBase>, Lexer::CTokenIterator>>&& commaExpressions,
                     IntrVarPtr<ExpressionBase>&& lastExpression)
-        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Rvalue),
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, type, ValueCategory::Rvalue),
           m_commaExpressions(std::move(commaExpressions)),
           m_lastExpression(std::move(lastExpression))
     {
@@ -1445,10 +1578,10 @@ class CallExpression final : public ExpressionBase
     Lexer::CTokenIterator m_closeParentheses;
 
 public:
-    CallExpression(Type type, IntrVarPtr<ExpressionBase>&& functionExpression, Lexer::CTokenIterator openParentheses,
-                   std::vector<IntrVarPtr<ExpressionBase>>&& argumentExpressions,
+    CallExpression(cld::not_null<const Type> type, IntrVarPtr<ExpressionBase>&& functionExpression,
+                   Lexer::CTokenIterator openParentheses, std::vector<IntrVarPtr<ExpressionBase>>&& argumentExpressions,
                    Lexer::CTokenIterator closeParentheses)
-        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Rvalue),
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, type, ValueCategory::Rvalue),
           m_functionExpression(std::move(functionExpression)),
           m_openParentheses(openParentheses),
           m_argumentExpressions(std::move(argumentExpressions)),
@@ -1494,9 +1627,9 @@ class CompoundLiteral final : public ExpressionBase
     bool m_staticLifetime;
 
 public:
-    explicit CompoundLiteral(Type type, Lexer::CTokenIterator openParentheses, Initializer initializer,
-                             Lexer::CTokenIterator closeParentheses, Lexer::CTokenIterator initEnd,
-                             bool staticLifetime);
+    explicit CompoundLiteral(cld::not_null<const Type> type, Lexer::CTokenIterator openParentheses,
+                             Initializer initializer, Lexer::CTokenIterator closeParentheses,
+                             Lexer::CTokenIterator initEnd, bool staticLifetime);
 
     [[nodiscard]] Lexer::CTokenIterator getOpenParentheses() const;
 
@@ -1522,9 +1655,10 @@ class BuiltinVAArg final : public ExpressionBase
     Lexer::CTokenIterator m_closeParentheses;
 
 public:
-    BuiltinVAArg(Type type, Lexer::CTokenIterator builtinToken, Lexer::CTokenIterator openParentheses,
-                 IntrVarPtr<ExpressionBase>&& expression, Lexer::CTokenIterator closeParentheses)
-        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Rvalue),
+    BuiltinVAArg(cld::not_null<const Type> type, Lexer::CTokenIterator builtinToken,
+                 Lexer::CTokenIterator openParentheses, IntrVarPtr<ExpressionBase>&& expression,
+                 Lexer::CTokenIterator closeParentheses)
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, type, ValueCategory::Rvalue),
           m_builtinToken(builtinToken),
           m_openParentheses(openParentheses),
           m_expression(std::move(expression)),
@@ -1566,16 +1700,17 @@ class BuiltinOffsetOf final : public ExpressionBase
     Lexer::CTokenIterator m_openParentheses;
     std::uint64_t m_offset;
     Lexer::CTokenIterator m_closeParentheses;
+    PrimitiveType m_size_t;
 
 public:
     BuiltinOffsetOf(const LanguageOptions& options, Lexer::CTokenIterator builtinToken,
                     Lexer::CTokenIterator openParentheses, std::uint64_t offset, Lexer::CTokenIterator closeParentheses)
-        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>,
-                         PrimitiveType::createSizeT(false, false, options), ValueCategory::Rvalue),
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, &m_size_t, ValueCategory::Rvalue),
           m_builtinToken(builtinToken),
           m_openParentheses(openParentheses),
           m_offset(offset),
-          m_closeParentheses(closeParentheses)
+          m_closeParentheses(closeParentheses),
+          m_size_t{PrimitiveType::createSizeT(false, false, options)}
     {
     }
 
@@ -1615,18 +1750,20 @@ class ErrorExpression final : public ExpressionBase
     Lexer::CTokenIterator m_begin;
     Lexer::CTokenIterator m_end;
 
-public:
-    explicit ErrorExpression(const Syntax::Node& node) : ErrorExpression(Type{}, node) {}
+    static inline ErrorType m_errorType;
 
-    ErrorExpression(Type type, const Syntax::Node& node);
+public:
+    explicit ErrorExpression(const Syntax::Node& node) : ErrorExpression(&m_errorType, node) {}
+
+    ErrorExpression(cld::not_null<const Type> type, const Syntax::Node& node);
 
     ErrorExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end)
-        : ExpressionBase(std::in_place_type<ErrorExpression>, Type{}, {}), m_begin(begin), m_end(end)
+        : ExpressionBase(std::in_place_type<ErrorExpression>, &m_errorType, {}), m_begin(begin), m_end(end)
     {
     }
 
-    ErrorExpression(Type type, Lexer::CTokenIterator begin, Lexer::CTokenIterator end)
-        : ExpressionBase(std::in_place_type<ErrorExpression>, std::move(type), {}), m_begin(begin), m_end(end)
+    ErrorExpression(cld::not_null<const Type> type, Lexer::CTokenIterator begin, Lexer::CTokenIterator end)
+        : ExpressionBase(std::in_place_type<ErrorExpression>, type, {}), m_begin(begin), m_end(end)
     {
     }
 
@@ -1854,21 +1991,22 @@ enum class Linkage : std::uint8_t
 
 class Declaration : public Useable
 {
-    Type m_type;
+    const Type* m_type;
     Linkage m_linkage;
     Lexer::CTokenIterator m_nameToken;
 
 protected:
     template <class T>
-    Declaration(std::in_place_type_t<T>, Type type, Linkage linkage, Lexer::CTokenIterator nameToken)
-        : Useable(std::in_place_type<T>), m_type(std::move(type)), m_linkage(linkage), m_nameToken(nameToken)
+    Declaration(std::in_place_type_t<T>, cld::not_null<const Type> type, Linkage linkage,
+                Lexer::CTokenIterator nameToken)
+        : Useable(std::in_place_type<T>), m_type(type), m_linkage(linkage), m_nameToken(nameToken)
     {
     }
 
 public:
     [[nodiscard]] const Type& getType() const
     {
-        return m_type;
+        return *m_type;
     }
 
     [[nodiscard]] Linkage getLinkage() const
@@ -2178,7 +2316,7 @@ public:
 
 struct FieldInLayout
 {
-    std::shared_ptr<const Type> type;
+    const Type* CLD_NON_NULL type;
     std::size_t layoutIndex;
     std::optional<std::pair<std::uint32_t, std::uint32_t>> bitFieldBounds;
 };
@@ -2189,7 +2327,7 @@ using FieldMap = tsl::ordered_map<std::string_view, Field, std::hash<std::string
 
 struct MemoryLayout
 {
-    Type type;
+    const Type* CLD_NON_NULL type;
     std::size_t offset;
 };
 
@@ -2309,12 +2447,13 @@ llvm::ArrayRef<FieldInLayout> getFieldLayout(const Type& recordType);
 class EnumDefinition
 {
     std::string_view m_name;
-    Type m_type;
+    const Type* m_type;
     std::vector<std::pair<std::string_view, llvm::APSInt>> m_values;
 
 public:
-    EnumDefinition(std::string_view name, Type type, std::vector<std::pair<std::string_view, llvm::APSInt>> values)
-        : m_name(name), m_type(std::move(type)), m_values(std::move(values))
+    EnumDefinition(std::string_view name, cld::not_null<const Type> type,
+                   std::vector<std::pair<std::string_view, llvm::APSInt>> values)
+        : m_name(name), m_type(type), m_values(std::move(values))
     {
     }
 
@@ -2325,7 +2464,7 @@ public:
 
     [[nodiscard]] const Type& getType() const
     {
-        return m_type;
+        return *m_type;
     }
 
     [[nodiscard]] const std::vector<std::pair<std::string_view, llvm::APSInt>>& getValues() const
@@ -2372,9 +2511,9 @@ class FunctionDeclaration final : public Declaration, public AttributeHolder<Fun
     InlineKind m_inlineKind;
 
 public:
-    FunctionDeclaration(Type type, Linkage linkage, Lexer::CTokenIterator nameToken, InlineKind inlineKind)
-        : Declaration(std::in_place_type<FunctionDeclaration>, std::move(type), linkage, nameToken),
-          m_inlineKind(inlineKind)
+    FunctionDeclaration(cld::not_null<const Type> type, Linkage linkage, Lexer::CTokenIterator nameToken,
+                        InlineKind inlineKind)
+        : Declaration(std::in_place_type<FunctionDeclaration>, type, linkage, nameToken), m_inlineKind(inlineKind)
     {
     }
 
@@ -2413,9 +2552,9 @@ private:
     Kind m_kind;
 
 public:
-    VariableDeclaration(Type type, Linkage linkage, Lifetime lifetime, Lexer::CTokenIterator nameToken, Kind kind,
-                        std::optional<Initializer> initializer = {})
-        : Declaration(std::in_place_type<VariableDeclaration>, std::move(type), linkage, nameToken),
+    VariableDeclaration(cld::not_null<const Type> type, Linkage linkage, Lifetime lifetime,
+                        Lexer::CTokenIterator nameToken, Kind kind, std::optional<Initializer> initializer = {})
+        : Declaration(std::in_place_type<VariableDeclaration>, type, linkage, nameToken),
           m_initializer(std::move(initializer)),
           m_lifetime(lifetime),
           m_kind(kind)
@@ -2445,7 +2584,7 @@ public:
 
 class FunctionDefinition final : public Useable, public AttributeHolder<FunctionAttribute>
 {
-    Type m_type;
+    const Type* m_type;
     Lexer::CTokenIterator m_nameToken;
     std::vector<std::unique_ptr<VariableDeclaration>> m_parameterDeclarations;
     Linkage m_linkage;
@@ -2453,11 +2592,11 @@ class FunctionDefinition final : public Useable, public AttributeHolder<Function
     CompoundStatement m_compoundStatement;
 
 public:
-    FunctionDefinition(Type type, Lexer::CTokenIterator nameToken,
+    FunctionDefinition(cld::not_null<const Type> type, Lexer::CTokenIterator nameToken,
                        std::vector<std::unique_ptr<VariableDeclaration>> parameterDeclarations, Linkage linkage,
                        InlineKind inlineKind, CompoundStatement compoundStatement)
         : Useable(std::in_place_type<FunctionDefinition>),
-          m_type(std::move(type)),
+          m_type(type),
           m_nameToken(nameToken),
           m_parameterDeclarations(std::move(parameterDeclarations)),
           m_linkage(linkage),
@@ -2471,14 +2610,9 @@ public:
         return m_nameToken;
     }
 
-    [[nodiscard]] const Type& getType() const&
+    [[nodiscard]] const Type& getType() const
     {
-        return m_type;
-    }
-
-    [[nodiscard]] Type&& getType() &&
-    {
-        return std::move(m_type);
+        return *m_type;
     }
 
     [[nodiscard]] const std::vector<std::unique_ptr<VariableDeclaration>>& getParameterDeclarations() const&
@@ -2493,7 +2627,7 @@ public:
 
     [[nodiscard]] bool isKandR() const
     {
-        return cld::get<FunctionType>(m_type.getVariant()).isKandR();
+        return m_type->cast<FunctionType>().isKandR();
     }
 
     [[nodiscard]] Linkage getLinkage() const
@@ -2529,7 +2663,7 @@ public:
 
 class BuiltinFunction final : public Useable
 {
-    Type m_type;
+    const Type* m_type;
 
 public:
     enum Kind
@@ -2582,14 +2716,14 @@ private:
     Kind m_kind;
 
 public:
-    BuiltinFunction(Type type, Kind kind)
-        : Useable(std::in_place_type<BuiltinFunction>), m_type(std::move(type)), m_kind(kind)
+    BuiltinFunction(cld::not_null<const Type> type, Kind kind)
+        : Useable(std::in_place_type<BuiltinFunction>), m_type(type), m_kind(kind)
     {
     }
 
     [[nodiscard]] const Type& getType() const noexcept
     {
-        return m_type;
+        return *m_type;
     }
 
     [[nodiscard]] Kind getKind() const noexcept
@@ -2638,7 +2772,7 @@ Program analyse(const Syntax::TranslationUnit& parseTree, CSourceObject&& cToken
 
 [[nodiscard]] const Type& getPointerElementType(const Type& type);
 
-[[nodiscard]] Type adjustParameterType(Type type);
+[[nodiscard]] IntrVarValue<Type> adjustParameterType(const Type& type);
 
 [[nodiscard]] bool isInteger(const Type& type);
 
@@ -2674,7 +2808,7 @@ Program analyse(const Syntax::TranslationUnit& parseTree, CSourceObject&& cToken
 
 [[nodiscard]] bool isCharacterLikeType(const Type& type, const LanguageOptions& options);
 
-[[nodiscard]] Type removeQualifiers(Type type);
+[[nodiscard]] IntrVarValue<Type> removeQualifiers(const Type& type);
 
 } // namespace cld::Semantics
 
@@ -2761,9 +2895,9 @@ struct hash<cld::Semantics::FunctionType>
     std::size_t operator()(const cld::Semantics::FunctionType& type) const noexcept
     {
         std::size_t hash = 0;
-        for (auto& [type, name] : type.getArguments())
+        for (auto& [type, name] : type.getParameters())
         {
-            hash = cld::rawHashCombine(hash, std::hash<cld::Semantics::Type>{}(type));
+            hash = cld::rawHashCombine(hash, std::hash<cld::Semantics::Type>{}(*type));
         }
         return cld::rawHashCombine(cld::hashCombine(type.isLastVararg(), type.isKandR(), type.getReturnType()), hash);
     }
@@ -2814,11 +2948,30 @@ struct hash<cld::Semantics::VectorType>
     }
 };
 
+template <>
+struct hash<cld::Semantics::ErrorType>
+{
+    std::size_t operator()(const cld::Semantics::ErrorType&) const noexcept
+    {
+        return 0;
+    }
+};
+
+inline std::size_t std::hash<cld::Semantics::Type>::operator()(const cld::Semantics::Type& type) const noexcept
+{
+    return cld::rawHashCombine(type.match(
+                                   [](const auto& type) -> std::size_t
+                                   {
+                                       using T = std::decay_t<decltype(type)>;
+                                       return std::hash<T>{}(type);
+                                   }),
+                               cld::hashCombine(type.getName(), type.isConst(), type.isVolatile(), type.index()));
+}
 } // namespace std
 
 inline bool cld::Semantics::isVoid(const cld::Semantics::Type& type)
 {
-    auto* primitive = std::get_if<PrimitiveType>(&type.getVariant());
+    auto* primitive = type.get_if<PrimitiveType>();
     if (!primitive)
     {
         return false;
@@ -2828,19 +2981,17 @@ inline bool cld::Semantics::isVoid(const cld::Semantics::Type& type)
 
 inline bool cld::Semantics::isArray(const Type& type)
 {
-    return std::holds_alternative<ArrayType>(type.getVariant())
-           || std::holds_alternative<ValArrayType>(type.getVariant())
-           || std::holds_alternative<AbstractArrayType>(type.getVariant());
+    return type.is<ArrayType>() || type.is<AbstractArrayType>() || type.is<ValArrayType>();
 }
 
 inline bool cld::Semantics::isArrayType(const Type& type)
 {
-    return std::holds_alternative<ArrayType>(type.getVariant());
+    return type.is<ArrayType>();
 }
 
 inline bool cld::Semantics::isAbstractArray(const Type& type)
 {
-    return std::holds_alternative<AbstractArrayType>(type.getVariant());
+    return type.is<AbstractArrayType>();
 }
 
 inline bool cld::Semantics::isCharArray(const Type& type, const LanguageOptions& options)
@@ -2854,8 +3005,8 @@ inline bool cld::Semantics::isCharArray(const Type& type, const LanguageOptions&
 
 inline const cld::Semantics::Type& cld::Semantics::getArrayElementType(const Type& type)
 {
-    return cld::match(
-        type.getVariant(), [](const auto&) -> const Type& { CLD_UNREACHABLE; },
+    return type.match(
+        [](const auto&) -> const Type& { CLD_UNREACHABLE; },
         [](const ArrayType& arrayType) -> const Type& { return arrayType.getType(); },
         [](const AbstractArrayType& abstractArrayType) -> const Type& { return abstractArrayType.getType(); },
         [](const ValArrayType& arrayType) -> const Type& { return arrayType.getType(); });
@@ -2863,36 +3014,33 @@ inline const cld::Semantics::Type& cld::Semantics::getArrayElementType(const Typ
 
 inline const cld::Semantics::Type& cld::Semantics::getVectorElementType(const Type& type)
 {
-    return cld::get<VectorType>(type.getVariant()).getType();
+    return type.cast<VectorType>().getType();
 }
 
 inline const cld::Semantics::Type& cld::Semantics::getPointerElementType(const Type& type)
 {
-    return cld::get<PointerType>(type.getVariant()).getElementType();
+    return type.cast<PointerType>().getElementType();
 }
 
 inline bool cld::Semantics::isInteger(const Type& type)
 {
-    return std::holds_alternative<PrimitiveType>(type.getVariant())
-           && !cld::get<PrimitiveType>(type.getVariant()).isFloatingPoint()
-           && cld::get<PrimitiveType>(type.getVariant()).getBitCount() != 0;
+    return type.is<PrimitiveType>() && !type.cast<PrimitiveType>().isFloatingPoint()
+           && type.cast<PrimitiveType>().getBitCount() != 0;
 }
 
 inline bool cld::Semantics::isArithmetic(const Type& type)
 {
-    return (std::holds_alternative<PrimitiveType>(type.getVariant())
-            && cld::get<PrimitiveType>(type.getVariant()).getBitCount() != 0)
-           || std::holds_alternative<EnumType>(type.getVariant());
+    return (type.is<PrimitiveType>() && type.cast<PrimitiveType>().getBitCount() != 0) || type.is<EnumType>();
 }
 
 inline bool cld::Semantics::isScalar(const Type& type)
 {
-    return isArithmetic(type) || std::holds_alternative<PointerType>(type.getVariant());
+    return isArithmetic(type) || type.is<PointerType>();
 }
 
 inline bool cld::Semantics::isPointer(const cld::Semantics::Type& type)
 {
-    return std::holds_alternative<PointerType>(type.getVariant());
+    return type.is<PointerType>();
 }
 
 inline bool cld::Semantics::isRecord(const cld::Semantics::Type& type)
@@ -2902,31 +3050,29 @@ inline bool cld::Semantics::isRecord(const cld::Semantics::Type& type)
 
 inline bool cld::Semantics::isStruct(const cld::Semantics::Type& type)
 {
-    return std::holds_alternative<StructType>(type.getVariant());
+    return type.is<StructType>();
 }
 
 inline bool cld::Semantics::isUnion(const cld::Semantics::Type& type)
 {
-    return std::holds_alternative<UnionType>(type.getVariant());
+    return type.is<UnionType>();
 }
 
 inline bool cld::Semantics::isAnonymous(const Type& type)
 {
-    return (std::holds_alternative<EnumType>(type.getVariant()) && cld::get<EnumType>(type.getVariant()).isAnonymous())
-           || (std::holds_alternative<StructType>(type.getVariant())
-               && cld::get<StructType>(type.getVariant()).isAnonymous())
-           || (std::holds_alternative<UnionType>(type.getVariant())
-               && cld::get<UnionType>(type.getVariant()).isAnonymous());
+    return (type.is<EnumType>() && type.cast<EnumType>().isAnonymous())
+           || (type.is<StructType>() && type.cast<StructType>().isAnonymous())
+           || (type.is<UnionType>() && type.cast<UnionType>().isAnonymous());
 }
 
 inline bool cld::Semantics::isEnum(const Type& type)
 {
-    return std::holds_alternative<EnumType>(type.getVariant());
+    return type.is<EnumType>();
 }
 
 inline bool cld::Semantics::isBool(const cld::Semantics::Type& type)
 {
-    auto* primitive = std::get_if<PrimitiveType>(&type.getVariant());
+    auto* primitive = type.get_if<PrimitiveType>();
     if (!primitive)
     {
         return false;
@@ -2936,7 +3082,7 @@ inline bool cld::Semantics::isBool(const cld::Semantics::Type& type)
 
 inline bool cld::Semantics::isCharType(const cld::Semantics::Type& type)
 {
-    auto* primitive = std::get_if<PrimitiveType>(&type.getVariant());
+    auto* primitive = type.get_if<PrimitiveType>();
     if (!primitive)
     {
         return false;
@@ -2952,7 +3098,7 @@ inline bool cld::Semantics::isCharacterLikeType(const Type& type, const Language
     {
         return true;
     }
-    return removeQualifiers(type) == PrimitiveType::createWcharT(false, false, options);
+    return *removeQualifiers(type) == PrimitiveType::createWcharT(false, false, options);
 }
 
 inline bool cld::Semantics::isAggregate(const Type& type)
@@ -2962,24 +3108,26 @@ inline bool cld::Semantics::isAggregate(const Type& type)
 
 inline bool cld::Semantics::isVector(const Type& type)
 {
-    return std::holds_alternative<VectorType>(type.getVariant());
+    return type.is<VectorType>();
 }
 
 inline bool cld::Semantics::isFunctionType(const Type& type)
 {
-    return std::holds_alternative<FunctionType>(type.getVariant());
+    return type.is<FunctionType>();
 }
 
-inline cld::Semantics::Type cld::Semantics::removeQualifiers(Type type)
+inline cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::removeQualifiers(const Type& type)
 {
-    if (type.isConst() || type.isVolatile()
-        || (isPointer(type) && cld::get<PointerType>(type.getVariant()).isRestricted()))
+    if (type.isConst() || type.isVolatile() || (isPointer(type) && type.cast<PointerType>().isRestricted()))
     {
-        if (!isPointer(type) || !cld::get<PointerType>(type.getVariant()).isRestricted())
+        if (!isPointer(type) || !type.cast<PointerType>().isRestricted())
         {
-            return Type(false, false, std::move(type).getVariant());
+            IntrVarValue<Type> copy = type;
+            copy->setConst(false);
+            copy->setVolatile(false);
+            return copy;
         }
-        return PointerType::create(false, false, false, getPointerElementType(type));
+        return PointerType(false, false, false, &getPointerElementType(type));
     }
     return type;
 }

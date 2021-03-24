@@ -1,7 +1,7 @@
 #include <catch.hpp>
 
 #include <cld/Support/AbstractIntrusiveVariant.hpp>
-#include <cld/Support/IntrusiveVariantAllocator.hpp>
+#include <cld/Support/IntrVarAllocator.hpp>
 
 #include <queue>
 
@@ -55,8 +55,8 @@ TEST_CASE("IntrusiveVariantAllocator", "[IVA]")
 {
     SECTION("Simple allocation")
     {
-        cld::IntrusiveVariantAllocator<Base> allocator;
-        auto* derived1 = allocator.alloc<Derived1>(5, 3.0);
+        cld::IntrVarAllocator<Base> allocator;
+        auto derived1 = allocator.alloc<Derived1>(5, 3.0);
         CHECK(derived1->is<Derived1>());
         CHECK(derived1->size == 5);
         CHECK(derived1->thing == 3.0);
@@ -65,9 +65,9 @@ TEST_CASE("IntrusiveVariantAllocator", "[IVA]")
     {
         DestrSideEffect::i = 0;
         {
-            cld::IntrusiveVariantAllocator<Base> allocator;
+            cld::IntrVarAllocator<Base> allocator;
             CHECK(DestrSideEffect::i == 0);
-            auto* derived1 = allocator.alloc<DestrSideEffect>();
+            auto derived1 = allocator.alloc<DestrSideEffect>();
             CHECK(derived1->is<DestrSideEffect>());
             CHECK(DestrSideEffect::i == 1);
         }
@@ -76,9 +76,9 @@ TEST_CASE("IntrusiveVariantAllocator", "[IVA]")
     SECTION("Can manually deallocate")
     {
         DestrSideEffect::i = 0;
-        cld::IntrusiveVariantAllocator<Base> allocator;
+        cld::IntrVarAllocator<Base> allocator;
         CHECK(DestrSideEffect::i == 0);
-        auto* derived1 = allocator.alloc<DestrSideEffect>();
+        auto derived1 = allocator.alloc<DestrSideEffect>();
         CHECK(derived1->is<DestrSideEffect>());
         CHECK(DestrSideEffect::i == 1);
         allocator.destroy(derived1);
@@ -296,7 +296,7 @@ TEST_CASE("IntrusiveVariantAllocator", "[IVA]")
             {false, 0, 0.0f},
         };
 
-        cld::IntrusiveVariantAllocator<Base> allocator;
+        cld::IntrVarAllocator<Base> allocator;
         for (auto& iter : operations)
         {
             if (!iter.alloc)
@@ -316,10 +316,10 @@ TEST_CASE("IntrusiveVariantAllocator", "[IVA]")
     }
     SECTION("Large amount")
     {
-        cld::IntrusiveVariantAllocator<Base> allocator;
+        cld::IntrVarAllocator<Base> allocator;
         for (std::size_t i = 0; i < 1000; i++)
         {
-            auto* derived1 = allocator.alloc<Derived1>(5, 3.0);
+            auto derived1 = allocator.alloc<Derived1>(5, 3.0);
             CHECK(derived1->is<Derived1>());
             CHECK(derived1->size == 5);
             CHECK(derived1->thing == 3.0);
@@ -330,7 +330,7 @@ TEST_CASE("IntrusiveVariantAllocator", "[IVA]")
         DestrSideEffect::i = 0;
         cld::IVAUniquePtr<Base, DestrSideEffect> ptr;
         CHECK(DestrSideEffect::i == 0);
-        cld::IntrusiveVariantAllocator<Base> allocator;
+        cld::IntrVarAllocator<Base> allocator;
         ptr = allocator.allocUnique<DestrSideEffect>();
         CHECK(ptr->is<DestrSideEffect>());
         CHECK(DestrSideEffect::i == 1);
@@ -339,7 +339,7 @@ TEST_CASE("IntrusiveVariantAllocator", "[IVA]")
     }
     SECTION("No double destruction")
     {
-        cld::IntrusiveVariantAllocator<Base> allocator;
+        cld::IntrVarAllocator<Base> allocator;
         auto firstTree = allocator.allocUnique<Tree>();
         auto secondTree = allocator.allocUnique<Tree>();
         secondTree->sub = std::move(firstTree);

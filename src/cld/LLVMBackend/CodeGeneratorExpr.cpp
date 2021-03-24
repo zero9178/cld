@@ -80,9 +80,8 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::Conversion
                 // This should be a noop for enums
                 return value;
             }
-            return valueOf(
-                m_builder.CreateIntCast(value.value, visit(conversion.getType()),
-                                        cld::get<Semantics::PrimitiveType>(prevType.getVariant()).isSigned()));
+            return valueOf(m_builder.CreateIntCast(value.value, visit(conversion.getType()),
+                                                   prevType.cast<Semantics::PrimitiveType>().isSigned()));
         }
         case Semantics::Conversion::Implicit:
         {
@@ -92,7 +91,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::Conversion
             {
                 return valueOf(m_builder.CreateIntCast(toBool(value.value), visit(newType), false));
             }
-            if (std::holds_alternative<Semantics::PointerType>(newType.getVariant()))
+            if (newType.is<Semantics::PointerType>())
             {
                 if (Semantics::isInteger(prevType))
                 {
@@ -114,8 +113,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::Conversion
             {
                 if (Semantics::isArithmetic(prevType))
                 {
-                    return m_builder.CreateVectorSplat(cld::get<Semantics::VectorType>(newType.getVariant()).getSize(),
-                                                       value);
+                    return m_builder.CreateVectorSplat(newType.cast<Semantics::VectorType>().getSize(), value);
                 }
 
                 // signed to unsigned cast, only implicit cast allowed with vectors and is a noop in LLVM IR
@@ -125,12 +123,12 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::Conversion
             }
             if (Semantics::isInteger(prevType) && Semantics::isInteger(newType))
             {
-                return valueOf(m_builder.CreateIntCast(
-                    value.value, visit(newType), cld::get<Semantics::PrimitiveType>(prevType.getVariant()).isSigned()));
+                return valueOf(m_builder.CreateIntCast(value.value, visit(newType),
+                                                       prevType.cast<Semantics::PrimitiveType>().isSigned()));
             }
             if (Semantics::isInteger(prevType))
             {
-                if (cld::get<Semantics::PrimitiveType>(prevType.getVariant()).isSigned())
+                if (prevType.cast<Semantics::PrimitiveType>().isSigned())
                 {
                     return valueOf(m_builder.CreateSIToFP(value.value, visit(newType)));
                 }
@@ -139,11 +137,11 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::Conversion
             }
             if (Semantics::isInteger(newType))
             {
-                if (std::holds_alternative<Semantics::PointerType>(prevType.getVariant()))
+                if (prevType.is<Semantics::PointerType>())
                 {
                     return valueOf(m_builder.CreatePtrToInt(value.value, visit(newType)));
                 }
-                if (cld::get<Semantics::PrimitiveType>(newType.getVariant()).isSigned())
+                if (newType.cast<Semantics::PrimitiveType>().isSigned())
                 {
                     return valueOf(m_builder.CreateFPToSI(value.value, visit(newType)));
                 }
@@ -157,9 +155,8 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::Conversion
             auto& prevType = conversion.getExpression().getType();
             if (Semantics::isInteger(prevType))
             {
-                return valueOf(
-                    m_builder.CreateIntCast(value.value, visit(conversion.getType()),
-                                            cld::get<Semantics::PrimitiveType>(prevType.getVariant()).isSigned()));
+                return valueOf(m_builder.CreateIntCast(value.value, visit(conversion.getType()),
+                                                       prevType.cast<Semantics::PrimitiveType>().isSigned()));
             }
             return valueOf(m_builder.CreateFPCast(value.value, visit(conversion.getType())));
         }
@@ -170,12 +167,10 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::Conversion
 cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::MemberAccess& memberAccess)
 {
     auto value = visit(memberAccess.getRecordExpression());
-    auto& type =
-        std::holds_alternative<Semantics::PointerType>(memberAccess.getRecordExpression().getType().getVariant()) ?
-            cld::get<Semantics::PointerType>(memberAccess.getRecordExpression().getType().getVariant())
-                .getElementType() :
-            memberAccess.getRecordExpression().getType();
-    if (!std::holds_alternative<Semantics::PointerType>(memberAccess.getRecordExpression().getType().getVariant())
+    auto& type = memberAccess.getRecordExpression().getType().is<Semantics::PointerType>() ?
+                     Semantics::getPointerElementType(memberAccess.getRecordExpression().getType()) :
+                     memberAccess.getRecordExpression().getType();
+    if (!memberAccess.getRecordExpression().getType().is<Semantics::PointerType>()
         && memberAccess.getRecordExpression().getValueCategory() != Semantics::ValueCategory::Lvalue)
     {
         // Struct access is only ever allowed on pointers or lvalues except through the return value of a function
@@ -187,7 +182,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::MemberAcce
     auto& cldField = memberAccess.getField();
     auto indices = llvm::ArrayRef(cldField.indices);
     auto parentTypes = cldField.parentTypes;
-    parentTypes.insert(parentTypes.begin(), std::make_shared<const Semantics::Type>(type));
+    parentTypes.insert(parentTypes.begin(), &type);
     Value field = value;
     for (auto iter = parentTypes.begin(); iter != parentTypes.end(); iter++)
     {
@@ -207,12 +202,12 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::MemberAcce
     {
         // If the record expression is the return value of a function and this is a dot access not arrow access
         // we must load because an rvalue is returned and no lvalue conversion will load for us
-        if (!std::holds_alternative<Semantics::PointerType>(memberAccess.getRecordExpression().getType().getVariant())
+        if (!memberAccess.getRecordExpression().getType().is<Semantics::PointerType>()
             && (memberAccess.getRecordExpression().getValueCategory() != Semantics::ValueCategory::Lvalue))
         {
             // Arrays are generally passed around as llvm pointers to llvm arrays to be able to decay them to
             // pointers. Best example for this are string literals which for this reason are global variables
-            if (std::holds_alternative<Semantics::ArrayType>(cldField.type->getVariant()))
+            if (cldField.type->is<Semantics::ArrayType>())
             {
                 return field;
             }
@@ -225,7 +220,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::MemberAcce
     auto upLeft = loaded.value->getType()->getPrimitiveSizeInBits() - cldField.bitFieldBounds->second;
     auto* shl = m_builder.CreateShl(loaded.value, llvm::ConstantInt::get(loaded.value->getType(), upLeft));
     auto* shrConstant = llvm::ConstantInt::get(loaded.value->getType(), upLeft + cldField.bitFieldBounds->first);
-    if (cld::get<Semantics::PrimitiveType>(memberAccess.getType().getVariant()).isSigned())
+    if (memberAccess.getType().cast<Semantics::PrimitiveType>().isSigned())
     {
         return valueOf(m_builder.CreateAShr(shl, shrConstant));
     }
@@ -290,14 +285,12 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::BinaryOper
                 fp = Semantics::isArithmetic(Semantics::getVectorElementType(lhsType))
                      && !Semantics::isInteger(Semantics::getVectorElementType(lhsType));
                 isSigned = Semantics::isInteger(Semantics::getVectorElementType(lhsType))
-                           && cld::get<Semantics::PrimitiveType>(Semantics::getVectorElementType(lhsType).getVariant())
-                                  .isSigned();
+                           && Semantics::getVectorElementType(lhsType).cast<Semantics::PrimitiveType>().isSigned();
             }
             else
             {
                 fp = Semantics::isArithmetic(lhsType) && !Semantics::isInteger(lhsType);
-                isSigned = Semantics::isInteger(lhsType)
-                           && cld::get<Semantics::PrimitiveType>(lhsType.getVariant()).isSigned();
+                isSigned = Semantics::isInteger(lhsType) && lhsType.cast<Semantics::PrimitiveType>().isSigned();
             }
 
             switch (binaryExpression.getKind())
@@ -487,7 +480,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::UnaryOpera
             auto prev = createLoad(value, isVolatile);
             if (Semantics::isInteger(unaryOperator.getOperand().getType()))
             {
-                if (cld::get<Semantics::PrimitiveType>(unaryOperator.getOperand().getType().getVariant()).isSigned())
+                if (unaryOperator.getOperand().getType().cast<Semantics::PrimitiveType>().isSigned())
                 {
                     auto* result = m_builder.CreateNSWAdd(prev, llvm::ConstantInt::get(prev.value->getType(), 1));
                     createStore(result, value, isVolatile);
@@ -498,7 +491,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::UnaryOpera
                     createStore(result, value, isVolatile);
                 }
             }
-            else if (!std::holds_alternative<Semantics::PointerType>(unaryOperator.getOperand().getType().getVariant()))
+            else if (!unaryOperator.getOperand().getType().is<Semantics::PointerType>())
             {
                 auto* result = m_builder.CreateFAdd(prev, llvm::ConstantFP::get(prev.value->getType(), 1));
                 createStore(result, value, isVolatile);
@@ -515,7 +508,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::UnaryOpera
             auto prev = createLoad(value, isVolatile);
             if (Semantics::isInteger(unaryOperator.getOperand().getType()))
             {
-                if (cld::get<Semantics::PrimitiveType>(unaryOperator.getOperand().getType().getVariant()).isSigned())
+                if (unaryOperator.getOperand().getType().cast<Semantics::PrimitiveType>().isSigned())
                 {
                     auto* result = m_builder.CreateNSWSub(prev, llvm::ConstantInt::get(prev.value->getType(), 1));
                     createStore(result, value, isVolatile);
@@ -526,7 +519,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::UnaryOpera
                     createStore(result, value, isVolatile);
                 }
             }
-            else if (!std::holds_alternative<Semantics::PointerType>(unaryOperator.getOperand().getType().getVariant()))
+            else if (!unaryOperator.getOperand().getType().is<Semantics::PointerType>())
             {
                 auto* result = m_builder.CreateFSub(prev, llvm::ConstantFP::get(prev.value->getType(), 1));
                 createStore(result, value, isVolatile);
@@ -544,7 +537,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::UnaryOpera
             auto prev = createLoad(value, isVolatile);
             if (Semantics::isInteger(unaryOperator.getOperand().getType()))
             {
-                if (cld::get<Semantics::PrimitiveType>(unaryOperator.getOperand().getType().getVariant()).isSigned())
+                if (unaryOperator.getOperand().getType().cast<Semantics::PrimitiveType>().isSigned())
                 {
                     result = m_builder.CreateNSWAdd(prev, llvm::ConstantInt::get(prev.value->getType(), 1));
                     createStore(result, value, isVolatile);
@@ -555,7 +548,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::UnaryOpera
                     createStore(result, value, isVolatile);
                 }
             }
-            else if (!std::holds_alternative<Semantics::PointerType>(unaryOperator.getOperand().getType().getVariant()))
+            else if (!unaryOperator.getOperand().getType().is<Semantics::PointerType>())
             {
                 result = m_builder.CreateFAdd(prev, llvm::ConstantFP::get(prev.value->getType(), 1));
                 createStore(result, value, isVolatile);
@@ -573,7 +566,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::UnaryOpera
             auto prev = createLoad(value, isVolatile);
             if (Semantics::isInteger(unaryOperator.getOperand().getType()))
             {
-                if (cld::get<Semantics::PrimitiveType>(unaryOperator.getOperand().getType().getVariant()).isSigned())
+                if (unaryOperator.getOperand().getType().cast<Semantics::PrimitiveType>().isSigned())
                 {
                     result = m_builder.CreateNSWSub(prev, llvm::ConstantInt::get(prev.value->getType(), 1));
                     createStore(result, value, isVolatile);
@@ -584,7 +577,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::UnaryOpera
                     createStore(result, value, isVolatile);
                 }
             }
-            else if (!std::holds_alternative<Semantics::PointerType>(unaryOperator.getOperand().getType().getVariant()))
+            else if (!unaryOperator.getOperand().getType().is<Semantics::PointerType>())
             {
                 result = m_builder.CreateFSub(prev, llvm::ConstantFP::get(prev.value->getType(), 1));
                 createStore(result, value, isVolatile);
@@ -601,7 +594,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::UnaryOpera
         {
             if (Semantics::isInteger(unaryOperator.getOperand().getType()))
             {
-                if (cld::get<Semantics::PrimitiveType>(unaryOperator.getOperand().getType().getVariant()).isSigned())
+                if (unaryOperator.getOperand().getType().cast<Semantics::PrimitiveType>().isSigned())
                 {
                     return m_builder.CreateNSWNeg(value);
                 }
@@ -632,7 +625,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::SizeofOper
     const Semantics::Type& type = cld::match(
         sizeofOperator.getVariant(),
         [](const Semantics::SizeofOperator::TypeVariant& typeVariant) -> const Semantics::Type& {
-            return typeVariant.type;
+            return *typeVariant.type;
         },
         [](const cld::IntrVarPtr<Semantics::ExpressionBase>& expression) -> const Semantics::Type& {
             return expression->getType();
@@ -649,13 +642,13 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::SizeofOper
     for (auto& iter : Semantics::RecursiveVisitor(type, Semantics::ARRAY_TYPE_NEXT_FN))
     {
         llvm::Value* temp;
-        if (std::holds_alternative<Semantics::ArrayType>(iter.getVariant()))
+        if (iter.is<Semantics::ArrayType>())
         {
-            temp = m_builder.getInt64(cld::get<Semantics::ArrayType>(iter.getVariant()).getSize());
+            temp = m_builder.getInt64(iter.cast<Semantics::ArrayType>().getSize());
         }
         else
         {
-            temp = m_valSizes[cld::get<Semantics::ValArrayType>(iter.getVariant()).getExpression()];
+            temp = m_valSizes[iter.cast<Semantics::ValArrayType>().getExpression()];
         }
         value = m_builder.CreateMul(value, temp);
     }
@@ -668,21 +661,18 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::SubscriptO
     auto* pointer = &subscriptOperator.getPointerExpression();
     if (!pointer->is<Semantics::Conversion>()
         || pointer->cast<Semantics::Conversion>().getKind() != Semantics::Conversion::LValue
-        || !std::holds_alternative<Semantics::ValArrayType>(
-            pointer->cast<Semantics::Conversion>().getExpression().getType().getVariant()))
+        || !pointer->cast<Semantics::Conversion>().getExpression().getType().is<Semantics::ValArrayType>())
     {
         auto llvmInteger = visit(integer);
         auto llvmPointer = visit(*pointer);
 
-        llvmInteger =
-            m_builder.CreateIntCast(llvmInteger, m_builder.getInt64Ty(),
-                                    cld::get<Semantics::PrimitiveType>(integer.getType().getVariant()).isSigned());
+        llvmInteger = m_builder.CreateIntCast(llvmInteger, m_builder.getInt64Ty(),
+                                              integer.getType().cast<Semantics::PrimitiveType>().isSigned());
         return createGEP(llvmPointer, {llvmInteger});
     }
 
-    std::vector<llvm::Value*> products = {
-        m_builder.CreateIntCast(visit(integer), m_builder.getInt64Ty(),
-                                cld::get<Semantics::PrimitiveType>(integer.getType().getVariant()).isSigned())};
+    std::vector<llvm::Value*> products = {m_builder.CreateIntCast(
+        visit(integer), m_builder.getInt64Ty(), integer.getType().cast<Semantics::PrimitiveType>().isSigned())};
     llvm::Value* dimensionProduct = nullptr;
     while (pointer->is<Semantics::Conversion>()
            && pointer->cast<Semantics::Conversion>().getKind() == Semantics::Conversion::LValue)
@@ -696,18 +686,16 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::SubscriptO
         auto& subPointer = subOp.getPointerExpression();
         auto& subInteger = subOp.getIntegerExpression();
         llvm::Value* newInt = visit(subInteger);
-        newInt =
-            m_builder.CreateIntCast(newInt, m_builder.getInt64Ty(),
-                                    cld::get<Semantics::PrimitiveType>(subInteger.getType().getVariant()).isSigned());
+        newInt = m_builder.CreateIntCast(newInt, m_builder.getInt64Ty(),
+                                         subInteger.getType().cast<Semantics::PrimitiveType>().isSigned());
         llvm::Value* newDimension;
         if (Semantics::isArrayType(subExpr.getType()))
         {
-            newDimension = m_builder.getInt64(cld::get<Semantics::ArrayType>(subExpr.getType().getVariant()).getSize());
+            newDimension = m_builder.getInt64(subExpr.getType().cast<Semantics::ArrayType>().getSize());
         }
         else
         {
-            newDimension =
-                m_valSizes[cld::get<Semantics::ValArrayType>(subExpr.getType().getVariant()).getExpression()];
+            newDimension = m_valSizes[subExpr.getType().cast<Semantics::ValArrayType>().getExpression()];
         }
         if (!dimensionProduct)
         {
@@ -831,18 +819,16 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::Assignment
     }
     auto& memberAccess = assignment.getLeftExpression().cast<Semantics::MemberAccess>();
     auto lhsRecord = visit(memberAccess.getRecordExpression());
-    auto& type =
-        std::holds_alternative<Semantics::PointerType>(memberAccess.getRecordExpression().getType().getVariant()) ?
-            cld::get<Semantics::PointerType>(memberAccess.getRecordExpression().getType().getVariant())
-                .getElementType() :
-            memberAccess.getRecordExpression().getType();
+    auto& type = memberAccess.getRecordExpression().getType().is<Semantics::PointerType>() ?
+                     Semantics::getPointerElementType(memberAccess.getRecordExpression().getType()) :
+                     memberAccess.getRecordExpression().getType();
     auto rhsValue = visit(assignment.getRightExpression());
 
     auto& cldField = memberAccess.getField();
     auto field = lhsRecord;
     auto indices = llvm::ArrayRef(cldField.indices);
     auto parentTypes = cldField.parentTypes;
-    parentTypes.insert(parentTypes.begin(), std::make_shared<const Semantics::Type>(type));
+    parentTypes.insert(parentTypes.begin(), &type);
     for (auto iter = parentTypes.begin(); iter != parentTypes.end(); iter++)
     {
         auto index = iter - parentTypes.begin();
@@ -1130,7 +1116,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::CallExpres
                 auto value = visit(*call.getArgumentExpressions()[1]);
                 auto* pointerType =
                     value.value->getType()->isPointerTy() ? value.value->getType()->getPointerElementType() : nullptr;
-                auto type = call.getArgumentExpressions()[1]->getType();
+                IntrVarValue<Semantics::Type> type = call.getArgumentExpressions()[1]->getType();
                 if (pointerType)
                 {
                     llvm::IntegerType* intPtrType = m_module.getDataLayout().getIntPtrType(m_module.getContext(), 0);
@@ -1155,8 +1141,8 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::CallExpres
                 llvm::Value* ret;
                 switch (builtin.getKind())
                 {
-                    case Semantics::BuiltinFunction::SyncAddAndFetch: ret = add(temp, type, value, type); break;
-                    case Semantics::BuiltinFunction::SyncSubAndFetch: ret = sub(temp, type, value, type); break;
+                    case Semantics::BuiltinFunction::SyncAddAndFetch: ret = add(temp, *type, value, *type); break;
+                    case Semantics::BuiltinFunction::SyncSubAndFetch: ret = sub(temp, *type, value, *type); break;
                     case Semantics::BuiltinFunction::SyncOrAndFetch: ret = m_builder.CreateOr(temp, value); break;
                     case Semantics::BuiltinFunction::SyncAndAndFetch: ret = m_builder.CreateAnd(temp, value); break;
                     case Semantics::BuiltinFunction::SyncXorAndFetch: ret = m_builder.CreateXor(temp, value); break;
@@ -1230,22 +1216,19 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::CallExpres
         CLD_UNREACHABLE;
     }
     auto function = visit(call.getFunctionExpression());
-    auto cldFt = cld::get<Semantics::FunctionType>(
-        cld::get<Semantics::PointerType>(call.getFunctionExpression().getType().getVariant())
-            .getElementType()
-            .getVariant());
+    Semantics::FunctionType cldFt =
+        Semantics::getPointerElementType(call.getFunctionExpression().getType()).cast<Semantics::FunctionType>();
     auto* ft = llvm::cast<llvm::FunctionType>(function.value->getType()->getPointerElementType());
     bool isKandR = cldFt.isKandR();
     if (isKandR || cldFt.isLastVararg())
     {
-        std::vector<std::pair<Semantics::Type, std::string_view>> arguments;
+        std::vector<Semantics::FunctionType::Parameter> arguments;
         for (auto& iter : call.getArgumentExpressions())
         {
-            arguments.emplace_back(iter->getType(), "");
+            arguments.push_back({&iter->getType(), ""});
         }
-        auto callerFt = Semantics::FunctionType::create(cldFt.getReturnType(), std::move(arguments), false, false);
-        ft = llvm::cast<llvm::FunctionType>(visit(callerFt));
-        cldFt = cld::get<Semantics::FunctionType>(callerFt.getVariant());
+        cldFt = Semantics::FunctionType(&cldFt.getReturnType(), std::move(arguments), false, false);
+        ft = llvm::cast<llvm::FunctionType>(visit(cldFt));
     }
     if (isKandR)
     {
@@ -1305,44 +1288,45 @@ llvm::Value* visitStaticInitializerList(cld::CGLLVM::CodeGenerator& codeGenerato
         std::optional<std::uint32_t> unionIndex;
     };
     Aggregate constants;
-    auto genAggregate = cld::YComb{[&](auto&& self, const cld::Semantics::Type& type, Aggregate& aggregate) -> void {
-        if (cld::Semantics::isStruct(type))
-        {
-            auto fields = cld::Semantics::getFieldLayout(type);
-            aggregate.vector.resize(fields.size());
-            for (const auto* iter = fields.begin(); iter != fields.end(); iter++)
-            {
-                if (!cld::Semantics::isAggregate(*iter->type))
-                {
-                    continue;
-                }
-                auto& vector = aggregate.vector[iter - fields.begin()].emplace<Aggregate>();
-                self(*iter->type, vector);
-            }
-        }
-        else if (cld::Semantics::isArray(type))
-        {
-            auto& array = cld::get<cld::Semantics::ArrayType>(type.getVariant());
-            std::variant<llvm::Constant*, Aggregate> value;
-            if (cld::Semantics::isAggregate(array.getType()))
-            {
-                auto& vector = value.emplace<Aggregate>();
-                self(array.getType(), vector);
-            }
-            aggregate.vector.resize(array.getSize(), value);
-        }
-        else if (cld::Semantics::isVector(type))
-        {
-            auto& vector = cld::get<cld::Semantics::VectorType>(type.getVariant());
-            aggregate.vector.resize(vector.getSize());
-        }
-    }};
+    auto genAggregate = cld::YComb{[&](auto&& self, const cld::Semantics::Type& type, Aggregate& aggregate) -> void
+                                   {
+                                       if (cld::Semantics::isStruct(type))
+                                       {
+                                           auto fields = cld::Semantics::getFieldLayout(type);
+                                           aggregate.vector.resize(fields.size());
+                                           for (const auto* iter = fields.begin(); iter != fields.end(); iter++)
+                                           {
+                                               if (!cld::Semantics::isAggregate(*iter->type))
+                                               {
+                                                   continue;
+                                               }
+                                               auto& vector =
+                                                   aggregate.vector[iter - fields.begin()].emplace<Aggregate>();
+                                               self(*iter->type, vector);
+                                           }
+                                       }
+                                       else if (auto* array = type.get_if<cld::Semantics::ArrayType>())
+                                       {
+                                           std::variant<llvm::Constant*, Aggregate> value;
+                                           if (cld::Semantics::isAggregate(array->getType()))
+                                           {
+                                               auto& vector = value.emplace<Aggregate>();
+                                               self(array->getType(), vector);
+                                           }
+                                           aggregate.vector.resize(array->getSize(), value);
+                                       }
+                                       else if (auto* vector = type.get_if<cld::Semantics::VectorType>())
+                                       {
+                                           aggregate.vector.resize(vector->getSize());
+                                       }
+                                   }};
     genAggregate(type, constants);
 
     for (auto& [path, expression] : initializerList.getFields())
     {
         auto replacement = codeGenerator.visit(*expression);
-        llvm::Constant** value = [&, &path = path, &expression = expression]() -> llvm::Constant** {
+        llvm::Constant** value = [&, &path = path, &expression = expression]() -> llvm::Constant**
+        {
             Aggregate* current = &constants;
             const cld::Semantics::Type* currentType = &type;
             for (auto& iter : llvm::ArrayRef(path).drop_back())
@@ -1361,13 +1345,13 @@ llvm::Value* visitStaticInitializerList(cld::CGLLVM::CodeGenerator& codeGenerato
                             genAggregate(*fields[iter].type, vector);
                         }
                     }
-                    currentType = fields[iter].type.get();
+                    currentType = fields[iter].type;
                     current = &cld::get<Aggregate>(current->vector[0]);
                     continue;
                 }
                 if (cld::Semantics::isStruct(*currentType))
                 {
-                    currentType = cld::Semantics::getFieldLayout(*currentType)[iter].type.get();
+                    currentType = cld::Semantics::getFieldLayout(*currentType)[iter].type;
                 }
                 else if (cld::Semantics::isArray(*currentType))
                 {
@@ -1523,8 +1507,8 @@ llvm::Value* visitStaticInitializerList(cld::CGLLVM::CodeGenerator& codeGenerato
                         return llvm::Constant::getNullValue(llvmType->getArrayElementType());
                     },
                     [&](const Aggregate& subAggregate) -> llvm::Constant* {
-                        return self(cld::get<cld::Semantics::ArrayType>(type.getVariant()).getType(),
-                                    llvmType->getArrayElementType(), subAggregate);
+                        return self(type.cast<cld::Semantics::ArrayType>().getType(), llvmType->getArrayElementType(),
+                                    subAggregate);
                     }));
                 elementTypes.push_back(elements.back()->getType());
                 if (elementType == nullptr)
@@ -1626,13 +1610,13 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::Initialize
                         auto fieldLayout = Semantics::getFieldLayout(*currentType);
                         currentPointer = createInBoundsGEP(
                             currentPointer, {m_builder.getInt64(0), m_builder.getInt32(fieldLayout[iter].layoutIndex)});
-                        currentType = fieldLayout[iter].type.get();
+                        currentType = fieldLayout[iter].type;
                         bitFieldBounds = fieldLayout[iter].bitFieldBounds;
                     }
                     else if (Semantics::isUnion(*currentType))
                     {
                         auto fields = Semantics::getFieldLayout(*currentType);
-                        currentType = fields[iter].type.get();
+                        currentType = fields[iter].type;
                         currentPointer =
                             createBitCast(currentPointer, llvm::PointerType::getUnqual(visit(*currentType)));
                         bitFieldBounds = fields[iter].bitFieldBounds;

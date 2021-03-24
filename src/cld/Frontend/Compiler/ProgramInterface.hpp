@@ -3,6 +3,8 @@
 
 #include <llvm/ADT/ArrayRef.h>
 
+#include <cld/Support/IntrVarAllocator.hpp>
+
 #include <deque>
 #include <unordered_map>
 
@@ -53,8 +55,8 @@ public:
         const Lexer::CToken* CLD_NULLABLE identifier; // Guaranteed to be non null if the scope isn't global and the
                                                       // declaration isn't a builtin variable like __func__
         using Variant = std::variant<VariableDeclaration * CLD_NON_NULL, FunctionDefinition * CLD_NON_NULL,
-                                     FunctionDeclaration * CLD_NON_NULL, BuiltinFunction * CLD_NON_NULL, Type,
-                                     std::pair<ConstValue, Type>>;
+                                     FunctionDeclaration * CLD_NON_NULL, BuiltinFunction * CLD_NON_NULL,
+                                     IntrVarValue<Type>, std::pair<ConstValue, IntrVarValue<Type>>>;
         Variant declared;
     };
 
@@ -76,12 +78,30 @@ public:
     constexpr static std::size_t END_OF_SCOPES = static_cast<std::size_t>(-1);
     constexpr static std::size_t GLOBAL_SCOPE = 0;
 
+    cld::IntrVarAllocator<Type> m_typeAlloc;
+
 protected:
     std::vector<Scope> m_scopes = {Scope{END_OF_SCOPES, {}, {}, {}}};
     std::deque<StructInfo> m_structDefinitions;
     std::deque<UnionInfo> m_unionDefinitions;
     std::deque<EnumInfo> m_enumDefinitions;
     std::unordered_map<std::string_view, BuiltinFunction> m_usedBuiltins;
+
+    cld::not_null<Type> typeAlloc(const Type& value)
+    {
+        return m_typeAlloc.alloc(value);
+    }
+
+    cld::not_null<Type> typeAlloc(Type&& value)
+    {
+        return m_typeAlloc.alloc(std::move(value));
+    }
+
+    template <class U, class... Args>
+    cld::not_null<U> typeAlloc(Args&&... args)
+    {
+        return m_typeAlloc.alloc<U>(std::forward<Args>(args)...);
+    }
 
 public:
     ProgramInterface() = default;

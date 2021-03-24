@@ -133,13 +133,13 @@ public:
 
 private:
     void handleParameterList(
-        Type& type, const Syntax::ParameterTypeList* CLD_NULLABLE parameterTypeList,
+        IntrVarValue<Type>& type, const Syntax::ParameterTypeList* CLD_NULLABLE parameterTypeList,
         const diag::PointRange& returnTypeLoc,
         cld::function_ref<void(const Type&, Lexer::CTokenIterator, const std::vector<Syntax::DeclarationSpecifier>&,
                                std::vector<GNUAttribute>&&)>
             paramCallback = {});
 
-    void handleArray(Type& type, const std::vector<Syntax::TypeQualifier>& typeQualifiers,
+    void handleArray(IntrVarValue<Type>& type, const std::vector<Syntax::TypeQualifier>& typeQualifiers,
                      const Syntax::AssignmentExpression* CLD_NULLABLE assignmentExpression,
                      const Lexer::CToken* isStatic, bool valArray, const diag::PointRange& returnTypeLoc);
 
@@ -147,7 +147,10 @@ private:
 
     [[nodiscard]] bool isTypedefInScope(std::string_view name) const;
 
-    [[nodiscard]] const Semantics::Type* CLD_NULLABLE getTypedef(std::string_view name);
+    [[nodiscard]] const IntrVarValue<Type>* CLD_NULLABLE getTypedef(std::string_view name)
+    {
+        return std::get_if<IntrVarValue<Type>>(lookupDecl(name));
+    }
 
     [[nodiscard]] const DeclarationInScope::Variant* CLD_NULLABLE getBuiltinFuncDecl(std::string_view name);
 
@@ -173,25 +176,27 @@ private:
                      const Syntax::StorageClassSpecifier * CLD_NON_NULL, const Syntax::FunctionSpecifier * CLD_NON_NULL,
                      const Syntax::GNUAttributes * CLD_NON_NULL>;
 
-    Type typeSpecifiersToType(bool isConst, bool isVolatile,
-                              const std::vector<const Syntax::TypeSpecifier * CLD_NON_NULL>& typeSpec);
+    IntrVarValue<Type> typeSpecifiersToType(bool isConst, bool isVolatile,
+                                            const std::vector<const Syntax::TypeSpecifier * CLD_NON_NULL>& typeSpec);
 
-    cld::Semantics::Type structOrUnionSpecifierToType(bool isConst, bool isVolatile,
-                                                      const Syntax::StructOrUnionSpecifier& structOrUnion);
+    IntrVarValue<Type> structOrUnionSpecifierToType(bool isConst, bool isVolatile,
+                                                    const Syntax::StructOrUnionSpecifier& structOrUnion);
 
-    Type applyDeclaratorsImpl(
-        Type&& type, const PossiblyAbstractQualifierRef& parameterList,
+    IntrVarValue<Type> applyDeclaratorsImpl(
+        IntrVarValue<Type>&& type, const PossiblyAbstractQualifierRef& parameterList,
         const std::vector<Syntax::Declaration>& declarations = {},
         cld::function_ref<void(const Type&, Lexer::CTokenIterator, const std::vector<Syntax::DeclarationSpecifier>&,
                                std::vector<GNUAttribute>&&)>
             paramCallback = {},
         std::vector<GNUAttribute>* attributesOut = nullptr);
 
-    Type qualifiersToTypeImpl(const std::vector<DeclarationOrSpecifierQualifier>& directAbstractDeclaratorParentheses,
-                              std::vector<GNUAttribute>* attributesOut = nullptr);
+    IntrVarValue<Type>
+        qualifiersToTypeImpl(const std::vector<DeclarationOrSpecifierQualifier>& directAbstractDeclaratorParentheses,
+                             std::vector<GNUAttribute>* attributesOut = nullptr);
 
-    Type primitiveTypeSpecifiersToType(bool isConst, bool isVolatile,
-                                       const std::vector<const Syntax::TypeSpecifier * CLD_NON_NULL>& typeSpecs);
+    IntrVarValue<Type>
+        primitiveTypeSpecifiersToType(bool isConst, bool isVolatile,
+                                      const std::vector<const Syntax::TypeSpecifier * CLD_NON_NULL>& typeSpecs);
 
     Scope& getCurrentScope()
     {
@@ -205,25 +210,25 @@ private:
 
     bool hasFlexibleArrayMember(const Type& type) const;
 
-    bool typesAreCompatible(const Type& lhs, const Type& rhs, bool leftIsFuncDefinition = false) const;
+    bool typesAreCompatible(const Type& lhs, const Type& rhs, bool leftIsFuncDefinition = false);
 
-    Type defaultArgumentPromotion(const Type& type) const;
+    IntrVarValue<Type> defaultArgumentPromotion(const Type& type);
 
-    Type integerPromotion(const Type& type) const;
+    IntrVarValue<Type> integerPromotion(const Type& type);
 
-    Type compositeType(const Type& lhs, const Type& rhs) const;
+    const Type& compositeType(const Type& lhs, const Type& rhs);
 
     IntrVarPtr<ExpressionBase> lvalueConversion(IntrVarPtr<ExpressionBase>&& expression);
 
-    static Type lvalueConversion(Type type);
+    IntrVarValue<Type> lvalueConversion(const Type& type);
 
     IntrVarPtr<ExpressionBase> defaultArgumentPromotion(IntrVarPtr<ExpressionBase>&& type);
 
     IntrVarPtr<ExpressionBase> integerPromotion(IntrVarPtr<ExpressionBase>&& expression);
 
-    static std::unique_ptr<Conversion> toBool(IntrVarPtr<ExpressionBase>&& expression);
+    std::unique_ptr<Conversion> toBool(IntrVarPtr<ExpressionBase>&& expression);
 
-    void arithmeticConversion(std::variant<IntrVarPtr<ExpressionBase> * CLD_NON_NULL, Type * CLD_NON_NULL> lhs,
+    void arithmeticConversion(std::variant<IntrVarPtr<ExpressionBase> * CLD_NON_NULL, const Type* * CLD_NON_NULL> lhs,
                               IntrVarPtr<ExpressionBase>& rhs);
 
     bool isModifiableLValue(const ExpressionBase& expression) const;
@@ -234,7 +239,7 @@ private:
 
     void reportNotApplicableAttributes(const std::vector<GNUAttribute>& attributes);
 
-    std::optional<std::pair<Type, const Field * CLD_NON_NULL>>
+    std::optional<std::pair<const Type*, const Field * CLD_NON_NULL>>
         checkMemberAccess(const Type& recordType, const Syntax::PostFixExpression& postFixExpr,
                           const Lexer::CToken& identifier);
 
@@ -247,6 +252,8 @@ private:
 
     void checkVectorCompoundAssign(const IntrVarPtr<ExpressionBase>& lhs, const Type& lhsType,
                                    Lexer::CTokenIterator token, const IntrVarPtr<ExpressionBase>& rhs);
+
+    VectorType vectorCompResultType(const VectorType& vectorType, const LanguageOptions& options);
 
     std::unique_ptr<BinaryOperator> doBitOperators(IntrVarPtr<ExpressionBase>&& lhs, BinaryOperator::Kind kind,
                                                    Lexer::CTokenIterator token, IntrVarPtr<ExpressionBase>&& rhs);
@@ -273,16 +280,16 @@ private:
     }
 
     template <class T>
-    Type declaratorsToType(const std::vector<T>& declarationOrSpecifierQualifiers,
-                           const Syntax::AbstractDeclarator* declarator = nullptr,
-                           std::vector<GNUAttribute>* attributes = nullptr)
+    IntrVarValue<Type> declaratorsToType(const std::vector<T>& declarationOrSpecifierQualifiers,
+                                         const Syntax::AbstractDeclarator* declarator = nullptr,
+                                         std::vector<GNUAttribute>* attributes = nullptr)
     {
         auto type = qualifiersToType(declarationOrSpecifierQualifiers, attributes);
         return applyDeclarator(std::move(type), declarator, attributes);
     }
 
     template <class T>
-    Type declaratorsToType(
+    IntrVarValue<Type> declaratorsToType(
         const std::vector<T>& declarationOrSpecifierQualifiers, const Syntax::Declarator& declarator,
         const std::vector<Syntax::Declaration>& declarations = {},
         cld::function_ref<void(const Type&, Lexer::CTokenIterator, const std::vector<Syntax::DeclarationSpecifier>&,
@@ -295,7 +302,8 @@ private:
     }
 
     template <class T>
-    Type qualifiersToType(const std::vector<T>& declarationOrSpecifierQualifiers, std::vector<GNUAttribute>* attributes)
+    IntrVarValue<Type> qualifiersToType(const std::vector<T>& declarationOrSpecifierQualifiers,
+                                        std::vector<GNUAttribute>* attributes)
     {
         std::vector<DeclarationOrSpecifierQualifier> temp(declarationOrSpecifierQualifiers.size());
         std::transform(declarationOrSpecifierQualifiers.begin(), declarationOrSpecifierQualifiers.end(), temp.begin(),
@@ -308,14 +316,15 @@ private:
         return qualifiersToTypeImpl(temp, attributes);
     }
 
-    Type applyDeclarator(Type type, const Syntax::AbstractDeclarator* declarator = nullptr,
-                         std::vector<GNUAttribute>* attributes = nullptr)
+    IntrVarValue<Type> applyDeclarator(IntrVarValue<Type> type, const Syntax::AbstractDeclarator* declarator = nullptr,
+                                       std::vector<GNUAttribute>* attributes = nullptr)
     {
         return applyDeclaratorsImpl(std::move(type), declarator, {}, {}, attributes);
     }
 
-    Type applyDeclarator(
-        Type type, const Syntax::Declarator& declarator, const std::vector<Syntax::Declaration>& declarations = {},
+    IntrVarValue<Type> applyDeclarator(
+        IntrVarValue<Type> type, const Syntax::Declarator& declarator,
+        const std::vector<Syntax::Declaration>& declarations = {},
         cld::function_ref<void(const Type&, Lexer::CTokenIterator, const std::vector<Syntax::DeclarationSpecifier>&,
                                std::vector<GNUAttribute>&&)>
             paramCallback = {},
@@ -358,13 +367,14 @@ private:
     std::unique_ptr<CallExpression> visitSyncBuiltinWithT(const Syntax::PostFixExpressionFunctionCall& node,
                                                           IntrVarPtr<ExpressionBase>&& function);
 
-    IntrVarPtr<ExpressionBase> checkFunctionArg(std::size_t i, Type paramType, IntrVarPtr<ExpressionBase>&& expression);
+    IntrVarPtr<ExpressionBase> checkFunctionArg(std::size_t i, IntrVarValue<Type> paramType,
+                                                IntrVarPtr<ExpressionBase>&& expression);
 
     bool checkFunctionCount(const ExpressionBase& function, const FunctionType& ft,
                             const Syntax::PostFixExpressionFunctionCall& node);
 
     std::unique_ptr<FunctionDeclaration>
-        visitFunctionDeclaration(Lexer::CTokenIterator loc, Type&& type,
+        visitFunctionDeclaration(Lexer::CTokenIterator loc, IntrVarValue<Type>&& type,
                                  const Syntax::StorageClassSpecifier* storageClassSpecifier, bool isInline,
                                  std::vector<GNUAttribute>&& attributes);
 
@@ -506,10 +516,10 @@ public:
 
     using AffectsFunctions = std::variant<FunctionDeclaration * CLD_NON_NULL, FunctionDefinition * CLD_NON_NULL>;
     using AffectsAll =
-        std::variant<std::pair<Type * CLD_NON_NULL, diag::PointRange>, FunctionDeclaration * CLD_NON_NULL,
+        std::variant<std::pair<const Type* * CLD_NON_NULL, diag::PointRange>, FunctionDeclaration * CLD_NON_NULL,
                      FunctionDefinition * CLD_NON_NULL, VariableDeclaration * CLD_NON_NULL>;
     using AffectsTypeVariable =
-        std::variant<VariableDeclaration * CLD_NON_NULL, std::pair<Type * CLD_NON_NULL, diag::PointRange>>;
+        std::variant<VariableDeclaration * CLD_NON_NULL, std::pair<const Type* * CLD_NON_NULL, diag::PointRange>>;
     using AffectsVariableFunction = std::variant<VariableDeclaration * CLD_NON_NULL, FunctionDeclaration * CLD_NON_NULL,
                                                  FunctionDefinition * CLD_NON_NULL>;
 

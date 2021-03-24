@@ -11,7 +11,7 @@
 #include "SemanticUtil.hpp"
 #include "Syntax.hpp"
 
-cld::Semantics::Type
+cld::Semantics::PrimitiveType
     cld::Semantics::PrimitiveType::fromUnderlyingType(bool isConst, bool isVolatile,
                                                       cld::LanguageOptions::UnderlyingType underlyingType,
                                                       const cld::LanguageOptions& options)
@@ -34,39 +34,12 @@ cld::Semantics::Type
     CLD_UNREACHABLE;
 }
 
-cld::Semantics::Type cld::Semantics::PrimitiveType::createPtrdiffT(bool isConst, bool isVolatile,
-                                                                   const LanguageOptions& options)
-{
-    return fromUnderlyingType(isConst, isVolatile, options.ptrdiffType, options);
-}
-
-cld::Semantics::Type cld::Semantics::PrimitiveType::createWcharT(bool isConst, bool isVolatile,
-                                                                 const LanguageOptions& options)
-{
-    return fromUnderlyingType(isConst, isVolatile, options.wcharUnderlyingType, options);
-}
-
-cld::Semantics::Type cld::Semantics::PrimitiveType::createSizeT(bool isConst, bool isVolatile,
-                                                                const LanguageOptions& options)
-{
-    return fromUnderlyingType(isConst, isVolatile, options.sizeTType, options);
-}
-
-cld::Semantics::ArrayType::ArrayType(bool isRestricted, bool isStatic, std::shared_ptr<cld::Semantics::Type>&& type,
-                                     std::uint64_t size)
-    : m_type(std::move(type)), m_size(size), m_restricted(isRestricted), m_static(isStatic)
-{
-}
-
-cld::Semantics::Type cld::Semantics::ArrayType::create(bool isConst, bool isVolatile, bool isRestricted, bool isStatic,
-                                                       cld::Semantics::Type type, std::uint64_t size)
-{
-    return cld::Semantics::Type(isConst, isVolatile,
-                                ArrayType(isRestricted, isStatic, std::make_shared<Type>(std::move(type)), size));
-}
-
 bool cld::Semantics::ArrayType::operator==(const cld::Semantics::ArrayType& rhs) const
 {
+    if (!equals(rhs))
+    {
+        return false;
+    }
     return std::tie(m_restricted, m_static, m_size, *m_type)
            == std::tie(rhs.m_restricted, rhs.m_static, rhs.m_size, *rhs.m_type);
 }
@@ -98,17 +71,13 @@ std::uint64_t cld::Semantics::ValArrayType::getAlignOf(const ProgramInterface& p
 
 bool cld::Semantics::Type::operator==(const cld::Semantics::Type& rhs) const
 {
-    if (std::tie(m_isConst, m_isVolatile) != std::tie(rhs.m_isConst, rhs.m_isVolatile))
+    if (index() != rhs.index())
     {
         return false;
     }
-    if (m_type.index() != rhs.m_type.index())
-    {
-        return false;
-    }
-    return cld::match(m_type, [&](auto&& value) -> bool {
+    return match([&](auto&& value) -> bool {
         using T = std::decay_t<decltype(value)>;
-        return value == cld::get<T>(rhs.m_type);
+        return value == rhs.template cast<T>();
     });
 }
 
@@ -119,7 +88,7 @@ bool cld::Semantics::Type::operator!=(const cld::Semantics::Type& rhs) const
 
 std::uint64_t cld::Semantics::Type::getSizeOf(const ProgramInterface& program) const
 {
-    return cld::match(m_type, [&](auto&& value) -> std::size_t {
+    return match([&](auto&& value) -> std::size_t {
         if constexpr (std::is_same_v<std::monostate, std::decay_t<decltype(value)>>)
         {
             CLD_UNREACHABLE;
@@ -133,32 +102,31 @@ std::uint64_t cld::Semantics::Type::getSizeOf(const ProgramInterface& program) c
 
 std::uint64_t cld::Semantics::Type::getAlignOf(const ProgramInterface& program) const
 {
-    return cld::match(m_type, [&](auto&& value) -> std::size_t {
-        if constexpr (std::is_same_v<std::monostate, std::decay_t<decltype(value)>>)
+    return match(
+        [&](auto&& value) -> std::size_t
         {
-            CLD_UNREACHABLE;
-        }
-        else
-        {
-            return value.getAlignOf(program);
-        }
-    });
+            if constexpr (std::is_same_v<std::monostate, std::decay_t<decltype(value)>>)
+            {
+                CLD_UNREACHABLE;
+            }
+            else
+            {
+                return value.getAlignOf(program);
+            }
+        });
 }
 
-cld::Semantics::PointerType::PointerType(bool isRestricted, std::shared_ptr<cld::Semantics::Type>&& elementType)
-    : m_elementType(std::move(elementType)), m_restricted(isRestricted)
+bool cld::Semantics::Type::equals(const cld::Semantics::Type& rhs) const
 {
-}
-
-cld::Semantics::Type cld::Semantics::PointerType::create(bool isConst, bool isVolatile, bool isRestricted,
-                                                         cld::Semantics::Type elementType)
-{
-    return cld::Semantics::Type(isConst, isVolatile,
-                                PointerType(isRestricted, std::make_shared<Type>(std::move(elementType))));
+    return std::tie(m_isConst, m_isVolatile) == std::tie(rhs.m_isConst, rhs.m_isVolatile);
 }
 
 bool cld::Semantics::PointerType::operator==(const cld::Semantics::PointerType& rhs) const
 {
+    if (!equals(rhs))
+    {
+        return false;
+    }
     return std::tie(m_restricted, *m_elementType) == std::tie(rhs.m_restricted, *rhs.m_elementType);
 }
 
@@ -177,14 +145,6 @@ std::uint64_t cld::Semantics::PointerType::getAlignOf(const ProgramInterface& pr
     return program.getLanguageOptions().sizeOfVoidStar;
 }
 
-cld::Semantics::EnumType::EnumType(std::string_view name, const EnumInfo& info) : m_name(name), m_info(&info) {}
-
-cld::Semantics::Type cld::Semantics::EnumType::create(bool isConst, bool isVolatile, std::string_view name,
-                                                      const EnumInfo& info)
-{
-    return cld::Semantics::Type(isConst, isVolatile, EnumType(name, info));
-}
-
 std::uint64_t cld::Semantics::EnumType::getSizeOf(const ProgramInterface& program) const
 {
     return getInfo().type.getType().getSizeOf(program);
@@ -195,32 +155,13 @@ std::uint64_t cld::Semantics::EnumType::getAlignOf(const ProgramInterface& progr
     return getInfo().type.getType().getAlignOf(program);
 }
 
-cld::Semantics::PrimitiveType::PrimitiveType(bool isFloatingPoint, bool isSigned, std::uint8_t bitCount,
-                                             std::uint8_t alignOf, Kind kind)
-    : m_bitCount(bitCount), m_alignOf(alignOf), m_isFloatingPoint(isFloatingPoint), m_isSigned(isSigned), m_kind(kind)
-{
-}
-
-std::uint8_t cld::Semantics::PrimitiveType::getByteCount() const
-{
-    return roundUpTo(m_bitCount, m_alignOf * 8) / 8;
-}
-
-cld::Semantics::Type cld::Semantics::PrimitiveType::create(bool isConst, bool isVolatile, bool isFloatingPoint,
-                                                           bool isSigned, std::uint8_t bitCount, std::uint8_t alignOf,
-                                                           Kind kind)
-{
-    return cld::Semantics::Type(isConst, isVolatile, PrimitiveType(isFloatingPoint, isSigned, bitCount, alignOf, kind));
-}
-
 bool cld::Semantics::PrimitiveType::operator==(const cld::Semantics::PrimitiveType& rhs) const
 {
-    if (m_bitCount == 0 && rhs.m_bitCount == 0)
+    if (!equals(rhs))
     {
-        return true;
+        return false;
     }
-    return std::tie(m_isFloatingPoint, m_isSigned, m_bitCount, m_kind)
-           == std::tie(rhs.m_isFloatingPoint, rhs.m_isSigned, rhs.m_bitCount, rhs.m_kind);
+    return m_kind == rhs.m_kind;
 }
 
 bool cld::Semantics::PrimitiveType::operator!=(const cld::Semantics::PrimitiveType& rhs) const
@@ -228,126 +169,12 @@ bool cld::Semantics::PrimitiveType::operator!=(const cld::Semantics::PrimitiveTy
     return !(rhs == *this);
 }
 
-cld::Semantics::Type cld::Semantics::PrimitiveType::createChar(bool isConst, bool isVolatile,
-                                                               const LanguageOptions& options)
-{
-    return create(isConst, isVolatile, false, options.charIsSigned, 8, 1, Kind::Char);
-}
-
-cld::Semantics::Type cld::Semantics::PrimitiveType::createSignedChar(bool isConst, bool isVolatile)
-{
-    return create(isConst, isVolatile, false, true, 8, 1, Kind::SignedChar);
-}
-
-cld::Semantics::Type cld::Semantics::PrimitiveType::createUnsignedChar(bool isConst, bool isVolatile)
-{
-    return create(isConst, isVolatile, false, false, 8, 1, Kind::UnsignedChar);
-}
-
-cld::Semantics::Type cld::Semantics::PrimitiveType::createUnderlineBool(bool isConst, bool isVolatile)
-{
-    return create(isConst, isVolatile, false, false, 1, 1, Kind::Bool);
-}
-
-cld::Semantics::Type cld::Semantics::PrimitiveType::createShort(bool isConst, bool isVolatile,
-                                                                const LanguageOptions& options)
-{
-    return create(isConst, isVolatile, false, true, options.sizeOfShort * 8, options.sizeOfShort, Kind::Short);
-}
-
-cld::Semantics::Type cld::Semantics::PrimitiveType::createUnsignedShort(bool isConst, bool isVolatile,
-                                                                        const LanguageOptions& options)
-{
-    return create(isConst, isVolatile, false, false, options.sizeOfShort * 8, options.sizeOfShort, Kind::UnsignedShort);
-}
-
-cld::Semantics::Type cld::Semantics::PrimitiveType::createInt(bool isConst, bool isVolatile,
-                                                              const LanguageOptions& options)
-{
-    return create(isConst, isVolatile, false, true, options.sizeOfInt * 8, options.sizeOfInt, Kind::Int);
-}
-
-cld::Semantics::Type cld::Semantics::PrimitiveType::createUnsignedInt(bool isConst, bool isVolatile,
-                                                                      const LanguageOptions& options)
-{
-    return create(isConst, isVolatile, false, false, options.sizeOfInt * 8, options.sizeOfInt, Kind::UnsignedInt);
-}
-
-cld::Semantics::Type cld::Semantics::PrimitiveType::createLong(bool isConst, bool isVolatile,
-                                                               const LanguageOptions& options)
-{
-    return create(isConst, isVolatile, false, true, options.sizeOfLong * 8, options.sizeOfLong, Kind::Long);
-}
-
-cld::Semantics::Type cld::Semantics::PrimitiveType::createUnsignedLong(bool isConst, bool isVolatile,
-                                                                       const LanguageOptions& options)
-{
-    return create(isConst, isVolatile, false, false, options.sizeOfLong * 8, options.sizeOfLong, Kind::UnsignedLong);
-}
-
-cld::Semantics::Type cld::Semantics::PrimitiveType::createLongLong(bool isConst, bool isVolatile,
-                                                                   const LanguageOptions& options)
-{
-    return create(isConst, isVolatile, false, true, 64, options.alignOfLongLong, Kind::LongLong);
-}
-
-cld::Semantics::Type cld::Semantics::PrimitiveType::createUnsignedLongLong(bool isConst, bool isVolatile,
-                                                                           const LanguageOptions& options)
-{
-    return create(isConst, isVolatile, false, false, 64, options.alignOfLongLong, Kind::UnsignedLongLong);
-}
-
-cld::Semantics::Type cld::Semantics::PrimitiveType::createFloat(bool isConst, bool isVolatile)
-{
-    return create(isConst, isVolatile, true, true, 32, 4, Kind::Float);
-}
-
-cld::Semantics::Type cld::Semantics::PrimitiveType::createDouble(bool isConst, bool isVolatile,
-                                                                 const LanguageOptions& options)
-{
-    return create(isConst, isVolatile, true, true, 64, options.alignOfDouble, Kind::Double);
-}
-
-cld::Semantics::Type cld::Semantics::PrimitiveType::createLongDouble(bool isConst, bool isVolatile,
-                                                                     const LanguageOptions& options)
-{
-    return create(isConst, isVolatile, true, true, options.sizeOfLongDoubleBits, options.alignOfLongDouble,
-                  Kind::LongDouble);
-}
-
-cld::Semantics::Type cld::Semantics::PrimitiveType::createVoid(bool isConst, bool isVolatile)
-{
-    return create(isConst, isVolatile, false, true, 0, 0, Kind::Void);
-}
-
-cld::Semantics::Type cld::Semantics::PrimitiveType::createInt128(bool isConst, bool isVolatile)
-{
-    return create(isConst, isVolatile, false, true, 128, 16, Kind::Int128);
-}
-
-cld::Semantics::Type cld::Semantics::PrimitiveType::createUnsignedInt128(bool isConst, bool isVolatile)
-{
-    return create(isConst, isVolatile, false, false, 128, 16, Kind::UnsignedInt128);
-}
-
-cld::Semantics::ValArrayType::ValArrayType(bool isRestricted, bool isStatic,
-                                           std::shared_ptr<cld::Semantics::Type>&& type,
-                                           std::shared_ptr<const ExpressionBase>&& expression)
-    : m_type(std::move(type)), m_restricted(isRestricted), m_static(isStatic), m_expression(std::move(expression))
-{
-}
-
-cld::Semantics::Type cld::Semantics::ValArrayType::create(bool isConst, bool isVolatile, bool isRestricted,
-                                                          bool isStatic, cld::Semantics::Type type,
-                                                          std::shared_ptr<const ExpressionBase> expression)
-{
-    return cld::Semantics::Type(
-        isConst, isVolatile,
-        ValArrayType(isRestricted, isStatic, std::make_shared<Type>(std::move(type)), std::move(expression)));
-}
-
 bool cld::Semantics::ValArrayType::operator==(const cld::Semantics::ValArrayType& rhs) const
 {
+    if (!equals(rhs))
+    {
+        return false;
+    }
     return std::tie(m_restricted, m_static, m_expression, *m_type)
            == std::tie(rhs.m_restricted, rhs.m_static, rhs.m_expression, *rhs.m_type);
 }
@@ -357,17 +184,12 @@ bool cld::Semantics::ValArrayType::operator!=(const cld::Semantics::ValArrayType
     return !(rhs == *this);
 }
 
-cld::Semantics::Type cld::Semantics::FunctionType::create(cld::Semantics::Type returnType,
-                                                          std::vector<std::pair<Type, std::string_view>>&& arguments,
-                                                          bool lastIsVararg, bool isKandR)
-{
-    return cld::Semantics::Type(
-        false, false,
-        FunctionType(std::make_shared<const Type>(std::move(returnType)), std::move(arguments), lastIsVararg, isKandR));
-}
-
 bool cld::Semantics::FunctionType::operator==(const cld::Semantics::FunctionType& rhs) const
 {
+    if (!equals(rhs))
+    {
+        return false;
+    }
     if (m_lastIsVararg != rhs.m_lastIsVararg || m_isKandR != rhs.m_isKandR)
     {
         return false;
@@ -376,8 +198,8 @@ bool cld::Semantics::FunctionType::operator==(const cld::Semantics::FunctionType
     {
         return false;
     }
-    return std::equal(m_arguments.begin(), m_arguments.end(), rhs.m_arguments.begin(), rhs.m_arguments.end(),
-                      [](const auto& lhs, const auto& rhs) { return lhs.first == rhs.first; });
+    return std::equal(m_parameters.begin(), m_parameters.end(), rhs.m_parameters.begin(), rhs.m_parameters.end(),
+                      [](const auto& lhs, const auto& rhs) { return *lhs.type == *rhs.type; });
 }
 
 bool cld::Semantics::FunctionType::operator!=(const cld::Semantics::FunctionType& rhs) const
@@ -385,20 +207,12 @@ bool cld::Semantics::FunctionType::operator!=(const cld::Semantics::FunctionType
     return !(rhs == *this);
 }
 
-cld::Semantics::AbstractArrayType::AbstractArrayType(bool isRestricted, std::shared_ptr<cld::Semantics::Type>&& type)
-    : m_type(std::move(type)), m_restricted(isRestricted)
-{
-}
-
-cld::Semantics::Type cld::Semantics::AbstractArrayType::create(bool isConst, bool isVolatile, bool isRestricted,
-                                                               cld::Semantics::Type type)
-{
-    return cld::Semantics::Type(isConst, isVolatile,
-                                AbstractArrayType(isRestricted, std::make_shared<Type>(std::move(type))));
-}
-
 bool cld::Semantics::AbstractArrayType::operator==(const cld::Semantics::AbstractArrayType& rhs) const
 {
+    if (!equals(rhs))
+    {
+        return false;
+    }
     return std::tie(m_restricted, *m_type) == std::tie(rhs.m_restricted, *rhs.m_type);
 }
 
@@ -424,14 +238,6 @@ cld::Lexer::CTokenIterator cld::Semantics::declaratorToLoc(const cld::Syntax::De
         });
 }
 
-cld::Semantics::StructType::StructType(std::string_view name, const StructInfo& info) : m_name(name), m_info(&info) {}
-
-cld::Semantics::Type cld::Semantics::StructType::create(bool isConst, bool isVolatile, std::string_view name,
-                                                        const StructInfo& info)
-{
-    return cld::Semantics::Type(isConst, isVolatile, StructType(name, info));
-}
-
 std::uint64_t cld::Semantics::StructType::getSizeOf(const ProgramInterface&) const
 {
     return cld::get<StructDefinition>(getInfo().type).getSizeOf();
@@ -440,14 +246,6 @@ std::uint64_t cld::Semantics::StructType::getSizeOf(const ProgramInterface&) con
 std::uint64_t cld::Semantics::StructType::getAlignOf(const ProgramInterface&) const
 {
     return cld::get<StructDefinition>(getInfo().type).getAlignOf();
-}
-
-cld::Semantics::UnionType::UnionType(std::string_view name, const UnionInfo& info) : m_name(name), m_info(&info) {}
-
-cld::Semantics::Type cld::Semantics::UnionType::create(bool isConst, bool isVolatile, std::string_view name,
-                                                       const UnionInfo& info)
-{
-    return cld::Semantics::Type(isConst, isVolatile, UnionType(name, info));
 }
 
 std::uint64_t cld::Semantics::UnionType::getSizeOf(const ProgramInterface&) const
@@ -485,14 +283,14 @@ bool cld::Semantics::isVariablyModified(const Type& type)
 {
     auto typeVisitor = RecursiveVisitor(type, TYPE_NEXT_FN);
     return std::any_of(typeVisitor.begin(), typeVisitor.end(),
-                       [](const Type& type) { return std::holds_alternative<ValArrayType>(type.getVariant()); });
+                       [](const Type& type) { return type.is<ValArrayType>(); });
 }
 
 bool cld::Semantics::isVariableLengthArray(const Type& type)
 {
     auto typeVisitor = RecursiveVisitor(type, ARRAY_TYPE_NEXT_FN);
     return std::any_of(typeVisitor.begin(), typeVisitor.end(),
-                       [](const Type& type) { return std::holds_alternative<ValArrayType>(type.getVariant()); });
+                       [](const Type& type) { return type.is<ValArrayType>(); });
 }
 
 namespace
@@ -502,12 +300,11 @@ std::string typeToString(const cld::Semantics::Type& arg)
     using namespace cld::Semantics;
     std::string qualifiersAndSpecifiers;
     std::string declarators;
-    std::optional<Type> maybeCurr = arg;
+    const Type* maybeCurr = &arg;
     while (maybeCurr)
     {
-        maybeCurr = cld::match(
-            maybeCurr->getVariant(),
-            [&](const PrimitiveType& primitiveType) -> std::optional<Type> {
+        maybeCurr = maybeCurr->match(
+            [&](const PrimitiveType& primitiveType) -> const Type* {
                 if (maybeCurr->isConst())
                 {
                     qualifiersAndSpecifiers += "const ";
@@ -539,10 +336,10 @@ std::string typeToString(const cld::Semantics::Type& arg)
                 }
                 return {};
             },
-            [&](const PointerType&) -> std::optional<Type> {
+            [&](const PointerType&) -> const Type* {
                 std::string temp;
-                auto curr = *maybeCurr;
-                while (auto* pointerType = std::get_if<PointerType>(&curr.getVariant()))
+                const auto* curr = maybeCurr;
+                while (auto* pointerType = curr->get_if<PointerType>())
                 {
                     if (pointerType->isRestricted())
                     {
@@ -555,7 +352,7 @@ std::string typeToString(const cld::Semantics::Type& arg)
                             temp = "restrict " + temp;
                         }
                     }
-                    if (curr.isConst())
+                    if (pointerType->isConst())
                     {
                         if (temp.empty())
                         {
@@ -566,7 +363,7 @@ std::string typeToString(const cld::Semantics::Type& arg)
                             temp = "const " + temp;
                         }
                     }
-                    if (curr.isVolatile())
+                    if (pointerType->isVolatile())
                     {
                         if (temp.empty())
                         {
@@ -578,21 +375,18 @@ std::string typeToString(const cld::Semantics::Type& arg)
                         }
                     }
                     temp = "*" + temp;
-                    curr = pointerType->getElementType();
+                    curr = &pointerType->getElementType();
                 }
-                if (std::holds_alternative<AbstractArrayType>(curr.getVariant())
-                    || std::holds_alternative<ValArrayType>(curr.getVariant())
-                    || std::holds_alternative<ArrayType>(curr.getVariant())
-                    || std::holds_alternative<FunctionType>(curr.getVariant()))
+                if (isArray(*curr) || curr->is<FunctionType>())
                 {
                     declarators = "(" + temp + declarators + ")";
-                    return {std::move(curr)};
+                    return curr;
                 }
 
-                qualifiersAndSpecifiers = typeToString(curr) + " " + temp;
+                qualifiersAndSpecifiers = typeToString(*curr) + " " + temp;
                 return {};
             },
-            [&](const ValArrayType& valArrayType) -> std::optional<Type> {
+            [&](const ValArrayType& valArrayType) -> const Type* {
                 declarators += "[";
                 if (valArrayType.isStatic())
                 {
@@ -611,9 +405,9 @@ std::string typeToString(const cld::Semantics::Type& arg)
                     declarators += "volatile ";
                 }
                 declarators += "*]";
-                return valArrayType.getType();
+                return &valArrayType.getType();
             },
-            [&](const ArrayType& arrayType) -> std::optional<Type> {
+            [&](const ArrayType& arrayType) -> const Type* {
                 declarators += "[";
                 if (arrayType.isStatic())
                 {
@@ -632,9 +426,9 @@ std::string typeToString(const cld::Semantics::Type& arg)
                     declarators += "volatile ";
                 }
                 declarators += cld::to_string(arrayType.getSize()) + "]";
-                return arrayType.getType();
+                return &arrayType.getType();
             },
-            [&](const AbstractArrayType& arrayType) -> std::optional<Type> {
+            [&](const AbstractArrayType& arrayType) -> const Type* {
                 declarators += "[";
                 if (arrayType.isRestricted())
                 {
@@ -649,37 +443,37 @@ std::string typeToString(const cld::Semantics::Type& arg)
                     declarators += "volatile ";
                 }
                 declarators += "]";
-                return arrayType.getType();
+                return &arrayType.getType();
             },
-            [&](const VectorType& vectorType) -> std::optional<Type> {
+            [&](const VectorType& vectorType) -> const Type* {
                 qualifiersAndSpecifiers += "__attribute__((vector_size(" + std::to_string(vectorType.getSize())
                                            + " * sizeof(" + typeToString(vectorType.getType()) + ")))) ";
-                return vectorType.getType();
+                return &vectorType.getType();
             },
-            [&](const FunctionType& functionType) -> std::optional<Type> {
+            [&](const FunctionType& functionType) -> const Type* {
                 declarators += "(";
-                if (functionType.getArguments().empty())
+                if (functionType.getParameters().empty())
                 {
                     if (!functionType.isKandR())
                     {
                         declarators += "void";
                     }
                     declarators += ")";
-                    return functionType.getReturnType();
+                    return &functionType.getReturnType();
                 }
-                declarators += typeToString(functionType.getArguments()[0].first);
-                for (auto& iter : llvm::ArrayRef(functionType.getArguments()).drop_front())
+                declarators += typeToString(*functionType.getParameters()[0].type);
+                for (auto& iter : llvm::ArrayRef(functionType.getParameters()).drop_front())
                 {
-                    declarators += ", " + typeToString(iter.first);
+                    declarators += ", " + typeToString(*iter.type);
                 }
                 if (functionType.isLastVararg())
                 {
                     declarators += ",...";
                 }
                 declarators += ")";
-                return functionType.getReturnType();
+                return &functionType.getReturnType();
             },
-            [&](const StructType& structType) -> std::optional<Type> {
+            [&](const StructType& structType) -> const Type* {
                 if (maybeCurr->isConst())
                 {
                     qualifiersAndSpecifiers += "const ";
@@ -698,7 +492,7 @@ std::string typeToString(const cld::Semantics::Type& arg)
                 }
                 return {};
             },
-            [&](const UnionType& unionType) -> std::optional<Type> {
+            [&](const UnionType& unionType) -> const Type* {
                 if (maybeCurr->isConst())
                 {
                     qualifiersAndSpecifiers += "const ";
@@ -717,7 +511,7 @@ std::string typeToString(const cld::Semantics::Type& arg)
                 }
                 return {};
             },
-            [&](const EnumType& enumType) -> std::optional<Type> {
+            [&](const EnumType& enumType) -> const Type* {
                 if (maybeCurr->isConst())
                 {
                     qualifiersAndSpecifiers += "const ";
@@ -736,7 +530,7 @@ std::string typeToString(const cld::Semantics::Type& arg)
                 }
                 return {};
             },
-            [&](std::monostate) -> std::optional<Type> {
+            [&](const ErrorType&) -> const Type* {
                 if (maybeCurr->isConst())
                 {
                     qualifiersAndSpecifiers += "const ";
@@ -881,10 +675,10 @@ cld::Lexer::CTokenIterator cld::Semantics::CallExpression::end() const
     return m_closeParentheses + 1;
 }
 
-cld::Semantics::CompoundLiteral::CompoundLiteral(Type type, Lexer::CTokenIterator openParentheses,
+cld::Semantics::CompoundLiteral::CompoundLiteral(cld::not_null<const Type> type, Lexer::CTokenIterator openParentheses,
                                                  Initializer initializer, Lexer::CTokenIterator closeParentheses,
                                                  Lexer::CTokenIterator initEnd, bool staticLifetime)
-    : ExpressionBase(std::in_place_type<CompoundLiteral>, std::move(type), ValueCategory::Lvalue),
+    : ExpressionBase(std::in_place_type<CompoundLiteral>, type, ValueCategory::Lvalue),
       m_openParentheses(openParentheses),
       m_initializer(std::make_unique<Initializer>(std::move(initializer))),
       m_closeParentheses(closeParentheses),
@@ -958,29 +752,35 @@ const cld::Semantics::Statement& cld::Semantics::DefaultStatement::getStatement(
     return *m_statement;
 }
 
-cld::Semantics::Type cld::Semantics::adjustParameterType(Type type)
+cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::adjustParameterType(const Type& type)
 {
     if (isArray(type))
     {
-        auto elementType = cld::match(type.getVariant(), [](auto&& value) -> Type {
-            using T = std::decay_t<decltype(value)>;
-            if constexpr (std::is_same_v<ArrayType,
-                                         T> || std::is_same_v<AbstractArrayType, T> || std::is_same_v<ValArrayType, T>)
+        auto& elementType = type.match(
+            [](auto&& value) -> const Type&
             {
-                return value.getType();
-            }
-            CLD_UNREACHABLE;
-        });
-        bool restrict = cld::match(type.getVariant(), [](auto&& value) -> bool {
-            using T = std::decay_t<decltype(value)>;
-            if constexpr (std::is_same_v<ArrayType,
-                                         T> || std::is_same_v<AbstractArrayType, T> || std::is_same_v<ValArrayType, T>)
+                using T = std::decay_t<decltype(value)>;
+                if constexpr (std::is_same_v<
+                                  ArrayType,
+                                  T> || std::is_same_v<AbstractArrayType, T> || std::is_same_v<ValArrayType, T>)
+                {
+                    return value.getType();
+                }
+                CLD_UNREACHABLE;
+            });
+        bool restrict = type.match(
+            [](auto&& value) -> bool
             {
-                return value.isRestricted();
-            }
-            CLD_UNREACHABLE;
-        });
-        return PointerType::create(type.isConst(), type.isVolatile(), restrict, std::move(elementType));
+                using T = std::decay_t<decltype(value)>;
+                if constexpr (std::is_same_v<
+                                  ArrayType,
+                                  T> || std::is_same_v<AbstractArrayType, T> || std::is_same_v<ValArrayType, T>)
+                {
+                    return value.isRestricted();
+                }
+                CLD_UNREACHABLE;
+            });
+        return PointerType(type.isConst(), type.isVolatile(), restrict, &elementType);
     }
     return type;
 }
@@ -998,11 +798,6 @@ const cld::Semantics::ExpressionBase& cld::Semantics::BuiltinVAArg::getExpressio
     return *m_expression;
 }
 
-std::size_t std::hash<cld::Semantics::Type>::operator()(const cld::Semantics::Type& type) const noexcept
-{
-    return cld::hashCombine(type.isConst(), type.isVolatile(), type.getVariant());
-}
-
 cld::Lexer::CTokenIterator cld::Semantics::ExpressionBase::begin() const
 {
     return this->match([](auto&& value) { return value.begin(); });
@@ -1013,24 +808,17 @@ cld::Lexer::CTokenIterator cld::Semantics::ExpressionBase::end() const
     return this->match([](auto&& value) { return value.end(); });
 }
 
-cld::Semantics::ErrorExpression::ErrorExpression(Type type, const cld::Syntax::Node& node)
-    : ErrorExpression(std::move(type), node.begin(), node.end())
+cld::Semantics::ErrorExpression::ErrorExpression(cld::not_null<const Type> type, const cld::Syntax::Node& node)
+    : ErrorExpression(type, node.begin(), node.end())
 {
-}
-
-cld::Semantics::VectorType::VectorType(std::shared_ptr<Type>&& type, std::uint64_t size)
-    : m_elementType(std::move(type)), m_size(size)
-{
-}
-
-cld::Semantics::Type cld::Semantics::VectorType::create(bool isConst, bool isVolatile, cld::Semantics::Type type,
-                                                        std::uint64_t size)
-{
-    return cld::Semantics::Type(isConst, isVolatile, VectorType(std::make_shared<Type>(std::move(type)), size));
 }
 
 bool cld::Semantics::VectorType::operator==(const cld::Semantics::VectorType& rhs) const
 {
+    if (!equals(rhs))
+    {
+        return false;
+    }
     return std::tie(m_size, *m_elementType) == std::tie(rhs.m_size, *rhs.m_elementType);
 }
 
@@ -1055,15 +843,15 @@ bool cld::Semantics::isCompleteType(const Type& type)
     {
         return false;
     }
-    if (std::holds_alternative<AbstractArrayType>(type.getVariant()))
+    if (type.is<AbstractArrayType>())
     {
         return false;
     }
-    if (auto* structType = std::get_if<StructType>(&type.getVariant()))
+    if (auto* structType = type.get_if<StructType>())
     {
         return std::holds_alternative<StructDefinition>(structType->getInfo().type);
     }
-    if (auto* unionType = std::get_if<UnionType>(&type.getVariant()))
+    if (auto* unionType = type.get_if<UnionType>())
     {
         return std::holds_alternative<UnionDefinition>(unionType->getInfo().type);
     }
@@ -1072,40 +860,35 @@ bool cld::Semantics::isCompleteType(const Type& type)
 
 const cld::Semantics::FieldMap& cld::Semantics::getFields(const cld::Semantics::Type& recordType)
 {
-    if (std::holds_alternative<StructType>(recordType.getVariant()))
+    if (auto* structType = recordType.get_if<StructType>())
     {
-        auto& structType = cld::get<StructType>(recordType.getVariant());
-        return cld::get<StructDefinition>(structType.getInfo().type).getFields();
+        return cld::get<StructDefinition>(structType->getInfo().type).getFields();
     }
-    if (std::holds_alternative<UnionType>(recordType.getVariant()))
+    if (auto* unionType = recordType.get_if<UnionType>())
     {
-        auto& unionType = cld::get<UnionType>(recordType.getVariant());
-        return cld::get<UnionDefinition>(unionType.getInfo().type).getFields();
+        return cld::get<UnionDefinition>(unionType->getInfo().type).getFields();
     }
     CLD_UNREACHABLE;
 }
 
 llvm::ArrayRef<cld::Semantics::MemoryLayout> cld::Semantics::getMemoryLayout(const cld::Semantics::Type& structType)
 {
-    if (std::holds_alternative<StructType>(structType.getVariant()))
+    if (auto* structTy = structType.get_if<StructType>())
     {
-        auto& structTy = cld::get<StructType>(structType.getVariant());
-        return cld::get<StructDefinition>(structTy.getInfo().type).getMemLayout();
+        return cld::get<StructDefinition>(structTy->getInfo().type).getMemLayout();
     }
     CLD_UNREACHABLE;
 }
 
 llvm::ArrayRef<cld::Semantics::FieldInLayout> cld::Semantics::getFieldLayout(const cld::Semantics::Type& recordType)
 {
-    if (std::holds_alternative<StructType>(recordType.getVariant()))
+    if (auto* structType = recordType.get_if<StructType>())
     {
-        auto& structType = cld::get<StructType>(recordType.getVariant());
-        return cld::get<StructDefinition>(structType.getInfo().type).getFieldLayout();
+        return cld::get<StructDefinition>(structType->getInfo().type).getFieldLayout();
     }
-    if (std::holds_alternative<UnionType>(recordType.getVariant()))
+    if (auto* unionType = recordType.get_if<UnionType>())
     {
-        auto& unionType = cld::get<UnionType>(recordType.getVariant());
-        return cld::get<UnionDefinition>(unionType.getInfo().type).getFieldLayout();
+        return cld::get<UnionDefinition>(unionType->getInfo().type).getFieldLayout();
     }
     CLD_UNREACHABLE;
 }

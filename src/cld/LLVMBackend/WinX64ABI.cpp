@@ -194,7 +194,7 @@ cld::CGLLVM::Value cld::CGLLVM::WinX64ABI::generateFunctionCall(CodeGenerator& c
             {
                 auto* ret = codeGenerator.createAllocaAtTop(arguments[i]->getType());
                 ret->setAlignment(
-                    llvm::Align(functionType.getArguments()[i].first.getAlignOf(codeGenerator.getProgramInterface())));
+                    llvm::Align(functionType.getParameters()[i].type->getAlignOf(codeGenerator.getProgramInterface())));
                 if (arguments[i]->getType()->isX86_FP80Ty())
                 {
                     codeGenerator.createStore(arguments[i], ret, false);
@@ -204,7 +204,7 @@ cld::CGLLVM::Value cld::CGLLVM::WinX64ABI::generateFunctionCall(CodeGenerator& c
                     auto* load = llvm::cast<llvm::LoadInst>(arguments[i]);
                     codeGenerator.getBuilder().CreateMemCpy(
                         ret, ret->getAlign(), load->getPointerOperand(), load->getAlign(),
-                        functionType.getArguments()[i].first.getSizeOf(codeGenerator.getProgramInterface()));
+                        functionType.getParameters()[i].type->getSizeOf(codeGenerator.getProgramInterface()));
                     load->eraseFromParent();
                 }
                 arguments[i] = ret;

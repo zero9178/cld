@@ -31,8 +31,8 @@ int debugging_printf(const char* format, ...)
 }
 } // namespace
 
-void cld::Tests::details::computeAndGet(std::unique_ptr<llvm::Module>&& module, std::string_view functionName,
-                                        cld::function_ref<void(std::uintptr_t)> symbolCallback)
+void cld::Tests::detail::computeAndGet(std::unique_ptr<llvm::Module>&& module, std::string_view functionName,
+                                       cld::function_ref<void(std::uintptr_t)> symbolCallback)
 {
     llvm::orc::LLJITBuilder builder;
     auto jit = llvm::cantFail(builder.create());

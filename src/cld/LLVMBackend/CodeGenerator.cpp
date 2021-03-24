@@ -103,7 +103,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::add(Value lhs, const Semantics::T
     {
         if (Semantics::isInteger(lhsType))
         {
-            if (cld::get<Semantics::PrimitiveType>(lhsType.getVariant()).isSigned())
+            if (lhsType.cast<Semantics::PrimitiveType>().isSigned())
             {
                 return m_builder.CreateNSWAdd(lhs, rhs);
             }
@@ -127,8 +127,8 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::add(Value lhs, const Semantics::T
     auto& pointerType = pointer.value == lhs.value ? lhsType : rhsType;
     integer = m_builder.CreateIntCast(
         integer.value, m_builder.getInt64Ty(),
-        cld::get<Semantics::PrimitiveType>((pointer.value == lhs.value ? rhsType : lhsType).getVariant()).isSigned());
-    if (!Semantics::isVariableLengthArray(cld::get<Semantics::PointerType>(pointerType.getVariant()).getElementType()))
+        (pointer.value == lhs.value ? rhsType : lhsType).cast<Semantics::PrimitiveType>().isSigned());
+    if (!Semantics::isVariableLengthArray(pointerType.cast<Semantics::PointerType>().getElementType()))
     {
         return createGEP(pointer, integer.value);
     }
@@ -139,11 +139,11 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::add(Value lhs, const Semantics::T
         llvm::Value* value;
         if (Semantics::isArrayType(iter))
         {
-            value = m_builder.getInt64(cld::get<Semantics::ArrayType>(iter.getVariant()).getSize());
+            value = m_builder.getInt64(iter.cast<Semantics::ArrayType>().getSize());
         }
         else
         {
-            value = m_valSizes[cld::get<Semantics::ValArrayType>(iter.getVariant()).getExpression()];
+            value = m_valSizes[iter.cast<Semantics::ValArrayType>().getExpression()];
         }
         product = m_builder.CreateMul(product.value, value);
     }
@@ -157,7 +157,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::sub(Value lhs, const Semantics::T
     {
         if (Semantics::isInteger(lhsType))
         {
-            if (cld::get<Semantics::PrimitiveType>(lhsType.getVariant()).isSigned())
+            if (lhsType.cast<Semantics::PrimitiveType>().isSigned())
             {
                 return m_builder.CreateNSWSub(lhs, rhs);
             }
@@ -181,7 +181,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::sub(Value lhs, const Semantics::T
     {
         rhs = valueOf(m_builder.CreateNeg(rhs.value));
         rhs = valueOf(m_builder.CreateIntCast(rhs.value, m_builder.getInt64Ty(),
-                                              cld::get<Semantics::PrimitiveType>(rhsType.getVariant()).isSigned()));
+                                              rhsType.cast<Semantics::PrimitiveType>().isSigned()));
         return createGEP(lhs, rhs.value);
     }
 
@@ -193,7 +193,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::mul(Value lhs, const Semantics::T
 {
     if (Semantics::isInteger(lhsType))
     {
-        if (cld::get<Semantics::PrimitiveType>(lhsType.getVariant()).isSigned())
+        if (lhsType.cast<Semantics::PrimitiveType>().isSigned())
         {
             return m_builder.CreateNSWMul(lhs, rhs);
         }
@@ -217,7 +217,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::div(Value lhs, const Semantics::T
 {
     if (Semantics::isInteger(lhsType))
     {
-        if (cld::get<Semantics::PrimitiveType>(lhsType.getVariant()).isSigned())
+        if (lhsType.cast<Semantics::PrimitiveType>().isSigned())
         {
             return m_builder.CreateSDiv(lhs, rhs);
         }
@@ -226,7 +226,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::div(Value lhs, const Semantics::T
     }
     if (Semantics::isVector(lhsType) && Semantics::isInteger(Semantics::getVectorElementType(lhsType)))
     {
-        if (cld::get<Semantics::PrimitiveType>(Semantics::getVectorElementType(lhsType).getVariant()).isSigned())
+        if (Semantics::getVectorElementType(lhsType).cast<Semantics::PrimitiveType>().isSigned())
         {
             return m_builder.CreateSDiv(lhs, rhs);
         }
@@ -239,13 +239,13 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::div(Value lhs, const Semantics::T
 cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::mod(Value lhs, const Semantics::Type& lhsType, Value rhs,
                                                    const Semantics::Type&)
 {
-    if (Semantics::isInteger(lhsType) && cld::get<Semantics::PrimitiveType>(lhsType.getVariant()).isSigned())
+    if (Semantics::isInteger(lhsType) && lhsType.cast<Semantics::PrimitiveType>().isSigned())
     {
         return m_builder.CreateSRem(lhs, rhs);
     }
     if (Semantics::isVector(lhsType))
     {
-        if (cld::get<Semantics::PrimitiveType>(Semantics::getVectorElementType(lhsType).getVariant()).isSigned())
+        if (Semantics::getVectorElementType(lhsType).cast<Semantics::PrimitiveType>().isSigned())
         {
             return m_builder.CreateSRem(lhs, rhs);
         }
@@ -259,8 +259,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::shl(Value lhs, const Semantics::T
 {
     if (lhs.value->getType() != rhs.value->getType())
     {
-        rhs = m_builder.CreateIntCast(rhs, lhs.value->getType(),
-                                      cld::get<Semantics::PrimitiveType>(rhsType.getVariant()).isSigned());
+        rhs = m_builder.CreateIntCast(rhs, lhs.value->getType(), rhsType.cast<Semantics::PrimitiveType>().isSigned());
     }
     return m_builder.CreateShl(lhs, rhs);
 }
@@ -270,16 +269,15 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::shr(Value lhs, const Semantics::T
 {
     if (lhs.value->getType() != rhs.value->getType())
     {
-        rhs = m_builder.CreateIntCast(rhs, lhs.value->getType(),
-                                      cld::get<Semantics::PrimitiveType>(rhsType.getVariant()).isSigned());
+        rhs = m_builder.CreateIntCast(rhs, lhs.value->getType(), rhsType.cast<Semantics::PrimitiveType>().isSigned());
     }
-    if (Semantics::isInteger(lhsType) && !cld::get<Semantics::PrimitiveType>(lhsType.getVariant()).isSigned())
+    if (Semantics::isInteger(lhsType) && !lhsType.cast<Semantics::PrimitiveType>().isSigned())
     {
         return m_builder.CreateLShr(lhs, rhs);
     }
     if (Semantics::isVector(lhsType))
     {
-        if (!cld::get<Semantics::PrimitiveType>(Semantics::getVectorElementType(lhsType).getVariant()).isSigned())
+        if (!Semantics::getVectorElementType(lhsType).cast<Semantics::PrimitiveType>().isSigned())
         {
             return m_builder.CreateLShr(lhs, rhs);
         }
@@ -308,12 +306,11 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::cast(Value value, const Semantics
     }
     if (Semantics::isInteger(to) && Semantics::isInteger(from))
     {
-        return m_builder.CreateIntCast(value, visit(to),
-                                       cld::get<Semantics::PrimitiveType>(from.getVariant()).isSigned());
+        return m_builder.CreateIntCast(value, visit(to), from.cast<Semantics::PrimitiveType>().isSigned());
     }
     if (Semantics::isArithmetic(to) && Semantics::isInteger(from))
     {
-        if (cld::get<Semantics::PrimitiveType>(from.getVariant()).isSigned())
+        if (from.cast<Semantics::PrimitiveType>().isSigned())
         {
             return m_builder.CreateSIToFP(value, visit(to));
         }
@@ -326,7 +323,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::cast(Value value, const Semantics
         {
             return m_builder.CreatePtrToInt(value, visit(to));
         }
-        if (cld::get<Semantics::PrimitiveType>(to.getVariant()).isSigned())
+        if (to.cast<Semantics::PrimitiveType>().isSigned())
         {
             return m_builder.CreateFPToSI(value, visit(to));
         }

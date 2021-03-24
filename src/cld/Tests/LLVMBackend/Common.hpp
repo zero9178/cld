@@ -48,7 +48,7 @@
 
 namespace cld::Tests
 {
-namespace details
+namespace detail
 {
 void computeAndGet(std::unique_ptr<llvm::Module>&& module, std::string_view functionName,
                    cld::function_ref<void(std::uintptr_t)> symbolCallback);
@@ -68,23 +68,23 @@ struct return_type<R(A..., ...)>
     typedef R type;
 };
 
-} // namespace details
+} // namespace detail
 
 template <class Fn, class... Args>
 auto computeInJIT(std::unique_ptr<llvm::Module>&& module, std::string_view functionName, Args&&... args)
 {
-    if constexpr (std::is_void_v<typename details::return_type<Fn>::type>)
+    if constexpr (std::is_void_v<typename detail::return_type<Fn>::type>)
     {
-        details::computeAndGet(std::move(module), functionName, [&](std::uintptr_t symbol) {
-            reinterpret_cast<Fn*>(symbol)(std::forward<Args&&>(args)...);
-        });
+        detail::computeAndGet(std::move(module), functionName,
+                              [&](std::uintptr_t symbol)
+                              { reinterpret_cast<Fn*>(symbol)(std::forward<Args&&>(args)...); });
     }
     else
     {
-        typename details::return_type<Fn>::type result;
-        details::computeAndGet(std::move(module), functionName, [&](std::uintptr_t symbol) {
-            result = reinterpret_cast<Fn*>(symbol)(std::forward<Args&&>(args)...);
-        });
+        typename detail::return_type<Fn>::type result;
+        detail::computeAndGet(std::move(module), functionName,
+                              [&](std::uintptr_t symbol)
+                              { result = reinterpret_cast<Fn*>(symbol)(std::forward<Args&&>(args)...); });
         return result;
     }
 }

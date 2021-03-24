@@ -239,30 +239,30 @@ constexpr auto createBuiltin(cld::Semantics::BuiltinFunction::Kind kind)
     constexpr auto value##Text = ::cld::Constexpr::basic_fixed_string{string}; \
     constexpr auto value##Builtin = createBuiltin<value##Text>(::cld::Semantics::BuiltinFunction::Kind::value)
 
-#define DEF_BUILTIN(value)                                                                                            \
-    do                                                                                                                \
-    {                                                                                                                 \
-        if (name == value##Builtin.name)                                                                              \
-        {                                                                                                             \
-            std::vector<std::pair<Type, std::string_view>> parameters;                                                \
-            if constexpr (value##Builtin.size != 0)                                                                   \
-            {                                                                                                         \
-                for (auto& iter : value##Builtin.parameterTypes)                                                      \
-                {                                                                                                     \
-                    parameters.emplace_back(adjustParameterType(typeEnumToType(iter)), "");                           \
-                }                                                                                                     \
-            }                                                                                                         \
-            auto result = m_usedBuiltins                                                                              \
-                              .insert({value##Builtin.name,                                                           \
-                                       {FunctionType::create(typeEnumToType(value##Builtin.returnType),               \
-                                                             std::move(parameters), value##Builtin.vararg, false),    \
-                                        ::cld::Semantics::BuiltinFunction::Kind::value}})                             \
-                              .first;                                                                                 \
-            auto iter = m_scopes[0]                                                                                   \
-                            .declarations.insert({value##Builtin.name, DeclarationInScope{nullptr, &result->second}}) \
-                            .first;                                                                                   \
-            return &iter->second.declared;                                                                            \
-        }                                                                                                             \
+#define DEF_BUILTIN(value)                                                                                             \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        if (name == value##Builtin.name)                                                                               \
+        {                                                                                                              \
+            std::vector<FunctionType::Parameter> parameters;                                                           \
+            if constexpr (value##Builtin.size != 0)                                                                    \
+            {                                                                                                          \
+                for (auto& iter : value##Builtin.parameterTypes)                                                       \
+                {                                                                                                      \
+                    parameters.push_back({typeAlloc(*adjustParameterType(*typeEnumToType(iter))), ""});                \
+                }                                                                                                      \
+            }                                                                                                          \
+            auto result = m_usedBuiltins                                                                               \
+                              .insert({value##Builtin.name,                                                            \
+                                       {typeAlloc<FunctionType>(typeAlloc(*typeEnumToType(value##Builtin.returnType)), \
+                                                                std::move(parameters), value##Builtin.vararg, false),  \
+                                        ::cld::Semantics::BuiltinFunction::Kind::value}})                              \
+                              .first;                                                                                  \
+            auto iter = m_scopes[0]                                                                                    \
+                            .declarations.insert({value##Builtin.name, DeclarationInScope{nullptr, &result->second}})  \
+                            .first;                                                                                    \
+            return &iter->second.declared;                                                                             \
+        }                                                                                                              \
     } while (0)
 
 #define HANDLE_BUILTIN(a, b) DECL_BUILTIN(a, b)
@@ -271,7 +271,8 @@ constexpr auto createBuiltin(cld::Semantics::BuiltinFunction::Kind kind)
 const cld::Semantics::ProgramInterface::DeclarationInScope::Variant* CLD_NULLABLE
     cld::Semantics::SemanticAnalysis::getBuiltinFuncDecl(std::string_view name)
 {
-    auto typeEnumToType = [&](Types types) -> Type {
+    auto typeEnumToType = [&](Types types) -> cld::IntrVarValue<Type>
+    {
         switch (types)
         {
             case Types::Void: return PrimitiveType::createVoid(false, false);
@@ -288,16 +289,16 @@ const cld::Semantics::ProgramInterface::DeclarationInScope::Variant* CLD_NULLABL
                 return PrimitiveType::createLongDouble(false, false, m_sourceInterface.getLanguageOptions());
             case Types::VAList: return *getTypedef("__builtin_va_list");
             case Types::VoidStar:
-                return PointerType::create(false, false, false, PrimitiveType::createVoid(false, false));
+                return PointerType(false, false, false, typeAlloc(PrimitiveType::createVoid(false, false)));
             case Types::ConstVoidStar:
-                return PointerType::create(false, false, false, PrimitiveType::createVoid(true, false));
-            case Types::Placeholder: return Type{};
-            case Types::PlaceholderPointer: return PointerType::create(false, false, false, Type{});
+                return PointerType(false, false, false, typeAlloc(PrimitiveType::createVoid(true, false)));
+            case Types::Placeholder: return ErrorType();
+            case Types::PlaceholderPointer: return PointerType(false, false, false, typeAlloc<ErrorType>());
             case Types::Bool: return PrimitiveType::createUnderlineBool(false, false);
             case Types::ConstCharStar:
-                return PointerType::create(
+                return PointerType(
                     false, false, false,
-                    PrimitiveType::createChar(true, false, m_sourceInterface.getLanguageOptions()));
+                    typeAlloc(PrimitiveType::createChar(true, false, m_sourceInterface.getLanguageOptions())));
         }
         CLD_UNREACHABLE;
     };
@@ -328,15 +329,16 @@ void cld::Semantics::SemanticAnalysis::createBuiltinTypes()
     {
         case LanguageOptions::BuiltInVaList::CharPtr:
         {
-            auto type = PointerType::create(
-                false, false, false, PrimitiveType::createChar(false, false, m_sourceInterface.getLanguageOptions()));
+            auto type =
+                PointerType(false, false, false,
+                            typeAlloc(PrimitiveType::createChar(false, false, m_sourceInterface.getLanguageOptions())));
             type.setName("__builtin_va_list");
             getCurrentScope().declarations.emplace("__builtin_va_list", DeclarationInScope{nullptr, std::move(type)});
             break;
         }
         case LanguageOptions::BuiltInVaList::VoidPtr:
         {
-            auto type = PointerType::create(false, false, false, PrimitiveType::createVoid(false, false));
+            auto type = PointerType(false, false, false, typeAlloc(PrimitiveType::createVoid(false, false)));
             type.setName("__builtin_va_list");
             getCurrentScope().declarations.emplace("__builtin_va_list", DeclarationInScope{nullptr, std::move(type)});
             break;
@@ -344,26 +346,26 @@ void cld::Semantics::SemanticAnalysis::createBuiltinTypes()
         case LanguageOptions::BuiltInVaList::x86_64ABI:
         {
             FieldMap fields;
-            auto unsignedInt = std::make_shared<Type>(
-                PrimitiveType::createUnsignedInt(false, false, m_sourceInterface.getLanguageOptions()));
+            auto unsignedInt =
+                typeAlloc(PrimitiveType::createUnsignedInt(false, false, m_sourceInterface.getLanguageOptions()));
             fields.insert({"gp_offset", {unsignedInt, "gp_offset", nullptr, {0}, {}, {}}});
             fields.insert({"fp_offset", {unsignedInt, "fp_offset", nullptr, {1}, {}, {}}});
-            auto voidStar = std::make_shared<Type>(
-                PointerType::create(false, false, false, PrimitiveType::createVoid(false, false)));
+            auto voidStar =
+                typeAlloc<PointerType>(false, false, false, typeAlloc(PrimitiveType::createVoid(false, false)));
             fields.insert({"overflow_arg_area", {voidStar, "overflow_arg_area", nullptr, {2}, {}, {}}});
             fields.insert({"reg_save_area", {voidStar, "reg_save_area", nullptr, {3}, {}, {}}});
             auto fieldLayout = std::vector<FieldInLayout>{
                 {unsignedInt, 0, {}}, {unsignedInt, 1, {}}, {voidStar, 2, {}}, {voidStar, 3, {}}};
             auto memLayout =
-                std::vector<MemoryLayout>{{*unsignedInt, 0}, {*unsignedInt, 4}, {*voidStar, 8}, {*voidStar, 16}};
+                std::vector<MemoryLayout>{{unsignedInt, 0}, {unsignedInt, 4}, {voidStar, 8}, {voidStar, 16}};
             m_structDefinitions.push_back({m_structDefinitions.size(),
                                            StructDefinition("__va_list_tag", std::move(fields), std::move(fieldLayout),
                                                             std::move(memLayout), 24, 8),
                                            0, nullptr});
-            auto elementType = StructType::create(false, false, "__va_list_tag", m_structDefinitions.back());
+            IntrVarValue<Type> elementType = StructType(false, false, "__va_list_tag", m_structDefinitions.back());
             getCurrentScope().types.emplace("__va_list_tag", TagTypeInScope{nullptr, &m_structDefinitions.back()});
-            elementType = ArrayType::create(false, false, false, false, std::move(elementType), 1);
-            elementType.setName("__builtin_va_list");
+            elementType = ArrayType(false, false, false, false, typeAlloc(*elementType), 1);
+            elementType->setName("__builtin_va_list");
             getCurrentScope().declarations.emplace("__builtin_va_list",
                                                    DeclarationInScope{nullptr, std::move(elementType)});
             break;

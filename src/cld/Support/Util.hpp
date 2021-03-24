@@ -457,15 +457,15 @@ constexpr size_t getIndex(const std::variant<Ts...>&) noexcept
     return r;
 }
 
-template <class... Args>
+template <template <class> class Hasher = std::hash, class... Args>
 constexpr std::size_t hashCombine(const Args&... args)
 {
     std::size_t seed = 0;
-    ((seed ^= std::hash<std::decay_t<Args>>{}(args) + 0x9e3779b9 + (seed << 6) + (seed >> 2)), ...);
+    ((seed ^= Hasher<std::decay_t<Args>>{}(args) + 0x9e3779b9 + (seed << 6) + (seed >> 2)), ...);
     return seed;
 }
 
-template <class... Args>
+template <template <class> class Hasher = std::hash, class... Args>
 constexpr std::size_t rawHashCombine(Args... args)
 {
     static_assert((std::is_integral_v<Args> && ...));
@@ -492,7 +492,7 @@ constexpr T1 roundUpTo(T1 number, T2 multiple)
     return number + multiple - remainder;
 }
 
-namespace details
+namespace detail
 {
 template <class F, class... Args>
 class BindFrontImpl
@@ -549,13 +549,125 @@ public:
     }
 };
 
-} // namespace details
+} // namespace detail
 
 template <class F, class... Args>
 auto bind_front(F&& f, Args&&... args)
 {
-    return details::BindFrontImpl<std::decay_t<F>, std::decay_t<Args>...>(std::forward<F>(f),
-                                                                          std::forward<Args>(args)...);
+    return detail::BindFrontImpl<std::decay_t<F>, std::decay_t<Args>...>(std::forward<F>(f),
+                                                                         std::forward<Args>(args)...);
 }
 
+template <class T>
+class not_null
+{
+    T* CLD_NON_NULL m_ptr;
+
+public:
+    constexpr not_null(T* CLD_NON_NULL ptr) : m_ptr(ptr)
+    {
+        CLD_ASSERT(m_ptr);
+    }
+
+    template <class U, std::enable_if_t<std::is_convertible_v<U, T*>>* = nullptr>
+    constexpr not_null(U&& u) : m_ptr(std::forward<U>(u))
+    {
+        CLD_ASSERT(m_ptr);
+    }
+
+    template <class U, std::enable_if_t<std::is_convertible_v<U*, T*>>* = nullptr>
+    constexpr not_null(const not_null<U>& rhs) : not_null(rhs.get())
+    {
+    }
+
+    not_null(std::nullptr_t) = delete;
+    not_null& operator=(std::nullptr_t) = delete;
+
+    constexpr T* CLD_NON_NULL get() const
+    {
+        CLD_ASSERT(m_ptr);
+        return m_ptr;
+    }
+
+    constexpr operator T* CLD_NON_NULL() const
+    {
+        return get();
+    }
+
+    constexpr T* CLD_NON_NULL operator->() const
+    {
+        return get();
+    }
+
+    constexpr T& operator*() const
+    {
+        return *get();
+    }
+
+    not_null& operator++() = delete;
+    not_null& operator--() = delete;
+    not_null& operator++(int) = delete;
+    not_null& operator--(int) = delete;
+    not_null& operator+=(std::ptrdiff_t) = delete;
+    not_null& operator-=(std::ptrdiff_t) = delete;
+    void operator[](std::ptrdiff_t) const = delete;
+};
+
+template <class T, class U>
+bool operator==(not_null<T> lhs, not_null<U> rhs)
+{
+    return lhs.get() == rhs.get();
+}
+
+template <class T, class U>
+bool operator!=(not_null<T> lhs, not_null<U> rhs)
+{
+    return !(rhs == lhs);
+}
+
+template <class T, class U>
+bool operator<(not_null<T> lhs, not_null<U> rhs)
+{
+    return lhs.get() < rhs.get();
+}
+
+template <class T, class U>
+bool operator>(not_null<T> lhs, not_null<U> rhs)
+{
+    return rhs < lhs;
+}
+
+template <class T, class U>
+bool operator<=(not_null<T> lhs, not_null<U> rhs)
+{
+    return !(rhs < lhs);
+}
+
+template <class T, class U>
+bool operator>=(not_null<T> lhs, not_null<U> rhs)
+{
+    return !(lhs < rhs);
+}
+
+template <class T, class U>
+std::ptrdiff_t operator-(not_null<T>, not_null<U>) = delete;
+template <class T>
+not_null<T> operator-(not_null<T>, std::ptrdiff_t) = delete;
+template <class T>
+not_null<T> operator+(not_null<T>, std::ptrdiff_t) = delete;
+template <class T>
+not_null<T> operator+(std::ptrdiff_t, not_null<T>) = delete;
+
 } // namespace cld
+
+namespace std
+{
+template <class T>
+struct hash<cld::not_null<T>>
+{
+    std::size_t operator()(cld::not_null<T> value) const
+    {
+        return hash<T*>{}(value.get());
+    }
+};
+} // namespace std

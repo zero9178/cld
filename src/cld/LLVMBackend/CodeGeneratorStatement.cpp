@@ -22,9 +22,8 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::CompoundStatement& compo
             iter,
             [&](const std::shared_ptr<const Semantics::ExpressionBase>& expr) {
                 auto result = m_valSizes.emplace(
-                    expr, m_builder.CreateIntCast(
-                              visit(*expr).value, m_builder.getInt64Ty(),
-                              cld::get<Semantics::PrimitiveType>(expr->getType().getVariant()).isSigned()));
+                    expr, m_builder.CreateIntCast(visit(*expr).value, m_builder.getInt64Ty(),
+                                                  expr->getType().cast<Semantics::PrimitiveType>().isSigned()));
                 (void)result;
                 CLD_ASSERT(result.second);
             },

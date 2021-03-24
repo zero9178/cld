@@ -5,7 +5,7 @@
 std::unique_ptr<cld::Semantics::ReturnStatement>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::ReturnStatement& node)
 {
-    auto& ft = cld::get<FunctionType>(getCurrentFunctionScope()->currentFunction->getType().getVariant());
+    auto& ft = getCurrentFunctionScope()->currentFunction->getType().cast<FunctionType>();
     if (!node.getExpression())
     {
         if (!isVoid(ft.getReturnType()))
@@ -246,14 +246,14 @@ void cld::Semantics::SemanticAnalysis::checkForIllegalSwitchJumps(
                     break;
                 }
             }
-            else if (auto* typeDef = std::get_if<Type>(&decl.declared))
+            else if (auto* typeDef = std::get_if<IntrVarValue<Type>>(&decl.declared))
             {
-                if (isVariablyModified(*typeDef))
+                if (isVariablyModified(**typeDef))
                 {
                     isTypedef = true;
                     illegalJump = true;
                     identifier = decl.identifier;
-                    type = typeDef;
+                    type = &**typeDef;
                     break;
                 }
             }
@@ -435,14 +435,14 @@ void cld::Semantics::SemanticAnalysis::resolveGotos()
                         break;
                     }
                 }
-                if (auto* typeDef = std::get_if<Type>(&decl.declared))
+                if (auto* typeDef = std::get_if<IntrVarValue<Type>>(&decl.declared))
                 {
-                    if (isVariablyModified(*typeDef))
+                    if (isVariablyModified(**typeDef))
                     {
                         isTypedef = true;
                         illegalJump = true;
                         identifier = decl.identifier;
-                        type = typeDef;
+                        type = &**typeDef;
                         break;
                     }
                 }

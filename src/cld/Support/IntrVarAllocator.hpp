@@ -9,17 +9,18 @@
 #include <vector>
 
 #include "AbstractIntrusiveVariant.hpp"
+#include "IntrVarValue.hpp"
 #include "Util.hpp"
 
 namespace cld
 {
 template <class T, class U = decltype(detail::AbstractIntrusiveVariant::deduceArgs(std::declval<T*>()))>
-class IntrusiveVariantAllocator
+class IntrVarAllocator
 {
     static_assert(always_false<T>, "Allocator only works for allocating subclasses of AbstractIntrusiveVariant");
 };
 
-namespace detail::IntrusiveVariantAllocator
+namespace detail::IntrVarAllocator
 {
 template <std::size_t allocSize, std::size_t align, std::size_t count, bool withMetadata>
 struct Slab;
@@ -84,23 +85,23 @@ struct Slab<allocSize, align, count, true>
 template <class Base>
 class Deleter
 {
-    ::cld::IntrusiveVariantAllocator<Base>* m_alloc;
+    ::cld::IntrVarAllocator<Base>* m_alloc;
 
 public:
     Deleter() = default;
 
-    Deleter(::cld::IntrusiveVariantAllocator<Base>* mAlloc) : m_alloc(mAlloc) {}
+    Deleter(::cld::IntrVarAllocator<Base>* mAlloc) : m_alloc(mAlloc) {}
 
     void operator()(Base* pointer) const noexcept;
 };
 
-} // namespace detail::IntrusiveVariantAllocator
+} // namespace detail::IntrVarAllocator
 
 template <class Base, class PreciseClass = Base>
-using IVAUniquePtr = std::unique_ptr<PreciseClass, detail::IntrusiveVariantAllocator::Deleter<Base>>;
+using IVAUniquePtr = std::unique_ptr<PreciseClass, detail::IntrVarAllocator::Deleter<Base>>;
 
 template <class Base, class... Subclasses>
-class IntrusiveVariantAllocator<Base, AbstractIntrusiveVariant<Subclasses...>>
+class IntrVarAllocator<Base, AbstractIntrusiveVariant<Subclasses...>>
 {
     constexpr static std::size_t largestAlign = std::max({alignof(Subclasses)...});
     constexpr static std::size_t largestSize = std::max({sizeof(Subclasses)...});
@@ -113,10 +114,9 @@ class IntrusiveVariantAllocator<Base, AbstractIntrusiveVariant<Subclasses...>>
 
     using index_type = typename Base::index_type;
 
-    using Slab =
-        detail::IntrusiveVariantAllocator::Slab<allocSize, largestAlign, sizeof...(Subclasses), needsDestructor>;
+    using Slab = detail::IntrVarAllocator::Slab<allocSize, largestAlign, sizeof...(Subclasses), needsDestructor>;
 
-    std::vector<Slab> m_slabs;
+    std::vector<std::unique_ptr<Slab>> m_slabs;
     std::vector<std::byte*> m_heads;
 
     static bool slabFull(std::byte* slabHeader)
@@ -129,7 +129,7 @@ class IntrusiveVariantAllocator<Base, AbstractIntrusiveVariant<Subclasses...>>
         auto head = std::find_if_not(m_heads.begin(), m_heads.end(), &slabFull);
         if (head == m_heads.end())
         {
-            return m_heads.insert(m_heads.end(), m_slabs.emplace_back().storage);
+            return m_heads.insert(m_heads.end(), m_slabs.emplace_back(std::make_unique<Slab>())->storage);
         }
         return head;
     }
@@ -137,7 +137,7 @@ class IntrusiveVariantAllocator<Base, AbstractIntrusiveVariant<Subclasses...>>
     void advance(std::vector<std::byte*>::iterator head)
     {
         *head += allocSize;
-        if (*head == std::end(m_slabs[head - m_heads.begin()].storage))
+        if (*head == std::end(m_slabs[head - m_heads.begin()]->storage))
         {
             *head = reinterpret_cast<std::byte*>(reinterpret_cast<std::uintptr_t>(*head) | 1);
         }
@@ -197,35 +197,35 @@ class IntrusiveVariantAllocator<Base, AbstractIntrusiveVariant<Subclasses...>>
     }
 
 public:
-    IntrusiveVariantAllocator() : m_slabs(1), m_heads{m_slabs.front().storage} {}
+    IntrVarAllocator() = default;
 
-    IntrusiveVariantAllocator(const IntrusiveVariantAllocator&) = delete;
-    IntrusiveVariantAllocator& operator=(const IntrusiveVariantAllocator&) = delete;
+    IntrVarAllocator(const IntrVarAllocator&) = delete;
+    IntrVarAllocator& operator=(const IntrVarAllocator&) = delete;
 
-    IntrusiveVariantAllocator(IntrusiveVariantAllocator&&) noexcept = default;
-    IntrusiveVariantAllocator& operator=(IntrusiveVariantAllocator&&) noexcept = default;
+    IntrVarAllocator(IntrVarAllocator&&) noexcept = default;
+    IntrVarAllocator& operator=(IntrVarAllocator&&) noexcept = default;
 
-    ~IntrusiveVariantAllocator()
+    ~IntrVarAllocator()
     {
         if constexpr (needsDestructor)
         {
             for (std::size_t i = 0; i < m_slabs.size(); i++)
             {
-                destroySlab(m_heads[i], m_slabs[i]);
+                destroySlab(m_heads[i], *m_slabs[i]);
             }
         }
     }
 
-    void destroy(const Base* object)
+    void destroy(cld::not_null<const Base> object)
     {
-        Base* casted = const_cast<Base*>(object);
+        Base* casted = const_cast<Base*>(object.get());
         std::byte* pointerIntoObject = reinterpret_cast<std::byte*>(casted);
         auto slab =
             std::find_if(m_slabs.begin(), m_slabs.end(),
-                         [pointerIntoObject](const Slab& slab)
-                         { return pointerIntoObject >= slab.storage && pointerIntoObject < std::end(slab.storage); });
+                         [pointerIntoObject](const std::unique_ptr<Slab>& slab)
+                         { return pointerIntoObject >= slab->storage && pointerIntoObject < std::end(slab->storage); });
         CLD_ASSERT(slab != m_slabs.end());
-        if (slab->metadata[(pointerIntoObject - slab->storage) / allocSize].destroyed)
+        if ((*slab)->metadata[(pointerIntoObject - (*slab)->storage) / allocSize].destroyed)
         {
             return;
         }
@@ -243,11 +243,32 @@ public:
         head = pointerToStart;
     }
 
-    template <class U, class... Args>
-    [[nodiscard]] U* alloc(Args&&... args)
+    template <class U = Base,
+              std::enable_if_t<std::is_same_v<U, Base> && (std::is_copy_constructible_v<Subclasses> && ...)>* = nullptr>
+    [[nodiscard]] cld::not_null<Base> alloc(const Base& value)
     {
-        static_assert((std::is_same_v<U, Subclasses> || ...),
-                      "Class to allocate has to be one of the listed Subclasses");
+        constexpr std::array<Base* (*)(IntrVarAllocator*, const Base&), sizeof...(Subclasses)> copyConstructors = {
+            +[](IntrVarAllocator* self, const Base& value) -> Base* {
+                return self->alloc<Subclasses>(static_cast<const Subclasses&>(value));
+            }...};
+        return copyConstructors[value.index()](this, value);
+    }
+
+    template <class U = Base,
+              std::enable_if_t<std::is_same_v<U, Base> && (std::is_copy_constructible_v<Subclasses> && ...)>* = nullptr>
+    [[nodiscard]] cld::not_null<Base> alloc(Base&& value)
+    {
+        constexpr std::array<Base* (*)(IntrVarAllocator*, Base &&), sizeof...(Subclasses)> moveConstructors = {
+            +[](IntrVarAllocator* self, Base&& value) -> Base* {
+                return self->alloc<Subclasses>(static_cast<Subclasses&&>(value));
+            }...};
+        return moveConstructors[value.index()](this, std::move(value));
+    }
+
+    template <class U, class... Args>
+    [[nodiscard]] auto alloc(Args&&... args)
+        -> std::enable_if_t<(std::is_same_v<U, Subclasses> || ...), cld::not_null<U>>
+    {
         auto head = getFreeHead();
         __asan_unpoison_memory_region(*head, std::max(sizeof(U), sizeof(std::byte*)));
         std::byte* previouslyContained;
@@ -256,7 +277,7 @@ public:
         auto* object = new (*head) U(std::forward<Args>(args)...);
         if constexpr (needsDestructor)
         {
-            auto& slab = m_slabs[head - m_heads.begin()];
+            auto& slab = *m_slabs[head - m_heads.begin()];
             slab.metadata[(*head - slab.storage) / allocSize].index = object->index();
             slab.metadata[(*head - slab.storage) / allocSize].destroyed = false;
         }
@@ -275,11 +296,11 @@ public:
     [[nodiscard]] IVAUniquePtr<Base, U> allocUnique(Args&&... args)
     {
         return IVAUniquePtr<Base, U>{alloc<U>(std::forward<Args>(args)...),
-                                     detail::IntrusiveVariantAllocator::Deleter<Base>{this}};
+                                     detail::IntrVarAllocator::Deleter<Base>{this}};
     }
 };
 
-namespace detail::IntrusiveVariantAllocator
+namespace detail::IntrVarAllocator
 {
 template <class Base>
 void Deleter<Base>::operator()(Base* pointer) const noexcept
@@ -287,6 +308,6 @@ void Deleter<Base>::operator()(Base* pointer) const noexcept
     CLD_ASSERT(m_alloc);
     m_alloc->destroy(pointer);
 }
-} // namespace detail::IntrusiveVariantAllocator
+} // namespace detail::IntrVarAllocator
 
 } // namespace cld

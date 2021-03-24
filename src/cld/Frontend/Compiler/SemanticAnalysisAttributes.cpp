@@ -82,7 +82,7 @@ std::vector<cld::Semantics::SemanticAnalysis::GNUAttribute>
                     applicant, [&](VariableDeclaration*) { iter.attempts |= GNUAttribute::Variable; },
                     [&](FunctionDeclaration*) { iter.attempts |= GNUAttribute::Function; },
                     [&](FunctionDefinition*) { iter.attempts |= GNUAttribute::Function; },
-                    [&](const std::pair<Type*, diag::PointRange>&) { iter.attempts |= GNUAttribute::Type; });
+                    [&](const std::pair<const Type**, diag::PointRange>&) { iter.attempts |= GNUAttribute::Type; });
                 results.push_back(std::move(iter));
             }
         }
@@ -172,34 +172,39 @@ void cld::Semantics::SemanticAnalysis::applyVectorSizeAttribute(AffectsTypeVaria
             *attribute.paramExpressions[0], m_sourceInterface, *attribute.paramExpressions[0], *result));
         return;
     }
-    Type baseType = cld::match(
-        applicant, [](VariableDeclaration* variableDeclaration) { return variableDeclaration->getType(); },
-        [](auto pair) { return *pair.first; });
+    const Type& baseType = cld::match(
+        applicant,
+        [](VariableDeclaration* variableDeclaration) -> const Type& { return variableDeclaration->getType(); },
+        [](auto pair) -> const Type& { return **pair.first; });
     if (!isArithmetic(baseType) || isEnum(baseType))
     {
         cld::match(
             applicant,
-            [&](VariableDeclaration* variableDeclaration) {
+            [&](VariableDeclaration* variableDeclaration)
+            {
                 log(Errors::Semantics::VECTOR_SIZE_CAN_ONLY_BE_APPLIED_TO_VARIABLES_OF_ARITHMETIC_TYPES.args(
                     *variableDeclaration->getNameToken(), m_sourceInterface, *variableDeclaration->getNameToken(),
                     baseType));
             },
-            [&](const std::pair<Type*, diag::PointRange>& pair) {
+            [&](const std::pair<const Type**, diag::PointRange>& pair)
+            {
                 log(Errors::Semantics::VECTOR_SIZE_CAN_ONLY_BE_APPLIED_TO_ARITHMETIC_TYPES.args(
                     pair.second, m_sourceInterface, pair.second, baseType));
             });
         return;
     }
-    if (cld::get<PrimitiveType>(baseType.getVariant()).getKind() == PrimitiveType::LongDouble)
+    if (baseType.cast<PrimitiveType>().getKind() == PrimitiveType::LongDouble)
     {
         cld::match(
             applicant,
-            [&](VariableDeclaration* variableDeclaration) {
+            [&](VariableDeclaration* variableDeclaration)
+            {
                 log(Errors::Semantics::VECTOR_SIZE_CAN_NOT_BE_APPLIED_TO_LONG_DOUBLE.args(
                     *variableDeclaration->getNameToken(), m_sourceInterface, *variableDeclaration->getNameToken(),
                     baseType));
             },
-            [&](const std::pair<Type*, diag::PointRange>& pair) {
+            [&](const std::pair<const Type**, diag::PointRange>& pair)
+            {
                 log(Errors::Semantics::VECTOR_SIZE_CAN_NOT_BE_APPLIED_TO_LONG_DOUBLE.args(
                     pair.second, m_sourceInterface, pair.second, baseType));
             });
@@ -228,19 +233,21 @@ void cld::Semantics::SemanticAnalysis::applyVectorSizeAttribute(AffectsTypeVaria
     }
     cld::match(
         applicant,
-        [&](const std::pair<Type*, diag::PointRange>& pair) {
-            *pair.first =
-                VectorType::create(baseType.isConst(), baseType.isVolatile(), removeQualifiers(std::move(baseType)),
-                                   multiple.getInteger().getZExtValue());
+        [&](const std::pair<const Type**, diag::PointRange>& pair)
+        {
+            *pair.first = typeAlloc<VectorType>(baseType.isConst(), baseType.isVolatile(),
+                                                typeAlloc(*removeQualifiers(std::move(baseType))),
+                                                multiple.getInteger().getZExtValue());
         },
-        [&](VariableDeclaration* variableDeclaration) {
-            auto newType =
-                VectorType::create(baseType.isConst(), baseType.isVolatile(), removeQualifiers(std::move(baseType)),
-                                   multiple.getInteger().getZExtValue());
+        [&](VariableDeclaration* variableDeclaration)
+        {
+            auto newType = typeAlloc<VectorType>(baseType.isConst(), baseType.isVolatile(),
+                                                 typeAlloc(*removeQualifiers(std::move(baseType))),
+                                                 multiple.getInteger().getZExtValue());
             *variableDeclaration =
-                VariableDeclaration(std::move(newType), variableDeclaration->getLinkage(),
-                                    variableDeclaration->getLifetime(), variableDeclaration->getNameToken(),
-                                    variableDeclaration->getKind(), std::move(*variableDeclaration).getInitializer());
+                VariableDeclaration(newType, variableDeclaration->getLinkage(), variableDeclaration->getLifetime(),
+                                    variableDeclaration->getNameToken(), variableDeclaration->getKind(),
+                                    std::move(*variableDeclaration).getInitializer());
         });
 }
 
