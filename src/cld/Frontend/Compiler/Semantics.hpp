@@ -1,3 +1,5 @@
+#pragma clang diagnostic push
+#pragma ide diagnostic ignored "HidingNonVirtualFunction"
 #pragma once
 
 #include <cld/Support/AbstractIntrusiveVariant.h>
@@ -42,6 +44,206 @@ class UnionDefinition;
 class EnumDefinition;
 
 class ProgramInterface;
+
+namespace details
+{
+enum class TypeFlags : std::uint8_t
+{
+    Nothing = 0,
+    Const = 0b1,
+    Volatile = 0b10,
+    Restricted = 0b100,
+    Static = 0b1000,
+};
+
+using TypeFlagsUT = std::underlying_type_t<TypeFlags>;
+
+template <class Left, class Right>
+struct OrExpr
+{
+    Left left;
+    Right right;
+
+    constexpr operator TypeFlags() const
+    {
+        return static_cast<TypeFlags>(static_cast<TypeFlagsUT>(left) | static_cast<TypeFlagsUT>(right));
+    }
+};
+
+template <class T>
+struct IsOrExpr : std::false_type
+{
+};
+
+template <class Left, class Right>
+struct IsOrExpr<OrExpr<Left, Right>> : std::true_type
+{
+};
+
+template <class Left, class Right>
+struct AndExpr
+{
+    Left left;
+    Right right;
+
+    constexpr operator TypeFlags() const
+    {
+        return static_cast<TypeFlags>(static_cast<TypeFlagsUT>(left) & static_cast<TypeFlagsUT>(right));
+    }
+};
+
+template <class T>
+struct IsAndExpr : std::false_type
+{
+};
+
+template <class Left, class Right>
+struct IsAndExpr<AndExpr<Left, Right>> : std::true_type
+{
+};
+
+template <TypeFlags value>
+struct Constant
+{
+    constexpr operator TypeFlags() const
+    {
+        return value;
+    }
+};
+
+template <class T>
+auto isConstant(const T&) -> std::false_type;
+
+template <TypeFlags value>
+auto isConstant(const Constant<value>&) -> std::true_type;
+
+struct Value
+{
+    TypeFlags value;
+
+    constexpr operator TypeFlags() const
+    {
+        return value;
+    }
+};
+
+template <class T>
+constexpr bool typeAllowedInExpr()
+{
+    return std::is_same_v<T, TypeFlags> || std::is_same_v<T, Value> || IsOrExpr<T>{} || IsAndExpr<T>{}
+           || decltype(isConstant(std::declval<T>())){};
+}
+
+template <class T>
+constexpr auto toValue(const T& value)
+{
+    if constexpr (std::is_same_v<T, TypeFlags>)
+    {
+        return Value{value};
+    }
+    else
+    {
+        return value;
+    }
+}
+
+template <class Left, class Right,
+          std::enable_if_t<(typeAllowedInExpr<Left>() && typeAllowedInExpr<Right>())>* = nullptr>
+constexpr OrExpr<Left, Right> operator|(const Left& left, const Right& right)
+{
+    return OrExpr{toValue(left), toValue(right)};
+}
+
+template <TypeFlags left, TypeFlags right>
+constexpr auto operator|(const Constant<left>&, const Constant<right>&)
+    -> Constant<static_cast<TypeFlags>(static_cast<TypeFlagsUT>(left) | static_cast<TypeFlagsUT>(right))>
+{
+    return {};
+}
+
+template <class Left, class Right,
+          std::enable_if_t<(typeAllowedInExpr<Left>() && typeAllowedInExpr<Right>())>* = nullptr>
+constexpr AndExpr<Left, Right> operator&(const Left& left, const Right& right)
+{
+    return AndExpr{toValue(left), toValue(right)};
+}
+
+template <TypeFlags left, TypeFlags right>
+constexpr auto operator&(const Constant<left>&, const Constant<right>&)
+    -> Constant<static_cast<TypeFlags>(static_cast<TypeFlagsUT>(left) & static_cast<TypeFlagsUT>(right))>
+{
+    return {};
+}
+
+template <TypeFlags... allowedValues, class T>
+constexpr auto containsOnlyAllowed(const T& arg) -> std::enable_if_t<typeAllowedInExpr<T>(), bool>
+{
+    struct MaskValue
+    {
+        TypeFlagsUT knownBitMask;
+        TypeFlagsUT knownBitValues;
+    };
+    MaskValue result = YComb{[&](auto&& self, const auto& arg) -> MaskValue {
+        using U = std::decay_t<decltype(arg)>;
+        if constexpr (IsOrExpr<U>{})
+        {
+            MaskValue left = self(arg.left);
+            MaskValue right = self(arg.right);
+            return {static_cast<TypeFlagsUT>((left.knownBitValues & left.knownBitMask)
+                                             | (right.knownBitValues & right.knownBitValues)
+                                             | (left.knownBitMask & right.knownBitMask)),
+                    static_cast<TypeFlagsUT>((left.knownBitValues & left.knownBitMask)
+                                             | (right.knownBitValues & right.knownBitValues))};
+        }
+        else if constexpr (IsAndExpr<U>{})
+        {
+            MaskValue left = self(arg.left);
+            MaskValue right = self(arg.right);
+            auto knownBits = (~(~left.knownBitMask | left.knownBitValues))
+                             | (~(~right.knownBitMask | right.knownBitValues))
+                             | (left.knownBitMask & right.knownBitMask);
+            return {static_cast<TypeFlagsUT>(knownBits),
+                    static_cast<TypeFlagsUT>((left.knownBitValues & left.knownBitMask)
+                                             & (right.knownBitValues & right.knownBitValues))};
+        }
+        else if constexpr (std::is_same_v<U, Value>)
+        {
+            return {0, 0};
+        }
+        else if constexpr (decltype(isConstant(std::declval<U>())){})
+        {
+            return {static_cast<TypeFlagsUT>(-1), static_cast<TypeFlagsUT>(static_cast<TypeFlags>(arg))};
+        }
+        else
+        {
+            CLD_UNREACHABLE;
+        }
+    }}(arg);
+    auto mask = (static_cast<TypeFlagsUT>(allowedValues) | ...);
+    return (result.knownBitValues & result.knownBitMask & (~mask)) == 0;
+}
+
+inline TypeFlags& operator|=(TypeFlags& left, const TypeFlags right)
+{
+    left = static_cast<TypeFlags>(static_cast<TypeFlagsUT>(left) | static_cast<TypeFlagsUT>(right));
+    return left;
+}
+
+inline TypeFlags& operator&=(TypeFlags& left, const TypeFlags right)
+{
+    left = static_cast<TypeFlags>(static_cast<TypeFlagsUT>(left) & static_cast<TypeFlagsUT>(right));
+    return left;
+}
+
+} // namespace details
+
+using details::TypeFlags;
+
+constexpr auto NothingFlag = details::Constant<TypeFlags::Nothing>{};
+constexpr auto ConstFlag = details::Constant<TypeFlags::Const>{};
+constexpr auto VolatileFlag = details::Constant<TypeFlags::Volatile>{};
+constexpr auto RestrictedFlag = details::Constant<TypeFlags::Restricted>{};
+constexpr auto StaticFlag = details::Constant<TypeFlags::Static>{};
 
 class PrimitiveType final
 {
@@ -2781,3 +2983,5 @@ inline cld::Semantics::Type cld::Semantics::removeQualifiers(Type type)
     }
     return type;
 }
+
+#pragma clang diagnostic pop
