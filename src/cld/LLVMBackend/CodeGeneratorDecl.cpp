@@ -546,6 +546,10 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::VariableDe
             return cld::get<Semantics::VariableDeclaration*>(decl)->getType();
         }();
         auto* type = visit(declType);
+        if (Semantics::isAbstractArray(declType))
+        {
+            type = llvm::ArrayType::get(type->getArrayElementType(), 1);
+        }
 
         auto* prevType = type;
         llvm::Constant* constant = nullptr;
@@ -562,11 +566,12 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::VariableDe
         {
             linkageType = llvm::GlobalValue::InternalLinkage;
         }
-        else if (declaration.getLinkage() != Semantics::Linkage::Internal
-                 && declaration.getKind() == Semantics::VariableDeclaration::TentativeDefinition)
-        {
-            linkageType = llvm::GlobalValue::CommonLinkage;
-        }
+        // TODO: Enable with either -fcommon or common attribute
+        //        else if (declaration.getLinkage() != Semantics::Linkage::Internal
+        //                 && declaration.getKind() == Semantics::VariableDeclaration::TentativeDefinition)
+        //        {
+        //            linkageType = llvm::GlobalValue::CommonLinkage;
+        //        }
 
         llvm::GlobalVariable* global = nullptr;
         if (m_currentFunction || m_cGlobalVariables.count(declaration.getNameToken()->getText()) == 0)

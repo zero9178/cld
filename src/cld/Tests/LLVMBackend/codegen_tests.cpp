@@ -627,7 +627,6 @@ TEST_CASE("LLVM codegen global variables", "[LLVM]")
             CHECK(module->getGlobalList().size() == 1);
             auto* variable = module->getGlobalVariable("foo");
             REQUIRE(variable);
-            CHECK(variable->getLinkage() == llvm::GlobalValue::CommonLinkage);
             CHECK(!variable->isDeclaration());
             REQUIRE(variable->getType()->isPointerTy());
             CHECK(variable->getType()->getPointerElementType()->isIntegerTy(cld::LanguageOptions::native().sizeOfInt
@@ -642,7 +641,6 @@ TEST_CASE("LLVM codegen global variables", "[LLVM]")
             CHECK(module->getGlobalList().size() == 1);
             auto* variable = module->getGlobalVariable("foo");
             REQUIRE(variable);
-            CHECK(variable->getLinkage() == llvm::GlobalValue::CommonLinkage);
             CHECK(!variable->isDeclaration());
             REQUIRE(variable->getType()->isPointerTy());
             REQUIRE(variable->getType()->getPointerElementType()->isArrayTy());
@@ -658,7 +656,6 @@ TEST_CASE("LLVM codegen global variables", "[LLVM]")
             CHECK(module->getGlobalList().size() == 1);
             auto* variable = module->getGlobalVariable("foo");
             REQUIRE(variable);
-            CHECK(variable->getLinkage() == llvm::GlobalValue::CommonLinkage);
             CHECK(!variable->isDeclaration());
             REQUIRE(variable->getType()->isPointerTy());
             CHECK(variable->getType()->getPointerElementType()->isIntegerTy(cld::LanguageOptions::native().sizeOfInt
