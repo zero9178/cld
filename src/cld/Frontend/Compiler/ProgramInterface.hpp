@@ -102,7 +102,6 @@ public:
 #endif
         = default;
 
-    [[nodiscard]] bool isCompleteType(const Type& type) const;
 
     [[nodiscard]] virtual const LanguageOptions& getLanguageOptions() const = 0;
 
@@ -124,12 +123,6 @@ public:
         }
         return nullptr;
     }
-
-    const FieldMap& getFields(const Type& recordType) const;
-
-    llvm::ArrayRef<MemoryLayout> getMemoryLayout(const Type& structType) const;
-
-    llvm::ArrayRef<FieldInLayout> getFieldLayout(const Type& recordType) const;
 
     const std::vector<Scope>& getScopes() const
     {

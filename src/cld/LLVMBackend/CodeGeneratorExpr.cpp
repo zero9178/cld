@@ -1308,7 +1308,7 @@ llvm::Value* visitStaticInitializerList(cld::CGLLVM::CodeGenerator& codeGenerato
     auto genAggregate = cld::YComb{[&](auto&& self, const cld::Semantics::Type& type, Aggregate& aggregate) -> void {
         if (cld::Semantics::isStruct(type))
         {
-            auto fields = codeGenerator.getProgramInterface().getFieldLayout(type);
+            auto fields = cld::Semantics::getFieldLayout(type);
             aggregate.vector.resize(fields.size());
             for (const auto* iter = fields.begin(); iter != fields.end(); iter++)
             {
@@ -1349,7 +1349,7 @@ llvm::Value* visitStaticInitializerList(cld::CGLLVM::CodeGenerator& codeGenerato
             {
                 if (cld::Semantics::isUnion(*currentType))
                 {
-                    auto fields = codeGenerator.getProgramInterface().getFieldLayout(*currentType);
+                    auto fields = cld::Semantics::getFieldLayout(*currentType);
                     if (current->vector.empty() || current->unionIndex != iter)
                     {
                         current->vector.resize(1);
@@ -1367,7 +1367,7 @@ llvm::Value* visitStaticInitializerList(cld::CGLLVM::CodeGenerator& codeGenerato
                 }
                 if (cld::Semantics::isStruct(*currentType))
                 {
-                    currentType = codeGenerator.getProgramInterface().getFieldLayout(*currentType)[iter].type.get();
+                    currentType = cld::Semantics::getFieldLayout(*currentType)[iter].type.get();
                 }
                 else if (cld::Semantics::isArray(*currentType))
                 {
@@ -1423,7 +1423,7 @@ llvm::Value* visitStaticInitializerList(cld::CGLLVM::CodeGenerator& codeGenerato
             }
             if (cld::Semantics::isUnion(*currentType))
             {
-                auto fields = codeGenerator.getProgramInterface().getFieldLayout(*currentType);
+                auto fields = cld::Semantics::getFieldLayout(*currentType);
                 if (current->vector.empty() || current->unionIndex != path.back())
                 {
                     current->vector.resize(1);
@@ -1452,7 +1452,7 @@ llvm::Value* visitStaticInitializerList(cld::CGLLVM::CodeGenerator& codeGenerato
         {
             std::vector<llvm::Constant*> elements;
             std::vector<llvm::Type*> elementTypes;
-            auto fields = codeGenerator.getProgramInterface().getFieldLayout(type);
+            auto fields = cld::Semantics::getFieldLayout(type);
             for (std::size_t i = 0; i < aggregate.vector.size();)
             {
                 if (!fields[i].bitFieldBounds)
@@ -1545,7 +1545,7 @@ llvm::Value* visitStaticInitializerList(cld::CGLLVM::CodeGenerator& codeGenerato
         if (cld::Semantics::isUnion(type))
         {
             // Union
-            auto fields = codeGenerator.getProgramInterface().getFieldLayout(type);
+            auto fields = cld::Semantics::getFieldLayout(type);
             auto* llvmSubType = codeGenerator.visit(*fields[*aggregate.unionIndex].type);
             llvm::Constant* element = cld::match(
                 aggregate.vector[0], [](llvm::Constant* constant) -> llvm::Constant* { return constant; },
@@ -1623,7 +1623,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::Initialize
                 {
                     if (Semantics::isStruct(*currentType))
                     {
-                        auto fieldLayout = m_programInterface.getFieldLayout(*currentType);
+                        auto fieldLayout = Semantics::getFieldLayout(*currentType);
                         currentPointer = createInBoundsGEP(
                             currentPointer, {m_builder.getInt64(0), m_builder.getInt32(fieldLayout[iter].layoutIndex)});
                         currentType = fieldLayout[iter].type.get();
@@ -1631,7 +1631,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::Initialize
                     }
                     else if (Semantics::isUnion(*currentType))
                     {
-                        auto fields = m_programInterface.getFieldLayout(*currentType);
+                        auto fields = Semantics::getFieldLayout(*currentType);
                         currentType = fields[iter].type.get();
                         currentPointer =
                             createBitCast(currentPointer, llvm::PointerType::getUnqual(visit(*currentType)));

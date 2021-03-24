@@ -1048,3 +1048,64 @@ std::uint64_t cld::Semantics::VectorType::getAlignOf(const cld::Semantics::Progr
 {
     return getSizeOf(program);
 }
+
+bool cld::Semantics::isCompleteType(const Type& type)
+{
+    if (isVoid(type))
+    {
+        return false;
+    }
+    if (std::holds_alternative<AbstractArrayType>(type.getVariant()))
+    {
+        return false;
+    }
+    if (auto* structType = std::get_if<StructType>(&type.getVariant()))
+    {
+        return std::holds_alternative<StructDefinition>(structType->getInfo().type);
+    }
+    if (auto* unionType = std::get_if<UnionType>(&type.getVariant()))
+    {
+        return std::holds_alternative<UnionDefinition>(unionType->getInfo().type);
+    }
+    return true;
+}
+
+const cld::Semantics::FieldMap& cld::Semantics::getFields(const cld::Semantics::Type& recordType)
+{
+    if (std::holds_alternative<StructType>(recordType.getVariant()))
+    {
+        auto& structType = cld::get<StructType>(recordType.getVariant());
+        return cld::get<StructDefinition>(structType.getInfo().type).getFields();
+    }
+    if (std::holds_alternative<UnionType>(recordType.getVariant()))
+    {
+        auto& unionType = cld::get<UnionType>(recordType.getVariant());
+        return cld::get<UnionDefinition>(unionType.getInfo().type).getFields();
+    }
+    CLD_UNREACHABLE;
+}
+
+llvm::ArrayRef<cld::Semantics::MemoryLayout> cld::Semantics::getMemoryLayout(const cld::Semantics::Type& structType)
+{
+    if (std::holds_alternative<StructType>(structType.getVariant()))
+    {
+        auto& structTy = cld::get<StructType>(structType.getVariant());
+        return cld::get<StructDefinition>(structTy.getInfo().type).getMemLayout();
+    }
+    CLD_UNREACHABLE;
+}
+
+llvm::ArrayRef<cld::Semantics::FieldInLayout> cld::Semantics::getFieldLayout(const cld::Semantics::Type& recordType)
+{
+    if (std::holds_alternative<StructType>(recordType.getVariant()))
+    {
+        auto& structType = cld::get<StructType>(recordType.getVariant());
+        return cld::get<StructDefinition>(structType.getInfo().type).getFieldLayout();
+    }
+    if (std::holds_alternative<UnionType>(recordType.getVariant()))
+    {
+        auto& unionType = cld::get<UnionType>(recordType.getVariant());
+        return cld::get<UnionDefinition>(unionType.getInfo().type).getFieldLayout();
+    }
+    CLD_UNREACHABLE;
+}

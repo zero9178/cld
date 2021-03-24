@@ -2098,6 +2098,12 @@ public:
     }
 };
 
+const FieldMap& getFields(const Type& recordType);
+
+llvm::ArrayRef<MemoryLayout> getMemoryLayout(const Type& structType);
+
+llvm::ArrayRef<FieldInLayout> getFieldLayout(const Type& recordType);
+
 class EnumDefinition
 {
     std::string_view m_name;
@@ -2411,6 +2417,8 @@ Program analyse(const Syntax::TranslationUnit& parseTree, CSourceObject&& cToken
                 llvm::raw_ostream* reporter = &llvm::errs(), bool* errors = nullptr);
 
 [[nodiscard]] Lexer::CTokenIterator declaratorToLoc(const cld::Syntax::Declarator& declarator);
+
+[[nodiscard]] bool isCompleteType(const Type& type);
 
 [[nodiscard]] bool isVoid(const Type& type);
 

@@ -190,7 +190,7 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::castTo(const cld::Semanti
                 },
                 [&](const PointerType& pointerType) -> ConstValue {
                     CLD_ASSERT(program);
-                    if (program->isCompleteType(pointerType.getElementType())
+                    if (isCompleteType(pointerType.getElementType())
                         && !std::holds_alternative<FunctionType>(pointerType.getElementType().getVariant()))
                     {
                         return {VoidStar{integer.getZExtValue(),

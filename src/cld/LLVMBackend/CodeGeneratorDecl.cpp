@@ -313,13 +313,13 @@ llvm::DIType* cld::CGLLVM::CodeGenerator::visitDebug(const Semantics::Type& type
                 {
                     if (Semantics::isStruct(*currentType))
                     {
-                        const auto& memoryLayout = m_programInterface.getMemoryLayout(*currentType);
+                        const auto& memoryLayout = Semantics::getMemoryLayout(*currentType);
                         offset += memoryLayout[index].offset;
                         currentType = &memoryLayout[index].type;
                     }
                     else
                     {
-                        currentType = m_programInterface.getFieldLayout(*currentType)[index].type.get();
+                        currentType = Semantics::getFieldLayout(*currentType)[index].type.get();
                     }
                 }
                 if (!iter.second.bitFieldBounds)
@@ -376,13 +376,13 @@ llvm::DIType* cld::CGLLVM::CodeGenerator::visitDebug(const Semantics::Type& type
                 {
                     if (Semantics::isStruct(*currentType))
                     {
-                        const auto& memoryLayout = m_programInterface.getMemoryLayout(*currentType);
+                        const auto& memoryLayout = Semantics::getMemoryLayout(*currentType);
                         offset += memoryLayout[index].offset;
                         currentType = &memoryLayout[index].type;
                     }
                     else
                     {
-                        currentType = m_programInterface.getFieldLayout(*currentType)[index].type.get();
+                        currentType = Semantics::getFieldLayout(*currentType)[index].type.get();
                     }
                 }
                 if (!iter.second.bitFieldBounds)
@@ -579,7 +579,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::VariableDe
             global = new llvm::GlobalVariable(
                 m_module, type, declType.isConst() && linkageType != llvm::GlobalValue::CommonLinkage, linkageType,
                 constant, llvm::StringRef{declaration.getNameToken()->getText()});
-            if (m_programInterface.isCompleteType(declType) || Semantics::isAbstractArray(declType))
+            if (Semantics::isCompleteType(declType) || Semantics::isAbstractArray(declType))
             {
                 if (m_triple.getArchitecture() == cld::Architecture::x86_64 && Semantics::isArray(declType)
                     && !Semantics::isAbstractArray(declType) && declType.getSizeOf(m_programInterface) >= 16)

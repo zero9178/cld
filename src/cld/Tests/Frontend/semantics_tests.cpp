@@ -951,7 +951,7 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
         CHECK(decl->getNameToken()->getText() == "a");
         REQUIRE(std::holds_alternative<cld::Semantics::StructType>(decl->getType().getVariant()));
         CHECK(cld::get<cld::Semantics::StructType>(decl->getType().getVariant()).isAnonymous());
-        auto& fields = program.getFields(decl->getType());
+        auto& fields = cld::Semantics::getFields(decl->getType());
         CHECK(fields.size() == 3);
         CHECK(fields.values_container()[0].second.name == "i");
         CHECK(*fields.values_container()[0].second.type
@@ -973,7 +973,7 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
         CHECK(decl->getNameToken()->getText() == "a");
         REQUIRE(std::holds_alternative<cld::Semantics::UnionType>(decl->getType().getVariant()));
         CHECK(cld::get<cld::Semantics::UnionType>(decl->getType().getVariant()).isAnonymous());
-        auto& fields = program.getFields(decl->getType());
+        auto& fields = cld::Semantics::getFields(decl->getType());
         CHECK(fields.size() == 3);
         CHECK(fields.values_container()[0].second.name == "i");
         CHECK(*fields.values_container()[0].second.type
