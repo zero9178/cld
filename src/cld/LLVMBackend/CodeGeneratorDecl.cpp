@@ -76,7 +76,7 @@ llvm::Type* cld::CGLLVM::CodeGenerator::visit(const Semantics::Type& type)
             {
                 return result->second;
             }
-            auto* structDef = m_programInterface.getStructDefinition(structType.getId());
+            auto* structDef = std::get_if<Semantics::StructDefinition>(&structType.getInfo().type);
             auto* type = llvm::StructType::create(m_module.getContext(),
                                                   structType.isAnonymous() ? "struct.anon" : structType.getName());
             m_types.insert({structType, type});
@@ -99,7 +99,7 @@ llvm::Type* cld::CGLLVM::CodeGenerator::visit(const Semantics::Type& type)
             {
                 return result->second;
             }
-            auto* unionDef = m_programInterface.getUnionDefinition(unionType.getId());
+            auto* unionDef = std::get_if<Semantics::UnionDefinition>(&unionType.getInfo().type);
             if (!unionDef)
             {
                 auto* type = llvm::StructType::create(m_module.getContext(),
@@ -148,11 +148,7 @@ llvm::Type* cld::CGLLVM::CodeGenerator::visit(const Semantics::Type& type)
             return llvm::FixedVectorType::get(elementType, vectorType.getSize());
         },
         [&](const std::monostate&) -> llvm::Type* { CLD_UNREACHABLE; },
-        [&](const Semantics::EnumType& enumType) -> llvm::Type* {
-            auto* enumDef = m_programInterface.getEnumDefinition(enumType.getId());
-            CLD_ASSERT(enumDef);
-            return visit(enumDef->getType());
-        },
+        [&](const Semantics::EnumType& enumType) -> llvm::Type* { return visit(enumType.getInfo().type.getType()); },
         [&](const Semantics::ValArrayType& valArrayType) -> llvm::Type* {
             auto expression = m_valSizes.find(valArrayType.getExpression());
             if (expression == m_valSizes.end() && m_currentFunction && m_builder.GetInsertBlock())
@@ -293,22 +289,19 @@ llvm::DIType* cld::CGLLVM::CodeGenerator::visitDebug(const Semantics::Type& type
             {
                 return result->second;
             }
-            auto* structDef = m_programInterface.getStructDefinition(structType.getId());
+            auto* structDef = std::get_if<Semantics::StructDefinition>(&structType.getInfo().type);
             if (!structDef)
             {
                 auto* structFwdDecl = m_debugInfo->createForwardDecl(
                     llvm::dwarf::DW_TAG_structure_type, structType.getName(),
-                    m_scopeIdToScope[m_programInterface.getStructScope(structType.getId())],
-                    getFile(m_programInterface.getStructLoc(structType.getId())),
-                    getLine(m_programInterface.getStructLoc(structType.getId())));
+                    m_scopeIdToScope[structType.getInfo().scope], getFile(structType.getInfo().structToken),
+                    getLine(structType.getInfo().structToken));
                 m_debugTypes.emplace(structType, structFwdDecl);
                 return structFwdDecl;
             }
             auto* structFwdDecl = m_debugInfo->createReplaceableCompositeType(
-                llvm::dwarf::DW_TAG_structure_type, structType.getName(),
-                m_scopeIdToScope[m_programInterface.getStructScope(structType.getId())],
-                getFile(m_programInterface.getStructLoc(structType.getId())),
-                getLine(m_programInterface.getStructLoc(structType.getId())));
+                llvm::dwarf::DW_TAG_structure_type, structType.getName(), m_scopeIdToScope[structType.getInfo().scope],
+                getFile(structType.getInfo().structToken), getLine(structType.getInfo().structToken));
             m_debugTypes.emplace(structType, structFwdDecl);
             std::vector<llvm::Metadata*> elements;
             for (auto& iter : structDef->getFields())
@@ -346,11 +339,10 @@ llvm::DIType* cld::CGLLVM::CodeGenerator::visitDebug(const Semantics::Type& type
             }
             auto* debugStructDef = llvm::DICompositeType::getDistinct(
                 m_module.getContext(), llvm::dwarf::DW_TAG_structure_type, structType.getName(),
-                getFile(m_programInterface.getStructLoc(structType.getId())),
-                getLine(m_programInterface.getStructLoc(structType.getId())),
-                m_scopeIdToScope[m_programInterface.getStructScope(structType.getId())], nullptr,
-                structType.getSizeOf(m_programInterface) * 8, structType.getAlignOf(m_programInterface) * 8, 0,
-                llvm::DINode::DIFlags::FlagZero, m_debugInfo->getOrCreateArray(elements), 0, nullptr);
+                getFile(structType.getInfo().structToken), getLine(structType.getInfo().structToken),
+                m_scopeIdToScope[structType.getInfo().scope], nullptr, structType.getSizeOf(m_programInterface) * 8,
+                structType.getAlignOf(m_programInterface) * 8, 0, llvm::DINode::DIFlags::FlagZero,
+                m_debugInfo->getOrCreateArray(elements), 0, nullptr);
             structFwdDecl->replaceAllUsesWith(debugStructDef);
             m_debugTypes.insert_or_assign(structType, debugStructDef);
             return debugStructDef;
@@ -361,22 +353,18 @@ llvm::DIType* cld::CGLLVM::CodeGenerator::visitDebug(const Semantics::Type& type
             {
                 return result->second;
             }
-            auto* unionDefinition = m_programInterface.getUnionDefinition(unionType.getId());
+            auto* unionDefinition = std::get_if<Semantics::UnionDefinition>(&unionType.getInfo().type);
             if (!unionDefinition)
             {
                 auto* structFwdDecl = m_debugInfo->createForwardDecl(
-                    llvm::dwarf::DW_TAG_union_type, unionType.getName(),
-                    m_scopeIdToScope[m_programInterface.getUnionScope(unionType.getId())],
-                    getFile(m_programInterface.getUnionLoc(unionType.getId())),
-                    getLine(m_programInterface.getUnionLoc(unionType.getId())));
+                    llvm::dwarf::DW_TAG_union_type, unionType.getName(), m_scopeIdToScope[unionType.getInfo().scope],
+                    getFile(unionType.getInfo().unionToken), getLine(unionType.getInfo().unionToken));
                 m_debugTypes.emplace(unionType, structFwdDecl);
                 return structFwdDecl;
             }
             auto* unionFwdDecl = m_debugInfo->createReplaceableCompositeType(
-                llvm::dwarf::DW_TAG_union_type, unionType.getName(),
-                m_scopeIdToScope[m_programInterface.getUnionScope(unionType.getId())],
-                getFile(m_programInterface.getUnionLoc(unionType.getId())),
-                getLine(m_programInterface.getUnionLoc(unionType.getId())));
+                llvm::dwarf::DW_TAG_union_type, unionType.getName(), m_scopeIdToScope[unionType.getInfo().scope],
+                getFile(unionType.getInfo().unionToken), getLine(unionType.getInfo().unionToken));
             m_debugTypes.emplace(unionType, unionFwdDecl);
             std::vector<llvm::Metadata*> elements;
             for (auto& iter : unionDefinition->getFields())
@@ -414,11 +402,10 @@ llvm::DIType* cld::CGLLVM::CodeGenerator::visitDebug(const Semantics::Type& type
             }
             auto* debugUnionDef = llvm::DICompositeType::getDistinct(
                 m_module.getContext(), llvm::dwarf::DW_TAG_union_type, unionType.getName(),
-                getFile(m_programInterface.getStructLoc(unionType.getId())),
-                getLine(m_programInterface.getStructLoc(unionType.getId())),
-                m_scopeIdToScope[m_programInterface.getStructScope(unionType.getId())], nullptr,
-                unionType.getSizeOf(m_programInterface) * 8, unionType.getAlignOf(m_programInterface) * 8, 0,
-                llvm::DINode::DIFlags::FlagZero, m_debugInfo->getOrCreateArray(elements), 0, nullptr);
+                getFile(unionType.getInfo().unionToken), getLine(unionType.getInfo().unionToken),
+                m_scopeIdToScope[unionType.getInfo().scope], nullptr, unionType.getSizeOf(m_programInterface) * 8,
+                unionType.getAlignOf(m_programInterface) * 8, 0, llvm::DINode::DIFlags::FlagZero,
+                m_debugInfo->getOrCreateArray(elements), 0, nullptr);
             unionFwdDecl->replaceAllUsesWith(debugUnionDef);
             m_debugTypes.insert_or_assign(unionType, debugUnionDef);
             return debugUnionDef;
@@ -446,7 +433,7 @@ llvm::DIType* cld::CGLLVM::CodeGenerator::visitDebug(const Semantics::Type& type
             {
                 return result->second;
             }
-            auto* enumDef = m_programInterface.getEnumDefinition(enumType.getId());
+            auto* enumDef = &enumType.getInfo().type;
             CLD_ASSERT(enumDef); // Currently not possible
             std::vector<llvm::Metadata*> enumerators;
             for (auto& [name, value] : enumDef->getValues())
@@ -455,9 +442,8 @@ llvm::DIType* cld::CGLLVM::CodeGenerator::visitDebug(const Semantics::Type& type
             }
             auto* underlying = visitDebug(enumDef->getType());
             auto* debugEnumDef = m_debugInfo->createEnumerationType(
-                m_scopeIdToScope[m_programInterface.getEnumScope(enumType.getId())], enumType.getName(),
-                getFile(m_programInterface.getEnumLoc(enumType.getId())),
-                getLine(m_programInterface.getEnumLoc(enumType.getId())), enumType.getSizeOf(m_programInterface) * 8,
+                m_scopeIdToScope[enumType.getInfo().scope], enumType.getName(), getFile(enumType.getInfo().enumToken),
+                getLine(enumType.getInfo().enumToken), enumType.getSizeOf(m_programInterface) * 8,
                 enumType.getAlignOf(m_programInterface) * 8, m_debugInfo->getOrCreateArray(enumerators), underlying);
             m_debugTypes.insert_or_assign(enumType, debugEnumDef);
             return debugEnumDef;

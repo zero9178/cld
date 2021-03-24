@@ -846,7 +846,7 @@ std::optional<std::pair<cld::Semantics::Type, const cld::Semantics::Field * CLD_
     const FieldMap* fields = nullptr;
     if (auto* structType = std::get_if<StructType>(&recordType.getVariant()))
     {
-        auto* structDef = getStructDefinition(structType->getId());
+        auto* structDef = std::get_if<StructDefinition>(&structType->getInfo().type);
         if (!structDef)
         {
             log(Errors::Semantics::STRUCT_N_IS_AN_INCOMPLETE_TYPE.args(postFixExpr, m_sourceInterface,
@@ -857,7 +857,7 @@ std::optional<std::pair<cld::Semantics::Type, const cld::Semantics::Field * CLD_
     }
     if (auto* unionType = std::get_if<UnionType>(&recordType.getVariant()))
     {
-        auto* unionDef = getUnionDefinition(unionType->getId());
+        auto* unionDef = std::get_if<UnionDefinition>(&unionType->getInfo().type);
         if (!unionDef)
         {
             log(Errors::Semantics::UNION_N_IS_AN_INCOMPLETE_TYPE.args(postFixExpr, m_sourceInterface,
@@ -2856,9 +2856,8 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     if (isEnum(expression->getType()))
     {
         auto& enumType = cld::get<EnumType>(expression->getType().getVariant());
-        auto* enumDef = getEnumDefinition(enumType.getId());
-        CLD_ASSERT(enumDef);
-        return std::make_unique<Conversion>(enumDef->getType(), Conversion::IntegerPromotion, std::move(expression));
+        return std::make_unique<Conversion>(enumType.getInfo().type.getType(), Conversion::IntegerPromotion,
+                                            std::move(expression));
     }
     if (!isArithmetic(expression->getType()))
     {

@@ -177,26 +177,22 @@ std::uint64_t cld::Semantics::PointerType::getAlignOf(const ProgramInterface& pr
     return program.getLanguageOptions().sizeOfVoidStar;
 }
 
-cld::Semantics::EnumType::EnumType(std::string_view name, std::size_t id) : m_name(name), m_id(id) {}
+cld::Semantics::EnumType::EnumType(std::string_view name, const EnumInfo& info) : m_name(name), m_info(&info) {}
 
 cld::Semantics::Type cld::Semantics::EnumType::create(bool isConst, bool isVolatile, std::string_view name,
-                                                      std::size_t id)
+                                                      const EnumInfo& info)
 {
-    return cld::Semantics::Type(isConst, isVolatile, EnumType(name, id));
+    return cld::Semantics::Type(isConst, isVolatile, EnumType(name, info));
 }
 
 std::uint64_t cld::Semantics::EnumType::getSizeOf(const ProgramInterface& program) const
 {
-    auto* def = program.getEnumDefinition(m_id);
-    CLD_ASSERT(def);
-    return def->getType().getSizeOf(program);
+    return getInfo().type.getType().getSizeOf(program);
 }
 
 std::uint64_t cld::Semantics::EnumType::getAlignOf(const ProgramInterface& program) const
 {
-    auto* def = program.getEnumDefinition(m_id);
-    CLD_ASSERT(def);
-    return def->getType().getAlignOf(program);
+    return getInfo().type.getType().getAlignOf(program);
 }
 
 cld::Semantics::PrimitiveType::PrimitiveType(bool isFloatingPoint, bool isSigned, std::uint8_t bitCount,
@@ -428,48 +424,40 @@ cld::Lexer::CTokenIterator cld::Semantics::declaratorToLoc(const cld::Syntax::De
         });
 }
 
-cld::Semantics::StructType::StructType(std::string_view name, std::size_t id) : m_name(name), m_id(id) {}
+cld::Semantics::StructType::StructType(std::string_view name, const StructInfo& info) : m_name(name), m_info(&info) {}
 
 cld::Semantics::Type cld::Semantics::StructType::create(bool isConst, bool isVolatile, std::string_view name,
-                                                        std::size_t id)
+                                                        const StructInfo& info)
 {
-    return cld::Semantics::Type(isConst, isVolatile, StructType(name, id));
+    return cld::Semantics::Type(isConst, isVolatile, StructType(name, info));
 }
 
-std::uint64_t cld::Semantics::StructType::getSizeOf(const ProgramInterface& program) const
+std::uint64_t cld::Semantics::StructType::getSizeOf(const ProgramInterface&) const
 {
-    auto* def = program.getStructDefinition(m_id);
-    CLD_ASSERT(def);
-    return def->getSizeOf();
+    return cld::get<StructDefinition>(getInfo().type).getSizeOf();
 }
 
-std::uint64_t cld::Semantics::StructType::getAlignOf(const ProgramInterface& program) const
+std::uint64_t cld::Semantics::StructType::getAlignOf(const ProgramInterface&) const
 {
-    auto* def = program.getStructDefinition(m_id);
-    CLD_ASSERT(def);
-    return def->getAlignOf();
+    return cld::get<StructDefinition>(getInfo().type).getAlignOf();
 }
 
-cld::Semantics::UnionType::UnionType(std::string_view name, std::size_t id) : m_name(name), m_id(id) {}
+cld::Semantics::UnionType::UnionType(std::string_view name, const UnionInfo& info) : m_name(name), m_info(&info) {}
 
 cld::Semantics::Type cld::Semantics::UnionType::create(bool isConst, bool isVolatile, std::string_view name,
-                                                       std::size_t id)
+                                                       const UnionInfo& info)
 {
-    return cld::Semantics::Type(isConst, isVolatile, UnionType(name, id));
+    return cld::Semantics::Type(isConst, isVolatile, UnionType(name, info));
 }
 
-std::uint64_t cld::Semantics::UnionType::getSizeOf(const ProgramInterface& program) const
+std::uint64_t cld::Semantics::UnionType::getSizeOf(const ProgramInterface&) const
 {
-    auto* def = program.getUnionDefinition(m_id);
-    CLD_ASSERT(def);
-    return def->getSizeOf();
+    return cld::get<UnionDefinition>(getInfo().type).getAlignOf();
 }
 
-std::uint64_t cld::Semantics::UnionType::getAlignOf(const ProgramInterface& program) const
+std::uint64_t cld::Semantics::UnionType::getAlignOf(const ProgramInterface&) const
 {
-    auto* def = program.getUnionDefinition(m_id);
-    CLD_ASSERT(def);
-    return def->getAlignOf();
+    return cld::get<UnionDefinition>(getInfo().type).getAlignOf();
 }
 
 bool cld::Semantics::isStringLiteralExpr(const ExpressionBase& expression)
@@ -702,7 +690,7 @@ std::string typeToString(const cld::Semantics::Type& arg)
                 }
                 if (structType.isAnonymous())
                 {
-                    qualifiersAndSpecifiers += "struct <anonymous 0x" + llvm::utohexstr(structType.getId()) + ">";
+                    qualifiersAndSpecifiers += "struct <anonymous 0x" + llvm::utohexstr(structType.getInfo().id) + ">";
                 }
                 else
                 {
@@ -721,7 +709,7 @@ std::string typeToString(const cld::Semantics::Type& arg)
                 }
                 if (unionType.isAnonymous())
                 {
-                    qualifiersAndSpecifiers += "union <anonymous 0x" + llvm::utohexstr(unionType.getId()) + ">";
+                    qualifiersAndSpecifiers += "union <anonymous 0x" + llvm::utohexstr(unionType.getInfo().id) + ">";
                 }
                 else
                 {
@@ -740,7 +728,7 @@ std::string typeToString(const cld::Semantics::Type& arg)
                 }
                 if (enumType.isAnonymous())
                 {
-                    qualifiersAndSpecifiers += "enum <anonymous 0x" + llvm::utohexstr(enumType.getId()) + ">";
+                    qualifiersAndSpecifiers += "enum <anonymous 0x" + llvm::utohexstr(enumType.getInfo().id) + ">";
                 }
                 else
                 {

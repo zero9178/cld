@@ -754,7 +754,7 @@ cld::Semantics::Type
     auto& enumDecl = cld::get<std::unique_ptr<Syntax::EnumSpecifier>>(typeSpec[0]->getVariant());
     if (auto* loc = std::get_if<Syntax::EnumSpecifier::EnumTag>(&enumDecl->getVariant()))
     {
-        const auto* lookup = lookupType<EnumTag>(loc->identifier->getText());
+        const auto* lookup = lookupType<EnumInfo>(loc->identifier->getText());
         if (!lookup)
         {
             // C99 6.7.2.3:
@@ -765,7 +765,7 @@ cld::Semantics::Type
                                                                                  *typeSpec[0]));
             return Type{};
         }
-        return EnumType::create(isConst, isVolatile, loc->identifier->getText(), static_cast<std::size_t>(*lookup));
+        return EnumType::create(isConst, isVolatile, loc->identifier->getText(), *lookup);
     }
     auto& enumDef = cld::get<Syntax::EnumDeclaration>(enumDecl->getVariant());
     // TODO: Type depending on values as an extension
@@ -833,10 +833,15 @@ cld::Semantics::Type
         }
     }
     std::string_view name = enumDef.getName() ? enumDef.getName()->getText() : "";
+    m_enumDefinitions.push_back(
+        {m_enumDefinitions.size(),
+         EnumDefinition(name, PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions()),
+                        std::move(values)),
+         m_currentScope, enumDef.begin()});
     if (enumDef.getName())
     {
-        auto [prev, notRedefined] = getCurrentScope().types.insert(
-            {name, TagTypeInScope{enumDef.getName(), EnumTag{m_enumDefinitions.size()}}});
+        auto [prev, notRedefined] =
+            getCurrentScope().types.insert({name, TagTypeInScope{enumDef.getName(), &m_enumDefinitions.back()}});
         if (!notRedefined)
         {
             log(Errors::REDEFINITION_OF_SYMBOL_N.args(*enumDef.getName(), m_sourceInterface, *enumDef.getName()));
@@ -847,11 +852,7 @@ cld::Semantics::Type
             }
         }
     }
-    m_enumDefinitions.push_back(
-        {EnumDefinition(name, PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions()),
-                        std::move(values)),
-         m_currentScope, enumDef.begin()});
-    return EnumType::create(isConst, isVolatile, name, m_enumDefinitions.size() - 1);
+    return EnumType::create(isConst, isVolatile, name, m_enumDefinitions.back());
 }
 
 cld::Semantics::Type
@@ -864,13 +865,14 @@ cld::Semantics::Type
         auto name = structOrUnion.getIdentifierLoc()->getText();
         if (structOrUnion.isUnion())
         {
-            if (auto* unionTag = lookupType<UnionTag>(name))
+            if (auto* unionInfo = lookupType<UnionInfo>(name))
             {
-                return UnionType::create(isConst, isVolatile, name, static_cast<std::size_t>(*unionTag));
+                return UnionType::create(isConst, isVolatile, name, *unionInfo);
             }
-            m_unionDefinitions.push_back({UnionDecl{}, m_currentScope, structOrUnion.begin()});
+            m_unionDefinitions.push_back(
+                {m_unionDefinitions.size(), UnionDecl{}, m_currentScope, structOrUnion.begin()});
             auto [prev, notRedefined] = getCurrentScope().types.insert(
-                {name, TagTypeInScope{structOrUnion.getIdentifierLoc(), UnionTag{m_unionDefinitions.size() - 1}}});
+                {name, TagTypeInScope{structOrUnion.getIdentifierLoc(), &m_unionDefinitions.back()}});
             if (!notRedefined)
             {
                 log(Errors::REDEFINITION_OF_SYMBOL_N.args(*structOrUnion.getIdentifierLoc(), m_sourceInterface,
@@ -881,16 +883,17 @@ cld::Semantics::Type
                                                              *prev->second.identifier));
                 }
             }
-            return UnionType::create(isConst, isVolatile, name, m_unionDefinitions.size() - 1);
+            return UnionType::create(isConst, isVolatile, name, m_unionDefinitions.back());
         }
 
-        if (auto* structTag = lookupType<StructTag>(name))
+        if (auto* structInfo = lookupType<StructInfo>(name))
         {
-            return StructType::create(isConst, isVolatile, name, static_cast<std::size_t>(*structTag));
+            return StructType::create(isConst, isVolatile, name, *structInfo);
         }
-        m_structDefinitions.push_back({StructDecl{}, m_currentScope, structOrUnion.begin()});
+        m_structDefinitions.push_back(
+            {m_structDefinitions.size(), StructDecl{}, m_currentScope, structOrUnion.begin()});
         auto [prev, notRedefined] = getCurrentScope().types.insert(
-            {name, TagTypeInScope{structOrUnion.getIdentifierLoc(), StructTag{m_structDefinitions.size() - 1}}});
+            {name, TagTypeInScope{structOrUnion.getIdentifierLoc(), &m_structDefinitions.back()}});
         if (!notRedefined)
         {
             log(Errors::REDEFINITION_OF_SYMBOL_N.args(*structOrUnion.getIdentifierLoc(), m_sourceInterface,
@@ -901,21 +904,23 @@ cld::Semantics::Type
                                                          *prev->second.identifier));
             }
         }
-        return StructType::create(isConst, isVolatile, name, m_structDefinitions.size() - 1);
+        return StructType::create(isConst, isVolatile, name, m_structDefinitions.back());
     }
 
-    std::optional<std::size_t> structOrUnionID;
+    std::variant<std::monostate, UnionInfo * CLD_NON_NULL, StructInfo * CLD_NON_NULL> structOrUnionInfo;
     if (!structOrUnion.getIdentifierLoc())
     {
         if (structOrUnion.isUnion())
         {
-            structOrUnionID = m_unionDefinitions.size();
-            m_unionDefinitions.push_back({UnionDecl{}, m_currentScope, structOrUnion.begin()});
+            m_unionDefinitions.push_back(
+                {m_unionDefinitions.size(), UnionDecl{}, m_currentScope, structOrUnion.begin()});
+            structOrUnionInfo = &m_unionDefinitions.back();
         }
         else
         {
-            structOrUnionID = m_structDefinitions.size();
-            m_structDefinitions.push_back({StructDecl{}, m_currentScope, structOrUnion.begin()});
+            m_structDefinitions.push_back(
+                {m_structDefinitions.size(), StructDecl{}, m_currentScope, structOrUnion.begin()});
+            structOrUnionInfo = &m_structDefinitions.back();
         }
     }
     else
@@ -923,12 +928,11 @@ cld::Semantics::Type
         auto name = structOrUnion.getIdentifierLoc()->getText();
         if (structOrUnion.isUnion())
         {
-            auto [prev, notRedefined] = getCurrentScope().types.insert(
-                {name, TagTypeInScope{structOrUnion.getIdentifierLoc(), UnionTag{m_unionDefinitions.size()}}});
-            if (!notRedefined)
+            auto prev = getCurrentScope().types.find(name);
+            if (prev != getCurrentScope().types.end())
             {
-                if (!std::holds_alternative<UnionTag>(prev->second.tagType)
-                    || getUnionDefinition(static_cast<std::size_t>(cld::get<UnionTag>(prev->second.tagType))))
+                if (auto* unionInfo = std::get_if<UnionInfo*>(&prev->second.tagType);
+                    !unionInfo || std::holds_alternative<UnionDefinition>((*unionInfo)->type))
                 {
                     log(Errors::REDEFINITION_OF_SYMBOL_N.args(*structOrUnion.getIdentifierLoc(), m_sourceInterface,
                                                               *structOrUnion.getIdentifierLoc()));
@@ -940,41 +944,46 @@ cld::Semantics::Type
                 }
                 else
                 {
-                    structOrUnionID = static_cast<std::size_t>(cld::get<UnionTag>(prev->second.tagType));
+                    structOrUnionInfo = *unionInfo;
                 }
             }
             else
             {
-                structOrUnionID = m_unionDefinitions.size();
-                m_unionDefinitions.push_back({UnionDecl{}, m_currentScope, structOrUnion.begin()});
+                m_unionDefinitions.push_back(
+                    {m_unionDefinitions.size(), UnionDecl{}, m_currentScope, structOrUnion.begin()});
+                structOrUnionInfo = &m_unionDefinitions.back();
+                getCurrentScope().types.insert(
+                    {name, TagTypeInScope{structOrUnion.getIdentifierLoc(), &m_unionDefinitions.back()}});
             }
         }
         else
         {
-            auto [prev, notRedefined] = getCurrentScope().types.insert(
-                {name, TagTypeInScope{structOrUnion.getIdentifierLoc(), StructTag{m_structDefinitions.size()}}});
-            if (!notRedefined)
+            auto result = getCurrentScope().types.find(name);
+            if (result != getCurrentScope().types.end())
             {
-                if (!std::holds_alternative<StructTag>(prev->second.tagType)
-                    || getStructDefinition(static_cast<std::size_t>(cld::get<StructTag>(prev->second.tagType))))
+                if (auto* structInfo = std::get_if<StructInfo*>(&result->second.tagType);
+                    !structInfo || std::holds_alternative<StructDefinition>((*structInfo)->type))
                 {
                     log(Errors::REDEFINITION_OF_SYMBOL_N.args(*structOrUnion.getIdentifierLoc(), m_sourceInterface,
                                                               *structOrUnion.getIdentifierLoc()));
-                    if (prev->second.identifier)
+                    if (result->second.identifier)
                     {
-                        log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
-                                                                 *prev->second.identifier));
+                        log(Notes::PREVIOUSLY_DECLARED_HERE.args(*result->second.identifier, m_sourceInterface,
+                                                                 *result->second.identifier));
                     }
                 }
                 else
                 {
-                    structOrUnionID = static_cast<std::size_t>(cld::get<StructTag>(prev->second.tagType));
+                    structOrUnionInfo = *structInfo;
                 }
             }
             else
             {
-                structOrUnionID = m_structDefinitions.size();
-                m_structDefinitions.push_back({StructDecl{}, m_currentScope, structOrUnion.begin()});
+                m_structDefinitions.push_back(
+                    {m_structDefinitions.size(), StructDecl{}, m_currentScope, structOrUnion.begin()});
+                structOrUnionInfo = &m_structDefinitions.back();
+                getCurrentScope().types.insert(
+                    {name, TagTypeInScope{structOrUnion.getIdentifierLoc(), &m_structDefinitions.back()}});
             }
         }
     }
@@ -1358,7 +1367,7 @@ cld::Semantics::Type
         }
     }
     currentSize = cld::roundUpTo(currentSize, currentAlignment);
-    if (!structOrUnionID)
+    if (std::holds_alternative<std::monostate>(structOrUnionInfo))
     {
         return Type{};
     }
@@ -1366,13 +1375,15 @@ cld::Semantics::Type
     std::string_view name = structOrUnion.getIdentifierLoc() ? structOrUnion.getIdentifierLoc()->getText() : "";
     if (structOrUnion.isUnion())
     {
-        m_unionDefinitions[*structOrUnionID].type.emplace<UnionDefinition>(
-            name, std::move(fields), std::move(fieldLayout), currentSize, currentAlignment);
-        return UnionType::create(isConst, isVolatile, name, *structOrUnionID);
+        cld::get<UnionInfo*>(structOrUnionInfo)
+            ->type.emplace<UnionDefinition>(name, std::move(fields), std::move(fieldLayout), currentSize,
+                                            currentAlignment);
+        return UnionType::create(isConst, isVolatile, name, *cld::get<UnionInfo*>(structOrUnionInfo));
     }
-    m_structDefinitions[*structOrUnionID].type.emplace<StructDefinition>(
-        name, std::move(fields), std::move(fieldLayout), std::move(memoryLayout), currentSize, currentAlignment);
-    return StructType::create(isConst, isVolatile, name, *structOrUnionID);
+    cld::get<StructInfo*>(structOrUnionInfo)
+        ->type.emplace<StructDefinition>(name, std::move(fields), std::move(fieldLayout), std::move(memoryLayout),
+                                         currentSize, currentAlignment);
+    return StructType::create(isConst, isVolatile, name, *cld::get<StructInfo*>(structOrUnionInfo));
 }
 
 cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitiveTypeSpecifiersToType(

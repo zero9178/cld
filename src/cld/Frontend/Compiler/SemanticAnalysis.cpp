@@ -1189,9 +1189,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::integerPromotion(const Ty
     if (isEnum(type))
     {
         auto& enumType = cld::get<EnumType>(type.getVariant());
-        auto* enumDef = getEnumDefinition(enumType.getId());
-        CLD_ASSERT(enumDef);
-        return enumDef->getType();
+        return enumType.getInfo().type.getType();
     }
     if (!std::holds_alternative<PrimitiveType>(type.getVariant()))
     {
@@ -1300,22 +1298,21 @@ bool cld::Semantics::SemanticAnalysis::hasFlexibleArrayMember(const Type& type) 
 {
     if (std::holds_alternative<StructType>(type.getVariant()))
     {
-        auto* maybeStructDef = getStructDefinition(cld::get<StructType>(type.getVariant()).getId());
+        auto* maybeStructDef = std::get_if<StructDefinition>(&cld::get<StructType>(type.getVariant()).getInfo().type);
         if (maybeStructDef)
         {
             return !maybeStructDef->getFields().empty()
-                   && std::holds_alternative<AbstractArrayType>(
-                       maybeStructDef->getFields().back().second.type->getVariant());
+                   && isAbstractArray(*maybeStructDef->getFields().back().second.type);
         }
     }
     else if (std::holds_alternative<UnionType>(type.getVariant()))
     {
-        auto* maybeUnionDef = getUnionDefinition(cld::get<UnionType>(type.getVariant()).getId());
+        auto* maybeUnionDef = std::get_if<UnionDefinition>(&cld::get<UnionType>(type.getVariant()).getInfo().type);
         if (maybeUnionDef)
         {
             for (auto& [name, field] : maybeUnionDef->getFields())
             {
-                if (std::holds_alternative<AbstractArrayType>(field.type->getVariant()))
+                if (isAbstractArray(*field.type))
                 {
                     return true;
                 }
@@ -2133,12 +2130,12 @@ void cld::Semantics::SemanticAnalysis::createBuiltinTypes()
                 {unsignedInt, 0, {}}, {unsignedInt, 1, {}}, {voidStar, 2, {}}, {voidStar, 3, {}}};
             auto memLayout =
                 std::vector<MemoryLayout>{{*unsignedInt, 0}, {*unsignedInt, 4}, {*voidStar, 8}, {*voidStar, 16}};
-            m_structDefinitions.push_back({StructDefinition("__va_list_tag", std::move(fields), std::move(fieldLayout),
+            m_structDefinitions.push_back({m_structDefinitions.size(),
+                                           StructDefinition("__va_list_tag", std::move(fields), std::move(fieldLayout),
                                                             std::move(memLayout), 24, 8),
                                            0, nullptr});
-            auto elementType = StructType::create(false, false, "__va_list_tag", m_structDefinitions.size() - 1);
-            getCurrentScope().types.emplace("__va_list_tag",
-                                            TagTypeInScope{nullptr, StructTag{m_structDefinitions.size() - 1}});
+            auto elementType = StructType::create(false, false, "__va_list_tag", m_structDefinitions.back());
+            getCurrentScope().types.emplace("__va_list_tag", TagTypeInScope{nullptr, &m_structDefinitions.back()});
             elementType = ArrayType::create(false, false, false, false, std::move(elementType), 1);
             elementType.setName("__builtin_va_list");
             getCurrentScope().declarations.emplace("__builtin_va_list",

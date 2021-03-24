@@ -19,7 +19,7 @@ namespace cld::Semantics
 {
 class SemanticAnalysis final : public ProgramInterface
 {
-    std::size_t m_currentScope = 0;
+    std::size_t m_currentScope = GLOBAL_SCOPE;
     const SourceInterface& m_sourceInterface;
     llvm::raw_ostream* m_reporter;
     bool* m_errors;
@@ -29,7 +29,7 @@ class SemanticAnalysis final : public ProgramInterface
         const FunctionDefinition* CLD_NON_NULL currentFunction;
         std::unordered_map<std::string_view, const LabelStatement * CLD_NON_NULL> labels;
     };
-    std::size_t m_currentFunctionScope = static_cast<std::size_t>(-1);
+    std::size_t m_currentFunctionScope = END_OF_SCOPES;
     std::vector<FunctionScope> m_functionScopes;
     bool m_inStaticInitializer = false;
     bool m_inFunctionPrototype = false;
@@ -60,18 +60,18 @@ class SemanticAnalysis final : public ProgramInterface
         m_currentFunctionScope = m_functionScopes.size() - 1;
         return cld::ScopeExit([this] {
             resolveGotos();
-            m_currentFunctionScope = static_cast<std::size_t>(-1);
+            m_currentFunctionScope = END_OF_SCOPES;
         });
     }
 
     [[nodiscard]] bool inFunction() const
     {
-        return m_currentFunctionScope != static_cast<std::size_t>(-1);
+        return m_currentFunctionScope != END_OF_SCOPES;
     }
 
     [[nodiscard]] FunctionScope* getCurrentFunctionScope()
     {
-        if (m_currentFunctionScope != static_cast<std::size_t>(-1))
+        if (m_currentFunctionScope != END_OF_SCOPES)
         {
             return &m_functionScopes[m_currentFunctionScope];
         }

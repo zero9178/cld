@@ -29,6 +29,10 @@ class TranslationUnit;
 
 namespace cld::Semantics
 {
+struct StructInfo;
+struct UnionInfo;
+struct EnumInfo;
+
 class Type;
 
 class StructDefinition;
@@ -343,12 +347,12 @@ public:
 class StructType final
 {
     std::string_view m_name;
-    std::size_t m_id;
+    const StructInfo* m_info;
 
-    StructType(std::string_view name, std::size_t id);
+    StructType(std::string_view name, const StructInfo& info);
 
 public:
-    [[nodiscard]] static Type create(bool isConst, bool isVolatile, std::string_view name, std::size_t id);
+    [[nodiscard]] static Type create(bool isConst, bool isVolatile, std::string_view name, const StructInfo& info);
 
     [[nodiscard]] std::string_view getName() const
     {
@@ -360,9 +364,9 @@ public:
         return m_name.empty();
     }
 
-    [[nodiscard]] std::size_t getId() const
+    [[nodiscard]] const StructInfo& getInfo() const
     {
-        return m_id;
+        return *m_info;
     }
 
     [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface& program) const;
@@ -371,7 +375,7 @@ public:
 
     [[nodiscard]] bool operator==(const StructType& rhs) const
     {
-        return m_id == rhs.m_id;
+        return m_info == rhs.m_info;
     }
 
     [[nodiscard]] bool operator!=(const StructType& rhs) const
@@ -383,12 +387,12 @@ public:
 class UnionType final
 {
     std::string_view m_name;
-    std::size_t m_id;
+    const UnionInfo* m_info;
 
-    UnionType(std::string_view name, std::uint64_t id);
+    UnionType(std::string_view name, const UnionInfo& info);
 
 public:
-    static Type create(bool isConst, bool isVolatile, std::string_view name, std::size_t id);
+    static Type create(bool isConst, bool isVolatile, std::string_view name, const UnionInfo& info);
 
     [[nodiscard]] std::string_view getName() const
     {
@@ -400,9 +404,9 @@ public:
         return m_name.empty();
     }
 
-    [[nodiscard]] std::size_t getId() const
+    [[nodiscard]] const UnionInfo& getInfo() const
     {
-        return m_id;
+        return *m_info;
     }
 
     [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface& program) const;
@@ -411,7 +415,7 @@ public:
 
     [[nodiscard]] bool operator==(const UnionType& rhs) const
     {
-        return m_id == rhs.m_id;
+        return m_info == rhs.m_info;
     }
 
     [[nodiscard]] bool operator!=(const UnionType& rhs) const
@@ -423,12 +427,12 @@ public:
 class EnumType final
 {
     std::string_view m_name;
-    std::size_t m_id;
+    const EnumInfo* m_info;
 
-    EnumType(std::string_view name, std::size_t id);
+    EnumType(std::string_view name, const EnumInfo& info);
 
 public:
-    static Type create(bool isConst, bool isVolatile, std::string_view name, std::size_t id);
+    static Type create(bool isConst, bool isVolatile, std::string_view name, const EnumInfo& info);
 
     [[nodiscard]] std::string_view getName() const
     {
@@ -440,9 +444,9 @@ public:
         return m_name.empty();
     }
 
-    [[nodiscard]] std::size_t getId() const
+    [[nodiscard]] const EnumInfo& getInfo() const
     {
-        return m_id;
+        return *m_info;
     }
 
     [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface& program) const;
@@ -451,7 +455,7 @@ public:
 
     [[nodiscard]] bool operator==(const EnumType& rhs) const
     {
-        return m_id == rhs.m_id;
+        return m_info == rhs.m_info;
     }
 
     [[nodiscard]] bool operator!=(const EnumType& rhs) const
@@ -2560,7 +2564,7 @@ struct hash<cld::Semantics::StructType>
 {
     std::size_t operator()(const cld::Semantics::StructType& type) const noexcept
     {
-        return std::hash<std::size_t>{}(type.getId());
+        return std::hash<const cld::Semantics::StructInfo*>{}(&type.getInfo());
     }
 };
 
@@ -2569,7 +2573,7 @@ struct hash<cld::Semantics::UnionType>
 {
     std::size_t operator()(const cld::Semantics::UnionType& type) const noexcept
     {
-        return std::hash<std::size_t>{}(type.getId());
+        return std::hash<const cld::Semantics::UnionInfo*>{}(&type.getInfo());
     }
 };
 
@@ -2578,7 +2582,7 @@ struct hash<cld::Semantics::EnumType>
 {
     std::size_t operator()(const cld::Semantics::EnumType& type) const noexcept
     {
-        return std::hash<std::size_t>{}(type.getId());
+        return std::hash<const cld::Semantics::EnumInfo*>{}(&type.getInfo());
     }
 };
 

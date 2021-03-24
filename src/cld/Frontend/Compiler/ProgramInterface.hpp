@@ -3,6 +3,7 @@
 
 #include <llvm/ADT/ArrayRef.h>
 
+#include <deque>
 #include <unordered_map>
 
 #include <tsl/ordered_map.h>
@@ -12,19 +13,41 @@
 
 namespace cld::Semantics
 {
+struct StructDecl
+{
+};
+
+struct UnionDecl
+{
+};
+
+struct StructInfo
+{
+    std::size_t id;
+    std::variant<StructDefinition, StructDecl> type;
+    std::size_t scope;
+    const Lexer::CToken* structToken;
+};
+
+struct UnionInfo
+{
+    std::size_t id;
+    std::variant<UnionDefinition, UnionDecl> type;
+    std::size_t scope;
+    const Lexer::CToken* unionToken;
+};
+
+struct EnumInfo
+{
+    std::size_t id;
+    EnumDefinition type;
+    std::size_t scope;
+    const Lexer::CToken* enumToken;
+};
+
 class ProgramInterface
 {
 public:
-    enum class StructTag : std::size_t
-    {
-    };
-    enum class UnionTag : std::size_t
-    {
-    };
-    enum class EnumTag : std::size_t
-    {
-    };
-
     struct DeclarationInScope
     {
         const Lexer::CToken* CLD_NULLABLE identifier; // Guaranteed to be non null if the scope isn't global and the
@@ -38,7 +61,7 @@ public:
     struct TagTypeInScope
     {
         const Lexer::CToken* CLD_NULLABLE identifier; // Guaranteed to be non null if not a builtin
-        using Variant = std::variant<StructTag, UnionTag, EnumTag>;
+        using Variant = std::variant<StructInfo*, UnionInfo*, EnumInfo*>;
         Variant tagType;
     };
 
@@ -50,40 +73,14 @@ public:
         std::unordered_map<std::string_view, TagTypeInScope> types;
     };
 
-    struct StructDecl
-    {
-    };
-
-    struct UnionDecl
-    {
-    };
-
-    struct StructInfo
-    {
-        std::variant<StructDefinition, StructDecl> type;
-        std::size_t scope;
-        const Lexer::CToken* structToken;
-    };
-
-    struct UnionInfo
-    {
-        std::variant<UnionDefinition, UnionDecl> type;
-        std::size_t scope;
-        const Lexer::CToken* unionToken;
-    };
-
-    struct EnumInfo
-    {
-        EnumDefinition type;
-        std::size_t scope;
-        const Lexer::CToken* enumToken;
-    };
+    constexpr static std::size_t END_OF_SCOPES = static_cast<std::size_t>(-1);
+    constexpr static std::size_t GLOBAL_SCOPE = 0;
 
 protected:
-    std::vector<Scope> m_scopes = {Scope{static_cast<std::size_t>(-1), {}, {}, {}}};
-    std::vector<StructInfo> m_structDefinitions;
-    std::vector<UnionInfo> m_unionDefinitions;
-    std::vector<EnumInfo> m_enumDefinitions;
+    std::vector<Scope> m_scopes = {Scope{END_OF_SCOPES, {}, {}, {}}};
+    std::deque<StructInfo> m_structDefinitions;
+    std::deque<UnionInfo> m_unionDefinitions;
+    std::deque<EnumInfo> m_enumDefinitions;
     std::unordered_map<std::string_view, BuiltinFunction> m_usedBuiltins;
 
 public:
@@ -113,79 +110,19 @@ public:
     [[nodiscard]] const T* CLD_NULLABLE lookupType(std::string_view name, std::size_t scope) const
     {
         auto curr = scope;
-        while (curr != static_cast<std::size_t>(-1))
+        while (curr != END_OF_SCOPES)
         {
             auto result = m_scopes[curr].types.find(name);
             if (result != m_scopes[curr].types.end())
             {
-                if (auto* ptr = std::get_if<T>(&result->second.tagType))
+                if (auto* ptr = std::get_if<T*>(&result->second.tagType))
                 {
-                    return ptr;
+                    return *ptr;
                 }
             }
             curr = m_scopes[curr].previousScope;
         }
         return nullptr;
-    }
-
-    StructDefinition* CLD_NULLABLE getStructDefinition(std::size_t id)
-    {
-        return std::get_if<StructDefinition>(&m_structDefinitions[id].type);
-    }
-
-    const StructDefinition* CLD_NULLABLE getStructDefinition(std::size_t id) const
-    {
-        return std::get_if<StructDefinition>(&m_structDefinitions[id].type);
-    }
-
-    std::size_t getStructScope(std::size_t id) const
-    {
-        return m_structDefinitions[id].scope;
-    }
-
-    const Lexer::CToken* CLD_NULLABLE getStructLoc(std::size_t id) const
-    {
-        return m_structDefinitions[id].structToken;
-    }
-
-    EnumDefinition* CLD_NULLABLE getEnumDefinition(std::size_t id)
-    {
-        return &m_enumDefinitions[id].type;
-    }
-
-    const EnumDefinition* CLD_NULLABLE getEnumDefinition(std::size_t id) const
-    {
-        return &m_enumDefinitions[id].type;
-    }
-
-    std::size_t getEnumScope(std::size_t id) const
-    {
-        return m_enumDefinitions[id].scope;
-    }
-
-    const Lexer::CToken* CLD_NULLABLE getEnumLoc(std::size_t id) const
-    {
-        return m_enumDefinitions[id].enumToken;
-    }
-
-    UnionDefinition* CLD_NULLABLE getUnionDefinition(std::size_t id)
-    {
-        return std::get_if<UnionDefinition>(&m_unionDefinitions[id].type);
-    }
-
-    const UnionDefinition* CLD_NULLABLE getUnionDefinition(std::size_t id) const
-    {
-        return std::get_if<UnionDefinition>(&m_unionDefinitions[id].type);
-    }
-
-    std::size_t getUnionScope(std::size_t id) const
-    {
-        return m_unionDefinitions[id].scope;
-    }
-
-    const Lexer::CToken* CLD_NULLABLE getUnionLoc(std::size_t id) const
-    {
-        return m_unionDefinitions[id].unionToken;
     }
 
     const FieldMap& getFields(const Type& recordType) const;

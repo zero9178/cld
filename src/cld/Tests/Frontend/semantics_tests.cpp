@@ -909,14 +909,15 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
         CHECK(decl->getNameToken()->getText() == "a");
         REQUIRE(std::holds_alternative<cld::Semantics::UnionType>(decl->getType().getVariant()));
         CHECK(cld::get<cld::Semantics::UnionType>(decl->getType().getVariant()).getName() == "A");
-        CHECK(cld::get<cld::Semantics::UnionType>(decl->getType().getVariant()).getId() == 0);
     }
     SECTION("Union alignment")
     {
         auto program = generateProgram("union A{ int i[3]; int* f; } a;");
-        auto* unionTag = program.lookupType<cld::Semantics::ProgramInterface::UnionTag>("A", 0);
-        REQUIRE(unionTag);
-        auto* unionDef = program.getUnionDefinition(static_cast<std::size_t>(*unionTag));
+        auto* unionInfo =
+            program.lookupType<cld::Semantics::UnionInfo>("A", cld::Semantics::ProgramInterface::GLOBAL_SCOPE);
+        REQUIRE(unionInfo);
+        auto* unionDef = std::get_if<cld::Semantics::UnionDefinition>(&unionInfo->type);
+        REQUIRE(unionDef);
         CHECK(unionDef->getAlignOf() == cld::LanguageOptions::native().sizeOfVoidStar);
         CHECK(unionDef->getSizeOf() == 4 * cld::LanguageOptions::native().sizeOfInt);
     }
@@ -1026,9 +1027,9 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
                                       "    _Bool f : 1;\n"
                                       "};";
             auto program = generateProgram(source, cld::Tests::x64windowsMsvc);
-            auto* structTag = program.lookupType<cld::Semantics::ProgramInterface::StructTag>("A", 0);
-            REQUIRE(structTag);
-            auto* structDef = program.getStructDefinition(static_cast<std::size_t>(*structTag));
+            auto* structInfo = program.lookupType<cld::Semantics::StructInfo>("A", 0);
+            REQUIRE(structInfo);
+            auto* structDef = std::get_if<cld::Semantics::StructDefinition>(&structInfo->type);
             REQUIRE(structDef);
             REQUIRE(structDef->getFields().size() == 6);
             CHECK(structDef->getMemLayout().size() == 2);
@@ -4700,9 +4701,10 @@ TEST_CASE("Semantics flexible array member", "[semantics]")
         REQUIRE_FALSE(errors);
         auto program = cld::Semantics::analyse(tree, std::move(ctokens), &llvm::errs(), &errors);
         REQUIRE_FALSE(errors);
-        auto* structTag = program.lookupType<cld::Semantics::ProgramInterface::StructTag>("A", 0);
-        REQUIRE(structTag);
-        auto* structDef = program.getStructDefinition(static_cast<std::size_t>(*structTag));
+        auto* structInfo =
+            program.lookupType<cld::Semantics::StructInfo>("A", cld::Semantics::ProgramInterface::GLOBAL_SCOPE);
+        REQUIRE(structInfo);
+        auto* structDef = std::get_if<cld::Semantics::StructDefinition>(&structInfo->type);
         REQUIRE(structDef);
         REQUIRE(structDef->getFields().size() == 2);
         REQUIRE(structDef->getFieldLayout().size() == 2);

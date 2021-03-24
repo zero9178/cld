@@ -13,18 +13,17 @@ bool cld::Semantics::ProgramInterface::isCompleteType(const Type& type) const
     }
     if (std::holds_alternative<EnumType>(type.getVariant()))
     {
-        auto& enumType = cld::get<EnumType>(type.getVariant());
-        return getEnumDefinition(enumType.getId());
+        return true;
     }
     if (std::holds_alternative<StructType>(type.getVariant()))
     {
         auto& structType = cld::get<StructType>(type.getVariant());
-        return getStructDefinition(structType.getId());
+        return std::holds_alternative<StructDefinition>(structType.getInfo().type);
     }
     if (std::holds_alternative<UnionType>(type.getVariant()))
     {
         auto& unionType = cld::get<UnionType>(type.getVariant());
-        return getUnionDefinition(unionType.getId());
+        return std::holds_alternative<UnionDefinition>(unionType.getInfo().type);
     }
     return true;
 }
@@ -35,16 +34,12 @@ const cld::Semantics::FieldMap&
     if (std::holds_alternative<StructType>(recordType.getVariant()))
     {
         auto& structType = cld::get<StructType>(recordType.getVariant());
-        auto* structDef = getStructDefinition(structType.getId());
-        CLD_ASSERT(structDef);
-        return structDef->getFields();
+        return cld::get<StructDefinition>(structType.getInfo().type).getFields();
     }
     if (std::holds_alternative<UnionType>(recordType.getVariant()))
     {
         auto& unionType = cld::get<UnionType>(recordType.getVariant());
-        auto* unionDef = getUnionDefinition(unionType.getId());
-        CLD_ASSERT(unionDef);
-        return unionDef->getFields();
+        return cld::get<UnionDefinition>(unionType.getInfo().type).getFields();
     }
     CLD_UNREACHABLE;
 }
@@ -55,9 +50,7 @@ llvm::ArrayRef<cld::Semantics::MemoryLayout>
     if (std::holds_alternative<StructType>(structType.getVariant()))
     {
         auto& structTy = cld::get<StructType>(structType.getVariant());
-        auto* structDef = getStructDefinition(structTy.getId());
-        CLD_ASSERT(structDef);
-        return structDef->getMemLayout();
+        return cld::get<StructDefinition>(structTy.getInfo().type).getMemLayout();
     }
     CLD_UNREACHABLE;
 }
@@ -68,16 +61,12 @@ llvm::ArrayRef<cld::Semantics::FieldInLayout>
     if (std::holds_alternative<StructType>(recordType.getVariant()))
     {
         auto& structType = cld::get<StructType>(recordType.getVariant());
-        auto* structDef = getStructDefinition(structType.getId());
-        CLD_ASSERT(structDef);
-        return structDef->getFieldLayout();
+        return cld::get<StructDefinition>(structType.getInfo().type).getFieldLayout();
     }
     if (std::holds_alternative<UnionType>(recordType.getVariant()))
     {
         auto& unionType = cld::get<UnionType>(recordType.getVariant());
-        auto* unionDef = getUnionDefinition(unionType.getId());
-        CLD_ASSERT(unionDef);
-        return unionDef->getFieldLayout();
+        return cld::get<UnionDefinition>(unionType.getInfo().type).getFieldLayout();
     }
     CLD_UNREACHABLE;
 }
