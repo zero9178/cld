@@ -76,6 +76,12 @@ cld::Semantics::TranslationUnit cld::Semantics::SemanticAnalysis::visit(const Sy
         cld::match(
             declared.declared, [](const auto&) {},
             [&declared = declared, this](VariableDeclaration* declaration) {
+                if (declaration->getKind() == VariableDeclaration::TentativeDefinition
+                    && !isCompleteType(declaration->getType()) && !isAbstractArray(declaration->getType()))
+                {
+                    log(Errors::Semantics::TYPE_OF_TENTATIVE_DEFINITION_IS_NEVER_COMPLETED.args(
+                        *declared.identifier, m_sourceInterface, *declared.identifier, declaration->getType()));
+                }
                 if (declaration->isUsed() || declaration->getLinkage() == Linkage::External
                     || declaration->hasAttribute<UsedAttribute>())
                 {
@@ -678,6 +684,12 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                                                                                          declaration->getType()));
                 visit(*iter.optionalInitializer, Type{}, declaration->getLifetime() == Lifetime::Static);
             }
+            else if (!isCompleteType(declaration->getType()) && !isAbstractArray(declaration->getType()))
+            {
+                log(Errors::Semantics::CANNOT_INITIALIZE_VARIABLE_OF_INCOMPLETE_TYPE.args(*loc, m_sourceInterface,
+                                                                                          *loc));
+                visit(*iter.optionalInitializer, Type{}, declaration->getLifetime() == Lifetime::Static);
+            }
             else
             {
                 m_inStaticInitializer = lifetime == Lifetime::Static;
@@ -706,7 +718,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
         // If the declaration of an identifier for an object is a tentative definition and has internal
         // linkage, the declared type shall not be an incomplete type.
         if (linkage == Linkage::None
-            || (kind == VariableDeclaration::Kind::TentativeDefinition && linkage == Linkage::Internal))
+            || (kind == VariableDeclaration::TentativeDefinition && linkage == Linkage::Internal))
         {
             if (isVoid(declaration->getType()))
             {

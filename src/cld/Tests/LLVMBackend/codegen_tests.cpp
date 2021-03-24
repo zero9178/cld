@@ -633,6 +633,21 @@ TEST_CASE("LLVM codegen global variables", "[LLVM]")
             CHECK(variable->getType()->getPointerElementType()->isIntegerTy(cld::LanguageOptions::native().sizeOfInt
                                                                             * 8));
         }
+        SECTION("Abstract array")
+        {
+            auto program = generateProgram("int foo[];");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            CHECK(module->getGlobalList().size() == 1);
+            auto* variable = module->getGlobalVariable("foo");
+            REQUIRE(variable);
+            CHECK(variable->getLinkage() == llvm::GlobalValue::CommonLinkage);
+            CHECK(!variable->isDeclaration());
+            REQUIRE(variable->getType()->isPointerTy());
+            REQUIRE(variable->getType()->getPointerElementType()->isArrayTy());
+            CHECK(variable->getType()->getPointerElementType()->getArrayNumElements() == 1);
+        }
         SECTION("Multiple")
         {
             auto program = generateProgram("int foo;\n"

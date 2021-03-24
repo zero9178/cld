@@ -513,6 +513,27 @@ TEST_CASE("Semantics declarations", "[semantics]")
                       "Point p;",
                       ProducesNoErrors());
     }
+    SECTION("Incomplete types")
+    {
+        SEMA_PRODUCES("void foo() { void f;}", ProducesError(DECLARATION_MUST_NOT_BE_VOID));
+        SEMA_PRODUCES("void foo() { struct R f; }", ProducesError(DECLARATION_MUST_HAVE_A_COMPLETE_TYPE));
+        SEMA_PRODUCES("void f;", ProducesError(TYPE_OF_TENTATIVE_DEFINITION_IS_NEVER_COMPLETED));
+        SEMA_PRODUCES("int f[];", ProducesNoErrors());
+        SEMA_PRODUCES("struct R f;", ProducesError(TYPE_OF_TENTATIVE_DEFINITION_IS_NEVER_COMPLETED));
+        SEMA_PRODUCES("struct R f;\n"
+                      "\n"
+                      "\n"
+                      "struct R { int i; };",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("int f[];\n"
+                      "\n"
+                      "\n"
+                      "int f[5];",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("struct R f = {0};", ProducesError(CANNOT_INITIALIZE_VARIABLE_OF_INCOMPLETE_TYPE));
+        SEMA_PRODUCES("extern struct R f;", ProducesNoErrors());
+        SEMA_PRODUCES("extern struct R f = {0};", ProducesError(CANNOT_INITIALIZE_VARIABLE_OF_INCOMPLETE_TYPE));
+    }
     SEMA_PRODUCES("int;", ProducesError(DECLARATION_DOES_NOT_DECLARE_ANYTHING));
     SEMA_PRODUCES("struct f;", !ProducesError(DECLARATION_DOES_NOT_DECLARE_ANYTHING));
     SEMA_PRODUCES("int i;\n"

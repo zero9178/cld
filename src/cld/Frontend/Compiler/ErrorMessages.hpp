@@ -148,7 +148,7 @@ CREATE_ERROR(REDEFINITION_OF_SYMBOL_N, "Redefinition of symbol %0", Underline<0>
 
 namespace Semantics
 {
-// Type spcifiers and qualifiers
+// Type specifiers and qualifiers
 
 CREATE_ERROR(ONLY_ONE_STORAGE_SPECIFIER, "Only one storage specifier allowed in declaration", Underline<0>);
 
@@ -221,6 +221,9 @@ CREATE_ERROR(STATIC_VARIABLE_N_REDEFINED_WITHOUT_STATIC, "Static variable %0 red
 
 CREATE_ERROR(REDECLARATION_OF_FUNCTION_N_WITH_INTERNAL_LINKAGE, "Redefinition of function %0 with internal linkage",
              Underline<0>);
+
+CREATE_ERROR(TYPE_OF_TENTATIVE_DEFINITION_IS_NEVER_COMPLETED, "Type of tentative definition is never completed",
+             Annotate<0, 1>);
 
 // Arrays
 
@@ -487,7 +490,7 @@ CREATE_ERROR(TYPE_OF_VECTOR_OPERANDS_OF_BINARY_OPERATOR_N_MUST_MATCH,
 CREATE_ERROR(CONVERSION_OF_SCALAR_IN_VECTOR_OPERATION_COULD_CAUSE_TRUNCATION,
              "Conversion of scalar in vector operation could cause truncation", AnnotateExpr<0>, AnnotateExpr<1>);
 
-// Addittive expression
+// Additive expression
 
 CREATE_ERROR(CANNOT_SUBTRACT_POINTER_FROM_ARITHMETIC_TYPE, "Cannot subtract pointer from arithmetic type",
              AnnotateExpr<0>, PointAt<1>, AnnotateExpr<2>);
@@ -756,6 +759,9 @@ CREATE_ERROR(CANNOT_INITIALIZE_FLEXIBLE_ARRAY_MEMBER, "Cannot initialize flexibl
 
 CREATE_ERROR(CANNOT_INITIALIZE_STATIC_OR_EXTERN_VARIABLE_AT_BLOCK_SCOPE,
              "Cannot initialize static or extern variable at block scope", Underline<0>);
+
+CREATE_ERROR(CANNOT_INITIALIZE_VARIABLE_OF_INCOMPLETE_TYPE, "Cannot initialize variable of incomplete type",
+             Underline<0>);
 
 CREATE_ERROR(NO_MORE_SUB_OBJECTS_TO_INITIALIZE, "No more sub objects to initialize", Underline<0>);
 
