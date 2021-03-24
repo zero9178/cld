@@ -37,7 +37,7 @@ public:
 
     struct TagTypeInScope
     {
-        const Lexer::CToken* CLD_NULLABLE identifier; // Guaranteed to be non null if the scope isn't global
+        const Lexer::CToken* CLD_NULLABLE identifier; // Guaranteed to be non null if not a builtin
         using Variant = std::variant<StructTag, UnionTag, EnumTag>;
         Variant tagType;
     };

@@ -36,12 +36,12 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
         std::vector<GNUAttribute> attributes;
         for (auto& specs : iter.declarationSpecifiers)
         {
-            auto* storageSpec = std::get_if<cld::Syntax::StorageClassSpecifier>(&specs);
+            auto* storageSpec = std::get_if<Syntax::StorageClassSpecifier>(&specs);
             if (!storageSpec)
             {
                 continue;
             }
-            if (storageSpec->getSpecifier() != cld::Syntax::StorageClassSpecifier::Register)
+            if (storageSpec->getSpecifier() != Syntax::StorageClassSpecifier::Register)
             {
                 log(Errors::Semantics::NO_STORAGE_CLASS_SPECIFIER_ALLOWED_IN_PARAMETER_BESIDES_REGISTER.args(
                     *storageSpec, m_sourceInterface, *storageSpec));
@@ -51,15 +51,15 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
         m_inParameter = true;
         auto paramType = cld::match(
             iter.declarator,
-            [&](const std::unique_ptr<cld::Syntax::Declarator>& ptr) {
+            [&](const std::unique_ptr<Syntax::Declarator>& ptr) {
                 return declaratorsToType(iter.declarationSpecifiers, *ptr, {}, {}, &attributes);
             },
-            [&](const std::unique_ptr<cld::Syntax::AbstractDeclarator>& ptr) {
+            [&](const std::unique_ptr<Syntax::AbstractDeclarator>& ptr) {
                 return declaratorsToType(iter.declarationSpecifiers, ptr.get(), &attributes);
             });
         if (isVoid(paramType) && !paramType.isConst() && !paramType.isVolatile()
-            && !std::holds_alternative<std::unique_ptr<cld::Syntax::Declarator>>(iter.declarator)
-            && !cld::get<std::unique_ptr<cld::Syntax::AbstractDeclarator>>(iter.declarator)
+            && !std::holds_alternative<std::unique_ptr<Syntax::Declarator>>(iter.declarator)
+            && !cld::get<std::unique_ptr<Syntax::AbstractDeclarator>>(iter.declarator)
             && parameterTypeList->getParameters().size() == 1 && !parameterTypeList->hasEllipse())
         {
             type = FunctionType::create(std::move(type), {}, false, false);
@@ -735,569 +735,15 @@ cld::Semantics::Type
     if (auto* structOrUnionPtr =
             std::get_if<std::unique_ptr<Syntax::StructOrUnionSpecifier>>(&typeSpec[0]->getVariant()))
     {
-        auto& structOrUnion = *structOrUnionPtr;
         if (typeSpec.size() != 1)
         {
-            log(Errors::Semantics::EXPECTED_NO_FURTHER_TYPE_SPECIFIERS_AFTER_N.args(
-                *typeSpec[1], m_sourceInterface,
-                structOrUnion->isUnion() ? Lexer::TokenType::UnionKeyword : Lexer::TokenType::StructKeyword,
+            this->log(Errors::Semantics::EXPECTED_NO_FURTHER_TYPE_SPECIFIERS_AFTER_N.args(
+                *typeSpec[1], this->m_sourceInterface,
+                (*structOrUnionPtr)->isUnion() ? cld::Lexer::TokenType::UnionKeyword :
+                                                 cld::Lexer::TokenType::StructKeyword,
                 llvm::ArrayRef(typeSpec).drop_front()));
         }
-        if (structOrUnion->getStructDeclarations().empty())
-        {
-            CLD_ASSERT(structOrUnion->getIdentifierLoc());
-            auto name = structOrUnion->getIdentifierLoc()->getText();
-            if (structOrUnion->isUnion())
-            {
-                if (auto* unionTag = lookupType<UnionTag>(name))
-                {
-                    return UnionType::create(isConst, isVolatile, name, static_cast<std::size_t>(*unionTag));
-                }
-                m_unionDefinitions.push_back({UnionDecl{}, m_currentScope, structOrUnion->begin()});
-                auto [prev, notRedefined] = getCurrentScope().types.insert(
-                    {name, TagTypeInScope{structOrUnion->getIdentifierLoc(), UnionTag{m_unionDefinitions.size() - 1}}});
-                if (!notRedefined)
-                {
-                    log(Errors::REDEFINITION_OF_SYMBOL_N.args(*structOrUnion->getIdentifierLoc(), m_sourceInterface,
-                                                              *structOrUnion->getIdentifierLoc()));
-                    if (prev->second.identifier)
-                    {
-                        log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
-                                                                 *prev->second.identifier));
-                    }
-                }
-                return UnionType::create(isConst, isVolatile, name, m_unionDefinitions.size() - 1);
-            }
-
-            if (auto* structTag = lookupType<StructTag>(name))
-            {
-                return StructType::create(isConst, isVolatile, name, static_cast<std::size_t>(*structTag));
-            }
-            m_structDefinitions.push_back({StructDecl{}, m_currentScope, structOrUnion->begin()});
-            auto [prev, notRedefined] = getCurrentScope().types.insert(
-                {name, TagTypeInScope{structOrUnion->getIdentifierLoc(), StructTag{m_structDefinitions.size() - 1}}});
-            if (!notRedefined)
-            {
-                log(Errors::REDEFINITION_OF_SYMBOL_N.args(*structOrUnion->getIdentifierLoc(), m_sourceInterface,
-                                                          *structOrUnion->getIdentifierLoc()));
-                if (prev->second.identifier)
-                {
-                    log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
-                                                             *prev->second.identifier));
-                }
-            }
-            return StructType::create(isConst, isVolatile, name, m_structDefinitions.size() - 1);
-        }
-
-        std::optional<std::size_t> structOrUnionID;
-        if (!structOrUnion->getIdentifierLoc())
-        {
-            if (structOrUnion->isUnion())
-            {
-                structOrUnionID = m_unionDefinitions.size();
-                m_unionDefinitions.push_back({UnionDecl{}, m_currentScope, structOrUnion->begin()});
-            }
-            else
-            {
-                structOrUnionID = m_structDefinitions.size();
-                m_structDefinitions.push_back({StructDecl{}, m_currentScope, structOrUnion->begin()});
-            }
-        }
-        else
-        {
-            auto name = structOrUnion->getIdentifierLoc()->getText();
-            if (structOrUnion->isUnion())
-            {
-                auto [prev, notRedefined] = getCurrentScope().types.insert(
-                    {name, TagTypeInScope{structOrUnion->getIdentifierLoc(), UnionTag{m_unionDefinitions.size()}}});
-                if (!notRedefined)
-                {
-                    if (!std::holds_alternative<UnionTag>(prev->second.tagType)
-                        || getUnionDefinition(static_cast<std::size_t>(cld::get<UnionTag>(prev->second.tagType))))
-                    {
-                        log(Errors::REDEFINITION_OF_SYMBOL_N.args(*structOrUnion->getIdentifierLoc(), m_sourceInterface,
-                                                                  *structOrUnion->getIdentifierLoc()));
-                        if (prev->second.identifier)
-                        {
-                            log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
-                                                                     *prev->second.identifier));
-                        }
-                    }
-                    else
-                    {
-                        structOrUnionID = static_cast<std::size_t>(cld::get<UnionTag>(prev->second.tagType));
-                    }
-                }
-                else
-                {
-                    structOrUnionID = m_unionDefinitions.size();
-                    m_unionDefinitions.push_back({UnionDecl{}, m_currentScope, structOrUnion->begin()});
-                }
-            }
-            else
-            {
-                auto [prev, notRedefined] = getCurrentScope().types.insert(
-                    {name, TagTypeInScope{structOrUnion->getIdentifierLoc(), StructTag{m_structDefinitions.size()}}});
-                if (!notRedefined)
-                {
-                    if (!std::holds_alternative<StructTag>(prev->second.tagType)
-                        || getStructDefinition(static_cast<std::size_t>(cld::get<StructTag>(prev->second.tagType))))
-                    {
-                        log(Errors::REDEFINITION_OF_SYMBOL_N.args(*structOrUnion->getIdentifierLoc(), m_sourceInterface,
-                                                                  *structOrUnion->getIdentifierLoc()));
-                        if (prev->second.identifier)
-                        {
-                            log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
-                                                                     *prev->second.identifier));
-                        }
-                    }
-                    else
-                    {
-                        structOrUnionID = static_cast<std::size_t>(cld::get<StructTag>(prev->second.tagType));
-                    }
-                }
-                else
-                {
-                    structOrUnionID = m_structDefinitions.size();
-                    m_structDefinitions.push_back({StructDecl{}, m_currentScope, structOrUnion->begin()});
-                }
-            }
-        }
-
-        FieldMap fields;
-        std::vector<FieldInLayout> fieldLayout;
-        std::unordered_set<std::size_t> zeroBitFields;
-        for (auto iter = structOrUnion->getStructDeclarations().begin();
-             iter != structOrUnion->getStructDeclarations().end(); iter++)
-        {
-            auto& [specifiers, declarators] = *iter;
-            auto fieldStructOrUnion = std::find_if(
-                specifiers.begin(), specifiers.end(), [](const Syntax::SpecifierQualifier& specifierQualifier) {
-                    if (!std::holds_alternative<Syntax::TypeSpecifier>(specifierQualifier))
-                    {
-                        return false;
-                    }
-                    auto& specifier = cld::get<Syntax::TypeSpecifier>(specifierQualifier);
-                    if (!std::holds_alternative<std::unique_ptr<Syntax::StructOrUnionSpecifier>>(
-                            specifier.getVariant()))
-                    {
-                        return false;
-                    }
-                    return true;
-                });
-            bool hadExtension = (fieldStructOrUnion != specifiers.end()
-                                 && cld::get<std::unique_ptr<Syntax::StructOrUnionSpecifier>>(
-                                        cld::get<Syntax::TypeSpecifier>(*fieldStructOrUnion).getVariant())
-                                        ->extensionsEnabled());
-            auto enableReset = enableExtensions(hadExtension);
-            if (declarators.empty())
-            {
-                auto type = declaratorsToType(specifiers);
-                auto parentType = std::make_shared<const Type>(std::move(type));
-                fieldLayout.push_back({parentType, static_cast<std::size_t>(-1), {}});
-                if (!extensionsEnabled(structOrUnion->begin()) || !isAnonymous(*parentType))
-                {
-                    log(Errors::Semantics::FIELD_WITHOUT_A_NAME_IS_NOT_ALLOWED.args(specifiers, m_sourceInterface,
-                                                                                    specifiers));
-                    continue;
-                }
-                auto& subFields = getFields(*parentType);
-                for (auto [name, field] : subFields)
-                {
-                    field.indices.insert(field.indices.begin(), static_cast<std::size_t>(-1));
-                    field.parentTypes.insert(field.parentTypes.begin(), parentType);
-                    if (std::pair(parentType->isConst(), parentType->isVolatile())
-                        > std::pair(field.type->isConst(), field.type->isVolatile()))
-                    {
-                        field.type = std::make_shared<const Type>(parentType->isConst() || field.type->isConst(),
-                                                                  parentType->isVolatile() || field.type->isVolatile(),
-                                                                  field.type->getVariant());
-                    }
-                    const auto* token = field.nameToken;
-                    auto [prev, notRedefined] = fields.insert({name, std::move(field)});
-                    if (!notRedefined)
-                    {
-                        log(Errors::Semantics::REDEFINITION_OF_FIELD_N.args(*token, m_sourceInterface, *token));
-                        if (prev->second.nameToken)
-                        {
-                            log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.nameToken, m_sourceInterface,
-                                                                     *prev->second.nameToken));
-                        }
-                    }
-                }
-                continue;
-            }
-            std::vector<GNUAttribute> attributes;
-            auto baseType = qualifiersToType(specifiers, &attributes);
-            for (auto iter2 = declarators.begin(); iter2 != declarators.end(); iter2++)
-            {
-                auto thisAttributes = attributes;
-                bool last = iter2 + 1 == declarators.end() && iter + 1 == structOrUnion->getStructDeclarations().end();
-                bool first = iter2 == declarators.begin() && iter == structOrUnion->getStructDeclarations().begin();
-
-                auto& declarator = iter2->optionalDeclarator;
-                auto& size = iter2->optionalBitfield;
-                auto type = declarator ? applyDeclarator(baseType, *declarator, {}, {}, &thisAttributes) : baseType;
-                reportNotApplicableAttributes(thisAttributes);
-                if (isVoid(type))
-                {
-                    if (structOrUnion->isUnion())
-                    {
-                        if (declarator)
-                        {
-                            log(Errors::Semantics::VOID_TYPE_NOT_ALLOWED_IN_UNION.args(*declarator, m_sourceInterface,
-                                                                                       specifiers, *declarator));
-                        }
-                        else
-                        {
-                            log(Errors::Semantics::VOID_TYPE_NOT_ALLOWED_IN_UNION.args(specifiers, m_sourceInterface,
-                                                                                       specifiers, specifiers));
-                        }
-                    }
-                    else
-                    {
-                        if (declarator)
-                        {
-                            log(Errors::Semantics::VOID_TYPE_NOT_ALLOWED_IN_STRUCT.args(*declarator, m_sourceInterface,
-                                                                                        specifiers, *declarator));
-                        }
-                        else
-                        {
-                            log(Errors::Semantics::VOID_TYPE_NOT_ALLOWED_IN_STRUCT.args(specifiers, m_sourceInterface,
-                                                                                        specifiers, specifiers));
-                        }
-                    }
-                    type = Type{};
-                }
-                else if (isVariablyModified(type))
-                {
-                    if (structOrUnion->isUnion())
-                    {
-                        log(Errors::Semantics::VARIABLY_MODIFIED_TYPE_NOT_ALLOWED_IN_UNION.args(
-                            *declarator, m_sourceInterface, specifiers, *declarator));
-                    }
-                    else
-                    {
-                        log(Errors::Semantics::VARIABLY_MODIFIED_TYPE_NOT_ALLOWED_IN_STRUCT.args(
-                            *declarator, m_sourceInterface, specifiers, *declarator));
-                    }
-                    type = Type{};
-                }
-                else if (!isCompleteType(type)
-                         && !(!structOrUnion->isUnion() && last && !first && isAbstractArray(type)))
-                {
-                    if (structOrUnion->isUnion())
-                    {
-                        log(Errors::Semantics::INCOMPLETE_TYPE_NOT_ALLOWED_IN_UNION.args(
-                            *declarator, m_sourceInterface, type, specifiers, *declarator));
-                    }
-                    else
-                    {
-                        log(Errors::Semantics::INCOMPLETE_TYPE_NOT_ALLOWED_IN_STRUCT.args(
-                            *declarator, m_sourceInterface, type, specifiers, *declarator));
-                    }
-                    type = Type{};
-                }
-                else if (isFunctionType(type))
-                {
-                    if (structOrUnion->isUnion())
-                    {
-                        if (declarator)
-                        {
-                            log(Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_UNION.args(
-                                *declarator, m_sourceInterface, specifiers, *declarator, type));
-                        }
-                        else
-                        {
-                            log(Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_UNION.args(
-                                specifiers, m_sourceInterface, specifiers, specifiers, type));
-                        }
-                    }
-                    else
-                    {
-                        if (declarator)
-                        {
-                            log(Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_STRUCT.args(
-                                *declarator, m_sourceInterface, specifiers, *declarator, type));
-                        }
-                        else
-                        {
-                            log(Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_STRUCT.args(
-                                specifiers, m_sourceInterface, specifiers, specifiers, type));
-                        }
-                    }
-                    type = Type{};
-                }
-                else if (!structOrUnion->isUnion() && hasFlexibleArrayMember(type))
-                {
-                    if (isStruct(type))
-                    {
-                        log(Errors::Semantics::STRUCT_WITH_FLEXIBLE_ARRAY_MEMBER_NOT_ALLOWED_IN_STRUCT.args(
-                            specifiers, m_sourceInterface, specifiers));
-                    }
-                    else
-                    {
-                        log(Errors::Semantics::
-                                UNION_WITH_STRUCT_OR_UNION_CONTAINING_A_FLEXIBLE_ARRAY_MEMBER_IS_NOT_ALLOWED_IN_STRUCT
-                                    .args(specifiers, m_sourceInterface, specifiers));
-                    }
-                    type = Type{};
-                }
-                std::optional<std::pair<std::uint32_t, std::uint32_t>> value;
-                if (size)
-                {
-                    bool hadValidType = true;
-                    if (!type.isUndefined() && !isInteger(type))
-                    {
-                        log(Errors::Semantics::BITFIELD_MAY_ONLY_BE_OF_TYPE_INT_OR_BOOL.args(
-                            specifiers, m_sourceInterface, specifiers));
-                        hadValidType = false;
-                    }
-                    else if (!type.isUndefined())
-                    {
-                        auto& primitive = cld::get<PrimitiveType>(type.getVariant());
-                        switch (primitive.getKind())
-                        {
-                            case PrimitiveType::Kind::Bool:
-                            case PrimitiveType::Kind::Int:
-                            case PrimitiveType::Kind::UnsignedInt: break;
-                            default:
-                            {
-                                log(Errors::Semantics::BITFIELD_MAY_ONLY_BE_OF_TYPE_INT_OR_BOOL.args(
-                                    specifiers, m_sourceInterface, specifiers));
-                                hadValidType = false;
-                            }
-                        }
-                    }
-                    auto expr = visit(*size);
-                    if (expr->isUndefined())
-                    {
-                        continue;
-                    }
-                    auto result = evaluateConstantExpression(*expr);
-                    if (!result)
-                    {
-                        for (auto& message : result.error())
-                        {
-                            log(message);
-                        }
-                        continue;
-                    }
-                    CLD_ASSERT(std::holds_alternative<PrimitiveType>(expr->getType().getVariant()));
-                    if (result->getInteger().isNegative())
-                    {
-                        log(Errors::Semantics::BITFIELD_MUST_BE_OF_SIZE_ZERO_OR_GREATER.args(*size, m_sourceInterface,
-                                                                                             *size, *result));
-                        continue;
-                    }
-                    if (!hadValidType)
-                    {
-                        continue;
-                    }
-                    auto objectWidth = cld::get<PrimitiveType>(type.getVariant()).getBitCount();
-                    if (result->getInteger() > objectWidth)
-                    {
-                        log(Errors::Semantics::BITFIELD_MUST_NOT_HAVE_A_GREATER_WIDTH_THAN_THE_TYPE.args(
-                            *size, m_sourceInterface, specifiers, objectWidth, *size, *result));
-                    }
-                    if (result->getInteger() == 0 && declarator)
-                    {
-                        log(Errors::Semantics::BITFIELD_WITH_SIZE_ZERO_MAY_NOT_HAVE_A_NAME.args(
-                            *declarator, m_sourceInterface, *declarator));
-                    }
-                    if (result->getInteger() == 0)
-                    {
-                        zeroBitFields.emplace(fields.size());
-                        continue;
-                    }
-                    value.emplace(0, result->getInteger().getZExtValue());
-                }
-                const auto* token = declarator ? declaratorToLoc(*declarator) : nullptr;
-                if (token)
-                {
-                    auto sharedType = std::make_shared<Type>(std::move(type));
-                    auto [prev, notRedefinition] = fields.insert(
-                        {token->getText(),
-                         {sharedType, token->getText(), token, {static_cast<std::size_t>(-1)}, value, {}}});
-                    fieldLayout.push_back({sharedType, static_cast<std::size_t>(-1), value});
-                    if (!notRedefinition)
-                    {
-                        log(Errors::Semantics::REDEFINITION_OF_FIELD_N.args(*token, m_sourceInterface, *token));
-                        if (prev->second.nameToken)
-                        {
-                            log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.nameToken, m_sourceInterface,
-                                                                     *prev->second.nameToken));
-                        }
-                    }
-                }
-            }
-        }
-        std::size_t currentSize = 0, currentAlignment = 0;
-        std::vector<MemoryLayout> memoryLayout;
-        std::size_t fieldLayoutCounter = 0;
-        if (!structOrUnion->isUnion())
-        {
-            for (auto iter = fields.begin(); iter != fields.end();)
-            {
-                if (iter->second.type->isUndefined())
-                {
-                    iter.value().indices[0] = memoryLayout.size();
-                    memoryLayout.push_back({*iter->second.type, currentSize});
-                    iter++;
-                    continue;
-                }
-                if (iter->second.indices.size() > 1)
-                {
-                    auto& parentType = iter->second.parentTypes.front();
-                    auto end = std::find_if_not(iter, fields.end(), [&](const auto& pair) {
-                        if (pair.second.parentTypes.empty())
-                        {
-                            return false;
-                        }
-                        return pair.second.parentTypes.front().get() == parentType.get();
-                    });
-                    fieldLayout[fieldLayoutCounter++].layoutIndex = memoryLayout.size();
-                    for (; iter != end; iter++)
-                    {
-                        iter.value().indices[0] = memoryLayout.size();
-                    }
-                    auto alignment = parentType->getAlignOf(*this);
-                    currentAlignment = std::max(currentAlignment, alignment);
-                    currentSize = roundUpTo(currentSize, alignment);
-                    memoryLayout.push_back({*parentType, currentSize});
-                    auto subSize = parentType->getSizeOf(*this);
-                    currentSize += subSize;
-                    continue;
-                }
-                if (!iter->second.bitFieldBounds)
-                {
-                    iter.value().indices[0] = memoryLayout.size();
-                    fieldLayout[fieldLayoutCounter++].layoutIndex = memoryLayout.size();
-                    if (!isCompleteType(*iter->second.type) && !isAbstractArray(*iter->second.type))
-                    {
-                        iter++;
-                        continue;
-                    }
-                    auto alignment = iter->second.type->getAlignOf(*this);
-                    currentAlignment = std::max(currentAlignment, alignment);
-                    currentSize = roundUpTo(currentSize, alignment);
-                    memoryLayout.push_back({*iter->second.type, currentSize});
-                    if (!isCompleteType(*iter->second.type))
-                    {
-                        iter++;
-                        continue;
-                    }
-                    auto subSize = iter->second.type->getSizeOf(*this);
-                    currentSize += subSize;
-                    iter++;
-                    continue;
-                }
-                bool lastWasZero = false;
-                std::uint64_t storageLeft = 0;
-                std::uint64_t prevSize = 0;
-                std::uint64_t used = 0;
-                for (; iter != fields.end() && iter->second.bitFieldBounds;)
-                {
-                    if (zeroBitFields.count(iter - fields.begin()))
-                    {
-                        lastWasZero = true;
-                    }
-                    std::uint64_t size = iter->second.type->getSizeOf(*this);
-                    if (!lastWasZero && storageLeft > iter->second.bitFieldBounds->second
-                        && (!m_sourceInterface.getLanguageOptions().discreteBitfields || prevSize == size))
-                    {
-                        iter.value().indices[0] = memoryLayout.size() - 1;
-                        storageLeft -= iter->second.bitFieldBounds->second;
-                        fieldLayout[fieldLayoutCounter].bitFieldBounds.emplace(
-                            used, used + iter->second.bitFieldBounds->second);
-                        fieldLayout[fieldLayoutCounter++].layoutIndex = memoryLayout.size() - 1;
-                        iter.value().bitFieldBounds.emplace(used, used + iter->second.bitFieldBounds->second);
-                        used = iter->second.bitFieldBounds->second;
-                        iter++;
-                        continue;
-                    }
-                    lastWasZero = false;
-                    currentSize += prevSize;
-                    auto alignment = iter->second.type->getAlignOf(*this);
-                    currentAlignment = std::max(currentAlignment, alignment);
-                    currentSize = roundUpTo(currentSize, alignment);
-                    prevSize = size;
-                    storageLeft = cld::get<PrimitiveType>(iter->second.type->getVariant()).getBitCount()
-                                  - iter->second.bitFieldBounds->second;
-                    used = iter->second.bitFieldBounds->second;
-                    iter.value().bitFieldBounds.emplace(0, used);
-                    iter.value().indices[0] = memoryLayout.size();
-                    fieldLayout[fieldLayoutCounter].bitFieldBounds.emplace(0, used);
-                    fieldLayout[fieldLayoutCounter++].layoutIndex = memoryLayout.size();
-                    memoryLayout.push_back({*iter->second.type, currentSize});
-                    iter++;
-                }
-                currentSize += prevSize;
-            }
-        }
-        else
-        {
-            for (auto iter = fields.begin(); iter != fields.end();)
-            {
-                auto& field = iter.value();
-                if (field.type->isUndefined())
-                {
-                    iter++;
-                    continue;
-                }
-                field.indices[0] = iter - fields.begin();
-                fieldLayout[fieldLayoutCounter++].layoutIndex = iter - fields.begin();
-                if (!fieldLayout[fieldLayoutCounter - 1].type->isUndefined())
-                {
-                    auto size = fieldLayout[fieldLayoutCounter - 1].type->getSizeOf(*this);
-                    if (size > currentSize)
-                    {
-                        currentSize = size;
-                    }
-                    currentAlignment =
-                        std::max(currentAlignment, fieldLayout[fieldLayoutCounter - 1].type->getAlignOf(*this));
-                }
-                if (!field.parentTypes.empty())
-                {
-                    auto end = std::find_if_not(iter + 1, fields.end(), [&](const auto& pair) {
-                        if (pair.second.parentTypes.empty())
-                        {
-                            return false;
-                        }
-                        return pair.second.parentTypes.front().get() == field.parentTypes.front().get();
-                    });
-                    for (iter++; iter != end; iter++)
-                    {
-                        iter.value().indices[0] = fieldLayout[fieldLayoutCounter - 1].layoutIndex;
-                    }
-                }
-                else
-                {
-                    iter++;
-                }
-            }
-        }
-        currentSize = roundUpTo(currentSize, currentAlignment);
-
-        std::string_view name = structOrUnion->getIdentifierLoc() ? structOrUnion->getIdentifierLoc()->getText() : "";
-        if (structOrUnion->isUnion())
-        {
-            if (structOrUnionID)
-            {
-                m_unionDefinitions[*structOrUnionID].type.emplace<UnionDefinition>(
-                    name, std::move(fields), std::move(fieldLayout), currentSize, currentAlignment);
-                return UnionType::create(isConst, isVolatile, name, *structOrUnionID);
-            }
-            return Type{};
-        }
-        if (structOrUnionID)
-        {
-            m_structDefinitions[*structOrUnionID].type.emplace<StructDefinition>(
-                name, std::move(fields), std::move(fieldLayout), std::move(memoryLayout), currentSize,
-                currentAlignment);
-            return StructType::create(isConst, isVolatile, name, *structOrUnionID);
-        }
-        return Type{};
+        return structOrUnionSpecifierToType(isConst, isVolatile, **structOrUnionPtr);
     }
     CLD_ASSERT(std::holds_alternative<std::unique_ptr<Syntax::EnumSpecifier>>(typeSpec[0]->getVariant()));
     if (typeSpec.size() != 1)
@@ -1406,6 +852,527 @@ cld::Semantics::Type
                         std::move(values)),
          m_currentScope, enumDef.begin()});
     return EnumType::create(isConst, isVolatile, name, m_enumDefinitions.size() - 1);
+}
+
+cld::Semantics::Type
+    cld::Semantics::SemanticAnalysis::structOrUnionSpecifierToType(bool isConst, bool isVolatile,
+                                                                   const Syntax::StructOrUnionSpecifier& structOrUnion)
+{
+    if (structOrUnion.getStructDeclarations().empty())
+    {
+        CLD_ASSERT(structOrUnion.getIdentifierLoc());
+        auto name = structOrUnion.getIdentifierLoc()->getText();
+        if (structOrUnion.isUnion())
+        {
+            if (auto* unionTag = lookupType<UnionTag>(name))
+            {
+                return UnionType::create(isConst, isVolatile, name, static_cast<std::size_t>(*unionTag));
+            }
+            m_unionDefinitions.push_back({UnionDecl{}, m_currentScope, structOrUnion.begin()});
+            auto [prev, notRedefined] = getCurrentScope().types.insert(
+                {name, TagTypeInScope{structOrUnion.getIdentifierLoc(), UnionTag{m_unionDefinitions.size() - 1}}});
+            if (!notRedefined)
+            {
+                log(Errors::REDEFINITION_OF_SYMBOL_N.args(*structOrUnion.getIdentifierLoc(), m_sourceInterface,
+                                                          *structOrUnion.getIdentifierLoc()));
+                if (prev->second.identifier)
+                {
+                    log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
+                                                             *prev->second.identifier));
+                }
+            }
+            return UnionType::create(isConst, isVolatile, name, m_unionDefinitions.size() - 1);
+        }
+
+        if (auto* structTag = lookupType<StructTag>(name))
+        {
+            return StructType::create(isConst, isVolatile, name, static_cast<std::size_t>(*structTag));
+        }
+        m_structDefinitions.push_back({StructDecl{}, m_currentScope, structOrUnion.begin()});
+        auto [prev, notRedefined] = getCurrentScope().types.insert(
+            {name, TagTypeInScope{structOrUnion.getIdentifierLoc(), StructTag{m_structDefinitions.size() - 1}}});
+        if (!notRedefined)
+        {
+            log(Errors::REDEFINITION_OF_SYMBOL_N.args(*structOrUnion.getIdentifierLoc(), m_sourceInterface,
+                                                      *structOrUnion.getIdentifierLoc()));
+            if (prev->second.identifier)
+            {
+                log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
+                                                         *prev->second.identifier));
+            }
+        }
+        return StructType::create(isConst, isVolatile, name, m_structDefinitions.size() - 1);
+    }
+
+    std::optional<std::size_t> structOrUnionID;
+    if (!structOrUnion.getIdentifierLoc())
+    {
+        if (structOrUnion.isUnion())
+        {
+            structOrUnionID = m_unionDefinitions.size();
+            m_unionDefinitions.push_back({UnionDecl{}, m_currentScope, structOrUnion.begin()});
+        }
+        else
+        {
+            structOrUnionID = m_structDefinitions.size();
+            m_structDefinitions.push_back({StructDecl{}, m_currentScope, structOrUnion.begin()});
+        }
+    }
+    else
+    {
+        auto name = structOrUnion.getIdentifierLoc()->getText();
+        if (structOrUnion.isUnion())
+        {
+            auto [prev, notRedefined] = getCurrentScope().types.insert(
+                {name, TagTypeInScope{structOrUnion.getIdentifierLoc(), UnionTag{m_unionDefinitions.size()}}});
+            if (!notRedefined)
+            {
+                if (!std::holds_alternative<UnionTag>(prev->second.tagType)
+                    || getUnionDefinition(static_cast<std::size_t>(cld::get<UnionTag>(prev->second.tagType))))
+                {
+                    log(Errors::REDEFINITION_OF_SYMBOL_N.args(*structOrUnion.getIdentifierLoc(), m_sourceInterface,
+                                                              *structOrUnion.getIdentifierLoc()));
+                    if (prev->second.identifier)
+                    {
+                        log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
+                                                                 *prev->second.identifier));
+                    }
+                }
+                else
+                {
+                    structOrUnionID = static_cast<std::size_t>(cld::get<UnionTag>(prev->second.tagType));
+                }
+            }
+            else
+            {
+                structOrUnionID = m_unionDefinitions.size();
+                m_unionDefinitions.push_back({UnionDecl{}, m_currentScope, structOrUnion.begin()});
+            }
+        }
+        else
+        {
+            auto [prev, notRedefined] = getCurrentScope().types.insert(
+                {name, TagTypeInScope{structOrUnion.getIdentifierLoc(), StructTag{m_structDefinitions.size()}}});
+            if (!notRedefined)
+            {
+                if (!std::holds_alternative<StructTag>(prev->second.tagType)
+                    || getStructDefinition(static_cast<std::size_t>(cld::get<StructTag>(prev->second.tagType))))
+                {
+                    log(Errors::REDEFINITION_OF_SYMBOL_N.args(*structOrUnion.getIdentifierLoc(), m_sourceInterface,
+                                                              *structOrUnion.getIdentifierLoc()));
+                    if (prev->second.identifier)
+                    {
+                        log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
+                                                                 *prev->second.identifier));
+                    }
+                }
+                else
+                {
+                    structOrUnionID = static_cast<std::size_t>(cld::get<StructTag>(prev->second.tagType));
+                }
+            }
+            else
+            {
+                structOrUnionID = m_structDefinitions.size();
+                m_structDefinitions.push_back({StructDecl{}, m_currentScope, structOrUnion.begin()});
+            }
+        }
+    }
+
+    FieldMap fields;
+    std::vector<FieldInLayout> fieldLayout;
+    std::unordered_set<std::size_t> zeroBitFields;
+    for (auto iter = structOrUnion.getStructDeclarations().begin(); iter != structOrUnion.getStructDeclarations().end();
+         iter++)
+    {
+        auto& [specifiers, declarators] = *iter;
+        auto fieldStructOrUnion = std::find_if(
+            specifiers.begin(), specifiers.end(), [](const Syntax::SpecifierQualifier& specifierQualifier) {
+                if (!std::holds_alternative<Syntax::TypeSpecifier>(specifierQualifier))
+                {
+                    return false;
+                }
+                auto& specifier = cld::get<Syntax::TypeSpecifier>(specifierQualifier);
+                if (!std::holds_alternative<std::unique_ptr<Syntax::StructOrUnionSpecifier>>(specifier.getVariant()))
+                {
+                    return false;
+                }
+                return true;
+            });
+        bool hadExtension = (fieldStructOrUnion != specifiers.end()
+                             && cld::get<std::unique_ptr<Syntax::StructOrUnionSpecifier>>(
+                                    cld::get<Syntax::TypeSpecifier>(*fieldStructOrUnion).getVariant())
+                                    ->extensionsEnabled());
+        auto enableReset = enableExtensions(hadExtension);
+        if (declarators.empty())
+        {
+            auto type = declaratorsToType(specifiers);
+            auto parentType = std::make_shared<const Type>(std::move(type));
+            fieldLayout.push_back({parentType, static_cast<std::size_t>(-1), {}});
+            if (!extensionsEnabled(structOrUnion.begin()) || !isAnonymous(*parentType))
+            {
+                log(Errors::Semantics::FIELD_WITHOUT_A_NAME_IS_NOT_ALLOWED.args(specifiers, m_sourceInterface,
+                                                                                specifiers));
+                continue;
+            }
+            auto& subFields = getFields(*parentType);
+            for (auto [name, field] : subFields)
+            {
+                field.indices.insert(field.indices.begin(), static_cast<std::size_t>(-1));
+                field.parentTypes.insert(field.parentTypes.begin(), parentType);
+                if (std::pair(parentType->isConst(), parentType->isVolatile())
+                    > std::pair(field.type->isConst(), field.type->isVolatile()))
+                {
+                    field.type = std::make_shared<const Type>(parentType->isConst() || field.type->isConst(),
+                                                              parentType->isVolatile() || field.type->isVolatile(),
+                                                              field.type->getVariant());
+                }
+                const auto* token = field.nameToken;
+                auto [prev, notRedefined] = fields.insert({name, std::move(field)});
+                if (!notRedefined)
+                {
+                    log(Errors::Semantics::REDEFINITION_OF_FIELD_N.args(*token, m_sourceInterface, *token));
+                    if (prev->second.nameToken)
+                    {
+                        log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.nameToken, m_sourceInterface,
+                                                                 *prev->second.nameToken));
+                    }
+                }
+            }
+            continue;
+        }
+        std::vector<SemanticAnalysis::GNUAttribute> attributes;
+        auto baseType = qualifiersToType(specifiers, &attributes);
+        for (auto iter2 = declarators.begin(); iter2 != declarators.end(); iter2++)
+        {
+            auto thisAttributes = attributes;
+            bool last = iter2 + 1 == declarators.end() && iter + 1 == structOrUnion.getStructDeclarations().end();
+            bool first = iter2 == declarators.begin() && iter == structOrUnion.getStructDeclarations().begin();
+
+            auto& declarator = iter2->optionalDeclarator;
+            auto& size = iter2->optionalBitfield;
+            auto type = declarator ? applyDeclarator(baseType, *declarator, {}, {}, &thisAttributes) : baseType;
+            reportNotApplicableAttributes(thisAttributes);
+            auto errorLoc = declarator ? diag::getPointRange(*declarator) : diag::getPointRange(specifiers);
+            if (isVoid(type))
+            {
+                if (structOrUnion.isUnion())
+                {
+                    log(Errors::Semantics::VOID_TYPE_NOT_ALLOWED_IN_UNION.args(errorLoc, m_sourceInterface, specifiers,
+                                                                               errorLoc));
+                }
+                else
+                {
+                    log(Errors::Semantics::VOID_TYPE_NOT_ALLOWED_IN_STRUCT.args(errorLoc, m_sourceInterface, specifiers,
+                                                                                errorLoc));
+                }
+                type = Type{};
+            }
+            else if (isVariablyModified(type))
+            {
+                if (structOrUnion.isUnion())
+                {
+                    log(Errors::Semantics::VARIABLY_MODIFIED_TYPE_NOT_ALLOWED_IN_UNION.args(errorLoc, m_sourceInterface,
+                                                                                            specifiers, errorLoc));
+                }
+                else
+                {
+                    log(Errors::Semantics::VARIABLY_MODIFIED_TYPE_NOT_ALLOWED_IN_STRUCT.args(
+                        errorLoc, m_sourceInterface, specifiers, errorLoc));
+                }
+                type = Type{};
+            }
+            else if (!isCompleteType(type) && !(!structOrUnion.isUnion() && last && !first && isAbstractArray(type)))
+            {
+                if (structOrUnion.isUnion())
+                {
+                    log(Errors::Semantics::INCOMPLETE_TYPE_NOT_ALLOWED_IN_UNION.args(errorLoc, m_sourceInterface, type,
+                                                                                     specifiers, errorLoc));
+                }
+                else
+                {
+                    log(Errors::Semantics::INCOMPLETE_TYPE_NOT_ALLOWED_IN_STRUCT.args(errorLoc, m_sourceInterface, type,
+                                                                                      specifiers, errorLoc));
+                }
+                type = Type{};
+            }
+            else if (isFunctionType(type))
+            {
+                if (structOrUnion.isUnion())
+                {
+                    log(Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_UNION.args(errorLoc, m_sourceInterface,
+                                                                                   specifiers, errorLoc, type));
+                }
+                else
+                {
+                    log(Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_STRUCT.args(errorLoc, m_sourceInterface,
+                                                                                    specifiers, errorLoc, type));
+                }
+                type = Type{};
+            }
+            else if (!structOrUnion.isUnion() && hasFlexibleArrayMember(type))
+            {
+                if (isStruct(type))
+                {
+                    log(Errors::Semantics::STRUCT_WITH_FLEXIBLE_ARRAY_MEMBER_NOT_ALLOWED_IN_STRUCT.args(
+                        specifiers, m_sourceInterface, specifiers));
+                }
+                else
+                {
+                    log(Errors::Semantics::
+                            UNION_WITH_STRUCT_OR_UNION_CONTAINING_A_FLEXIBLE_ARRAY_MEMBER_IS_NOT_ALLOWED_IN_STRUCT.args(
+                                specifiers, m_sourceInterface, specifiers));
+                }
+                type = Type{};
+            }
+            std::optional<std::pair<uint32_t, uint32_t>> value;
+            if (size)
+            {
+                bool hadValidType = true;
+                if (!type.isUndefined() && !isInteger(type))
+                {
+                    log(Errors::Semantics::BITFIELD_MAY_ONLY_BE_OF_TYPE_INT_OR_BOOL.args(specifiers, m_sourceInterface,
+                                                                                         specifiers));
+                    hadValidType = false;
+                }
+                else if (!type.isUndefined())
+                {
+                    auto& primitive = cld::get<PrimitiveType>(type.getVariant());
+                    switch (primitive.getKind())
+                    {
+                        case PrimitiveType::Bool:
+                        case PrimitiveType::Int:
+                        case PrimitiveType::UnsignedInt: break;
+                        default:
+                        {
+                            log(Errors::Semantics::BITFIELD_MAY_ONLY_BE_OF_TYPE_INT_OR_BOOL.args(
+                                specifiers, m_sourceInterface, specifiers));
+                            hadValidType = false;
+                        }
+                    }
+                }
+                auto expr = visit(*size);
+                if (expr->isUndefined())
+                {
+                    continue;
+                }
+                auto result = evaluateConstantExpression(*expr);
+                if (!result)
+                {
+                    std::for_each(result.error().begin(), result.error().end(),
+                                  cld::bind_front(&SemanticAnalysis::log, this));
+                    continue;
+                }
+                CLD_ASSERT(std::holds_alternative<PrimitiveType>(expr->getType().getVariant()));
+                if (result->getInteger().isNegative())
+                {
+                    log(Errors::Semantics::BITFIELD_MUST_BE_OF_SIZE_ZERO_OR_GREATER.args(*size, m_sourceInterface,
+                                                                                         *size, *result));
+                    continue;
+                }
+                if (!hadValidType)
+                {
+                    continue;
+                }
+                auto objectWidth = cld::get<PrimitiveType>(type.getVariant()).getBitCount();
+                if (result->getInteger() > objectWidth)
+                {
+                    log(Errors::Semantics::BITFIELD_MUST_NOT_HAVE_A_GREATER_WIDTH_THAN_THE_TYPE.args(
+                        *size, m_sourceInterface, specifiers, objectWidth, *size, *result));
+                }
+                if (result->getInteger() == 0 && declarator)
+                {
+                    log(Errors::Semantics::BITFIELD_WITH_SIZE_ZERO_MAY_NOT_HAVE_A_NAME.args(
+                        *declarator, m_sourceInterface, *declarator));
+                }
+                if (result->getInteger() == 0)
+                {
+                    zeroBitFields.emplace(fields.size());
+                    continue;
+                }
+                value.emplace(0, result->getInteger().getZExtValue());
+            }
+            const auto* token = declarator ? declaratorToLoc(*declarator) : nullptr;
+            if (token)
+            {
+                auto sharedType = std::make_shared<Type>(std::move(type));
+                auto [prev, notRedefinition] =
+                    fields.insert({token->getText(),
+                                   {sharedType, token->getText(), token, {static_cast<std::size_t>(-1)}, value, {}}});
+                fieldLayout.push_back({sharedType, static_cast<std::size_t>(-1), value});
+                if (!notRedefinition)
+                {
+                    log(Errors::Semantics::REDEFINITION_OF_FIELD_N.args(*token, m_sourceInterface, *token));
+                    if (prev->second.nameToken)
+                    {
+                        log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.nameToken, m_sourceInterface,
+                                                                 *prev->second.nameToken));
+                    }
+                }
+            }
+        }
+    }
+    std::size_t currentSize = 0, currentAlignment = 0;
+    std::vector<MemoryLayout> memoryLayout;
+    std::size_t fieldLayoutCounter = 0;
+    if (!structOrUnion.isUnion())
+    {
+        for (auto iter = fields.begin(); iter != fields.end();)
+        {
+            if (iter->second.type->isUndefined())
+            {
+                iter.value().indices[0] = memoryLayout.size();
+                memoryLayout.push_back({*iter->second.type, currentSize});
+                iter++;
+                continue;
+            }
+            if (iter->second.indices.size() > 1)
+            {
+                auto& parentType = iter->second.parentTypes.front();
+                auto end = std::find_if_not(iter, fields.end(), [&](const auto& pair) {
+                    if (pair.second.parentTypes.empty())
+                    {
+                        return false;
+                    }
+                    return pair.second.parentTypes.front().get() == parentType.get();
+                });
+                fieldLayout[fieldLayoutCounter++].layoutIndex = memoryLayout.size();
+                for (; iter != end; iter++)
+                {
+                    iter.value().indices[0] = memoryLayout.size();
+                }
+                auto alignment = parentType->getAlignOf(*this);
+                currentAlignment = std::max(currentAlignment, alignment);
+                currentSize = cld::roundUpTo(currentSize, alignment);
+                memoryLayout.push_back({*parentType, currentSize});
+                auto subSize = parentType->getSizeOf(*this);
+                currentSize += subSize;
+                continue;
+            }
+            if (!iter->second.bitFieldBounds)
+            {
+                iter.value().indices[0] = memoryLayout.size();
+                fieldLayout[fieldLayoutCounter++].layoutIndex = memoryLayout.size();
+                if (!isCompleteType(*iter->second.type) && !isAbstractArray(*iter->second.type))
+                {
+                    iter++;
+                    continue;
+                }
+                auto alignment = iter->second.type->getAlignOf(*this);
+                currentAlignment = std::max(currentAlignment, alignment);
+                currentSize = cld::roundUpTo(currentSize, alignment);
+                memoryLayout.push_back({*iter->second.type, currentSize});
+                if (!isCompleteType(*iter->second.type))
+                {
+                    iter++;
+                    continue;
+                }
+                auto subSize = iter->second.type->getSizeOf(*this);
+                currentSize += subSize;
+                iter++;
+                continue;
+            }
+            bool lastWasZero = false;
+            std::uint64_t storageLeft = 0;
+            std::uint64_t prevSize = 0;
+            std::uint64_t used = 0;
+            for (; iter != fields.end() && iter->second.bitFieldBounds;)
+            {
+                if (zeroBitFields.count(iter - fields.begin()))
+                {
+                    lastWasZero = true;
+                }
+                std::uint64_t size = iter->second.type->getSizeOf(*this);
+                if (!lastWasZero && storageLeft > iter->second.bitFieldBounds->second
+                    && (!m_sourceInterface.getLanguageOptions().discreteBitfields || prevSize == size))
+                {
+                    iter.value().indices[0] = memoryLayout.size() - 1;
+                    storageLeft -= iter->second.bitFieldBounds->second;
+                    fieldLayout[fieldLayoutCounter].bitFieldBounds.emplace(used,
+                                                                           used + iter->second.bitFieldBounds->second);
+                    fieldLayout[fieldLayoutCounter++].layoutIndex = memoryLayout.size() - 1;
+                    iter.value().bitFieldBounds.emplace(used, used + iter->second.bitFieldBounds->second);
+                    used = iter->second.bitFieldBounds->second;
+                    iter++;
+                    continue;
+                }
+                lastWasZero = false;
+                currentSize += prevSize;
+                auto alignment = iter->second.type->getAlignOf(*this);
+                currentAlignment = std::max(currentAlignment, alignment);
+                currentSize = cld::roundUpTo(currentSize, alignment);
+                prevSize = size;
+                storageLeft = cld::get<PrimitiveType>(iter->second.type->getVariant()).getBitCount()
+                              - iter->second.bitFieldBounds->second;
+                used = iter->second.bitFieldBounds->second;
+                iter.value().bitFieldBounds.emplace(0, used);
+                iter.value().indices[0] = memoryLayout.size();
+                fieldLayout[fieldLayoutCounter].bitFieldBounds.emplace(0, used);
+                fieldLayout[fieldLayoutCounter++].layoutIndex = memoryLayout.size();
+                memoryLayout.push_back({*iter->second.type, currentSize});
+                iter++;
+            }
+            currentSize += prevSize;
+        }
+    }
+    else
+    {
+        for (auto iter = fields.begin(); iter != fields.end();)
+        {
+            auto& field = iter.value();
+            if (field.type->isUndefined())
+            {
+                iter++;
+                continue;
+            }
+            field.indices[0] = iter - fields.begin();
+            fieldLayout[fieldLayoutCounter++].layoutIndex = iter - fields.begin();
+            if (!fieldLayout[fieldLayoutCounter - 1].type->isUndefined())
+            {
+                auto size = fieldLayout[fieldLayoutCounter - 1].type->getSizeOf(*this);
+                if (size > currentSize)
+                {
+                    currentSize = size;
+                }
+                currentAlignment =
+                    std::max(currentAlignment, fieldLayout[fieldLayoutCounter - 1].type->getAlignOf(*this));
+            }
+            if (!field.parentTypes.empty())
+            {
+                auto end = std::find_if_not(iter + 1, fields.end(), [&](const auto& pair) {
+                    if (pair.second.parentTypes.empty())
+                    {
+                        return false;
+                    }
+                    return pair.second.parentTypes.front().get() == field.parentTypes.front().get();
+                });
+                for (iter++; iter != end; iter++)
+                {
+                    iter.value().indices[0] = fieldLayout[fieldLayoutCounter - 1].layoutIndex;
+                }
+            }
+            else
+            {
+                iter++;
+            }
+        }
+    }
+    currentSize = cld::roundUpTo(currentSize, currentAlignment);
+    if (!structOrUnionID)
+    {
+        return Type{};
+    }
+
+    std::string_view name = structOrUnion.getIdentifierLoc() ? structOrUnion.getIdentifierLoc()->getText() : "";
+    if (structOrUnion.isUnion())
+    {
+        m_unionDefinitions[*structOrUnionID].type.emplace<UnionDefinition>(
+            name, std::move(fields), std::move(fieldLayout), currentSize, currentAlignment);
+        return UnionType::create(isConst, isVolatile, name, *structOrUnionID);
+    }
+    m_structDefinitions[*structOrUnionID].type.emplace<StructDefinition>(
+        name, std::move(fields), std::move(fieldLayout), std::move(memoryLayout), currentSize, currentAlignment);
+    return StructType::create(isConst, isVolatile, name, *structOrUnionID);
 }
 
 cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitiveTypeSpecifiersToType(
@@ -1636,7 +1603,7 @@ cld::Semantics::Type cld::Semantics::SemanticAnalysis::primitiveTypeSpecifiersTo
 
 void cld::Semantics::SemanticAnalysis::handleArray(cld::Semantics::Type& type,
                                                    const std::vector<Syntax::TypeQualifier>& typeQualifiers,
-                                                   const cld::Syntax::AssignmentExpression* assignmentExpression,
+                                                   const Syntax::AssignmentExpression* assignmentExpression,
                                                    const Lexer::CToken* isStatic, bool valArray,
                                                    const diag::PointRange& returnTypeLoc)
 {

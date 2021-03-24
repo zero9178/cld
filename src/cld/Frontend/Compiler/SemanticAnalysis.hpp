@@ -176,6 +176,9 @@ private:
     Type typeSpecifiersToType(bool isConst, bool isVolatile,
                               const std::vector<const Syntax::TypeSpecifier * CLD_NON_NULL>& typeSpec);
 
+    cld::Semantics::Type structOrUnionSpecifierToType(bool isConst, bool isVolatile,
+                                                      const Syntax::StructOrUnionSpecifier& structOrUnion);
+
     Type applyDeclaratorsImpl(
         Type&& type, const PossiblyAbstractQualifierRef& parameterList,
         const std::vector<Syntax::Declaration>& declarations = {},
