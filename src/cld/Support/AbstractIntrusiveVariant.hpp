@@ -56,7 +56,9 @@ public:
         static_assert((std::is_same_v<T, Args> || ...), "T must be one of the subclasses specified in Args...");
     }
 
-    [[nodiscard]] constexpr std::size_t index() const noexcept
+    using index_type = decltype(m_index);
+
+    [[nodiscard]] constexpr index_type index() const noexcept
     {
         return m_index;
     }

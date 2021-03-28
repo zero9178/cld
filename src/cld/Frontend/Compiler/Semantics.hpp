@@ -2,7 +2,7 @@
 #pragma ide diagnostic ignored "HidingNonVirtualFunction"
 #pragma once
 
-#include <cld/Support/AbstractIntrusiveVariant.h>
+#include <cld/Support/AbstractIntrusiveVariant.hpp>
 
 #include <map>
 #include <memory>
