@@ -239,30 +239,30 @@ constexpr auto createBuiltin(cld::Semantics::BuiltinFunction::Kind kind)
     constexpr auto value##Text = ::cld::Constexpr::basic_fixed_string{string}; \
     constexpr auto value##Builtin = createBuiltin<value##Text>(::cld::Semantics::BuiltinFunction::Kind::value)
 
-#define DEF_BUILTIN(value)                                                                                             \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        if (name == value##Builtin.name)                                                                               \
-        {                                                                                                              \
-            std::vector<FunctionType::Parameter> parameters;                                                           \
-            if constexpr (value##Builtin.size != 0)                                                                    \
-            {                                                                                                          \
-                for (auto& iter : value##Builtin.parameterTypes)                                                       \
-                {                                                                                                      \
-                    parameters.push_back({typeAlloc(*adjustParameterType(*typeEnumToType(iter))), ""});                \
-                }                                                                                                      \
-            }                                                                                                          \
-            auto result = m_usedBuiltins                                                                               \
-                              .insert({value##Builtin.name,                                                            \
-                                       {typeAlloc<FunctionType>(typeAlloc(*typeEnumToType(value##Builtin.returnType)), \
-                                                                std::move(parameters), value##Builtin.vararg, false),  \
-                                        ::cld::Semantics::BuiltinFunction::Kind::value}})                              \
-                              .first;                                                                                  \
-            auto iter = m_scopes[0]                                                                                    \
-                            .declarations.insert({value##Builtin.name, DeclarationInScope{nullptr, &result->second}})  \
-                            .first;                                                                                    \
-            return &iter->second.declared;                                                                             \
-        }                                                                                                              \
+#define DEF_BUILTIN(value)                                                                                            \
+    do                                                                                                                \
+    {                                                                                                                 \
+        if (name == value##Builtin.name)                                                                              \
+        {                                                                                                             \
+            std::vector<FunctionType::Parameter> parameters;                                                          \
+            if constexpr (value##Builtin.size != 0)                                                                   \
+            {                                                                                                         \
+                for (auto& iter : value##Builtin.parameterTypes)                                                      \
+                {                                                                                                     \
+                    parameters.push_back({typeAlloc(*adjustParameterType(*typeEnumToType(iter))), ""});               \
+                }                                                                                                     \
+            }                                                                                                         \
+            auto result = m_usedBuiltins                                                                              \
+                              .insert({value##Builtin.name,                                                           \
+                                       {FunctionType(typeAlloc(*typeEnumToType(value##Builtin.returnType)),           \
+                                                     std::move(parameters), value##Builtin.vararg, false),            \
+                                        ::cld::Semantics::BuiltinFunction::Kind::value}})                             \
+                              .first;                                                                                 \
+            auto iter = m_scopes[0]                                                                                   \
+                            .declarations.insert({value##Builtin.name, DeclarationInScope{nullptr, &result->second}}) \
+                            .first;                                                                                   \
+            return &iter->second.declared;                                                                            \
+        }                                                                                                             \
     } while (0)
 
 #define HANDLE_BUILTIN(a, b) DECL_BUILTIN(a, b)
@@ -271,7 +271,7 @@ constexpr auto createBuiltin(cld::Semantics::BuiltinFunction::Kind kind)
 const cld::Semantics::ProgramInterface::DeclarationInScope::Variant* CLD_NULLABLE
     cld::Semantics::SemanticAnalysis::getBuiltinFuncDecl(std::string_view name)
 {
-    auto typeEnumToType = [&](Types types) -> cld::IntrVarValue<Type>
+    auto typeEnumToType = [&](Types types) -> IntrVarValue<Type>
     {
         switch (types)
         {

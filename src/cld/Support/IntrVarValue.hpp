@@ -108,8 +108,8 @@ protected:
     {
         constexpr std::array<void (*)(std::byte*, Base*), sizeof...(SubClasses)> copyFuncs = {
             {+[](std::byte* storage, Base* ptr) { new (storage) SubClasses(*static_cast<SubClasses*>(ptr)); }...}};
-        copyFuncs[rhs.cast().index()](this->m_storage, &rhs.get());
-        this->m_storage = rhs.cast().index();
+        copyFuncs[rhs.get().index()](this->m_storage, &rhs.get());
+        this->m_storage = rhs.get().index();
     }
 
 public:
@@ -206,12 +206,12 @@ struct IntrusiveVariantStorageCopyAss<Base, SpecialMem::Exists, SubClasses...>
 
     IntrusiveVariantStorageCopyAss& operator=(const IntrusiveVariantStorageCopyAss& rhs)
     {
-        if (this->get().index() == rhs.cast().index())
+        if (this->get().index() == rhs.get().index())
         {
-            constexpr std::array<void (*)(Base*, Base*), sizeof...(SubClasses)> copyFuncs = {
-                {+[](Base* storage, Base* ptr)
-                 { *static_cast<SubClasses*>(storage) = *static_cast<SubClasses*>(ptr); }...}};
-            copyFuncs[rhs.cast().index()](&this->get(), &rhs.get());
+            constexpr std::array<void (*)(Base*, const Base*), sizeof...(SubClasses)> copyFuncs = {
+                {+[](Base* storage, const Base* ptr)
+                 { *static_cast<SubClasses*>(storage) = *static_cast<const SubClasses*>(ptr); }...}};
+            copyFuncs[rhs.get().index()](&this->get(), &rhs.get());
         }
         else
         {
@@ -250,8 +250,8 @@ protected:
         constexpr std::array<void (*)(std::byte*, Base*), sizeof...(SubClasses)> moveFuncs = {
             {+[](std::byte* storage, Base* ptr)
              { new (storage) SubClasses(std::move(*static_cast<SubClasses*>(ptr))); }...}};
-        moveFuncs[rhs.cast().index()](this->m_storage, &rhs.get());
-        this->m_index = rhs.cast().index();
+        moveFuncs[rhs.get().index()](this->m_storage, &rhs.get());
+        this->m_index = rhs.get().index();
     }
 
 public:
@@ -387,6 +387,19 @@ class IntrVarValue
 {
     static_assert(always_false<T>,
                   "InstrusiveVariantStorage can only store a class inheriting from AbstractIntrusiveVariant");
+
+public:
+    // DEDUCTION ONLY
+
+    IntrVarValue(const T&)
+    {
+        CLD_UNREACHABLE;
+    }
+
+    IntrVarValue(T&&) noexcept
+    {
+        CLD_UNREACHABLE;
+    }
 };
 
 template <class Base, class... SubClasses>

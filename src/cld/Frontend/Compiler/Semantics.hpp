@@ -913,13 +913,13 @@ class ExpressionBase
                                       class CommaExpression, class CallExpression, class CompoundLiteral,
                                       class BuiltinVAArg, class BuiltinOffsetOf, class ErrorExpression>
 {
-    const Type* m_type;
+    IntrVarValue<Type> m_type;
     ValueCategory m_valueCategory;
 
 protected:
     template <class T>
-    ExpressionBase(std::in_place_type_t<T>, cld::not_null<const Type> type, ValueCategory valueCategory)
-        : AbstractIntrusiveVariant(std::in_place_type<T>), m_type(type), m_valueCategory(valueCategory)
+    ExpressionBase(std::in_place_type_t<T>, IntrVarValue<Type> type, ValueCategory valueCategory)
+        : AbstractIntrusiveVariant(std::in_place_type<T>), m_type(std::move(type)), m_valueCategory(valueCategory)
     {
     }
 
@@ -977,9 +977,8 @@ private:
     Lexer::CTokenIterator m_valueEnd;
 
 public:
-    Constant(cld::not_null<const Type> type, Variant value, Lexer::CTokenIterator valueBegin,
-             Lexer::CTokenIterator valueEnd)
-        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, type, ValueCategory::Rvalue),
+    Constant(IntrVarValue<Type> type, Variant value, Lexer::CTokenIterator valueBegin, Lexer::CTokenIterator valueEnd)
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Rvalue),
           m_value(std::move(value)),
           m_valueBegin(valueBegin),
           m_valueEnd(valueEnd)
@@ -1020,9 +1019,8 @@ class DeclarationRead final : public ExpressionBase
     Lexer::CTokenIterator m_identifierToken;
 
 public:
-    explicit DeclarationRead(cld::not_null<const Type> type, const Useable& useable,
-                             Lexer::CTokenIterator identifierToken)
-        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, type, ValueCategory::Lvalue),
+    explicit DeclarationRead(IntrVarValue<Type> type, const Useable& useable, Lexer::CTokenIterator identifierToken)
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Lvalue),
           m_declRead(&useable),
           m_identifierToken(identifierToken)
     {
@@ -1066,8 +1064,8 @@ private:
     IntrVarPtr<ExpressionBase> m_expression;
 
 public:
-    Conversion(cld::not_null<const Type> type, Kind kind, IntrVarPtr<ExpressionBase>&& expression)
-        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, type, ValueCategory::Rvalue),
+    Conversion(IntrVarValue<Type> type, Kind kind, IntrVarPtr<ExpressionBase>&& expression)
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Rvalue),
           m_kind(kind),
           m_expression(std::move(expression))
     {
@@ -1095,7 +1093,7 @@ class Cast final : public ExpressionBase
     IntrVarPtr<ExpressionBase> m_expression;
 
 public:
-    Cast(cld::not_null<const Type> type, Lexer::CTokenIterator openParentheses, Lexer::CTokenIterator closeParentheses,
+    Cast(IntrVarValue<Type> type, Lexer::CTokenIterator openParentheses, Lexer::CTokenIterator closeParentheses,
          IntrVarPtr<ExpressionBase>&& expression)
         : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, type, ValueCategory::Rvalue),
           m_openParentheses(openParentheses),
@@ -1144,9 +1142,9 @@ class MemberAccess final : public ExpressionBase
     Lexer::CTokenIterator m_memberIdentifier;
 
 public:
-    MemberAccess(cld::not_null<const Type> type, ValueCategory valueCategory, IntrVarPtr<ExpressionBase>&& recordExpr,
+    MemberAccess(IntrVarValue<Type> type, ValueCategory valueCategory, IntrVarPtr<ExpressionBase>&& recordExpr,
                  const Field& field, Lexer::CTokenIterator memberIdentifier)
-        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, type, valueCategory),
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), valueCategory),
           m_recordExpr(std::move(recordExpr)),
           m_field(&field),
           m_memberIdentifier(memberIdentifier)
@@ -1180,10 +1178,10 @@ class SubscriptOperator final : public ExpressionBase
     Lexer::CTokenIterator m_closeBracket;
 
 public:
-    SubscriptOperator(cld::not_null<const Type> type, bool leftIsPointer, IntrVarPtr<ExpressionBase>&& leftExpr,
+    SubscriptOperator(IntrVarValue<Type> type, bool leftIsPointer, IntrVarPtr<ExpressionBase>&& leftExpr,
                       Lexer::CTokenIterator openBracket, IntrVarPtr<ExpressionBase>&& rightExpr,
                       Lexer::CTokenIterator closeBracket)
-        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, type, ValueCategory::Lvalue),
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Lvalue),
           m_leftIsPointer(leftIsPointer),
           m_leftExpr(std::move(leftExpr)),
           m_openBracket(openBracket),
@@ -1263,9 +1261,9 @@ private:
     IntrVarPtr<ExpressionBase> m_rightOperand;
 
 public:
-    BinaryOperator(cld::not_null<const Type> type, IntrVarPtr<ExpressionBase>&& leftOperand, Kind kind,
+    BinaryOperator(IntrVarValue<Type> type, IntrVarPtr<ExpressionBase>&& leftOperand, Kind kind,
                    Lexer::CTokenIterator operatorToken, IntrVarPtr<ExpressionBase>&& rightOperand)
-        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, type, ValueCategory::Rvalue),
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Rvalue),
           m_leftOperand(std::move(leftOperand)),
           m_kind(kind),
           m_operatorToken(operatorToken),
@@ -1321,9 +1319,9 @@ private:
     IntrVarPtr<ExpressionBase> m_operand;
 
 public:
-    UnaryOperator(cld::not_null<const Type> type, ValueCategory valueCategory, Kind kind,
-                  Lexer::CTokenIterator operatorToken, IntrVarPtr<ExpressionBase>&& operand)
-        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, type, valueCategory),
+    UnaryOperator(IntrVarValue<Type> type, ValueCategory valueCategory, Kind kind, Lexer::CTokenIterator operatorToken,
+                  IntrVarPtr<ExpressionBase>&& operand)
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), valueCategory),
           m_kind(kind),
           m_operatorToken(operatorToken),
           m_operand(std::move(operand))
@@ -1356,7 +1354,7 @@ public:
     struct TypeVariant
     {
         Lexer::CTokenIterator openParentheses;
-        const Type* CLD_NON_NULL type;
+        IntrVarValue<Type> type;
         Lexer::CTokenIterator closeParentheses;
     };
 
@@ -1366,16 +1364,15 @@ private:
     Lexer::CTokenIterator m_sizeOfToken;
     std::optional<std::uint64_t> m_size;
     Variant m_variant;
-    PrimitiveType m_size_t;
 
 public:
     SizeofOperator(const LanguageOptions& options, Lexer::CTokenIterator sizeOfToken, std::optional<std::uint64_t> size,
                    Variant variant)
-        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, &m_size_t, ValueCategory::Rvalue),
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>,
+                         PrimitiveType::createSizeT(false, false, options), ValueCategory::Rvalue),
           m_sizeOfToken(sizeOfToken),
           m_size(size),
-          m_variant(std::move(variant)),
-          m_size_t{PrimitiveType::createSizeT(false, false, options)}
+          m_variant(std::move(variant))
     {
     }
 
@@ -1406,10 +1403,10 @@ class Conditional final : public ExpressionBase
     IntrVarPtr<ExpressionBase> m_falseExpression;
 
 public:
-    Conditional(cld::not_null<const Type> type, IntrVarPtr<ExpressionBase>&& boolExpression,
+    Conditional(IntrVarValue<Type> type, IntrVarPtr<ExpressionBase>&& boolExpression,
                 Lexer::CTokenIterator questionMark, IntrVarPtr<ExpressionBase>&& trueExpression,
                 Lexer::CTokenIterator colon, IntrVarPtr<ExpressionBase>&& falseExpression)
-        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, type, ValueCategory::Rvalue),
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Rvalue),
           m_boolExpression(std::move(boolExpression)),
           m_questionMark(questionMark),
           m_trueExpression(std::move(trueExpression)),
@@ -1451,7 +1448,7 @@ public:
 class Assignment final : public ExpressionBase
 {
     IntrVarPtr<ExpressionBase> m_leftOperand;
-    const Type* m_leftCalcType;
+    IntrVarValue<Type> m_leftCalcType;
 
 public:
     enum Kind
@@ -1475,12 +1472,11 @@ private:
     IntrVarPtr<ExpressionBase> m_rightOperand;
 
 public:
-    Assignment(cld::not_null<const Type> type, IntrVarPtr<ExpressionBase>&& leftOperand,
-               cld::not_null<const Type> leftCalcType, Kind kind, Lexer::CTokenIterator operatorToken,
-               IntrVarPtr<ExpressionBase>&& rightOperand)
-        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, type, ValueCategory::Rvalue),
+    Assignment(IntrVarValue<Type> type, IntrVarPtr<ExpressionBase>&& leftOperand, IntrVarValue<Type> leftCalcType,
+               Kind kind, Lexer::CTokenIterator operatorToken, IntrVarPtr<ExpressionBase>&& rightOperand)
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Rvalue),
           m_leftOperand(std::move(leftOperand)),
-          m_leftCalcType(leftCalcType),
+          m_leftCalcType(std::move(leftCalcType)),
           m_kind(kind),
           m_operatorToken(operatorToken),
           m_rightOperand(std::move(rightOperand))
@@ -1523,10 +1519,10 @@ class CommaExpression final : public ExpressionBase
     IntrVarPtr<ExpressionBase> m_lastExpression;
 
 public:
-    CommaExpression(cld::not_null<const Type> type,
+    CommaExpression(IntrVarValue<Type> type,
                     std::vector<std::pair<IntrVarPtr<ExpressionBase>, Lexer::CTokenIterator>>&& commaExpressions,
                     IntrVarPtr<ExpressionBase>&& lastExpression)
-        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, type, ValueCategory::Rvalue),
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Rvalue),
           m_commaExpressions(std::move(commaExpressions)),
           m_lastExpression(std::move(lastExpression))
     {
@@ -1557,10 +1553,10 @@ class CallExpression final : public ExpressionBase
     Lexer::CTokenIterator m_closeParentheses;
 
 public:
-    CallExpression(cld::not_null<const Type> type, IntrVarPtr<ExpressionBase>&& functionExpression,
+    CallExpression(IntrVarValue<Type> type, IntrVarPtr<ExpressionBase>&& functionExpression,
                    Lexer::CTokenIterator openParentheses, std::vector<IntrVarPtr<ExpressionBase>>&& argumentExpressions,
                    Lexer::CTokenIterator closeParentheses)
-        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, type, ValueCategory::Rvalue),
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Rvalue),
           m_functionExpression(std::move(functionExpression)),
           m_openParentheses(openParentheses),
           m_argumentExpressions(std::move(argumentExpressions)),
@@ -1606,9 +1602,9 @@ class CompoundLiteral final : public ExpressionBase
     bool m_staticLifetime;
 
 public:
-    explicit CompoundLiteral(cld::not_null<const Type> type, Lexer::CTokenIterator openParentheses,
-                             Initializer initializer, Lexer::CTokenIterator closeParentheses,
-                             Lexer::CTokenIterator initEnd, bool staticLifetime);
+    explicit CompoundLiteral(IntrVarValue<Type> type, Lexer::CTokenIterator openParentheses, Initializer initializer,
+                             Lexer::CTokenIterator closeParentheses, Lexer::CTokenIterator initEnd,
+                             bool staticLifetime);
 
     [[nodiscard]] Lexer::CTokenIterator getOpenParentheses() const;
 
@@ -1634,10 +1630,9 @@ class BuiltinVAArg final : public ExpressionBase
     Lexer::CTokenIterator m_closeParentheses;
 
 public:
-    BuiltinVAArg(cld::not_null<const Type> type, Lexer::CTokenIterator builtinToken,
-                 Lexer::CTokenIterator openParentheses, IntrVarPtr<ExpressionBase>&& expression,
-                 Lexer::CTokenIterator closeParentheses)
-        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, type, ValueCategory::Rvalue),
+    BuiltinVAArg(IntrVarValue<Type> type, Lexer::CTokenIterator builtinToken, Lexer::CTokenIterator openParentheses,
+                 IntrVarPtr<ExpressionBase>&& expression, Lexer::CTokenIterator closeParentheses)
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, std::move(type), ValueCategory::Rvalue),
           m_builtinToken(builtinToken),
           m_openParentheses(openParentheses),
           m_expression(std::move(expression)),
@@ -1679,17 +1674,16 @@ class BuiltinOffsetOf final : public ExpressionBase
     Lexer::CTokenIterator m_openParentheses;
     std::uint64_t m_offset;
     Lexer::CTokenIterator m_closeParentheses;
-    PrimitiveType m_size_t;
 
 public:
     BuiltinOffsetOf(const LanguageOptions& options, Lexer::CTokenIterator builtinToken,
                     Lexer::CTokenIterator openParentheses, std::uint64_t offset, Lexer::CTokenIterator closeParentheses)
-        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, &m_size_t, ValueCategory::Rvalue),
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>,
+                         PrimitiveType::createSizeT(false, false, options), ValueCategory::Rvalue),
           m_builtinToken(builtinToken),
           m_openParentheses(openParentheses),
           m_offset(offset),
-          m_closeParentheses(closeParentheses),
-          m_size_t{PrimitiveType::createSizeT(false, false, options)}
+          m_closeParentheses(closeParentheses)
     {
     }
 
@@ -1729,20 +1723,18 @@ class ErrorExpression final : public ExpressionBase
     Lexer::CTokenIterator m_begin;
     Lexer::CTokenIterator m_end;
 
-    static inline ErrorType m_errorType;
-
 public:
-    explicit ErrorExpression(const Syntax::Node& node) : ErrorExpression(&m_errorType, node) {}
+    explicit ErrorExpression(const Syntax::Node& node) : ErrorExpression(ErrorType{}, node) {}
 
-    ErrorExpression(cld::not_null<const Type> type, const Syntax::Node& node);
+    ErrorExpression(IntrVarValue<Type> type, const Syntax::Node& node);
 
     ErrorExpression(Lexer::CTokenIterator begin, Lexer::CTokenIterator end)
-        : ExpressionBase(std::in_place_type<ErrorExpression>, &m_errorType, {}), m_begin(begin), m_end(end)
+        : ExpressionBase(std::in_place_type<ErrorExpression>, ErrorType{}, {}), m_begin(begin), m_end(end)
     {
     }
 
-    ErrorExpression(cld::not_null<const Type> type, Lexer::CTokenIterator begin, Lexer::CTokenIterator end)
-        : ExpressionBase(std::in_place_type<ErrorExpression>, type, {}), m_begin(begin), m_end(end)
+    ErrorExpression(IntrVarValue<Type> type, Lexer::CTokenIterator begin, Lexer::CTokenIterator end)
+        : ExpressionBase(std::in_place_type<ErrorExpression>, std::move(type), {}), m_begin(begin), m_end(end)
     {
     }
 
@@ -1970,15 +1962,14 @@ enum class Linkage : std::uint8_t
 
 class Declaration : public Useable
 {
-    const Type* m_type;
+    IntrVarValue<Type> m_type;
     Linkage m_linkage;
     Lexer::CTokenIterator m_nameToken;
 
 protected:
     template <class T>
-    Declaration(std::in_place_type_t<T>, cld::not_null<const Type> type, Linkage linkage,
-                Lexer::CTokenIterator nameToken)
-        : Useable(std::in_place_type<T>), m_type(type), m_linkage(linkage), m_nameToken(nameToken)
+    Declaration(std::in_place_type_t<T>, IntrVarValue<Type> type, Linkage linkage, Lexer::CTokenIterator nameToken)
+        : Useable(std::in_place_type<T>), m_type(std::move(type)), m_linkage(linkage), m_nameToken(nameToken)
     {
     }
 
@@ -2426,13 +2417,13 @@ llvm::ArrayRef<FieldInLayout> getFieldLayout(const Type& recordType);
 class EnumDefinition
 {
     std::string_view m_name;
-    const Type* m_type;
+    IntrVarValue<Type> m_type;
     std::vector<std::pair<std::string_view, llvm::APSInt>> m_values;
 
 public:
-    EnumDefinition(std::string_view name, cld::not_null<const Type> type,
+    EnumDefinition(std::string_view name, IntrVarValue<Type> type,
                    std::vector<std::pair<std::string_view, llvm::APSInt>> values)
-        : m_name(name), m_type(type), m_values(std::move(values))
+        : m_name(name), m_type(std::move(type)), m_values(std::move(values))
     {
     }
 
@@ -2490,9 +2481,10 @@ class FunctionDeclaration final : public Declaration, public AttributeHolder<Fun
     InlineKind m_inlineKind;
 
 public:
-    FunctionDeclaration(cld::not_null<const Type> type, Linkage linkage, Lexer::CTokenIterator nameToken,
+    FunctionDeclaration(IntrVarValue<Type> type, Linkage linkage, Lexer::CTokenIterator nameToken,
                         InlineKind inlineKind)
-        : Declaration(std::in_place_type<FunctionDeclaration>, type, linkage, nameToken), m_inlineKind(inlineKind)
+        : Declaration(std::in_place_type<FunctionDeclaration>, std::move(type), linkage, nameToken),
+          m_inlineKind(inlineKind)
     {
     }
 
@@ -2531,9 +2523,9 @@ private:
     Kind m_kind;
 
 public:
-    VariableDeclaration(cld::not_null<const Type> type, Linkage linkage, Lifetime lifetime,
-                        Lexer::CTokenIterator nameToken, Kind kind, std::optional<Initializer> initializer = {})
-        : Declaration(std::in_place_type<VariableDeclaration>, type, linkage, nameToken),
+    VariableDeclaration(IntrVarValue<Type> type, Linkage linkage, Lifetime lifetime, Lexer::CTokenIterator nameToken,
+                        Kind kind, std::optional<Initializer> initializer = {})
+        : Declaration(std::in_place_type<VariableDeclaration>, std::move(type), linkage, nameToken),
           m_initializer(std::move(initializer)),
           m_lifetime(lifetime),
           m_kind(kind)
@@ -2563,7 +2555,7 @@ public:
 
 class FunctionDefinition final : public Useable, public AttributeHolder<FunctionAttribute>
 {
-    const Type* m_type;
+    IntrVarValue<Type> m_type;
     Lexer::CTokenIterator m_nameToken;
     std::vector<std::unique_ptr<VariableDeclaration>> m_parameterDeclarations;
     Linkage m_linkage;
@@ -2571,11 +2563,11 @@ class FunctionDefinition final : public Useable, public AttributeHolder<Function
     CompoundStatement m_compoundStatement;
 
 public:
-    FunctionDefinition(cld::not_null<const Type> type, Lexer::CTokenIterator nameToken,
+    FunctionDefinition(IntrVarValue<Type> type, Lexer::CTokenIterator nameToken,
                        std::vector<std::unique_ptr<VariableDeclaration>> parameterDeclarations, Linkage linkage,
                        InlineKind inlineKind, CompoundStatement compoundStatement)
         : Useable(std::in_place_type<FunctionDefinition>),
-          m_type(type),
+          m_type(std::move(type)),
           m_nameToken(nameToken),
           m_parameterDeclarations(std::move(parameterDeclarations)),
           m_linkage(linkage),
@@ -2642,7 +2634,7 @@ public:
 
 class BuiltinFunction final : public Useable
 {
-    const Type* m_type;
+    IntrVarValue<Type> m_type;
 
 public:
     enum Kind
@@ -2695,8 +2687,8 @@ private:
     Kind m_kind;
 
 public:
-    BuiltinFunction(cld::not_null<const Type> type, Kind kind)
-        : Useable(std::in_place_type<BuiltinFunction>), m_type(type), m_kind(kind)
+    BuiltinFunction(IntrVarValue<Type> type, Kind kind)
+        : Useable(std::in_place_type<BuiltinFunction>), m_type(std::move(type)), m_kind(kind)
     {
     }
 

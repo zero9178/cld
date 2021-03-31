@@ -82,7 +82,8 @@ std::vector<cld::Semantics::SemanticAnalysis::GNUAttribute>
                     applicant, [&](VariableDeclaration*) { iter.attempts |= GNUAttribute::Variable; },
                     [&](FunctionDeclaration*) { iter.attempts |= GNUAttribute::Function; },
                     [&](FunctionDefinition*) { iter.attempts |= GNUAttribute::Function; },
-                    [&](const std::pair<const Type**, diag::PointRange>&) { iter.attempts |= GNUAttribute::Type; });
+                    [&](const std::pair<IntrVarValue<Type>*, diag::PointRange>&)
+                    { iter.attempts |= GNUAttribute::Type; });
                 results.push_back(std::move(iter));
             }
         }
@@ -175,7 +176,7 @@ void cld::Semantics::SemanticAnalysis::applyVectorSizeAttribute(AffectsTypeVaria
     const Type& baseType = cld::match(
         applicant,
         [](VariableDeclaration* variableDeclaration) -> const Type& { return variableDeclaration->getType(); },
-        [](auto pair) -> const Type& { return **pair.first; });
+        [](auto pair) -> const Type& { return *pair.first; });
     if (!isArithmetic(baseType) || isEnum(baseType))
     {
         cld::match(
@@ -186,7 +187,7 @@ void cld::Semantics::SemanticAnalysis::applyVectorSizeAttribute(AffectsTypeVaria
                     *variableDeclaration->getNameToken(), m_sourceInterface, *variableDeclaration->getNameToken(),
                     baseType));
             },
-            [&](const std::pair<const Type**, diag::PointRange>& pair)
+            [&](const std::pair<IntrVarValue<Type>*, diag::PointRange>& pair)
             {
                 log(Errors::Semantics::VECTOR_SIZE_CAN_ONLY_BE_APPLIED_TO_ARITHMETIC_TYPES.args(
                     pair.second, m_sourceInterface, pair.second, baseType));
@@ -203,7 +204,7 @@ void cld::Semantics::SemanticAnalysis::applyVectorSizeAttribute(AffectsTypeVaria
                     *variableDeclaration->getNameToken(), m_sourceInterface, *variableDeclaration->getNameToken(),
                     baseType));
             },
-            [&](const std::pair<const Type**, diag::PointRange>& pair)
+            [&](const std::pair<IntrVarValue<Type>*, diag::PointRange>& pair)
             {
                 log(Errors::Semantics::VECTOR_SIZE_CAN_NOT_BE_APPLIED_TO_LONG_DOUBLE.args(
                     pair.second, m_sourceInterface, pair.second, baseType));
@@ -233,17 +234,17 @@ void cld::Semantics::SemanticAnalysis::applyVectorSizeAttribute(AffectsTypeVaria
     }
     cld::match(
         applicant,
-        [&](const std::pair<const Type**, diag::PointRange>& pair)
+        [&](const std::pair<IntrVarValue<Type>*, diag::PointRange>& pair)
         {
-            *pair.first = typeAlloc<VectorType>(baseType.isConst(), baseType.isVolatile(),
-                                                typeAlloc(*removeQualifiers(std::move(baseType))),
-                                                multiple.getInteger().getZExtValue());
+            pair.first->emplace<VectorType>(baseType.isConst(), baseType.isVolatile(),
+                                            typeAlloc(*removeQualifiers(std::move(baseType))),
+                                            multiple.getInteger().getZExtValue());
         },
         [&](VariableDeclaration* variableDeclaration)
         {
-            auto newType = typeAlloc<VectorType>(baseType.isConst(), baseType.isVolatile(),
-                                                 typeAlloc(*removeQualifiers(std::move(baseType))),
-                                                 multiple.getInteger().getZExtValue());
+            auto newType =
+                VectorType(baseType.isConst(), baseType.isVolatile(), typeAlloc(*removeQualifiers(std::move(baseType))),
+                           multiple.getInteger().getZExtValue());
             *variableDeclaration =
                 VariableDeclaration(newType, variableDeclaration->getLinkage(), variableDeclaration->getLifetime(),
                                     variableDeclaration->getNameToken(), variableDeclaration->getKind(),

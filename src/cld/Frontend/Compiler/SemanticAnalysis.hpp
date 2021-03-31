@@ -212,15 +212,15 @@ private:
 
     bool typesAreCompatible(const Type& lhs, const Type& rhs, bool leftIsFuncDefinition = false);
 
-    IntrVarValue<Type> defaultArgumentPromotion(const Type& type);
+    IntrVarValue<Type> defaultArgumentPromotion(IntrVarValue<Type> type);
 
-    IntrVarValue<Type> integerPromotion(const Type& type);
+    IntrVarValue<Type> integerPromotion(IntrVarValue<Type> type);
 
-    const Type& compositeType(const Type& lhs, const Type& rhs);
+    IntrVarValue<Type> compositeType(const Type& lhs, const Type& rhs);
 
     IntrVarPtr<ExpressionBase> lvalueConversion(IntrVarPtr<ExpressionBase>&& expression);
 
-    IntrVarValue<Type> lvalueConversion(const Type& type);
+    IntrVarValue<Type> lvalueConversion(IntrVarValue<Type> type);
 
     IntrVarPtr<ExpressionBase> defaultArgumentPromotion(IntrVarPtr<ExpressionBase>&& type);
 
@@ -228,8 +228,9 @@ private:
 
     std::unique_ptr<Conversion> toBool(IntrVarPtr<ExpressionBase>&& expression);
 
-    void arithmeticConversion(std::variant<IntrVarPtr<ExpressionBase> * CLD_NON_NULL, const Type* * CLD_NON_NULL> lhs,
-                              IntrVarPtr<ExpressionBase>& rhs);
+    void arithmeticConversion(
+        std::variant<IntrVarPtr<ExpressionBase> * CLD_NON_NULL, IntrVarValue<Type> * CLD_NON_NULL> lhs,
+        IntrVarPtr<ExpressionBase>& rhs);
 
     bool isModifiableLValue(const ExpressionBase& expression) const;
 
@@ -239,7 +240,7 @@ private:
 
     void reportNotApplicableAttributes(const std::vector<GNUAttribute>& attributes);
 
-    std::optional<std::pair<const Type*, const Field * CLD_NON_NULL>>
+    std::optional<std::pair<IntrVarValue<Type>, const Field * CLD_NON_NULL>>
         checkMemberAccess(const Type& recordType, const Syntax::PostFixExpression& postFixExpr,
                           const Lexer::CToken& identifier);
 
@@ -247,6 +248,7 @@ private:
                                                           IntrVarPtr<ExpressionBase>&& value,
                                                           Lexer::CTokenIterator opToken);
 
+    // TODO: return bool instead of out parameter
     void checkVectorBinaryOp(const IntrVarPtr<ExpressionBase>& lhs, Lexer::CTokenIterator token,
                              const IntrVarPtr<ExpressionBase>& rhs, bool* errors = nullptr);
 
@@ -516,10 +518,10 @@ public:
 
     using AffectsFunctions = std::variant<FunctionDeclaration * CLD_NON_NULL, FunctionDefinition * CLD_NON_NULL>;
     using AffectsAll =
-        std::variant<std::pair<const Type* * CLD_NON_NULL, diag::PointRange>, FunctionDeclaration * CLD_NON_NULL,
+        std::variant<std::pair<IntrVarValue<Type> * CLD_NON_NULL, diag::PointRange>, FunctionDeclaration * CLD_NON_NULL,
                      FunctionDefinition * CLD_NON_NULL, VariableDeclaration * CLD_NON_NULL>;
-    using AffectsTypeVariable =
-        std::variant<VariableDeclaration * CLD_NON_NULL, std::pair<const Type* * CLD_NON_NULL, diag::PointRange>>;
+    using AffectsTypeVariable = std::variant<VariableDeclaration * CLD_NON_NULL,
+                                             std::pair<IntrVarValue<Type> * CLD_NON_NULL, diag::PointRange>>;
     using AffectsVariableFunction = std::variant<VariableDeclaration * CLD_NON_NULL, FunctionDeclaration * CLD_NON_NULL,
                                                  FunctionDefinition * CLD_NON_NULL>;
 

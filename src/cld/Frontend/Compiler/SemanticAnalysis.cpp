@@ -159,7 +159,7 @@ std::vector<cld::IntrVarPtr<cld::Semantics::Useable>>
             paramType = adjustParameterType(paramType);
 
             auto& ptr = parameterDeclarations.emplace_back(std::make_unique<VariableDeclaration>(
-                typeAlloc(std::move(*paramType)), Linkage::None, lifetime, loc, VariableDeclaration::Kind::Definition));
+                std::move(paramType), Linkage::None, lifetime, loc, VariableDeclaration::Kind::Definition));
             auto [prev, notRedefined] =
                 getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, ptr.get()}});
             if (!notRedefined)
@@ -288,7 +288,7 @@ std::vector<cld::IntrVarPtr<cld::Semantics::Useable>>
     std::vector<IntrVarPtr<Useable>> result;
     auto& ptr = result
                     .emplace_back(std::make_unique<FunctionDefinition>(
-                        typeAlloc(std::move(*type)), loc, std::move(parameterDeclarations), linkage, inlineKind,
+                        std::move(type), loc, std::move(parameterDeclarations), linkage, inlineKind,
                         CompoundStatement(m_currentScope, loc, {}, loc)))
                     ->cast<FunctionDefinition>();
     attributes = applyAttributes(&ptr, std::move(attributes));
@@ -319,8 +319,8 @@ std::vector<cld::IntrVarPtr<cld::Semantics::Useable>>
                 log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
                                                          *prev->second.identifier));
             }
-            ptr = FunctionDefinition(&ptr.getType(), loc, std::move(ptr).getParameterDeclarations(), linkage,
-                                     inlineKind, std::move(ptr).getCompoundStatement());
+            ptr = FunctionDefinition(ptr.getType(), loc, std::move(ptr).getParameterDeclarations(), linkage, inlineKind,
+                                     std::move(ptr).getCompoundStatement());
             ptr.setUses(cld::get<FunctionDeclaration*>(prev->second.declared)->getUses());
             prev.value() = DeclarationInScope{loc, &ptr};
         }
@@ -330,12 +330,11 @@ std::vector<cld::IntrVarPtr<cld::Semantics::Useable>>
         ArrayType(false, false, false, false, typeAlloc(PrimitiveType::createChar(true, false, getLanguageOptions())),
                   loc->getText().size() + 1);
     auto funcName = std::make_unique<VariableDeclaration>(
-        typeAlloc(std::move(funcType)), Linkage::Internal, Lifetime::Static, loc, VariableDeclaration::Definition,
-        std::make_unique<Constant>(
-            typeAlloc<ArrayType>(false, false, false, false,
-                                 typeAlloc(PrimitiveType::createChar(false, false, getLanguageOptions())),
-                                 loc->getText().size() + 1),
-            cld::to_string(loc->getText()), loc, loc + 1));
+        std::move(funcType), Linkage::Internal, Lifetime::Static, loc, VariableDeclaration::Definition,
+        std::make_unique<Constant>(ArrayType(false, false, false, false,
+                                             typeAlloc(PrimitiveType::createChar(false, false, getLanguageOptions())),
+                                             loc->getText().size() + 1),
+                                   cld::to_string(loc->getText()), loc, loc + 1));
     getCurrentScope().declarations.insert({"__func__", DeclarationInScope{nullptr, funcName.get()}});
     // GCC Extensions
     getCurrentScope().declarations.insert({"__FUNCTION__", DeclarationInScope{nullptr, funcName.get()}});
@@ -549,9 +548,8 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                     *loc, m_sourceInterface, *loc));
                 continue;
             }
-            // TODO:
-            //            thisAttributes = applyAttributes(std::pair{&result, diag::getPointRange(*loc)},
-            //            std::move(thisAttributes)); reportNotApplicableAttributes(thisAttributes);
+            thisAttributes = applyAttributes(std::pair{&result, diag::getPointRange(*loc)}, std::move(thisAttributes));
+            reportNotApplicableAttributes(thisAttributes);
             result->setTypedefName(loc->getText());
             auto [prev, noRedefinition] =
                 getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, result}});
@@ -605,8 +603,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
             kind = VariableDeclaration::Definition;
         }
 
-        auto declaration =
-            std::make_unique<VariableDeclaration>(typeAlloc(std::move(*result)), linkage, lifetime, loc, kind);
+        auto declaration = std::make_unique<VariableDeclaration>(std::move(result), linkage, lifetime, loc, kind);
         thisAttributes = applyAttributes(declaration.get(), std::move(thisAttributes));
         reportNotApplicableAttributes(thisAttributes);
         auto [prev, notRedefinition] =
@@ -640,7 +637,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
             else
             {
                 auto& prevDecl = cld::get<VariableDeclaration*>(prev->second.declared);
-                auto& composite = compositeType(prevDecl->getType(), declaration->getType());
+                auto composite = compositeType(prevDecl->getType(), declaration->getType());
                 // C99 6.2.2§4:
                 // For an identifier declared with the storage-class specifier extern in a scope in which a
                 // prior declaration of that identifier is visible, if the prior declaration specifies internal or
@@ -666,8 +663,8 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                                                              *prev->second.identifier));
                     linkage = Linkage::Internal;
                 }
-                *declaration =
-                    VariableDeclaration(&composite, linkage, lifetime, loc, std::max(prevDecl->getKind(), kind));
+                *declaration = VariableDeclaration(std::move(composite), linkage, lifetime, loc,
+                                                   std::max(prevDecl->getKind(), kind));
                 prev.value().declared = declaration.get();
             }
         }
@@ -697,17 +694,16 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
             else
             {
                 m_inStaticInitializer = lifetime == Lifetime::Static;
-                const auto* prevType = &declaration->getType();
+                IntrVarValue<Type> prevType = declaration->getType();
                 std::size_t size = 0;
                 auto expr = visit(*iter.optionalInitializer, declaration->getType(),
                                   declaration->getLifetime() == Lifetime::Static, &size);
                 if (auto* abstractArray = declaration->getType().get_if<AbstractArrayType>())
                 {
-                    prevType =
-                        typeAlloc<ArrayType>(prevType->isConst(), prevType->isVolatile(), abstractArray->isRestricted(),
-                                             false, &abstractArray->getType(), size);
+                    prevType.emplace<ArrayType>(prevType->isConst(), prevType->isVolatile(),
+                                                abstractArray->isRestricted(), false, &abstractArray->getType(), size);
                 }
-                *declaration = VariableDeclaration(prevType, linkage, lifetime, loc, kind, std::move(expr));
+                *declaration = VariableDeclaration(std::move(prevType), linkage, lifetime, loc, kind, std::move(expr));
                 m_inStaticInitializer = false;
             }
         }
@@ -802,7 +798,7 @@ std::unique_ptr<cld::Semantics::FunctionDeclaration> cld::Semantics::SemanticAna
         inlineKind = InlineKind::InlineDefinition;
     }
 
-    auto declaration = std::make_unique<FunctionDeclaration>(typeAlloc(std::move(*type)), linkage, loc, inlineKind);
+    auto declaration = std::make_unique<FunctionDeclaration>(std::move(type), linkage, loc, inlineKind);
     attributes = applyAttributes(declaration.get(), std::move(attributes));
     reportNotApplicableAttributes(attributes);
 
@@ -825,7 +821,7 @@ std::unique_ptr<cld::Semantics::FunctionDeclaration> cld::Semantics::SemanticAna
         {
             auto& prevDecl = *cld::get<FunctionDeclaration*>(prev->second.declared);
             auto& otherType = prevDecl.getType();
-            auto& composite = compositeType(otherType, declaration->getType());
+            auto composite = compositeType(otherType, declaration->getType());
             // C99 6.2.2§4:
             // For an identifier declared with the storage-class specifier extern in a scope in which a
             // prior declaration of that identifier is visible, if the prior declaration specifies internal or
@@ -847,7 +843,7 @@ std::unique_ptr<cld::Semantics::FunctionDeclaration> cld::Semantics::SemanticAna
                                                          *prev->second.identifier));
             }
             *declaration =
-                FunctionDeclaration(&composite, linkage, loc, std::max(inlineKind, prevDecl.getInlineKind()));
+                FunctionDeclaration(std::move(composite), linkage, loc, std::max(inlineKind, prevDecl.getInlineKind()));
             declaration->setUses(prevDecl.getUses());
             prev.value().declared = declaration.get();
             return declaration;
@@ -867,7 +863,7 @@ std::unique_ptr<cld::Semantics::FunctionDeclaration> cld::Semantics::SemanticAna
                                                          *prev->second.identifier));
             }
             inlineKind = std::max(fd.getInlineKind(), inlineKind);
-            fd = FunctionDefinition(&fd.getType(), fd.getNameToken(), std::move(fd).getParameterDeclarations(),
+            fd = FunctionDefinition(fd.getType(), fd.getNameToken(), std::move(fd).getParameterDeclarations(),
                                     fd.getLinkage(), inlineKind, std::move(fd).getCompoundStatement());
         }
         return {};
@@ -1142,9 +1138,8 @@ bool cld::Semantics::SemanticAnalysis::typesAreCompatible(const cld::Semantics::
             {
                 auto kandRType = adjustParameterType(*kandRFunc.getParameters()[i].type);
                 auto paramType = adjustParameterType(*paramFunc.getParameters()[i].type);
-                auto nonQualifiedkandR = removeQualifiers(kandRType);
                 auto nonQualifiedParam = removeQualifiers(paramType);
-                if (!typesAreCompatible(defaultArgumentPromotion(nonQualifiedkandR), nonQualifiedParam))
+                if (!typesAreCompatible(defaultArgumentPromotion(removeQualifiers(kandRType)), nonQualifiedParam))
                 {
                     return false;
                 }
@@ -1180,9 +1175,9 @@ bool cld::Semantics::SemanticAnalysis::typesAreCompatible(const cld::Semantics::
 }
 
 cld::IntrVarValue<cld::Semantics::Type>
-    cld::Semantics::SemanticAnalysis::defaultArgumentPromotion(const cld::Semantics::Type& type)
+    cld::Semantics::SemanticAnalysis::defaultArgumentPromotion(cld::IntrVarValue<Type> type)
 {
-    auto* prim = type.get_if<PrimitiveType>();
+    auto* prim = type->get_if<PrimitiveType>();
     if (!prim)
     {
         return type;
@@ -1191,42 +1186,42 @@ cld::IntrVarValue<cld::Semantics::Type>
     {
         if (prim->getKind() == PrimitiveType::Float)
         {
-            return PrimitiveType::createDouble(type.isConst(), type.isVolatile(),
+            return PrimitiveType::createDouble(type->isConst(), type->isVolatile(),
                                                m_sourceInterface.getLanguageOptions());
         }
         return type;
     }
-    return integerPromotion(type);
+    return integerPromotion(std::move(type));
 }
 
-cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::integerPromotion(const Type& type)
+cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::integerPromotion(cld::IntrVarValue<Type> type)
 {
-    if (auto* enumType = type.get_if<EnumType>())
+    if (auto* enumType = type->get_if<EnumType>())
     {
         return enumType->getInfo().type.getType();
     }
-    auto* prim = type.get_if<PrimitiveType>();
+    auto* prim = type->get_if<PrimitiveType>();
     if (!prim)
     {
-        return lvalueConversion(type);
+        return lvalueConversion(std::move(type));
     }
     if (prim->isFloatingPoint())
     {
-        return lvalueConversion(type);
+        return lvalueConversion(std::move(type));
     }
     if (prim->getBitCount() == 0)
     {
-        return lvalueConversion(type);
+        return lvalueConversion(std::move(type));
     }
     if (prim->getBitCount() < m_sourceInterface.getLanguageOptions().sizeOfInt * 8)
     {
-        return PrimitiveType::createInt(type.isConst(), type.isVolatile(), m_sourceInterface.getLanguageOptions());
+        return PrimitiveType::createInt(type->isConst(), type->isVolatile(), m_sourceInterface.getLanguageOptions());
     }
-    return lvalueConversion(type);
+    return lvalueConversion(std::move(type));
 }
 
-const cld::Semantics::Type& cld::Semantics::SemanticAnalysis::compositeType(const cld::Semantics::Type& lhs,
-                                                                            const cld::Semantics::Type& rhs)
+cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::compositeType(const cld::Semantics::Type& lhs,
+                                                                                        const cld::Semantics::Type& rhs)
 {
     if (isArray(lhs) || isArray(rhs))
     {
@@ -1251,30 +1246,30 @@ const cld::Semantics::Type& cld::Semantics::SemanticAnalysis::compositeType(cons
         };
         if (auto* array = lhs.get_if<ArrayType>())
         {
-            return *typeAlloc<ArrayType>(lhs.isConst(), lhs.isVolatile(), array->isRestricted(), array->isStatic(),
-                                         &compositeType(array->getType(), getElementType(rhs)), array->getSize());
+            return ArrayType(lhs.isConst(), lhs.isVolatile(), array->isRestricted(), array->isStatic(),
+                             typeAlloc(*compositeType(array->getType(), getElementType(rhs))), array->getSize());
         }
         if (auto* array = rhs.get_if<ArrayType>())
         {
-            return *typeAlloc<ArrayType>(rhs.isConst(), rhs.isVolatile(), array->isRestricted(), array->isStatic(),
-                                         &compositeType(array->getType(), getElementType(lhs)), array->getSize());
+            return ArrayType(rhs.isConst(), rhs.isVolatile(), array->isRestricted(), array->isStatic(),
+                             typeAlloc(*compositeType(array->getType(), getElementType(lhs))), array->getSize());
         }
         if (auto* valArray = lhs.get_if<ValArrayType>())
         {
-            return *typeAlloc<ValArrayType>(
-                lhs.isConst(), lhs.isVolatile(), valArray->isRestricted(), valArray->isStatic(),
-                &compositeType(valArray->getType(), getElementType(rhs)), valArray->getExpression());
+            return ValArrayType(lhs.isConst(), lhs.isVolatile(), valArray->isRestricted(), valArray->isStatic(),
+                                typeAlloc(*compositeType(valArray->getType(), getElementType(rhs))),
+                                valArray->getExpression());
         }
         if (auto* valArray = rhs.get_if<ValArrayType>())
         {
-            return *typeAlloc<ValArrayType>(
-                rhs.isConst(), rhs.isVolatile(), valArray->isRestricted(), valArray->isStatic(),
-                &compositeType(valArray->getType(), getElementType(lhs)), valArray->getExpression());
+            return ValArrayType(rhs.isConst(), rhs.isVolatile(), valArray->isRestricted(), valArray->isStatic(),
+                                typeAlloc(*compositeType(valArray->getType(), getElementType(lhs))),
+                                valArray->getExpression());
         }
         auto& abstractArray = lhs.is<AbstractArrayType>() ? lhs : rhs;
-        return *typeAlloc<AbstractArrayType>(rhs.isConst(), rhs.isVolatile(),
-                                             abstractArray.cast<AbstractArrayType>().isRestricted(),
-                                             &compositeType(getElementType(lhs), getElementType(rhs)));
+        return AbstractArrayType(rhs.isConst(), rhs.isVolatile(),
+                                 abstractArray.cast<AbstractArrayType>().isRestricted(),
+                                 typeAlloc(*compositeType(getElementType(lhs), getElementType(rhs))));
     }
     if (lhs.is<FunctionType>())
     {
@@ -1295,16 +1290,17 @@ const cld::Semantics::Type& cld::Semantics::SemanticAnalysis::compositeType(cons
         std::vector<FunctionType::Parameter> parameters;
         for (std::size_t i = 0; i < rhsFtype.getParameters().size(); i++)
         {
-            parameters.push_back({&compositeType(*lhsFtype.getParameters()[i].type, *rhsFtype.getParameters()[i].type),
-                                  rhsFtype.getParameters()[i].name});
+            parameters.push_back(
+                {typeAlloc(*compositeType(*lhsFtype.getParameters()[i].type, *rhsFtype.getParameters()[i].type)),
+                 rhsFtype.getParameters()[i].name});
         }
-        return *typeAlloc<FunctionType>(&compositeType(lhsFtype.getReturnType(), rhsFtype.getReturnType()),
-                                        std::move(parameters), rhsFtype.isLastVararg(), false);
+        return FunctionType(typeAlloc(*compositeType(lhsFtype.getReturnType(), rhsFtype.getReturnType())),
+                            std::move(parameters), rhsFtype.isLastVararg(), false);
     }
     if (lhs.is<PointerType>())
     {
-        return *typeAlloc<PointerType>(rhs.isConst(), rhs.isVolatile(), rhs.cast<PointerType>().isRestricted(),
-                                       &compositeType(getPointerElementType(lhs), getPointerElementType(rhs)));
+        return PointerType(rhs.isConst(), rhs.isVolatile(), rhs.cast<PointerType>().isRestricted(),
+                           typeAlloc(*compositeType(getPointerElementType(lhs), getPointerElementType(rhs))));
     }
     return *typeAlloc(rhs);
 }

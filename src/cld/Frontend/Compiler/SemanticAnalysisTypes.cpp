@@ -176,10 +176,9 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
         {
             paramType.emplace<PointerType>(false, false, false, typeAlloc(std::move(*paramType)));
         }
-        const Type* alloc = typeAlloc(std::move(*paramType));
-        attributes =
-            applyAttributes(std::pair{&alloc, diag::getPointRange(iter.declarationSpecifiers)}, std::move(attributes));
-        auto& ret = parameters.emplace_back(FunctionType::Parameter{alloc, name});
+        attributes = applyAttributes(std::pair{&paramType, diag::getPointRange(iter.declarationSpecifiers)},
+                                     std::move(attributes));
+        auto& ret = parameters.emplace_back(FunctionType::Parameter{typeAlloc(std::move(*paramType)), name});
         if (paramCallback && loc)
         {
             paramCallback(*ret.type, loc, iter.declarationSpecifiers, std::move(attributes));
@@ -230,18 +229,14 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::qualif
     auto result = typeSpecifiersToType(isConst, isVolatile, std::move(typeSpecs));
     if (attributesOut)
     {
-        // TODO:
-        //        auto temp = applyAttributes(std::pair{&result,
-        //        diag::getPointRange(directAbstractDeclaratorParentheses)},
-        //                                    std::move(attributes));
-        //        attributesOut->insert(attributesOut->end(), std::move_iterator(temp.begin()),
-        //        std::move_iterator(temp.end()));
+        auto temp = applyAttributes(std::pair{&result, diag::getPointRange(directAbstractDeclaratorParentheses)},
+                                    std::move(attributes));
+        attributesOut->insert(attributesOut->end(), std::move_iterator(temp.begin()), std::move_iterator(temp.end()));
     }
     else
     {
-        // TODO:
-        //        (void)applyAttributes(std::pair{&result, diag::getPointRange(directAbstractDeclaratorParentheses)},
-        //                              std::move(attributes));
+        (void)applyAttributes(std::pair{&result, diag::getPointRange(directAbstractDeclaratorParentheses)},
+                              std::move(attributes));
     }
     return result;
 }
@@ -298,11 +293,9 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::applyD
                 if (parentheses.getOptionalAttributes())
                 {
                     auto result = visit(*parentheses.getOptionalAttributes());
-                    // TODO:
-                    //                    result = applyAttributes(
-                    //                        std::pair{&type,
-                    //                        diag::getPointRange(parentheses.getDeclarator().getDirectDeclarator())},
-                    //                        std::move(result));
+                    result = applyAttributes(
+                        std::pair{&type, diag::getPointRange(parentheses.getDeclarator().getDirectDeclarator())},
+                        std::move(result));
                     if (attributesOut)
                     {
                         attributesOut->insert(attributesOut->end(), std::move_iterator(result.begin()),
@@ -338,11 +331,10 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::applyD
                         if (auto* attribute = std::get_if<Syntax::GNUAttributes>(&iter2))
                         {
                             auto result = visit(*attribute);
-                            // TODO:
-                            //                            result = applyAttributes(
-                            //                                std::pair{&type,
-                            //                                          diag::getPointRange(parentheses.getDeclarator().getDirectDeclarator())},
-                            //                                std::move(result));
+                            result = applyAttributes(
+                                std::pair{&type,
+                                          diag::getPointRange(parentheses.getDeclarator().getDirectDeclarator())},
+                                std::move(result));
                             if (attributesOut)
                             {
                                 attributesOut->insert(attributesOut->end(), std::move_iterator(result.begin()),
@@ -575,15 +567,13 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::applyD
             {
                 if (parentheses.getOptionalAttributes())
                 {
-                    // TODO:
-                    //                    auto result = visit(*parentheses.getOptionalAttributes());
-                    //                    result = applyAttributes(std::pair{&type, diag::getPointRange(parentheses)},
-                    //                    std::move(result)); if (attributesOut)
-                    //                    {
-                    //                        attributesOut->insert(attributesOut->end(),
-                    //                        std::move_iterator(result.begin()),
-                    //                                              std::move_iterator(result.end()));
-                    //                    }
+                    auto result = visit(*parentheses.getOptionalAttributes());
+                    result = applyAttributes(std::pair{&type, diag::getPointRange(parentheses)}, std::move(result));
+                    if (attributesOut)
+                    {
+                        attributesOut->insert(attributesOut->end(), std::move_iterator(result.begin()),
+                                              std::move_iterator(result.end()));
+                    }
                 }
                 for (auto& iter : parentheses.getAbstractDeclarator().getPointers())
                 {
@@ -613,17 +603,14 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::applyD
                     {
                         if (auto* attribute = std::get_if<Syntax::GNUAttributes>(&iter2))
                         {
-                            // TODO:
-                            //                            auto result = visit(*attribute);
-                            //                            result =
-                            //                                applyAttributes(std::pair{&type,
-                            //                                diag::getPointRange(parentheses)}, std::move(result));
-                            //                            if (attributesOut)
-                            //                            {
-                            //                                attributesOut->insert(attributesOut->end(),
-                            //                                std::move_iterator(result.begin()),
-                            //                                                      std::move_iterator(result.end()));
-                            //                            }
+                            auto result = visit(*attribute);
+                            result =
+                                applyAttributes(std::pair{&type, diag::getPointRange(parentheses)}, std::move(result));
+                            if (attributesOut)
+                            {
+                                attributesOut->insert(attributesOut->end(), std::move_iterator(result.begin()),
+                                                      std::move_iterator(result.end()));
+                            }
                         }
                     }
                 }
@@ -860,7 +847,7 @@ cld::IntrVarValue<cld::Semantics::Type>
     std::string_view name = enumDef.getName() ? enumDef.getName()->getText() : "";
     m_enumDefinitions.push_back(
         {m_enumDefinitions.size(),
-         EnumDefinition(name, typeAlloc(PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions())),
+         EnumDefinition(name, PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions()),
                         std::move(values)),
          m_currentScope, enumDef.begin(), name});
     if (enumDef.getName())

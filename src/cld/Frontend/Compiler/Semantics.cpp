@@ -705,10 +705,10 @@ cld::Lexer::CTokenIterator cld::Semantics::CallExpression::end() const
     return m_closeParentheses + 1;
 }
 
-cld::Semantics::CompoundLiteral::CompoundLiteral(cld::not_null<const Type> type, Lexer::CTokenIterator openParentheses,
+cld::Semantics::CompoundLiteral::CompoundLiteral(IntrVarValue<Type> type, Lexer::CTokenIterator openParentheses,
                                                  Initializer initializer, Lexer::CTokenIterator closeParentheses,
                                                  Lexer::CTokenIterator initEnd, bool staticLifetime)
-    : ExpressionBase(std::in_place_type<CompoundLiteral>, type, ValueCategory::Lvalue),
+    : ExpressionBase(std::in_place_type<CompoundLiteral>, std::move(type), ValueCategory::Lvalue),
       m_openParentheses(openParentheses),
       m_initializer(std::make_unique<Initializer>(std::move(initializer))),
       m_closeParentheses(closeParentheses),
@@ -838,8 +838,8 @@ cld::Lexer::CTokenIterator cld::Semantics::ExpressionBase::end() const
     return this->match([](auto&& value) { return value.end(); });
 }
 
-cld::Semantics::ErrorExpression::ErrorExpression(cld::not_null<const Type> type, const cld::Syntax::Node& node)
-    : ErrorExpression(type, node.begin(), node.end())
+cld::Semantics::ErrorExpression::ErrorExpression(IntrVarValue<Type> type, const cld::Syntax::Node& node)
+    : ErrorExpression(std::move(type), node.begin(), node.end())
 {
 }
 
