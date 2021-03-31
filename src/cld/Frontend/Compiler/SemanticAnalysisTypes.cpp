@@ -87,13 +87,13 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
             auto hasStatic = std::any_of(begin, visitor.end(),
                                          [](const Type& type)
                                          {
-                                             if (auto* valArray = type.get_if<ValArrayType>())
+                                             if (auto* valArray = type.tryAs<ValArrayType>())
                                              {
                                                  return valArray->isStatic();
                                              }
                                              if (isArrayType(type))
                                              {
-                                                 return type.cast<ArrayType>().isStatic();
+                                                 return type.as<ArrayType>().isStatic();
                                              }
                                              return false;
                                          });
@@ -108,11 +108,11 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
                 {
                     if (type.is<ValArrayType>())
                     {
-                        return type.cast<ValArrayType>().isRestricted() || type.isConst() || type.isVolatile();
+                        return type.as<ValArrayType>().isRestricted() || type.isConst() || type.isVolatile();
                     }
                     if (type.is<ArrayType>())
                     {
-                        return type.cast<ArrayType>().isRestricted() || type.isConst() || type.isVolatile();
+                        return type.as<ArrayType>().isRestricted() || type.isConst() || type.isVolatile();
                     }
                     return false;
                 });
@@ -130,11 +130,11 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
                                          {
                                              if (type.is<ValArrayType>())
                                              {
-                                                 return type.cast<ValArrayType>().isStatic();
+                                                 return type.as<ValArrayType>().isStatic();
                                              }
                                              if (type.is<ArrayType>())
                                              {
-                                                 return type.cast<ArrayType>().isStatic();
+                                                 return type.as<ArrayType>().isStatic();
                                              }
                                              return false;
                                          });
@@ -149,11 +149,11 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
                 {
                     if (type.is<ValArrayType>())
                     {
-                        return type.cast<ValArrayType>().isRestricted() || type.isConst() || type.isVolatile();
+                        return type.as<ValArrayType>().isRestricted() || type.isConst() || type.isVolatile();
                     }
                     if (isArrayType(type))
                     {
-                        return type.cast<ArrayType>().isRestricted() || type.isConst() || type.isVolatile();
+                        return type.as<ArrayType>().isRestricted() || type.isConst() || type.isVolatile();
                     }
                     return false;
                 });
@@ -1159,7 +1159,7 @@ cld::IntrVarValue<cld::Semantics::Type>
                 }
                 else if (!type->isUndefined())
                 {
-                    auto& primitive = type->cast<PrimitiveType>();
+                    auto& primitive = type->as<PrimitiveType>();
                     switch (primitive.getKind())
                     {
                         case PrimitiveType::Bool:
@@ -1196,7 +1196,7 @@ cld::IntrVarValue<cld::Semantics::Type>
                 {
                     continue;
                 }
-                auto objectWidth = type->cast<PrimitiveType>().getBitCount();
+                auto objectWidth = type->as<PrimitiveType>().getBitCount();
                 if (result->getInteger() > objectWidth)
                 {
                     log(Errors::Semantics::BITFIELD_MUST_NOT_HAVE_A_GREATER_WIDTH_THAN_THE_TYPE.args(
@@ -1327,7 +1327,7 @@ cld::IntrVarValue<cld::Semantics::Type>
                 currentSize = cld::roundUpTo(currentSize, alignment);
                 prevSize = size;
                 storageLeft =
-                    iter->second.type->cast<PrimitiveType>().getBitCount() - iter->second.bitFieldBounds->second;
+                    iter->second.type->as<PrimitiveType>().getBitCount() - iter->second.bitFieldBounds->second;
                 used = iter->second.bitFieldBounds->second;
                 iter.value().bitFieldBounds.emplace(0, used);
                 iter.value().indices[0] = memoryLayout.size();
@@ -1703,7 +1703,7 @@ void cld::Semantics::SemanticAnalysis::handleArray(IntrVarValue<Type>& type,
         type.emplace<ErrorType>();
         return;
     }
-    if (expr->getType().cast<PrimitiveType>().isSigned())
+    if (expr->getType().as<PrimitiveType>().isSigned())
     {
         if (extensionsEnabled(expr->begin()) ? result->getInteger() < 0 : result->getInteger() <= 0)
         {

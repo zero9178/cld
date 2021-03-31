@@ -64,21 +64,21 @@ public:
     }
 
     template <class T>
-    [[nodiscard]] constexpr const T& cast() const noexcept
+    [[nodiscard]] constexpr const T& as() const noexcept
     {
         CLD_ASSERT(index() == detail::getIndex<T, 0, Args...>());
         return *static_cast<const T*>(this);
     }
 
     template <class T>
-    [[nodiscard]] constexpr T& cast() noexcept
+    [[nodiscard]] constexpr T& as() noexcept
     {
         CLD_ASSERT(index() == detail::getIndex<T, 0, Args...>());
         return *static_cast<T*>(this);
     }
 
     template <class T>
-    [[nodiscard]] constexpr const T* get_if() const noexcept
+    [[nodiscard]] constexpr const T* tryAs() const noexcept
     {
         constexpr auto var = detail::getIndex<T, 0, Args...>();
         if (index() != var)
@@ -89,7 +89,7 @@ public:
     }
 
     template <class T>
-    [[nodiscard]] constexpr T* get_if() noexcept
+    [[nodiscard]] constexpr T* tryAs() noexcept
     {
         constexpr auto var = detail::getIndex<T, 0, Args...>();
         if (index() != var)

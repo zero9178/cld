@@ -163,7 +163,7 @@ llvm::Type* cld::CGLLVM::CodeGenerator::visit(const Semantics::Type& type)
                     valArrayType.getExpression(),
                     m_builder.CreateIntCast(
                         visit(*valArrayType.getExpression()), m_builder.getInt64Ty(),
-                        valArrayType.getExpression()->getType().cast<Semantics::PrimitiveType>().isSigned()));
+                        valArrayType.getExpression()->getType().as<Semantics::PrimitiveType>().isSigned()));
             }
             return visit(valArrayType.getType());
         });
@@ -518,7 +518,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDe
         llvm::Function::Create(ft, linkageType, -1, llvm::StringRef{declaration.getNameToken()->getText()}, &m_module);
     auto attributes = function->getAttributes();
     attributes = m_abi->generateFunctionAttributes(
-        std::move(attributes), ft, declaration.getType().cast<Semantics::FunctionType>(), m_programInterface);
+        std::move(attributes), ft, declaration.getType().as<Semantics::FunctionType>(), m_programInterface);
     function->setAttributes(std::move(attributes));
     if (!m_options.reloc)
     {
@@ -634,7 +634,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::VariableDe
         bool valSeen = false;
         for (auto& iter : visitor)
         {
-            if (auto* valArray = iter.get_if<Semantics::ValArrayType>())
+            if (auto* valArray = iter.tryAs<Semantics::ValArrayType>())
             {
                 valSeen = true;
                 if (!value)
@@ -648,12 +648,12 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::VariableDe
             {
                 if (!value)
                 {
-                    value = m_builder.getInt64(iter.cast<Semantics::ArrayType>().getSize());
+                    value = m_builder.getInt64(iter.as<Semantics::ArrayType>().getSize());
                     continue;
                 }
                 if (!valSeen)
                 {
-                    value = m_builder.CreateMul(m_builder.getInt64(iter.cast<Semantics::ArrayType>().getSize()), value);
+                    value = m_builder.CreateMul(m_builder.getInt64(iter.as<Semantics::ArrayType>().getSize()), value);
                     continue;
                 }
                 break;
@@ -731,7 +731,7 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDefinition& func
                                           llvm::StringRef{functionDefinition.getNameToken()->getText()}, &m_module);
     }
     m_lvalues.emplace(&functionDefinition, valueOf(function));
-    auto& ft = functionDefinition.getType().cast<Semantics::FunctionType>();
+    auto& ft = functionDefinition.getType().as<Semantics::FunctionType>();
     auto attributes = function->getAttributes();
     attributes =
         m_abi->generateFunctionAttributes(std::move(attributes), function->getFunctionType(), ft, m_programInterface);

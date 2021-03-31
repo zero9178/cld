@@ -820,8 +820,8 @@ void cld::Semantics::SemanticAnalysis::reportNoMember(const Type& recordType, co
         }
         else
         {
-            log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_UNION_N.args(
-                identifier, m_sourceInterface, identifier, recordType.cast<UnionType>().getUnionName()));
+            log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_UNION_N.args(identifier, m_sourceInterface, identifier,
+                                                                            recordType.as<UnionType>().getUnionName()));
         }
     }
     if (isStruct(recordType))
@@ -834,7 +834,7 @@ void cld::Semantics::SemanticAnalysis::reportNoMember(const Type& recordType, co
         else
         {
             log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_STRUCT_N.args(
-                identifier, m_sourceInterface, identifier, recordType.cast<StructType>().getStructName()));
+                identifier, m_sourceInterface, identifier, recordType.as<StructType>().getStructName()));
         }
     }
 }
@@ -845,7 +845,7 @@ std::optional<std::pair<cld::IntrVarValue<cld::Semantics::Type>, const cld::Sema
                                                         const Lexer::CToken& identifier)
 {
     const FieldMap* fields = nullptr;
-    if (auto* structType = recordType.get_if<StructType>())
+    if (auto* structType = recordType.tryAs<StructType>())
     {
         auto* structDef = std::get_if<StructDefinition>(&structType->getInfo().type);
         if (!structDef)
@@ -856,7 +856,7 @@ std::optional<std::pair<cld::IntrVarValue<cld::Semantics::Type>, const cld::Sema
         }
         fields = &structDef->getFields();
     }
-    if (auto* unionType = recordType.get_if<UnionType>())
+    if (auto* unionType = recordType.tryAs<UnionType>())
     {
         auto* unionDef = std::get_if<UnionDefinition>(&unionType->getInfo().type);
         if (!unionDef)
@@ -951,12 +951,12 @@ namespace
 {
 bool isBuiltinKind(const cld::Semantics::ExpressionBase& expression, cld::Semantics::BuiltinFunction::Kind kind)
 {
-    auto* declRead = expression.get_if<cld::Semantics::DeclarationRead>();
+    auto* declRead = expression.tryAs<cld::Semantics::DeclarationRead>();
     if (!declRead)
     {
         return false;
     }
-    auto* builtin = declRead->getDeclRead().get_if<cld::Semantics::BuiltinFunction>();
+    auto* builtin = declRead->getDeclRead().tryAs<cld::Semantics::BuiltinFunction>();
     if (!builtin)
     {
         return false;
@@ -966,12 +966,12 @@ bool isBuiltinKind(const cld::Semantics::ExpressionBase& expression, cld::Semant
 
 bool isSyncBuiltinWithType(const cld::Semantics::ExpressionBase& expression)
 {
-    auto* declRead = expression.get_if<cld::Semantics::DeclarationRead>();
+    auto* declRead = expression.tryAs<cld::Semantics::DeclarationRead>();
     if (!declRead)
     {
         return false;
     }
-    auto* builtin = declRead->getDeclRead().get_if<cld::Semantics::BuiltinFunction>();
+    auto* builtin = declRead->getDeclRead().tryAs<cld::Semantics::BuiltinFunction>();
     if (!builtin)
     {
         return false;
@@ -1000,7 +1000,7 @@ bool isSyncBuiltinWithType(const cld::Semantics::ExpressionBase& expression)
 
 bool isBuiltinFunction(const cld::Semantics::ExpressionBase& expression)
 {
-    auto* declRead = expression.get_if<cld::Semantics::DeclarationRead>();
+    auto* declRead = expression.tryAs<cld::Semantics::DeclarationRead>();
     if (!declRead)
     {
         return false;
@@ -1049,12 +1049,12 @@ std::unique_ptr<cld::Semantics::CallExpression>
             log(Errors::Semantics::CANNOT_USE_VA_START_OUTSIDE_OF_A_FUNCTION.args(*function, m_sourceInterface,
                                                                                   *function));
         }
-        else if (!getCurrentFunctionScope()->currentFunction->getType().cast<FunctionType>().isLastVararg())
+        else if (!getCurrentFunctionScope()->currentFunction->getType().as<FunctionType>().isLastVararg())
         {
             log(Errors::Semantics::CANNOT_USE_VA_START_IN_A_FUNCTION_WITH_FIXED_ARGUMENT_COUNT.args(
                 *function, m_sourceInterface, *function));
         }
-        else if (auto* declRead = expression->get_if<DeclarationRead>();
+        else if (auto* declRead = expression->tryAs<DeclarationRead>();
                  !declRead
                  || (!getCurrentFunctionScope()->currentFunction->getParameterDeclarations().empty()
                      && &declRead->getDeclRead()
@@ -1078,16 +1078,16 @@ std::unique_ptr<cld::Semantics::CallExpression>
                                                     IntrVarPtr<ExpressionBase>&& function)
 {
     std::vector<IntrVarPtr<ExpressionBase>> arguments;
-    auto& ft = function->getType().cast<FunctionType>();
+    auto& ft = function->getType().as<FunctionType>();
     if (node.getOptionalAssignmentExpressions().size() == 0)
     {
-        auto& decl = function->cast<DeclarationRead>();
+        auto& decl = function->as<DeclarationRead>();
         log(Errors::Semantics::NOT_ENOUGH_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_AT_LEAST_N_GOT_N.args(
             decl, m_sourceInterface, *decl.getIdentifierToken(), 1, 0));
     }
     else if (node.getOptionalAssignmentExpressions().size() > 3)
     {
-        auto& decl = function->cast<DeclarationRead>();
+        auto& decl = function->as<DeclarationRead>();
         log(Errors::Semantics::TOO_MANY_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_N_GOT_N.args(
             decl, m_sourceInterface, *decl.getIdentifierToken(), 3, node.getOptionalAssignmentExpressions().size(),
             llvm::ArrayRef(node.getOptionalAssignmentExpressions()).drop_front(3)));
@@ -1146,16 +1146,16 @@ std::unique_ptr<cld::Semantics::CallExpression>
                                                                  IntrVarPtr<ExpressionBase>&& function)
 {
     std::vector<IntrVarPtr<ExpressionBase>> arguments;
-    auto& ft = function->getType().cast<FunctionType>();
+    auto& ft = function->getType().as<FunctionType>();
     if (node.getOptionalAssignmentExpressions().size() < 3)
     {
-        auto& decl = function->cast<DeclarationRead>();
+        auto& decl = function->as<DeclarationRead>();
         log(Errors::Semantics::NOT_ENOUGH_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_N_GOT_N.args(
             decl, m_sourceInterface, *decl.getIdentifierToken(), 3, node.getOptionalAssignmentExpressions().size()));
     }
     else if (node.getOptionalAssignmentExpressions().size() > 3)
     {
-        auto& decl = function->cast<DeclarationRead>();
+        auto& decl = function->as<DeclarationRead>();
         log(Errors::Semantics::TOO_MANY_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_N_GOT_N.args(
             decl, m_sourceInterface, *decl.getIdentifierToken(), 3, node.getOptionalAssignmentExpressions().size(),
             llvm::ArrayRef(node.getOptionalAssignmentExpressions()).drop_front(3)));
@@ -1198,13 +1198,13 @@ std::unique_ptr<cld::Semantics::CallExpression>
     auto& type = function->getType();
     function =
         std::make_unique<Conversion>(PointerType(false, false, false, &type), Conversion::LValue, std::move(function));
-    auto& ft = getPointerElementType(function->getType()).cast<FunctionType>();
+    auto& ft = getPointerElementType(function->getType()).as<FunctionType>();
 
     IntrVarValue<Type> placeholder = ErrorType{};
     std::vector<IntrVarPtr<ExpressionBase>> arguments;
     if (checkFunctionCount(*function, ft, node))
     {
-        auto& decl = function->cast<Conversion>().getExpression().cast<DeclarationRead>();
+        auto& decl = function->as<Conversion>().getExpression().as<DeclarationRead>();
         arguments.push_back(lvalueConversion(visit(node.getOptionalAssignmentExpressions()[0])));
         if (!isPointer(arguments.back()->getType()))
         {
@@ -1338,7 +1338,7 @@ bool cld::Semantics::SemanticAnalysis::checkFunctionCount(const ExpressionBase& 
         {
             return false;
         }
-        auto& conversion = function.cast<Conversion>();
+        auto& conversion = function.as<Conversion>();
         if (conversion.getKind() != Conversion::LValue)
         {
             return false;
@@ -1347,7 +1347,7 @@ bool cld::Semantics::SemanticAnalysis::checkFunctionCount(const ExpressionBase& 
         {
             return false;
         }
-        auto& decl = conversion.getExpression().cast<DeclarationRead>();
+        auto& decl = conversion.getExpression().as<DeclarationRead>();
         return decl.getDeclRead().match(
             [](const FunctionDefinition&) { return true; }, [](const FunctionDeclaration&) { return true; },
             [](const VariableDeclaration&) { return false; }, [](const BuiltinFunction&) { return true; });
@@ -1359,7 +1359,7 @@ bool cld::Semantics::SemanticAnalysis::checkFunctionCount(const ExpressionBase& 
         {
             if (callsFunction)
             {
-                auto& decl = function.cast<Conversion>().getExpression().cast<DeclarationRead>();
+                auto& decl = function.as<Conversion>().getExpression().as<DeclarationRead>();
                 log(Errors::Semantics::NOT_ENOUGH_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_N_GOT_N.args(
                     decl, m_sourceInterface, *decl.getIdentifierToken(), argumentTypes.size(),
                     node.getOptionalAssignmentExpressions().size()));
@@ -1375,7 +1375,7 @@ bool cld::Semantics::SemanticAnalysis::checkFunctionCount(const ExpressionBase& 
         {
             if (callsFunction)
             {
-                auto& decl = function.cast<Conversion>().getExpression().cast<DeclarationRead>();
+                auto& decl = function.as<Conversion>().getExpression().as<DeclarationRead>();
                 log(Errors::Semantics::NOT_ENOUGH_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_AT_LEAST_N_GOT_N.args(
                     decl, m_sourceInterface, *decl.getIdentifierToken(), argumentTypes.size(),
                     node.getOptionalAssignmentExpressions().size()));
@@ -1393,7 +1393,7 @@ bool cld::Semantics::SemanticAnalysis::checkFunctionCount(const ExpressionBase& 
     {
         if (callsFunction)
         {
-            auto& decl = function.cast<Conversion>().getExpression().cast<DeclarationRead>();
+            auto& decl = function.as<Conversion>().getExpression().as<DeclarationRead>();
             log(Errors::Semantics::TOO_MANY_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_N_GOT_N.args(
                 decl, m_sourceInterface, *decl.getIdentifierToken(), argumentTypes.size(),
                 node.getOptionalAssignmentExpressions().size(),
@@ -1453,7 +1453,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         function = std::make_unique<Conversion>(PointerType(false, false, false, &type), Conversion::LValue,
                                                 std::move(function));
     }
-    auto& ft = getPointerElementType(function->getType()).cast<FunctionType>();
+    auto& ft = getPointerElementType(function->getType()).as<FunctionType>();
     std::vector<IntrVarPtr<ExpressionBase>> arguments;
     if (ft.isKandR())
     {
@@ -1570,7 +1570,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     {
         std::size_t size = 0;
         value = visit(node.getInitializerList(), type, !inFunction() || m_inStaticInitializer, &size);
-        auto& abstractArrayType = type->cast<AbstractArrayType>();
+        auto& abstractArrayType = type->as<AbstractArrayType>();
         type = ArrayType(type->isConst(), type->isVolatile(), abstractArrayType.isRestricted(), false,
                          &abstractArrayType.getType(), size);
     }
@@ -1613,16 +1613,16 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                                               node.getUnaryToken());
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Ampersand:
         {
-            if (auto* declRead = value->get_if<DeclarationRead>())
+            if (auto* declRead = value->tryAs<DeclarationRead>())
             {
-                if (auto* decl = declRead->getDeclRead().get_if<VariableDeclaration>();
+                if (auto* decl = declRead->getDeclRead().tryAs<VariableDeclaration>();
                     decl && decl->getLifetime() == Lifetime::Register)
                 {
                     log(Errors::Semantics::CANNOT_TAKE_ADDRESS_OF_DECLARATION_ANNOTATED_WITH_REGISTER.args(
                         *value, m_sourceInterface, *node.getUnaryToken(), *value));
                 }
             }
-            if (auto* subscript = value->get_if<SubscriptOperator>();
+            if (auto* subscript = value->tryAs<SubscriptOperator>();
                 subscript && isVector(subscript->getPointerExpression().getType()))
             {
                 log(Errors::Semantics::CANNOT_TAKE_ADDRESS_OF_VECTOR_ELEMENT.args(*value, m_sourceInterface,
@@ -2236,7 +2236,7 @@ cld::Semantics::VectorType cld::Semantics::SemanticAnalysis::vectorCompResultTyp
     auto elementCount = vectorType.getSize();
     if (isInteger(getVectorElementType(vectorType)))
     {
-        switch (getVectorElementType(vectorType).cast<PrimitiveType>().getKind())
+        switch (getVectorElementType(vectorType).as<PrimitiveType>().getKind())
         {
             case PrimitiveType::Char:
                 if (options.charIsSigned)
@@ -2261,7 +2261,7 @@ cld::Semantics::VectorType cld::Semantics::SemanticAnalysis::vectorCompResultTyp
             default: return vectorType;
         }
     }
-    auto bitWidth = getVectorElementType(vectorType).cast<PrimitiveType>().getBitCount();
+    auto bitWidth = getVectorElementType(vectorType).as<PrimitiveType>().getBitCount();
     if (bitWidth == options.sizeOfShort * 8)
     {
         return VectorType(false, false, typeAlloc(PrimitiveType::createShort(false, false, options)), elementCount);
@@ -2361,7 +2361,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                 value = std::make_unique<ErrorExpression>(value->begin(), rhsValue->end());
                 continue;
             }
-            resultType = vectorCompResultType(value->getType().cast<VectorType>(), getLanguageOptions());
+            resultType = vectorCompResultType(value->getType().as<VectorType>(), getLanguageOptions());
         }
         value = std::make_unique<BinaryOperator>(
             std::move(resultType), std::move(value),
@@ -2485,7 +2485,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                 value = std::make_unique<ErrorExpression>(value->begin(), rhsValue->end());
                 continue;
             }
-            resultType = vectorCompResultType(value->getType().cast<VectorType>(), getLanguageOptions());
+            resultType = vectorCompResultType(value->getType().as<VectorType>(), getLanguageOptions());
         }
         value = std::make_unique<BinaryOperator>(std::move(resultType), std::move(value),
                                                  kind == Syntax::EqualityExpression::Equal ? BinaryOperator::Equal :
@@ -2804,7 +2804,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                                             std::move(expression));
     }
     auto& type = expression->getType();
-    if (!type.isVolatile() && !type.isConst() && (!type.is<PointerType>() || !type.cast<PointerType>().isRestricted()))
+    if (!type.isVolatile() && !type.isConst() && (!type.is<PointerType>() || !type.as<PointerType>().isRestricted()))
     {
         IntrVarValue copy = type;
         return std::make_unique<Conversion>(std::move(copy), Conversion::LValue, std::move(expression));
@@ -2812,7 +2812,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     IntrVarValue<Type> newType = type;
     newType->setConst(false);
     newType->setVolatile(false);
-    if (auto* pointer = newType->get_if<PointerType>())
+    if (auto* pointer = newType->tryAs<PointerType>())
     {
         newType = PointerType(false, false, false, &pointer->getElementType());
     }
@@ -2832,13 +2832,13 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::lvalue
     }
     // If the expression isn't an lvalue and not qualified then conversion is redundant
     if (!type->isVolatile() && !type->isConst()
-        && (!type->is<PointerType>() || !type->cast<PointerType>().isRestricted()))
+        && (!type->is<PointerType>() || !type->as<PointerType>().isRestricted()))
     {
         return type;
     }
     type->setConst(false);
     type->setVolatile(false);
-    if (auto* pointer = type->get_if<PointerType>())
+    if (auto* pointer = type->tryAs<PointerType>())
     {
         type.emplace<PointerType>(false, false, false, &pointer->getElementType());
     }
@@ -2853,7 +2853,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     {
         return std::move(expression);
     }
-    auto& prim = expression->getType().cast<PrimitiveType>();
+    auto& prim = expression->getType().as<PrimitiveType>();
     if (prim.getKind() != PrimitiveType::Kind::Float)
     {
         return std::move(expression);
@@ -2867,7 +2867,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::integerPromotion(IntrVarPtr<ExpressionBase>&& expression)
 {
     expression = lvalueConversion(std::move(expression));
-    if (auto* enumType = expression->getType().get_if<EnumType>())
+    if (auto* enumType = expression->getType().tryAs<EnumType>())
     {
         return std::make_unique<Conversion>(enumType->getInfo().type.getType(), Conversion::IntegerPromotion,
                                             std::move(expression));
@@ -2876,7 +2876,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     {
         return std::move(expression);
     }
-    auto& prim = expression->getType().cast<PrimitiveType>();
+    auto& prim = expression->getType().as<PrimitiveType>();
     if (prim.isFloatingPoint() || prim.getBitCount() >= m_sourceInterface.getLanguageOptions().sizeOfInt * 8)
     {
         return std::move(expression);
@@ -2907,8 +2907,8 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(
         rhs = lvalueConversion(std::move(rhs));
         if (isVector(getLhsType(lhs)) && isVector(rhs->getType()))
         {
-            std::size_t lhsKind = getVectorElementType(getLhsType(lhs)).cast<PrimitiveType>().getKind();
-            std::size_t rhsKind = getVectorElementType(rhs->getType()).cast<PrimitiveType>().getKind();
+            std::size_t lhsKind = getVectorElementType(getLhsType(lhs)).as<PrimitiveType>().getKind();
+            std::size_t rhsKind = getVectorElementType(rhs->getType()).as<PrimitiveType>().getKind();
             if (lhsKind == rhsKind)
             {
                 return;
@@ -2962,11 +2962,11 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(
         std::size_t scalarKind;
         if (isEnum(scalarType))
         {
-            scalarKind = integerPromotion(scalarType)->cast<PrimitiveType>().getKind();
+            scalarKind = integerPromotion(scalarType)->as<PrimitiveType>().getKind();
         }
         else
         {
-            scalarKind = scalarType.cast<PrimitiveType>().getKind();
+            scalarKind = scalarType.as<PrimitiveType>().getKind();
         }
         // Signed and unsigned element types are seen as equal
         switch (scalarKind)
@@ -2978,7 +2978,7 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(
             case PrimitiveType::UnsignedLongLong: scalarKind--;
             default: break;
         }
-        std::size_t elementKind = elementType.cast<PrimitiveType>().getKind();
+        std::size_t elementKind = elementType.as<PrimitiveType>().getKind();
         switch (elementKind)
         {
             case PrimitiveType::UnsignedChar:
@@ -3025,7 +3025,7 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(
         {
             return;
         }
-        auto* constant = (**expr)->get_if<Constant>();
+        auto* constant = (**expr)->tryAs<Constant>();
         if (!constant)
         {
             return;
@@ -3035,7 +3035,7 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(
             [&](const llvm::APSInt& apsInt) {
                 if (isInteger(elementType))
                 {
-                    auto bitWidth = elementType.cast<PrimitiveType>().getBitCount();
+                    auto bitWidth = elementType.as<PrimitiveType>().getBitCount();
                     if (llvm::APSInt::isSameValue(apsInt.extOrTrunc(bitWidth), apsInt))
                     {
                         doCasts();
@@ -3043,7 +3043,7 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(
                 }
                 else
                 {
-                    auto kind = elementType.cast<PrimitiveType>().getKind();
+                    auto kind = elementType.as<PrimitiveType>().getKind();
                     llvm::APFloat temp(kind == PrimitiveType::Double ? llvm::APFloatBase::IEEEdouble() :
                                                                        llvm::APFloatBase::IEEEsingle());
                     temp.convertFromAPInt(apsInt, apsInt.isSigned(),
@@ -3060,8 +3060,8 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(
             [&](const llvm::APFloat& apFloat) {
                 if (isInteger(elementType))
                 {
-                    auto width = elementType.cast<PrimitiveType>().getBitCount();
-                    bool isSigned = elementType.cast<PrimitiveType>().isSigned();
+                    auto width = elementType.as<PrimitiveType>().getBitCount();
+                    bool isSigned = elementType.as<PrimitiveType>().isSigned();
                     llvm::APSInt temp(width, !isSigned);
                     bool exact = true;
                     apFloat.convertToInteger(temp, llvm::APFloatBase::roundingMode::NearestTiesToEven, &exact);
@@ -3072,7 +3072,7 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(
                 }
                 else
                 {
-                    auto kind = elementType.cast<PrimitiveType>().getKind();
+                    auto kind = elementType.as<PrimitiveType>().getKind();
                     bool notExact = false;
                     auto temp = apFloat;
                     temp.convert(kind == PrimitiveType::Double ? llvm::APFloatBase::IEEEdouble() :
@@ -3097,8 +3097,8 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(
     {
         return;
     }
-    auto& lhsPrim = getLhsType(lhs).cast<PrimitiveType>();
-    auto& rhsPrim = rhs->getType().cast<PrimitiveType>();
+    auto& lhsPrim = getLhsType(lhs).as<PrimitiveType>();
+    auto& rhsPrim = rhs->getType().as<PrimitiveType>();
     IntrVarValue<Type> type = ErrorType{};
     if (lhsPrim.isFloatingPoint() || rhsPrim.isFloatingPoint())
     {
@@ -3164,7 +3164,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             }
             return std::make_unique<ErrorExpression>(node);
         }
-        auto& str = expression->cast<Constant>().getValue();
+        auto& str = expression->as<Constant>().getValue();
         if (std::holds_alternative<std::string>(str) && !isCharType(elementType))
         {
             log(Errors::Semantics::CANNOT_INITIALIZE_WCHART_ARRAY_WITH_STRING_LITERAL.args(
@@ -3222,7 +3222,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                                                                                   *expression));
         },
         [&] {
-            if (isVoid(type.cast<PointerType>().getElementType()))
+            if (isVoid(type.as<PointerType>().getElementType()))
             {
                 log(Errors::Semantics::CANNOT_INITIALIZE_VOID_POINTER_WITH_FUNCTION_POINTER.args(
                     *expression, m_sourceInterface, *expression));
@@ -3240,9 +3240,9 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         if (isCharType(elementType))
         {
             if (expression->is<Constant>()
-                && std::holds_alternative<std::string>(expression->cast<Constant>().getValue()))
+                && std::holds_alternative<std::string>(expression->as<Constant>().getValue()))
             {
-                *size = cld::get<std::string>(expression->cast<Constant>().getValue()).size() + 1;
+                *size = cld::get<std::string>(expression->as<Constant>().getValue()).size() + 1;
             }
         }
         else if (elementType.is<PrimitiveType>()
@@ -3250,9 +3250,9 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                         == PrimitiveType::createWcharT(false, false, m_sourceInterface.getLanguageOptions()))
         {
             if (expression->is<Constant>()
-                && std::holds_alternative<Lexer::NonCharString>(expression->cast<Constant>().getValue()))
+                && std::holds_alternative<Lexer::NonCharString>(expression->as<Constant>().getValue()))
             {
-                *size = cld::get<Lexer::NonCharString>(expression->cast<Constant>().getValue()).characters.size() + 1;
+                *size = cld::get<Lexer::NonCharString>(expression->as<Constant>().getValue()).characters.size() + 1;
             }
         }
     }
@@ -3442,7 +3442,7 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const Syntax
         }
         if (isArrayType(type))
         {
-            auto& arrayType = type.cast<ArrayType>();
+            auto& arrayType = type.as<ArrayType>();
             parent.resize(arrayType.getSize());
             for (std::size_t i = 0; i < arrayType.getSize(); i++)
             {
@@ -3457,7 +3457,7 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const Syntax
         }
         if (isVector(type))
         {
-            auto& vectorType = type.cast<VectorType>();
+            auto& vectorType = type.as<VectorType>();
             parent.resize(vectorType.getSize());
             for (std::size_t i = 0; i < vectorType.getSize(); i++)
             {
@@ -3578,7 +3578,7 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const Syntax
                         return std::make_unique<ErrorExpression>(node);
                     }
                     if (!(current == &top && abstractArray)
-                        && constant->getInteger() >= current->type->cast<ArrayType>().getSize())
+                        && constant->getInteger() >= current->type->as<ArrayType>().getSize())
                     {
                         log(Errors::Semantics::DESIGNATOR_INDEX_OUT_OF_RANGE_FOR_ARRAY_TYPE_N.args(
                             *exp, m_sourceInterface, *current->type, *exp, *constant));
@@ -3591,7 +3591,7 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const Syntax
                         auto prevSize = top.size();
                         for (std::size_t i = prevSize; i < *size; i++)
                         {
-                            top.push_back({top.type->cast<AbstractArrayType>().getType(), i, top});
+                            top.push_back({top.type->as<AbstractArrayType>().getType(), i, top});
                             assignChildren(*top.at(i).type, top.at(i));
                         }
                     }

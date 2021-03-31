@@ -183,7 +183,7 @@ std::vector<cld::IntrVarPtr<cld::Semantics::Useable>>
         return {};
     }
 
-    auto& ft = type->cast<FunctionType>();
+    auto& ft = type->as<FunctionType>();
     if (!(isVoid(ft.getReturnType()) && !ft.getReturnType().isConst() && !ft.getReturnType().isVolatile())
         && !isCompleteType(ft.getReturnType()))
     {
@@ -290,7 +290,7 @@ std::vector<cld::IntrVarPtr<cld::Semantics::Useable>>
                     .emplace_back(std::make_unique<FunctionDefinition>(
                         std::move(type), loc, std::move(parameterDeclarations), linkage, inlineKind,
                         CompoundStatement(m_currentScope, loc, {}, loc)))
-                    ->cast<FunctionDefinition>();
+                    ->as<FunctionDefinition>();
     attributes = applyAttributes(&ptr, std::move(attributes));
     // We are currently in block scope. Functions are always at file scope though so we can't use getCurrentScope
     auto [prev, notRedefinition] = m_scopes[0].declarations.insert({loc->getText(), DeclarationInScope{loc, &ptr}});
@@ -563,7 +563,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
             }
             for (auto& type : RecursiveVisitor(result, TYPE_NEXT_FN))
             {
-                if (auto* valArrayType = type.get_if<ValArrayType>())
+                if (auto* valArrayType = type.tryAs<ValArrayType>())
                 {
                     decls.push_back(valArrayType->getExpression());
                 }
@@ -698,7 +698,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                 std::size_t size = 0;
                 auto expr = visit(*iter.optionalInitializer, declaration->getType(),
                                   declaration->getLifetime() == Lifetime::Static, &size);
-                if (auto* abstractArray = declaration->getType().get_if<AbstractArrayType>())
+                if (auto* abstractArray = declaration->getType().tryAs<AbstractArrayType>())
                 {
                     prevType.emplace<ArrayType>(prevType->isConst(), prevType->isVolatile(),
                                                 abstractArray->isRestricted(), false, &abstractArray->getType(), size);
@@ -1060,7 +1060,7 @@ bool cld::Semantics::SemanticAnalysis::typesAreCompatible(const cld::Semantics::
         {
             return true;
         }
-        return lhs.cast<ArrayType>().getSize() == rhs.cast<ArrayType>().getSize();
+        return lhs.as<ArrayType>().getSize() == rhs.as<ArrayType>().getSize();
     }
     if (lhs.index() != rhs.index())
     {
@@ -1068,8 +1068,8 @@ bool cld::Semantics::SemanticAnalysis::typesAreCompatible(const cld::Semantics::
     }
     if (lhs.is<PointerType>())
     {
-        auto& lhsType = lhs.cast<PointerType>();
-        auto& rhsType = rhs.cast<PointerType>();
+        auto& lhsType = lhs.as<PointerType>();
+        auto& rhsType = rhs.as<PointerType>();
         if (lhsType.isRestricted() != rhsType.isRestricted())
         {
             return false;
@@ -1083,8 +1083,8 @@ bool cld::Semantics::SemanticAnalysis::typesAreCompatible(const cld::Semantics::
         // compatibility and of a composite type, each parameter declared with function or array
         // type is taken as having the adjusted type and each parameter declared with qualified type
         // is taken as having the unqualified version of its declared type.)
-        auto& lhsFtype = lhs.cast<FunctionType>();
-        auto& rhsFtype = rhs.cast<FunctionType>();
+        auto& lhsFtype = lhs.as<FunctionType>();
+        auto& rhsFtype = rhs.as<FunctionType>();
         if (!typesAreCompatible(lhsFtype.getReturnType(), rhsFtype.getReturnType()))
         {
             return false;
@@ -1177,7 +1177,7 @@ bool cld::Semantics::SemanticAnalysis::typesAreCompatible(const cld::Semantics::
 cld::IntrVarValue<cld::Semantics::Type>
     cld::Semantics::SemanticAnalysis::defaultArgumentPromotion(cld::IntrVarValue<Type> type)
 {
-    auto* prim = type->get_if<PrimitiveType>();
+    auto* prim = type->tryAs<PrimitiveType>();
     if (!prim)
     {
         return type;
@@ -1196,11 +1196,11 @@ cld::IntrVarValue<cld::Semantics::Type>
 
 cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::integerPromotion(cld::IntrVarValue<Type> type)
 {
-    if (auto* enumType = type->get_if<EnumType>())
+    if (auto* enumType = type->tryAs<EnumType>())
     {
         return enumType->getInfo().type.getType();
     }
-    auto* prim = type->get_if<PrimitiveType>();
+    auto* prim = type->tryAs<PrimitiveType>();
     if (!prim)
     {
         return lvalueConversion(std::move(type));
@@ -1244,37 +1244,36 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::compos
                     CLD_UNREACHABLE;
                 });
         };
-        if (auto* array = lhs.get_if<ArrayType>())
+        if (auto* array = lhs.tryAs<ArrayType>())
         {
             return ArrayType(lhs.isConst(), lhs.isVolatile(), array->isRestricted(), array->isStatic(),
                              typeAlloc(*compositeType(array->getType(), getElementType(rhs))), array->getSize());
         }
-        if (auto* array = rhs.get_if<ArrayType>())
+        if (auto* array = rhs.tryAs<ArrayType>())
         {
             return ArrayType(rhs.isConst(), rhs.isVolatile(), array->isRestricted(), array->isStatic(),
                              typeAlloc(*compositeType(array->getType(), getElementType(lhs))), array->getSize());
         }
-        if (auto* valArray = lhs.get_if<ValArrayType>())
+        if (auto* valArray = lhs.tryAs<ValArrayType>())
         {
             return ValArrayType(lhs.isConst(), lhs.isVolatile(), valArray->isRestricted(), valArray->isStatic(),
                                 typeAlloc(*compositeType(valArray->getType(), getElementType(rhs))),
                                 valArray->getExpression());
         }
-        if (auto* valArray = rhs.get_if<ValArrayType>())
+        if (auto* valArray = rhs.tryAs<ValArrayType>())
         {
             return ValArrayType(rhs.isConst(), rhs.isVolatile(), valArray->isRestricted(), valArray->isStatic(),
                                 typeAlloc(*compositeType(valArray->getType(), getElementType(lhs))),
                                 valArray->getExpression());
         }
         auto& abstractArray = lhs.is<AbstractArrayType>() ? lhs : rhs;
-        return AbstractArrayType(rhs.isConst(), rhs.isVolatile(),
-                                 abstractArray.cast<AbstractArrayType>().isRestricted(),
+        return AbstractArrayType(rhs.isConst(), rhs.isVolatile(), abstractArray.as<AbstractArrayType>().isRestricted(),
                                  typeAlloc(*compositeType(getElementType(lhs), getElementType(rhs))));
     }
     if (lhs.is<FunctionType>())
     {
-        auto& lhsFtype = lhs.cast<FunctionType>();
-        auto& rhsFtype = rhs.cast<FunctionType>();
+        auto& lhsFtype = lhs.as<FunctionType>();
+        auto& rhsFtype = rhs.as<FunctionType>();
         if (lhsFtype.isKandR() && !rhsFtype.isKandR())
         {
             return rhs;
@@ -1299,7 +1298,7 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::compos
     }
     if (lhs.is<PointerType>())
     {
-        return PointerType(rhs.isConst(), rhs.isVolatile(), rhs.cast<PointerType>().isRestricted(),
+        return PointerType(rhs.isConst(), rhs.isVolatile(), rhs.as<PointerType>().isRestricted(),
                            typeAlloc(*compositeType(getPointerElementType(lhs), getPointerElementType(rhs))));
     }
     return *typeAlloc(rhs);
@@ -1307,7 +1306,7 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::compos
 
 bool cld::Semantics::SemanticAnalysis::hasFlexibleArrayMember(const Type& type) const
 {
-    if (auto* structType = type.get_if<StructType>())
+    if (auto* structType = type.tryAs<StructType>())
     {
         auto* maybeStructDef = std::get_if<StructDefinition>(&structType->getInfo().type);
         if (maybeStructDef)
@@ -1316,7 +1315,7 @@ bool cld::Semantics::SemanticAnalysis::hasFlexibleArrayMember(const Type& type) 
                    && isAbstractArray(*maybeStructDef->getFields().back().second.type);
         }
     }
-    else if (auto* unionType = type.get_if<UnionType>())
+    else if (auto* unionType = type.tryAs<UnionType>())
     {
         auto* maybeUnionDef = std::get_if<UnionDefinition>(&unionType->getInfo().type);
         if (maybeUnionDef)
@@ -1476,11 +1475,11 @@ cld::Semantics::ConstValue
                             // constant expression if this wasn't short circuiting. This actually isn't sufficient
                             // though. TODO: Implement a tree walk to check for non integer constant expressions
                             if (mode == Integer && binaryOperator.getRightExpression().is<Conversion>()
-                                && binaryOperator.getRightExpression().cast<Conversion>().getKind()
+                                && binaryOperator.getRightExpression().as<Conversion>().getKind()
                                        == Conversion::Implicit
                                 && isBool(binaryOperator.getRightExpression().getType()))
                             {
-                                auto& rExpr = binaryOperator.getRightExpression().cast<Conversion>().getExpression();
+                                auto& rExpr = binaryOperator.getRightExpression().as<Conversion>().getExpression();
                                 if (!rExpr.getType().isUndefined() && !isInteger(rExpr.getType()))
                                 {
                                     logger(
@@ -1507,11 +1506,11 @@ cld::Semantics::ConstValue
                         {
                             // TODO: Implement a tree walk to check for non integer constant expressions
                             if (mode == Integer && binaryOperator.getRightExpression().is<Conversion>()
-                                && binaryOperator.getRightExpression().cast<Conversion>().getKind()
+                                && binaryOperator.getRightExpression().as<Conversion>().getKind()
                                        == Conversion::Implicit
                                 && isBool(binaryOperator.getRightExpression().getType()))
                             {
-                                auto& rExpr = binaryOperator.getRightExpression().cast<Conversion>().getExpression();
+                                auto& rExpr = binaryOperator.getRightExpression().as<Conversion>().getExpression();
                                 if (!rExpr.getType().isUndefined() && !isInteger(rExpr.getType()))
                                 {
                                     logger(
@@ -1663,7 +1662,7 @@ cld::Semantics::ConstValue
             {
                 if (unaryOperator.getOperand().is<UnaryOperator>())
                 {
-                    auto& innerUnary = unaryOperator.getOperand().cast<UnaryOperator>();
+                    auto& innerUnary = unaryOperator.getOperand().as<UnaryOperator>();
                     if (innerUnary.getKind() == UnaryOperator::Dereference)
                     {
                         return evaluate(innerUnary.getOperand(), mode, logger);
@@ -1671,7 +1670,7 @@ cld::Semantics::ConstValue
                 }
                 else if (unaryOperator.getOperand().is<SubscriptOperator>())
                 {
-                    auto& subScript = unaryOperator.getOperand().cast<SubscriptOperator>();
+                    auto& subScript = unaryOperator.getOperand().as<SubscriptOperator>();
                     auto lhs = evaluate(subScript.getLeftExpression(), mode, logger);
                     auto rhs = evaluate(subScript.getRightExpression(), mode, logger);
                     if (lhs.isUndefined() || rhs.isUndefined())
@@ -1714,7 +1713,7 @@ cld::Semantics::ConstValue
             if (sizeofOperator.getSize())
             {
                 auto type = PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions());
-                return {llvm::APSInt(llvm::APInt(type.cast<PrimitiveType>().getBitCount(), *sizeofOperator.getSize()))};
+                return {llvm::APSInt(llvm::APInt(type.as<PrimitiveType>().getBitCount(), *sizeofOperator.getSize()))};
             }
             logger(Errors::Semantics::SIZEOF_VAL_MODIFIED_TYPE_CANNOT_BE_DETERMINED_IN_CONSTANT_EXPRESSION.args(
                 sizeofOperator, m_sourceInterface, sizeofOperator));
@@ -1779,7 +1778,7 @@ cld::Semantics::ConstValue
         },
         [&](const BuiltinOffsetOf& builtinOffsetOf) -> ConstValue {
             auto type = PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions());
-            return {llvm::APSInt(llvm::APInt(type.cast<PrimitiveType>().getBitCount(), builtinOffsetOf.getOffset()))};
+            return {llvm::APSInt(llvm::APInt(type.as<PrimitiveType>().getBitCount(), builtinOffsetOf.getOffset()))};
         });
 }
 

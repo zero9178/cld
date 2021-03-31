@@ -310,8 +310,8 @@ TEST_CASE("IntrusiveVariantAllocator", "[IVA]")
             }
             bases.push(allocator.alloc<Derived1>(iter.size, iter.thing));
             CHECK(bases.back()->is<Derived1>());
-            CHECK(bases.back()->cast<Derived1>().size == iter.size);
-            CHECK(bases.back()->cast<Derived1>().thing == iter.thing);
+            CHECK(bases.back()->as<Derived1>().size == iter.size);
+            CHECK(bases.back()->as<Derived1>().thing == iter.thing);
         }
     }
     SECTION("Large amount")

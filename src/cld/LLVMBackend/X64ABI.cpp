@@ -252,7 +252,7 @@ llvm::AttributeList cld::CGLLVM::X64ABI::generateFunctionAttributes(llvm::Attrib
     else if (std::holds_alternative<X64ABIImpl::Unchanged>(adjustment.returnType)
              && Semantics::isInteger(functionType.getReturnType()))
     {
-        auto& prim = functionType.getReturnType().cast<Semantics::PrimitiveType>();
+        auto& prim = functionType.getReturnType().as<Semantics::PrimitiveType>();
         if (prim.getBitCount() < 32)
         {
             if (prim.isSigned())
@@ -277,7 +277,7 @@ llvm::AttributeList cld::CGLLVM::X64ABI::generateFunctionAttributes(llvm::Attrib
                 {
                     return;
                 }
-                auto& prim = arg.cast<Semantics::PrimitiveType>();
+                auto& prim = arg.as<Semantics::PrimitiveType>();
                 if (prim.getBitCount() >= 32)
                 {
                     return;

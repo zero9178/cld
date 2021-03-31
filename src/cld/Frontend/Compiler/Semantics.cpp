@@ -77,8 +77,8 @@ bool cld::Semantics::Type::operator==(const cld::Semantics::Type& rhs) const
     }
     return match([&](auto&& value) -> bool {
         using T = std::decay_t<decltype(value)>;
-        return value == rhs.template cast<T>();
-    });
+            return value == rhs.template as<T>();
+        });
 }
 
 bool cld::Semantics::Type::operator!=(const cld::Semantics::Type& rhs) const
@@ -290,7 +290,7 @@ bool cld::Semantics::UnionType::isAnonymous() const
 
 bool cld::Semantics::isStringLiteralExpr(const ExpressionBase& expression)
 {
-    auto* constant = expression.get_if<Constant>();
+    auto* constant = expression.tryAs<Constant>();
     if (!constant)
     {
         return false;
@@ -305,7 +305,7 @@ bool cld::Semantics::isBitfieldAccess(const ExpressionBase& expression)
     {
         return false;
     }
-    auto& mem = expression.cast<MemberAccess>();
+    auto& mem = expression.as<MemberAccess>();
     return static_cast<bool>(mem.getField().bitFieldBounds);
 }
 
@@ -369,7 +369,7 @@ std::string typeToString(const cld::Semantics::Type& arg)
             [&](const PointerType&) -> const Type* {
                 std::string temp;
                 const auto* curr = maybeCurr;
-                while (auto* pointerType = curr->get_if<PointerType>())
+                while (auto* pointerType = curr->tryAs<PointerType>())
                 {
                     if (pointerType->isRestricted())
                     {
@@ -877,11 +877,11 @@ bool cld::Semantics::isCompleteType(const Type& type)
     {
         return false;
     }
-    if (auto* structType = type.get_if<StructType>())
+    if (auto* structType = type.tryAs<StructType>())
     {
         return std::holds_alternative<StructDefinition>(structType->getInfo().type);
     }
-    if (auto* unionType = type.get_if<UnionType>())
+    if (auto* unionType = type.tryAs<UnionType>())
     {
         return std::holds_alternative<UnionDefinition>(unionType->getInfo().type);
     }
@@ -890,11 +890,11 @@ bool cld::Semantics::isCompleteType(const Type& type)
 
 const cld::Semantics::FieldMap& cld::Semantics::getFields(const cld::Semantics::Type& recordType)
 {
-    if (auto* structType = recordType.get_if<StructType>())
+    if (auto* structType = recordType.tryAs<StructType>())
     {
         return cld::get<StructDefinition>(structType->getInfo().type).getFields();
     }
-    if (auto* unionType = recordType.get_if<UnionType>())
+    if (auto* unionType = recordType.tryAs<UnionType>())
     {
         return cld::get<UnionDefinition>(unionType->getInfo().type).getFields();
     }
@@ -903,7 +903,7 @@ const cld::Semantics::FieldMap& cld::Semantics::getFields(const cld::Semantics::
 
 llvm::ArrayRef<cld::Semantics::MemoryLayout> cld::Semantics::getMemoryLayout(const cld::Semantics::Type& structType)
 {
-    if (auto* structTy = structType.get_if<StructType>())
+    if (auto* structTy = structType.tryAs<StructType>())
     {
         return cld::get<StructDefinition>(structTy->getInfo().type).getMemLayout();
     }
@@ -912,11 +912,11 @@ llvm::ArrayRef<cld::Semantics::MemoryLayout> cld::Semantics::getMemoryLayout(con
 
 llvm::ArrayRef<cld::Semantics::FieldInLayout> cld::Semantics::getFieldLayout(const cld::Semantics::Type& recordType)
 {
-    if (auto* structType = recordType.get_if<StructType>())
+    if (auto* structType = recordType.tryAs<StructType>())
     {
         return cld::get<StructDefinition>(structType->getInfo().type).getFieldLayout();
     }
-    if (auto* unionType = recordType.get_if<UnionType>())
+    if (auto* unionType = recordType.tryAs<UnionType>())
     {
         return cld::get<UnionDefinition>(unionType->getInfo().type).getFieldLayout();
     }

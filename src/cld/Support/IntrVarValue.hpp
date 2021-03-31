@@ -455,7 +455,7 @@ public:
     T& emplace(Args&&... args)
     {
         *this = IntrVarValue(std::in_place_type<T>, std::forward<Args>(args)...);
-        return this->get().template cast<T>();
+        return this->get().template as<T>();
     }
 
     Base* CLD_NON_NULL operator->()

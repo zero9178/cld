@@ -78,7 +78,7 @@ std::pair<cld::Semantics::ConstValue, std::string>
     auto translationUnit = analysis.visit(parsing);
     REQUIRE_THAT(ss.str(), ProducesNoErrors());
     REQUIRE(translationUnit.getGlobals().back()->is<cld::Semantics::FunctionDefinition>());
-    auto& funcDef = translationUnit.getGlobals().back()->cast<cld::Semantics::FunctionDefinition>();
+    auto& funcDef = translationUnit.getGlobals().back()->as<cld::Semantics::FunctionDefinition>();
     REQUIRE(std::holds_alternative<cld::IntrVarPtr<cld::Semantics::Statement>>(
         funcDef.getCompoundStatement().getCompoundItems().back()));
     auto& statement =

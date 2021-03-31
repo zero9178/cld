@@ -23,16 +23,16 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::CompoundStatement& compo
             [&](const std::shared_ptr<const Semantics::ExpressionBase>& expr) {
                 auto result = m_valSizes.emplace(
                     expr, m_builder.CreateIntCast(visit(*expr).value, m_builder.getInt64Ty(),
-                                                  expr->getType().cast<Semantics::PrimitiveType>().isSigned()));
+                                                  expr->getType().as<Semantics::PrimitiveType>().isSigned()));
                 (void)result;
                 CLD_ASSERT(result.second);
             },
             [&](const cld::IntrVarPtr<Semantics::Declaration>& decl) {
-                if (auto* varDecl = decl->get_if<Semantics::VariableDeclaration>())
+                if (auto* varDecl = decl->tryAs<Semantics::VariableDeclaration>())
                 {
                     visit(*varDecl);
                 }
-                else if (auto* funcDecl = decl->get_if<Semantics::FunctionDeclaration>())
+                else if (auto* funcDecl = decl->tryAs<Semantics::FunctionDeclaration>())
                 {
                     visit(*funcDecl);
                 }
@@ -108,11 +108,11 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::ForStatement& forStateme
             }
             for (auto& iter : declaration)
             {
-                if (auto* varDecl = iter->get_if<Semantics::VariableDeclaration>())
+                if (auto* varDecl = iter->tryAs<Semantics::VariableDeclaration>())
                 {
                     visit(*varDecl);
                 }
-                else if (auto* funcDecl = iter->get_if<Semantics::FunctionDeclaration>())
+                else if (auto* funcDecl = iter->tryAs<Semantics::FunctionDeclaration>())
                 {
                     visit(*funcDecl);
                 }
@@ -355,7 +355,7 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::CaseStatement& caseState
                 llvm::ConstantInt::get(switchData.llvmSwitch->getCondition()->getType(), caseStatement.getConstant());
             switchData.llvmSwitch->addCase(llvm::cast<llvm::ConstantInt>(val), bb);
         }
-        visit(caseStatement.getStatement().cast<Semantics::CaseStatement>(), bb);
+        visit(caseStatement.getStatement().as<Semantics::CaseStatement>(), bb);
         return;
     }
     if (bb)

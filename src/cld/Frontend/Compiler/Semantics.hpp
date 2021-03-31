@@ -2598,7 +2598,7 @@ public:
 
     [[nodiscard]] bool isKandR() const
     {
-        return m_type->cast<FunctionType>().isKandR();
+        return m_type->as<FunctionType>().isKandR();
     }
 
     [[nodiscard]] Linkage getLinkage() const
@@ -2943,7 +2943,7 @@ inline std::size_t std::hash<cld::Semantics::Type>::operator()(const cld::Semant
 
 inline bool cld::Semantics::isVoid(const cld::Semantics::Type& type)
 {
-    auto* primitive = type.get_if<PrimitiveType>();
+    auto* primitive = type.tryAs<PrimitiveType>();
     if (!primitive)
     {
         return false;
@@ -2986,23 +2986,23 @@ inline const cld::Semantics::Type& cld::Semantics::getArrayElementType(const Typ
 
 inline const cld::Semantics::Type& cld::Semantics::getVectorElementType(const Type& type)
 {
-    return type.cast<VectorType>().getType();
+    return type.as<VectorType>().getType();
 }
 
 inline const cld::Semantics::Type& cld::Semantics::getPointerElementType(const Type& type)
 {
-    return type.cast<PointerType>().getElementType();
+    return type.as<PointerType>().getElementType();
 }
 
 inline bool cld::Semantics::isInteger(const Type& type)
 {
-    return type.is<PrimitiveType>() && !type.cast<PrimitiveType>().isFloatingPoint()
-           && type.cast<PrimitiveType>().getBitCount() != 0;
+    return type.is<PrimitiveType>() && !type.as<PrimitiveType>().isFloatingPoint()
+           && type.as<PrimitiveType>().getBitCount() != 0;
 }
 
 inline bool cld::Semantics::isArithmetic(const Type& type)
 {
-    return (type.is<PrimitiveType>() && type.cast<PrimitiveType>().getBitCount() != 0) || type.is<EnumType>();
+    return (type.is<PrimitiveType>() && type.as<PrimitiveType>().getBitCount() != 0) || type.is<EnumType>();
 }
 
 inline bool cld::Semantics::isScalar(const Type& type)
@@ -3032,9 +3032,9 @@ inline bool cld::Semantics::isUnion(const cld::Semantics::Type& type)
 
 inline bool cld::Semantics::isAnonymous(const Type& type)
 {
-    return (type.is<EnumType>() && type.cast<EnumType>().isAnonymous())
-           || (type.is<StructType>() && type.cast<StructType>().isAnonymous())
-           || (type.is<UnionType>() && type.cast<UnionType>().isAnonymous());
+    return (type.is<EnumType>() && type.as<EnumType>().isAnonymous())
+           || (type.is<StructType>() && type.as<StructType>().isAnonymous())
+           || (type.is<UnionType>() && type.as<UnionType>().isAnonymous());
 }
 
 inline bool cld::Semantics::isEnum(const Type& type)
@@ -3044,7 +3044,7 @@ inline bool cld::Semantics::isEnum(const Type& type)
 
 inline bool cld::Semantics::isBool(const cld::Semantics::Type& type)
 {
-    auto* primitive = type.get_if<PrimitiveType>();
+    auto* primitive = type.tryAs<PrimitiveType>();
     if (!primitive)
     {
         return false;
@@ -3054,7 +3054,7 @@ inline bool cld::Semantics::isBool(const cld::Semantics::Type& type)
 
 inline bool cld::Semantics::isCharType(const cld::Semantics::Type& type)
 {
-    auto* primitive = type.get_if<PrimitiveType>();
+    auto* primitive = type.tryAs<PrimitiveType>();
     if (!primitive)
     {
         return false;
@@ -3090,9 +3090,9 @@ inline bool cld::Semantics::isFunctionType(const Type& type)
 
 inline cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::removeQualifiers(const Type& type)
 {
-    if (type.isConst() || type.isVolatile() || (isPointer(type) && type.cast<PointerType>().isRestricted()))
+    if (type.isConst() || type.isVolatile() || (isPointer(type) && type.as<PointerType>().isRestricted()))
     {
-        if (!isPointer(type) || !type.cast<PointerType>().isRestricted())
+        if (!isPointer(type) || !type.as<PointerType>().isRestricted())
         {
             IntrVarValue<Type> copy = type;
             copy->setConst(false);

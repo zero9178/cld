@@ -194,7 +194,7 @@ void cld::Semantics::SemanticAnalysis::applyVectorSizeAttribute(AffectsTypeVaria
             });
         return;
     }
-    if (baseType.cast<PrimitiveType>().getKind() == PrimitiveType::LongDouble)
+    if (baseType.as<PrimitiveType>().getKind() == PrimitiveType::LongDouble)
     {
         cld::match(
             applicant,
