@@ -155,6 +155,16 @@ std::uint64_t cld::Semantics::EnumType::getAlignOf(const ProgramInterface& progr
     return getInfo().type.getType().getAlignOf(program);
 }
 
+std::string_view cld::Semantics::EnumType::getEnumName() const
+{
+    return m_info->name;
+}
+
+bool cld::Semantics::EnumType::isAnonymous() const
+{
+    return m_info->name.empty();
+}
+
 bool cld::Semantics::PrimitiveType::operator==(const cld::Semantics::PrimitiveType& rhs) const
 {
     if (!equals(rhs))
@@ -248,6 +258,16 @@ std::uint64_t cld::Semantics::StructType::getAlignOf(const ProgramInterface&) co
     return cld::get<StructDefinition>(getInfo().type).getAlignOf();
 }
 
+std::string_view cld::Semantics::StructType::getStructName() const
+{
+    return m_info->name;
+}
+
+bool cld::Semantics::StructType::isAnonymous() const
+{
+    return m_info->name.empty();
+}
+
 std::uint64_t cld::Semantics::UnionType::getSizeOf(const ProgramInterface&) const
 {
     return cld::get<UnionDefinition>(getInfo().type).getAlignOf();
@@ -256,6 +276,16 @@ std::uint64_t cld::Semantics::UnionType::getSizeOf(const ProgramInterface&) cons
 std::uint64_t cld::Semantics::UnionType::getAlignOf(const ProgramInterface&) const
 {
     return cld::get<UnionDefinition>(getInfo().type).getAlignOf();
+}
+
+std::string_view cld::Semantics::UnionType::getUnionName() const
+{
+    return m_info->name;
+}
+
+bool cld::Semantics::UnionType::isAnonymous() const
+{
+    return m_info->name.empty();
 }
 
 bool cld::Semantics::isStringLiteralExpr(const ExpressionBase& expression)
@@ -488,7 +518,7 @@ std::string typeToString(const cld::Semantics::Type& arg)
                 }
                 else
                 {
-                    qualifiersAndSpecifiers += "struct " + cld::to_string(structType.getName());
+                    qualifiersAndSpecifiers += "struct " + cld::to_string(structType.getStructName());
                 }
                 return {};
             },
@@ -507,7 +537,7 @@ std::string typeToString(const cld::Semantics::Type& arg)
                 }
                 else
                 {
-                    qualifiersAndSpecifiers += "union " + cld::to_string(unionType.getName());
+                    qualifiersAndSpecifiers += "union " + cld::to_string(unionType.getUnionName());
                 }
                 return {};
             },
@@ -526,7 +556,7 @@ std::string typeToString(const cld::Semantics::Type& arg)
                 }
                 else
                 {
-                    qualifiersAndSpecifiers += "enum " + cld::to_string(enumType.getName());
+                    qualifiersAndSpecifiers += "enum " + cld::to_string(enumType.getEnumName());
                 }
                 return {};
             },
@@ -557,7 +587,7 @@ std::string cld::diag::CustomFormat<U'f', U'u', U'l', U'l'>::operator()(const Se
     auto result = typeToString(arg);
     if (arg.isTypedef())
     {
-        return "'" + cld::to_string(arg.getName()) + "' (aka '" + result + "')";
+        return "'" + cld::to_string(arg.getTypedefName()) + "' (aka '" + result + "')";
     }
     return "'" + result + "'";
 }

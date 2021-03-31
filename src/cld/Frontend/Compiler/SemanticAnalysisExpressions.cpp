@@ -825,8 +825,8 @@ void cld::Semantics::SemanticAnalysis::reportNoMember(const Type& recordType, co
         }
         else
         {
-            log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_UNION_N.args(identifier, m_sourceInterface, identifier,
-                                                                            recordType.cast<UnionType>().getName()));
+            log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_UNION_N.args(
+                identifier, m_sourceInterface, identifier, recordType.cast<UnionType>().getUnionName()));
         }
     }
     if (isStruct(recordType))
@@ -838,8 +838,8 @@ void cld::Semantics::SemanticAnalysis::reportNoMember(const Type& recordType, co
         }
         else
         {
-            log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_STRUCT_N.args(identifier, m_sourceInterface, identifier,
-                                                                             recordType.cast<StructType>().getName()));
+            log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_STRUCT_N.args(
+                identifier, m_sourceInterface, identifier, recordType.cast<StructType>().getStructName()));
         }
     }
 }
@@ -856,7 +856,7 @@ std::optional<std::pair<const cld::Semantics::Type*, const cld::Semantics::Field
         if (!structDef)
         {
             log(Errors::Semantics::STRUCT_N_IS_AN_INCOMPLETE_TYPE.args(postFixExpr, m_sourceInterface,
-                                                                       structType->getName(), postFixExpr));
+                                                                       structType->getStructName(), postFixExpr));
             return {};
         }
         fields = &structDef->getFields();
@@ -867,7 +867,7 @@ std::optional<std::pair<const cld::Semantics::Type*, const cld::Semantics::Field
         if (!unionDef)
         {
             log(Errors::Semantics::UNION_N_IS_AN_INCOMPLETE_TYPE.args(postFixExpr, m_sourceInterface,
-                                                                      unionType->getName(), postFixExpr));
+                                                                      unionType->getUnionName(), postFixExpr));
             return {};
         }
         fields = &unionDef->getFields();
@@ -3684,7 +3684,7 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const Syntax
                                 else
                                 {
                                     log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_STRUCT_N.args(
-                                        *token, m_sourceInterface, *token, structType.getName()));
+                                        *token, m_sourceInterface, *token, structType.getStructName()));
                                 }
                             },
                             [&](const UnionType& unionType) {
@@ -3696,7 +3696,7 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const Syntax
                                 else
                                 {
                                     log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_UNION_N.args(
-                                        *token, m_sourceInterface, *token, unionType.getName()));
+                                        *token, m_sourceInterface, *token, unionType.getUnionName()));
                                 }
                             },
                             [&](const auto&) { CLD_UNREACHABLE; });

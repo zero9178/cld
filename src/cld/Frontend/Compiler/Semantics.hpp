@@ -290,12 +290,12 @@ public:
         m_isVolatile = isVolatile;
     }
 
-    [[nodiscard]] std::string_view getName() const
+    [[nodiscard]] std::string_view getTypedefName() const
     {
         return m_name;
     }
 
-    void setName(std::string_view name)
+    void setTypedefName(std::string_view name)
     {
         m_name = name;
     }
@@ -720,24 +720,17 @@ public:
 
 class StructType final : public Type
 {
-    std::string_view m_name;
     const StructInfo* m_info;
 
 public:
-    StructType(bool isConst, bool isVolatile, std::string_view name, const StructInfo& info)
-        : Type(std::in_place_type<StructType>, isConst, isVolatile), m_name(name), m_info(&info)
+    StructType(bool isConst, bool isVolatile, const StructInfo& info)
+        : Type(std::in_place_type<StructType>, isConst, isVolatile), m_info(&info)
     {
     }
 
-    [[nodiscard]] std::string_view getName() const
-    {
-        return m_name;
-    }
+    [[nodiscard]] std::string_view getStructName() const;
 
-    [[nodiscard]] bool isAnonymous() const
-    {
-        return m_name.empty();
-    }
+    [[nodiscard]] bool isAnonymous() const;
 
     [[nodiscard]] const StructInfo& getInfo() const
     {
@@ -765,24 +758,17 @@ public:
 
 class UnionType final : public Type
 {
-    std::string_view m_name;
     const UnionInfo* m_info;
 
 public:
-    UnionType(bool isConst, bool isVolatile, std::string_view name, const UnionInfo& info)
-        : Type(std::in_place_type<UnionType>, isConst, isVolatile), m_name(name), m_info(&info)
+    UnionType(bool isConst, bool isVolatile, const UnionInfo& info)
+        : Type(std::in_place_type<UnionType>, isConst, isVolatile), m_info(&info)
     {
     }
 
-    [[nodiscard]] std::string_view getName() const
-    {
-        return m_name;
-    }
+    [[nodiscard]] std::string_view getUnionName() const;
 
-    [[nodiscard]] bool isAnonymous() const
-    {
-        return m_name.empty();
-    }
+    [[nodiscard]] bool isAnonymous() const;
 
     [[nodiscard]] const UnionInfo& getInfo() const
     {
@@ -810,24 +796,17 @@ public:
 
 class EnumType final : public Type
 {
-    std::string_view m_name;
     const EnumInfo* m_info;
 
 public:
-    EnumType(bool isConst, bool isVolatile, std::string_view name, const EnumInfo& info)
-        : Type(std::in_place_type<EnumType>, isConst, isVolatile), m_name(name), m_info(&info)
+    EnumType(bool isConst, bool isVolatile, const EnumInfo& info)
+        : Type(std::in_place_type<EnumType>, isConst, isVolatile), m_info(&info)
     {
     }
 
-    [[nodiscard]] std::string_view getName() const
-    {
-        return m_name;
-    }
+    [[nodiscard]] std::string_view getEnumName() const;
 
-    [[nodiscard]] bool isAnonymous() const
-    {
-        return m_name.empty();
-    }
+    [[nodiscard]] bool isAnonymous() const;
 
     [[nodiscard]] const EnumInfo& getInfo() const
     {
@@ -2959,13 +2938,14 @@ struct hash<cld::Semantics::ErrorType>
 
 inline std::size_t std::hash<cld::Semantics::Type>::operator()(const cld::Semantics::Type& type) const noexcept
 {
-    return cld::rawHashCombine(type.match(
-                                   [](const auto& type) -> std::size_t
-                                   {
-                                       using T = std::decay_t<decltype(type)>;
-                                       return std::hash<T>{}(type);
-                                   }),
-                               cld::hashCombine(type.getName(), type.isConst(), type.isVolatile(), type.index()));
+    return cld::rawHashCombine(
+        type.match(
+            [](const auto& type) -> std::size_t
+            {
+                using T = std::decay_t<decltype(type)>;
+                return std::hash<T>{}(type);
+            }),
+        cld::hashCombine(type.getTypedefName(), type.isConst(), type.isVolatile(), type.index()));
 }
 } // namespace std
 

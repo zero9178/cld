@@ -29,6 +29,7 @@ struct StructInfo
     std::variant<StructDefinition, StructDecl> type;
     std::size_t scope;
     const Lexer::CToken* structToken;
+    std::string_view name;
 };
 
 struct UnionInfo
@@ -37,6 +38,7 @@ struct UnionInfo
     std::variant<UnionDefinition, UnionDecl> type;
     std::size_t scope;
     const Lexer::CToken* unionToken;
+    std::string_view name;
 };
 
 struct EnumInfo
@@ -45,6 +47,7 @@ struct EnumInfo
     EnumDefinition type;
     std::size_t scope;
     const Lexer::CToken* enumToken;
+    std::string_view name;
 };
 
 class ProgramInterface

@@ -790,7 +790,7 @@ cld::IntrVarValue<cld::Semantics::Type>
                                                                                  *typeSpec[0]));
             return ErrorType{};
         }
-        return EnumType(isConst, isVolatile, loc->identifier->getText(), *lookup);
+        return EnumType(isConst, isVolatile, *lookup);
     }
     auto& enumDef = cld::get<Syntax::EnumDeclaration>(enumDecl->getVariant());
     // TODO: Type depending on values as an extension
@@ -862,7 +862,7 @@ cld::IntrVarValue<cld::Semantics::Type>
         {m_enumDefinitions.size(),
          EnumDefinition(name, typeAlloc(PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions())),
                         std::move(values)),
-         m_currentScope, enumDef.begin()});
+         m_currentScope, enumDef.begin(), name});
     if (enumDef.getName())
     {
         auto [prev, notRedefined] =
@@ -877,7 +877,7 @@ cld::IntrVarValue<cld::Semantics::Type>
             }
         }
     }
-    return EnumType(isConst, isVolatile, name, m_enumDefinitions.back());
+    return EnumType(isConst, isVolatile, m_enumDefinitions.back());
 }
 
 cld::IntrVarValue<cld::Semantics::Type>
@@ -892,10 +892,10 @@ cld::IntrVarValue<cld::Semantics::Type>
         {
             if (auto* unionInfo = lookupType<UnionInfo>(name))
             {
-                return UnionType(isConst, isVolatile, name, *unionInfo);
+                return UnionType(isConst, isVolatile, *unionInfo);
             }
             m_unionDefinitions.push_back(
-                {m_unionDefinitions.size(), UnionDecl{}, m_currentScope, structOrUnion.begin()});
+                {m_unionDefinitions.size(), UnionDecl{}, m_currentScope, structOrUnion.begin(), name});
             auto [prev, notRedefined] = getCurrentScope().types.insert(
                 {name, TagTypeInScope{structOrUnion.getIdentifierLoc(), &m_unionDefinitions.back()}});
             if (!notRedefined)
@@ -908,15 +908,15 @@ cld::IntrVarValue<cld::Semantics::Type>
                                                              *prev->second.identifier));
                 }
             }
-            return UnionType(isConst, isVolatile, name, m_unionDefinitions.back());
+            return UnionType(isConst, isVolatile, m_unionDefinitions.back());
         }
 
         if (auto* structInfo = lookupType<StructInfo>(name))
         {
-            return StructType(isConst, isVolatile, name, *structInfo);
+            return StructType(isConst, isVolatile, *structInfo);
         }
         m_structDefinitions.push_back(
-            {m_structDefinitions.size(), StructDecl{}, m_currentScope, structOrUnion.begin()});
+            {m_structDefinitions.size(), StructDecl{}, m_currentScope, structOrUnion.begin(), name});
         auto [prev, notRedefined] = getCurrentScope().types.insert(
             {name, TagTypeInScope{structOrUnion.getIdentifierLoc(), &m_structDefinitions.back()}});
         if (!notRedefined)
@@ -929,7 +929,7 @@ cld::IntrVarValue<cld::Semantics::Type>
                                                          *prev->second.identifier));
             }
         }
-        return StructType(isConst, isVolatile, name, m_structDefinitions.back());
+        return StructType(isConst, isVolatile, m_structDefinitions.back());
     }
 
     std::variant<std::monostate, UnionInfo * CLD_NON_NULL, StructInfo * CLD_NON_NULL> structOrUnionInfo;
@@ -938,13 +938,13 @@ cld::IntrVarValue<cld::Semantics::Type>
         if (structOrUnion.isUnion())
         {
             m_unionDefinitions.push_back(
-                {m_unionDefinitions.size(), UnionDecl{}, m_currentScope, structOrUnion.begin()});
+                {m_unionDefinitions.size(), UnionDecl{}, m_currentScope, structOrUnion.begin(), ""});
             structOrUnionInfo = &m_unionDefinitions.back();
         }
         else
         {
             m_structDefinitions.push_back(
-                {m_structDefinitions.size(), StructDecl{}, m_currentScope, structOrUnion.begin()});
+                {m_structDefinitions.size(), StructDecl{}, m_currentScope, structOrUnion.begin(), ""});
             structOrUnionInfo = &m_structDefinitions.back();
         }
     }
@@ -975,7 +975,7 @@ cld::IntrVarValue<cld::Semantics::Type>
             else
             {
                 m_unionDefinitions.push_back(
-                    {m_unionDefinitions.size(), UnionDecl{}, m_currentScope, structOrUnion.begin()});
+                    {m_unionDefinitions.size(), UnionDecl{}, m_currentScope, structOrUnion.begin(), name});
                 structOrUnionInfo = &m_unionDefinitions.back();
                 getCurrentScope().types.insert(
                     {name, TagTypeInScope{structOrUnion.getIdentifierLoc(), &m_unionDefinitions.back()}});
@@ -1005,7 +1005,7 @@ cld::IntrVarValue<cld::Semantics::Type>
             else
             {
                 m_structDefinitions.push_back(
-                    {m_structDefinitions.size(), StructDecl{}, m_currentScope, structOrUnion.begin()});
+                    {m_structDefinitions.size(), StructDecl{}, m_currentScope, structOrUnion.begin(), name});
                 structOrUnionInfo = &m_structDefinitions.back();
                 getCurrentScope().types.insert(
                     {name, TagTypeInScope{structOrUnion.getIdentifierLoc(), &m_structDefinitions.back()}});
@@ -1408,12 +1408,12 @@ cld::IntrVarValue<cld::Semantics::Type>
         cld::get<UnionInfo*>(structOrUnionInfo)
             ->type.emplace<UnionDefinition>(name, std::move(fields), std::move(fieldLayout), currentSize,
                                             currentAlignment);
-        return UnionType(isConst, isVolatile, name, *cld::get<UnionInfo*>(structOrUnionInfo));
+        return UnionType(isConst, isVolatile, *cld::get<UnionInfo*>(structOrUnionInfo));
     }
     cld::get<StructInfo*>(structOrUnionInfo)
         ->type.emplace<StructDefinition>(name, std::move(fields), std::move(fieldLayout), std::move(memoryLayout),
                                          currentSize, currentAlignment);
-    return StructType(isConst, isVolatile, name, *cld::get<StructInfo*>(structOrUnionInfo));
+    return StructType(isConst, isVolatile, *cld::get<StructInfo*>(structOrUnionInfo));
 }
 
 cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::primitiveTypeSpecifiersToType(

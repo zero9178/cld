@@ -332,14 +332,14 @@ void cld::Semantics::SemanticAnalysis::createBuiltinTypes()
             auto type =
                 PointerType(false, false, false,
                             typeAlloc(PrimitiveType::createChar(false, false, m_sourceInterface.getLanguageOptions())));
-            type.setName("__builtin_va_list");
+            type.setTypedefName("__builtin_va_list");
             getCurrentScope().declarations.emplace("__builtin_va_list", DeclarationInScope{nullptr, std::move(type)});
             break;
         }
         case LanguageOptions::BuiltInVaList::VoidPtr:
         {
             auto type = PointerType(false, false, false, typeAlloc(PrimitiveType::createVoid(false, false)));
-            type.setName("__builtin_va_list");
+            type.setTypedefName("__builtin_va_list");
             getCurrentScope().declarations.emplace("__builtin_va_list", DeclarationInScope{nullptr, std::move(type)});
             break;
         }
@@ -361,11 +361,11 @@ void cld::Semantics::SemanticAnalysis::createBuiltinTypes()
             m_structDefinitions.push_back({m_structDefinitions.size(),
                                            StructDefinition("__va_list_tag", std::move(fields), std::move(fieldLayout),
                                                             std::move(memLayout), 24, 8),
-                                           0, nullptr});
-            IntrVarValue<Type> elementType = StructType(false, false, "__va_list_tag", m_structDefinitions.back());
+                                           0, nullptr, "__va_list_tag"});
+            IntrVarValue<Type> elementType = StructType(false, false, m_structDefinitions.back());
             getCurrentScope().types.emplace("__va_list_tag", TagTypeInScope{nullptr, &m_structDefinitions.back()});
             elementType = ArrayType(false, false, false, false, typeAlloc(*elementType), 1);
-            elementType->setName("__builtin_va_list");
+            elementType->setTypedefName("__builtin_va_list");
             getCurrentScope().declarations.emplace("__builtin_va_list",
                                                    DeclarationInScope{nullptr, std::move(elementType)});
             break;
@@ -375,10 +375,10 @@ void cld::Semantics::SemanticAnalysis::createBuiltinTypes()
     if (m_sourceInterface.getLanguageOptions().int128Enabled)
     {
         auto type = PrimitiveType::createInt128(false, false);
-        type.setName("__int128_t");
+        type.setTypedefName("__int128_t");
         getCurrentScope().declarations.emplace("__int128_t", DeclarationInScope{nullptr, std::move(type)});
         type = PrimitiveType::createUnsignedInt128(false, false);
-        type.setName("__uint128_t");
+        type.setTypedefName("__uint128_t");
         getCurrentScope().declarations.emplace("__uint128_t", DeclarationInScope{nullptr, std::move(type)});
     }
 }

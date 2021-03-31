@@ -892,7 +892,7 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
         auto* decl = &translationUnit->getGlobals()[0]->cast<cld::Semantics::VariableDeclaration>();
         CHECK(decl->getNameToken()->getText() == "a");
         REQUIRE(decl->getType().is<cld::Semantics::StructType>());
-        CHECK(decl->getType().cast<cld::Semantics::StructType>().getName() == "A");
+        CHECK(decl->getType().cast<cld::Semantics::StructType>().getStructName() == "A");
     }
     SECTION("Defining two variables with one struct definition")
     {
@@ -910,7 +910,7 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
         auto* decl = &translationUnit->getGlobals()[0]->cast<cld::Semantics::VariableDeclaration>();
         CHECK(decl->getNameToken()->getText() == "a");
         REQUIRE(decl->getType().is<cld::Semantics::UnionType>());
-        CHECK(decl->getType().cast<cld::Semantics::UnionType>().getName() == "A");
+        CHECK(decl->getType().cast<cld::Semantics::UnionType>().getUnionName() == "A");
     }
     SECTION("Union alignment")
     {
