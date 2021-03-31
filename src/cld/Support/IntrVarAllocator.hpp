@@ -202,9 +202,6 @@ public:
     IntrVarAllocator(const IntrVarAllocator&) = delete;
     IntrVarAllocator& operator=(const IntrVarAllocator&) = delete;
 
-    IntrVarAllocator(IntrVarAllocator&&) noexcept = default;
-    IntrVarAllocator& operator=(IntrVarAllocator&&) noexcept = default;
-
     ~IntrVarAllocator()
     {
         if constexpr (needsDestructor)
@@ -216,6 +213,22 @@ public:
         }
     }
 
+    IntrVarAllocator(IntrVarAllocator&&) noexcept = default;
+
+    IntrVarAllocator& operator=(IntrVarAllocator&& rhs) noexcept
+    {
+        if constexpr (needsDestructor)
+        {
+            for (std::size_t i = 0; i < m_slabs.size(); i++)
+            {
+                destroySlab(m_heads[i], *m_slabs[i]);
+            }
+        }
+        m_slabs = std::move(rhs.m_slabs);
+        m_heads = std::move(rhs.m_heads);
+        return *this;
+    }
+
     void destroy(cld::not_null<const Base> object)
     {
         Base* casted = const_cast<Base*>(object.get());
@@ -225,10 +238,12 @@ public:
                          [pointerIntoObject](const std::unique_ptr<Slab>& slab)
                          { return pointerIntoObject >= slab->storage && pointerIntoObject < std::end(slab->storage); });
         CLD_ASSERT(slab != m_slabs.end());
-        if ((*slab)->metadata[(pointerIntoObject - (*slab)->storage) / allocSize].destroyed)
+        auto& metadata = (*slab)->metadata[(pointerIntoObject - (*slab)->storage) / allocSize];
+        if (metadata.destroyed)
         {
             return;
         }
+        metadata.destroyed = true;
         auto index = casted->index();
         constexpr std::array<void (*)(Base*), sizeof...(Subclasses)> destructors = {
             +[](Base* base) { std::destroy_at(static_cast<Subclasses*>(base)); }...};
@@ -239,7 +254,9 @@ public:
         auto& head = m_heads[slab - m_slabs.begin()];
         __asan_unpoison_memory_region(pointerToStart, sizeof(std::byte*));
         std::memcpy(pointerToStart, &head, sizeof(std::byte*));
-        __asan_poison_memory_region(pointerToStart + sizeof(std::byte*), allocSize - sizeof(std::byte*));
+        // Poison the whole thing. No one but the allocator should access the emplaced free list. Allocator unpoisons
+        // first
+        __asan_poison_memory_region(pointerToStart, allocSize);
         head = pointerToStart;
     }
 
@@ -255,12 +272,12 @@ public:
     }
 
     template <class U = Base,
-              std::enable_if_t<std::is_same_v<U, Base> && (std::is_copy_constructible_v<Subclasses> && ...)>* = nullptr>
+              std::enable_if_t<std::is_same_v<U, Base> && (std::is_move_constructible_v<Subclasses> && ...)>* = nullptr>
     [[nodiscard]] cld::not_null<Base> alloc(Base&& value)
     {
         constexpr std::array<Base* (*)(IntrVarAllocator*, Base &&), sizeof...(Subclasses)> moveConstructors = {
             +[](IntrVarAllocator* self, Base&& value) -> Base* {
-                return self->alloc<Subclasses>(static_cast<Subclasses&&>(value));
+                return self->alloc<Subclasses>(static_cast<Subclasses&&>(std::move(value)));
             }...};
         return moveConstructors[value.index()](this, std::move(value));
     }
@@ -278,8 +295,9 @@ public:
         if constexpr (needsDestructor)
         {
             auto& slab = *m_slabs[head - m_heads.begin()];
-            slab.metadata[(*head - slab.storage) / allocSize].index = object->index();
-            slab.metadata[(*head - slab.storage) / allocSize].destroyed = false;
+            auto& metadata = slab.metadata[(*head - slab.storage) / allocSize];
+            metadata.index = object->index();
+            metadata.destroyed = false;
         }
         if (previouslyContained != 0)
         {
