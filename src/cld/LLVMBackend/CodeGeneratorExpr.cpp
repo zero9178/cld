@@ -1141,8 +1141,8 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::CallExpres
                 llvm::Value* ret;
                 switch (builtin.getKind())
                 {
-                    case Semantics::BuiltinFunction::SyncAddAndFetch: ret = add(temp, *type, value, *type); break;
-                    case Semantics::BuiltinFunction::SyncSubAndFetch: ret = sub(temp, *type, value, *type); break;
+                    case Semantics::BuiltinFunction::SyncAddAndFetch: ret = add(temp, type, value, type); break;
+                    case Semantics::BuiltinFunction::SyncSubAndFetch: ret = sub(temp, type, value, type); break;
                     case Semantics::BuiltinFunction::SyncOrAndFetch: ret = m_builder.CreateOr(temp, value); break;
                     case Semantics::BuiltinFunction::SyncAndAndFetch: ret = m_builder.CreateAnd(temp, value); break;
                     case Semantics::BuiltinFunction::SyncXorAndFetch: ret = m_builder.CreateXor(temp, value); break;

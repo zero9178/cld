@@ -11,17 +11,17 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
                            std::vector<GNUAttribute>&&)>
         paramCallback)
 {
-    if (isFunctionType(*type))
+    if (isFunctionType(type))
     {
         log(Errors::Semantics::FUNCTION_RETURN_TYPE_MUST_NOT_BE_A_FUNCTION.args(returnTypeLoc, m_sourceInterface,
-                                                                                returnTypeLoc, *type));
+                                                                                returnTypeLoc, type));
         type.emplace<ErrorType>();
         return;
     }
-    if (isArray(*type))
+    if (isArray(type))
     {
         log(Errors::Semantics::FUNCTION_RETURN_TYPE_MUST_NOT_BE_AN_ARRAY.args(returnTypeLoc, m_sourceInterface,
-                                                                              returnTypeLoc, *type));
+                                                                              returnTypeLoc, type));
         type.emplace<ErrorType>();
         return;
     }
@@ -55,7 +55,7 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
             { return declaratorsToType(iter.declarationSpecifiers, *ptr, {}, {}, &attributes); },
             [&](const std::unique_ptr<Syntax::AbstractDeclarator>& ptr)
             { return declaratorsToType(iter.declarationSpecifiers, ptr.get(), &attributes); });
-        if (isVoid(*paramType) && !paramType->isConst() && !paramType->isVolatile()
+        if (isVoid(paramType) && !paramType->isConst() && !paramType->isVolatile()
             && !std::holds_alternative<std::unique_ptr<Syntax::Declarator>>(iter.declarator)
             && !cld::get<std::unique_ptr<Syntax::AbstractDeclarator>>(iter.declarator)
             && parameterTypeList->getParameters().size() == 1 && !parameterTypeList->hasEllipse())
@@ -64,7 +64,7 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
             reportNotApplicableAttributes(attributes);
             return;
         }
-        if (isVoid(*paramType))
+        if (isVoid(paramType))
         {
             log(Errors::Semantics::VOID_TYPE_NOT_ALLOWED_AS_FUNCTION_PARAMETER.args(
                 iter.declarationSpecifiers, m_sourceInterface, iter.declarationSpecifiers));
@@ -79,9 +79,9 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
         // The optional type qualifiers and the keyword static shall appear only in a
         // declaration of a function parameter with an array type, and then only in the outermost
         // array type derivation.
-        if (isArray(*paramType))
+        if (isArray(paramType))
         {
-            auto visitor = RecursiveVisitor(*paramType, ARRAY_TYPE_NEXT_FN);
+            auto visitor = RecursiveVisitor(paramType, ARRAY_TYPE_NEXT_FN);
             auto begin = visitor.begin();
             begin++;
             auto hasStatic = std::any_of(begin, visitor.end(),
@@ -124,7 +124,7 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
         }
         else
         {
-            auto visitor = RecursiveVisitor(*paramType, TYPE_NEXT_FN);
+            auto visitor = RecursiveVisitor(paramType, TYPE_NEXT_FN);
             auto hasStatic = std::any_of(visitor.begin(), visitor.end(),
                                          [](const Type& type)
                                          {
@@ -141,7 +141,7 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
             if (hasStatic)
             {
                 log(Errors::Semantics::ONLY_PARAMETER_OF_ARRAY_TYPE_MAY_BE_STATIC.args(
-                    iter.declarator, m_sourceInterface, iter.declarator, *paramType));
+                    iter.declarator, m_sourceInterface, iter.declarator, paramType));
             }
             auto hasQualifiers = std::any_of(
                 visitor.begin(), visitor.end(),
@@ -160,7 +160,7 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
             if (hasQualifiers)
             {
                 log(Errors::Semantics::ONLY_PARAMETER_OF_ARRAY_TYPE_MAY_BE_QUALIFIED.args(
-                    iter.declarator, m_sourceInterface, iter.declarator, *paramType));
+                    iter.declarator, m_sourceInterface, iter.declarator, paramType));
             }
         }
         std::string_view name;
@@ -172,7 +172,7 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
         }
         // Not transforming array types to pointers here as we might still want to use that information
         // to warn callers.
-        if (isFunctionType(*paramType))
+        if (isFunctionType(paramType))
         {
             paramType.emplace<PointerType>(false, false, false, typeAlloc(std::move(*paramType)));
         }
@@ -312,7 +312,7 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::applyD
                 for (auto& iter : parentheses.getDeclarator().getPointers())
                 {
                     auto [isConst, isVolatile, restricted] = getQualifiers(iter.getTypeQualifiers());
-                    if (restricted && isFunctionType(*type))
+                    if (restricted && isFunctionType(type))
                     {
                         auto restrictQual = std::find_if(
                             iter.getTypeQualifiers().begin(), iter.getTypeQualifiers().end(),
@@ -383,32 +383,32 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::applyD
                 {
                     scope2.emplace(pushScope());
                 }
-                if (isFunctionType(*type))
+                if (isFunctionType(type))
                 {
                     log(Errors::Semantics::FUNCTION_RETURN_TYPE_MUST_NOT_BE_A_FUNCTION.args(
                         /*TODO: Better source location*/ identifiers.getDirectDeclarator(), m_sourceInterface,
-                        /*TODO: Better source location*/ identifiers.getDirectDeclarator(), *type));
+                        /*TODO: Better source location*/ identifiers.getDirectDeclarator(), type));
                     type.emplace<ErrorType>();
                     return;
                 }
-                if (isArray(*type))
+                if (isArray(type))
                 {
                     log(Errors::Semantics::FUNCTION_RETURN_TYPE_MUST_NOT_BE_AN_ARRAY.args(
                         /*TODO: Better source location*/ identifiers.getDirectDeclarator(), m_sourceInterface,
-                        /*TODO: Better source location*/ identifiers.getDirectDeclarator(), *type));
+                        /*TODO: Better source location*/ identifiers.getDirectDeclarator(), type));
                     type.emplace<ErrorType>();
                     return;
                 }
                 if (identifiers.getIdentifiers().empty() && !paramCallback)
                 {
-                    type = FunctionType(typeAlloc(std::move(*type)), {}, false, true);
+                    type = FunctionType(typeAlloc(std::move(type)), {}, false, true);
                     return;
                 }
                 if (!paramCallback || declarationsOwner != &identifiers)
                 {
                     log(Errors::Semantics::IDENTIFIER_LIST_ONLY_ALLOWED_AS_PART_OF_A_FUNCTION_DEFINITION.args(
                         identifiers.getIdentifiers(), m_sourceInterface, identifiers.getIdentifiers()));
-                    type = FunctionType(typeAlloc(std::move(*type)), {}, false, true);
+                    type = FunctionType(typeAlloc(std::move(type)), {}, false, true);
                     return;
                 }
                 std::unordered_map<std::string_view, std::size_t> paramNames;
@@ -719,13 +719,13 @@ cld::IntrVarValue<cld::Semantics::Type>
         // C99 6.7.3§8:
         // If the specification of an array type includes any type qualifiers, the element type is soqualified, not the
         // array type. If the specification of a function type includes any type qualifiers, the behavior is undefined
-        if (isArray(**type))
+        if (isArray(*type))
         {
             if (!isConst && !isVolatile)
             {
                 return *type;
             }
-            auto& elementType = getArrayElementType(**type);
+            auto& elementType = getArrayElementType(*type);
             if ((!isConst || elementType.isConst()) && (!isVolatile || elementType.isVolatile()))
             {
                 return *type;
@@ -1089,7 +1089,7 @@ cld::IntrVarValue<cld::Semantics::Type>
             auto type = declarator ? applyDeclarator(baseType, *declarator, {}, {}, &thisAttributes) : baseType;
             reportNotApplicableAttributes(thisAttributes);
             auto errorLoc = declarator ? diag::getPointRange(*declarator) : diag::getPointRange(specifiers);
-            if (isVoid(*type))
+            if (isVoid(type))
             {
                 if (structOrUnion.isUnion())
                 {
@@ -1103,7 +1103,7 @@ cld::IntrVarValue<cld::Semantics::Type>
                 }
                 type.emplace<ErrorType>();
             }
-            else if (isVariablyModified(*type))
+            else if (isVariablyModified(type))
             {
                 if (structOrUnion.isUnion())
                 {
@@ -1117,37 +1117,37 @@ cld::IntrVarValue<cld::Semantics::Type>
                 }
                 type.emplace<ErrorType>();
             }
-            else if (!isCompleteType(*type) && !(!structOrUnion.isUnion() && last && !first && isAbstractArray(*type)))
+            else if (!isCompleteType(type) && !(!structOrUnion.isUnion() && last && !first && isAbstractArray(type)))
             {
                 if (structOrUnion.isUnion())
                 {
-                    log(Errors::Semantics::INCOMPLETE_TYPE_NOT_ALLOWED_IN_UNION.args(errorLoc, m_sourceInterface, *type,
+                    log(Errors::Semantics::INCOMPLETE_TYPE_NOT_ALLOWED_IN_UNION.args(errorLoc, m_sourceInterface, type,
                                                                                      specifiers, errorLoc));
                 }
                 else
                 {
-                    log(Errors::Semantics::INCOMPLETE_TYPE_NOT_ALLOWED_IN_STRUCT.args(errorLoc, m_sourceInterface,
-                                                                                      *type, specifiers, errorLoc));
+                    log(Errors::Semantics::INCOMPLETE_TYPE_NOT_ALLOWED_IN_STRUCT.args(errorLoc, m_sourceInterface, type,
+                                                                                      specifiers, errorLoc));
                 }
                 type.emplace<ErrorType>();
             }
-            else if (isFunctionType(*type))
+            else if (isFunctionType(type))
             {
                 if (structOrUnion.isUnion())
                 {
                     log(Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_UNION.args(errorLoc, m_sourceInterface,
-                                                                                   specifiers, errorLoc, *type));
+                                                                                   specifiers, errorLoc, type));
                 }
                 else
                 {
                     log(Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_STRUCT.args(errorLoc, m_sourceInterface,
-                                                                                    specifiers, errorLoc, *type));
+                                                                                    specifiers, errorLoc, type));
                 }
                 type.emplace<ErrorType>();
             }
-            else if (!structOrUnion.isUnion() && hasFlexibleArrayMember(*type))
+            else if (!structOrUnion.isUnion() && hasFlexibleArrayMember(type))
             {
-                if (isStruct(*type))
+                if (isStruct(type))
                 {
                     log(Errors::Semantics::STRUCT_WITH_FLEXIBLE_ARRAY_MEMBER_NOT_ALLOWED_IN_STRUCT.args(
                         specifiers, m_sourceInterface, specifiers));
@@ -1164,7 +1164,7 @@ cld::IntrVarValue<cld::Semantics::Type>
             if (size)
             {
                 bool hadValidType = true;
-                if (!type->isUndefined() && !isInteger(*type))
+                if (!type->isUndefined() && !isInteger(type))
                 {
                     log(Errors::Semantics::BITFIELD_MAY_ONLY_BE_OF_TYPE_INT_OR_BOOL.args(specifiers, m_sourceInterface,
                                                                                          specifiers));
@@ -1650,19 +1650,19 @@ void cld::Semantics::SemanticAnalysis::handleArray(IntrVarValue<Type>& type,
                                                    const Lexer::CToken* isStatic, bool valArray,
                                                    const diag::PointRange& returnTypeLoc)
 {
-    if (isFunctionType(*type))
+    if (isFunctionType(type))
     {
         log(Errors::Semantics::ARRAY_ELEMENT_TYPE_MUST_NOT_BE_A_FUNCTION.args(returnTypeLoc, m_sourceInterface,
-                                                                              returnTypeLoc, *type));
+                                                                              returnTypeLoc, type));
         type.emplace<ErrorType>();
     }
-    else if (!isCompleteType(*type))
+    else if (!isCompleteType(type))
     {
         log(Errors::Semantics::ARRAY_ELEMENT_TYPE_MUST_BE_A_COMPLETE_TYPE.args(returnTypeLoc, m_sourceInterface,
-                                                                               returnTypeLoc, *type));
+                                                                               returnTypeLoc, type));
         type.emplace<ErrorType>();
     }
-    else if (hasFlexibleArrayMember(*type))
+    else if (hasFlexibleArrayMember(type))
     {
         log(Errors::Semantics::ARRAY_ELEMENT_TYPE_MUST_NOT_CONTAIN_A_FLEXIBLE_ARRAY_MEMBER.args(
             returnTypeLoc, m_sourceInterface, returnTypeLoc));

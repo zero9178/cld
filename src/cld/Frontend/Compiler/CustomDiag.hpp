@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cld/Support/IntrVarValue.hpp>
 #include <cld/Support/Text.hpp>
 
 #include <type_traits>
@@ -21,6 +22,20 @@ struct StringConverter
     static std::string inArg(const T& arg, const SourceInterface*)
     {
         return cld::to_string(arg);
+    }
+};
+
+template <class T>
+struct StringConverter<IntrVarValue<T>>
+{
+    static std::string inFormat(const IntrVarValue<T>& arg, const SourceInterface* sourceInterface)
+    {
+        return StringConverter<T>::inFormat(arg, sourceInterface);
+    }
+
+    static std::string inArg(const IntrVarValue<T>& arg, const SourceInterface* sourceInterface)
+    {
+        return StringConverter<T>::inArg(arg, sourceInterface);
     }
 };
 

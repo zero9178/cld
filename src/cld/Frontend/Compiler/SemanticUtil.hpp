@@ -9,27 +9,29 @@
 
 namespace cld::Semantics
 {
-template <class TopType, class Callable>
+template <class StartType, class Callable>
 class RecursiveVisitor
 {
-    const TopType& m_start;
+    const StartType& m_start;
     Callable m_nextFunc;
+
+    using ValueType = std::decay_t<std::remove_pointer_t<std::invoke_result_t<Callable, const StartType&>>>;
 
     class Iterator
     {
-        const TopType* m_curr;
+        const ValueType* m_curr;
         const Callable* m_nextFunc;
 
     public:
-        using reference = const TopType&;
-        using value_type = const TopType;
-        using pointer = const TopType*;
+        using reference = const ValueType&;
+        using value_type = const ValueType;
+        using pointer = const ValueType*;
         using iterator_category = std::forward_iterator_tag;
         using difference_type = void;
 
         Iterator() = default;
 
-        Iterator(const TopType* curr, const Callable* nextFunc) : m_curr(curr), m_nextFunc(nextFunc) {}
+        Iterator(const ValueType* curr, const Callable* nextFunc) : m_curr(curr), m_nextFunc(nextFunc) {}
 
         bool operator==(const Iterator& rhs) const noexcept
         {
@@ -41,13 +43,13 @@ class RecursiveVisitor
             return !(*this == rhs);
         }
 
-        const TopType& operator*() const noexcept
+        const ValueType& operator*() const noexcept
         {
             CLD_ASSERT(m_curr);
             return *m_curr;
         }
 
-        const TopType* operator->() const noexcept
+        const ValueType* operator->() const noexcept
         {
             return m_curr;
         }
@@ -69,20 +71,21 @@ class RecursiveVisitor
     };
 
 public:
-    RecursiveVisitor(const TopType& start, Callable nextFunc) : m_start(start), m_nextFunc(std::move(nextFunc))
+    RecursiveVisitor(const StartType& start, Callable nextFunc) : m_start(start), m_nextFunc(std::move(nextFunc))
     {
-        static_assert(std::is_invocable_r_v<const TopType*, Callable, const TopType&>);
+        static_assert(std::is_convertible_v<const StartType&, const ValueType&>);
+        static_assert(std::is_invocable_r_v<const ValueType*, Callable, const ValueType&>);
     }
 
-    using value_type = const TopType;
-    using reference = const TopType&;
-    using const_reference = const TopType&;
+    using value_type = const ValueType;
+    using reference = const ValueType&;
+    using const_reference = const ValueType&;
     using const_iterator = Iterator;
     using iterator = Iterator;
 
     const_iterator begin() const
     {
-        return Iterator(&m_start, &m_nextFunc);
+        return Iterator(&static_cast<const ValueType&>(m_start), &m_nextFunc);
     }
 
     const_iterator cbegin() const

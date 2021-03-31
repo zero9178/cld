@@ -156,7 +156,7 @@ std::vector<cld::IntrVarPtr<cld::Semantics::Useable>>
                     lifetime = Lifetime ::Register;
                 }
             }
-            paramType = adjustParameterType(*paramType);
+            paramType = adjustParameterType(paramType);
 
             auto& ptr = parameterDeclarations.emplace_back(std::make_unique<VariableDeclaration>(
                 typeAlloc(std::move(*paramType)), Linkage::None, lifetime, loc, VariableDeclaration::Kind::Definition));
@@ -179,7 +179,7 @@ std::vector<cld::IntrVarPtr<cld::Semantics::Useable>>
     {
         log(Errors::Semantics::FUNCTION_DEFINITION_MUST_HAVE_FUNCTION_TYPE.args(
             std::forward_as_tuple(node.getDeclarationSpecifiers(), node.getDeclarator()), m_sourceInterface,
-            std::forward_as_tuple(node.getDeclarationSpecifiers(), node.getDeclarator()), *type));
+            std::forward_as_tuple(node.getDeclarationSpecifiers(), node.getDeclarator()), type));
         return {};
     }
 
@@ -443,7 +443,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                                   std::move_iterator(vector.end()));
         }
 
-        if (isFunctionType(*result) && !isTypedef)
+        if (isFunctionType(result) && !isTypedef)
         {
             if (iter.optionalInitializer)
             {
@@ -489,7 +489,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
             lifetime = Lifetime::Static;
         }
 
-        if (isVariablyModified(*result))
+        if (isVariablyModified(result))
         {
             if (m_currentScope == 0)
             {
@@ -520,7 +520,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                 errors = true;
             }
         }
-        if (isVariableLengthArray(*result))
+        if (isVariableLengthArray(result))
         {
             if (lifetime == Lifetime::Static)
             {
@@ -557,13 +557,13 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                 getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, result}});
             if (!noRedefinition
                 && (!std::holds_alternative<IntrVarValue<Type>>(prev->second.declared)
-                    || !typesAreCompatible(*result, *cld::get<IntrVarValue<Type>>(prev->second.declared))))
+                    || !typesAreCompatible(result, *cld::get<IntrVarValue<Type>>(prev->second.declared))))
             {
                 log(Errors::REDEFINITION_OF_SYMBOL_N.args(*loc, m_sourceInterface, *loc));
                 log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
                                                          *prev->second.identifier));
             }
-            for (auto& type : RecursiveVisitor(*result, TYPE_NEXT_FN))
+            for (auto& type : RecursiveVisitor(result, TYPE_NEXT_FN))
             {
                 if (auto* valArrayType = type.get_if<ValArrayType>())
                 {
@@ -1120,8 +1120,8 @@ bool cld::Semantics::SemanticAnalysis::typesAreCompatible(const cld::Semantics::
                 for (auto& iter : paramFunc.getParameters())
                 {
                     auto nonQualifiedType = removeQualifiers(*iter.type);
-                    auto ret = defaultArgumentPromotion(*nonQualifiedType);
-                    if (!typesAreCompatible(*nonQualifiedType, *ret))
+                    auto ret = defaultArgumentPromotion(nonQualifiedType);
+                    if (!typesAreCompatible(nonQualifiedType, ret))
                     {
                         return false;
                     }
@@ -1142,9 +1142,9 @@ bool cld::Semantics::SemanticAnalysis::typesAreCompatible(const cld::Semantics::
             {
                 auto kandRType = adjustParameterType(*kandRFunc.getParameters()[i].type);
                 auto paramType = adjustParameterType(*paramFunc.getParameters()[i].type);
-                auto nonQualifiedkandR = removeQualifiers(*kandRType);
-                auto nonQualifiedParam = removeQualifiers(*paramType);
-                if (!typesAreCompatible(*defaultArgumentPromotion(*nonQualifiedkandR), *nonQualifiedParam))
+                auto nonQualifiedkandR = removeQualifiers(kandRType);
+                auto nonQualifiedParam = removeQualifiers(paramType);
+                if (!typesAreCompatible(defaultArgumentPromotion(nonQualifiedkandR), nonQualifiedParam))
                 {
                     return false;
                 }
@@ -1167,9 +1167,9 @@ bool cld::Semantics::SemanticAnalysis::typesAreCompatible(const cld::Semantics::
         {
             auto lhsType = adjustParameterType(*lhsFtype.getParameters()[i].type);
             auto rhsType = adjustParameterType(*rhsFtype.getParameters()[i].type);
-            auto nonQualifiedLhs = removeQualifiers(*lhsType);
-            auto nonQualifiedRhs = removeQualifiers(*rhsType);
-            if (!typesAreCompatible(*nonQualifiedLhs, *nonQualifiedRhs))
+            auto nonQualifiedLhs = removeQualifiers(lhsType);
+            auto nonQualifiedRhs = removeQualifiers(rhsType);
+            if (!typesAreCompatible(nonQualifiedLhs, nonQualifiedRhs))
             {
                 return false;
             }

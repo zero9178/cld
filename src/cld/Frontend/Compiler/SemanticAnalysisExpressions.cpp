@@ -169,7 +169,7 @@ bool cld::Semantics::SemanticAnalysis::doAssignmentLikeConstraints(
         return true;
     }
 
-    if (!typesAreCompatible(*removeQualifiers(lhsElementType), *removeQualifiers(rhsElementType)))
+    if (!typesAreCompatible(removeQualifiers(lhsElementType), removeQualifiers(rhsElementType)))
     {
         incompatibleTypes();
         return false;
@@ -411,7 +411,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             }
         }
         rhsValue = std::make_unique<Assignment>(
-            typeAlloc(*resultType), std::move(lhsValue), lhsType,
+            typeAlloc(std::move(*resultType)), std::move(lhsValue), lhsType,
             [kind = kind]
             {
                 switch (kind)
@@ -599,13 +599,13 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     }
     auto type =
         declaratorsToType(vaArg.getTypeName().getSpecifierQualifiers(), vaArg.getTypeName().getAbstractDeclarator());
-    if (!isCompleteType(*type))
+    if (!isCompleteType(type))
     {
-        log(Errors::Semantics::INCOMPLETE_TYPE_N_IN_VA_ARG.args(vaArg.getTypeName(), m_sourceInterface, *type,
+        log(Errors::Semantics::INCOMPLETE_TYPE_N_IN_VA_ARG.args(vaArg.getTypeName(), m_sourceInterface, type,
                                                                 vaArg.getTypeName()));
         return std::make_unique<ErrorExpression>(vaArg);
     }
-    type = removeQualifiers(*type);
+    type = removeQualifiers(type);
     return std::make_unique<BuiltinVAArg>(typeAlloc(std::move(*type)), vaArg.getBuiltinToken(),
                                           vaArg.getOpenParentheses(), std::move(expression),
                                           vaArg.getCloseParentheses());
@@ -616,21 +616,21 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
 {
     auto type =
         declaratorsToType(node.getTypeName().getSpecifierQualifiers(), node.getTypeName().getAbstractDeclarator());
-    if (type->isUndefined() || !isRecord(*type))
+    if (type->isUndefined() || !isRecord(type))
     {
-        if (!isRecord(*type))
+        if (!isRecord(type))
         {
             log(Errors::Semantics::TYPE_N_IN_OFFSETOF_MUST_BE_A_STRUCT_OR_UNION_TYPE.args(
-                node.getTypeName(), m_sourceInterface, *type, node.getTypeName()));
+                node.getTypeName(), m_sourceInterface, type, node.getTypeName()));
         }
         return std::make_unique<ErrorExpression>(
             typeAlloc(PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions())), node);
     }
-    auto& fields = getFields(*type);
+    auto& fields = getFields(type);
     auto result = fields.find(node.getMemberName()->getText());
     if (result == fields.end())
     {
-        reportNoMember(*type, *node.getMemberName());
+        reportNoMember(type, *node.getMemberName());
         return std::make_unique<ErrorExpression>(
             typeAlloc(PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions())), node);
     }
@@ -644,7 +644,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     llvm::ArrayRef<Lexer::CToken> range(node.getMemberName(), node.getMemberName() + 1);
     std::uint64_t currentOffset = 0;
 
-    const Type* currentType = &*type;
+    const Type* currentType = type.data();
     for (auto& iter : result->second.indices)
     {
         if (isUnion(*currentType))
@@ -1289,7 +1289,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::checkFunctionArg(std::size_t i, IntrVarValue<Type> paramType,
                                                        IntrVarPtr<ExpressionBase>&& expression)
 {
-    paramType = removeQualifiers(*adjustParameterType(*paramType));
+    paramType = removeQualifiers(adjustParameterType(paramType));
     if (paramType->isUndefined())
     {
         return {};
@@ -1300,7 +1300,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         return {std::move(expression)};
     }
     doAssignmentLikeConstraints(
-        *paramType, expression,
+        paramType, expression,
         [&]
         {
             log(Errors::Semantics::EXPECTED_ARGUMENT_N_TO_BE_AN_ARITHMETIC_TYPE.args(*expression, m_sourceInterface, i,
@@ -1314,12 +1314,12 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         [&]
         {
             log(Errors::Semantics::CANNOT_PASS_ARGUMENT_TO_INCOMPLETE_TYPE_N_OF_PARAMETER_N.args(
-                *expression, m_sourceInterface, *paramType, i, *expression));
+                *expression, m_sourceInterface, paramType, i, *expression));
         },
         [&]
         {
             log(Errors::Semantics::CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_N.args(
-                *expression, m_sourceInterface, i, *paramType, *expression));
+                *expression, m_sourceInterface, i, paramType, *expression));
         },
         [&] {
             log(Errors::Semantics::EXPECTED_ARGUMENT_N_TO_BE_NULL_2.args(*expression, m_sourceInterface, i,
@@ -1337,7 +1337,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         },
         [&]
         {
-            if (isVoid(getPointerElementType(*paramType)))
+            if (isVoid(getPointerElementType(paramType)))
             {
                 log(Errors::Semantics::CANNOT_PASS_FUNCTION_POINTER_TO_VOID_POINTER_PARAMETER.args(
                     *expression, m_sourceInterface, *expression));
@@ -1570,38 +1570,38 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                                   node.getTypeName().getAbstractDeclarator(), &attributes);
     if (type->isUndefined())
     {
-        visit(node.getInitializerList(), *type, !inFunction() || m_inStaticInitializer);
+        visit(node.getInitializerList(), type, !inFunction() || m_inStaticInitializer);
         return std::make_unique<ErrorExpression>(node);
     }
     // TODO:
     //    attributes = applyAttributes(std::pair{&type, diag::getPointRange(node.getTypeName())},
     //    std::move(attributes)); reportNotApplicableAttributes(attributes);
-    if (isFunctionType(*type))
+    if (isFunctionType(type))
     {
         log(Errors::Semantics::CANNOT_INITIALIZE_FUNCTION_TYPE.args(node.getTypeName(), m_sourceInterface,
-                                                                    node.getTypeName(), *type));
+                                                                    node.getTypeName(), type));
         visit(node.getInitializerList(), ErrorType{}, !inFunction() || m_inStaticInitializer);
         return std::make_unique<ErrorExpression>(node);
     }
-    if (isVariableLengthArray(*type))
+    if (isVariableLengthArray(type))
     {
         log(Errors::Semantics::CANNOT_INITIALIZE_VARIABLE_LENGTH_ARRAY_TYPE.args(node.getTypeName(), m_sourceInterface,
-                                                                                 node.getTypeName(), *type));
+                                                                                 node.getTypeName(), type));
         visit(node.getInitializerList(), ErrorType{}, !inFunction() || m_inStaticInitializer);
         return std::make_unique<ErrorExpression>(node);
     }
     Initializer value{std::make_unique<ErrorExpression>(node)};
-    if (isAbstractArray(*type))
+    if (isAbstractArray(type))
     {
         std::size_t size = 0;
-        value = visit(node.getInitializerList(), *type, !inFunction() || m_inStaticInitializer, &size);
+        value = visit(node.getInitializerList(), type, !inFunction() || m_inStaticInitializer, &size);
         auto& abstractArrayType = type->cast<AbstractArrayType>();
         type = ArrayType(type->isConst(), type->isVolatile(), abstractArrayType.isRestricted(), false,
                          &abstractArrayType.getType(), size);
     }
     else
     {
-        value = visit(node.getInitializerList(), *type, !inFunction() || m_inStaticInitializer);
+        value = visit(node.getInitializerList(), type, !inFunction() || m_inStaticInitializer);
     }
     return std::make_unique<CompoundLiteral>(typeAlloc(std::move(*type)), node.getOpenParentheses(), std::move(value),
                                              node.getCloseParentheses(), node.getInitializerList().end(),
@@ -1781,19 +1781,19 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                 return std::make_unique<ErrorExpression>(node);
             }
             reportNotApplicableAttributes(attributes);
-            if (!isCompleteType(*type))
+            if (!isCompleteType(type))
             {
-                log(Errors::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(*typeName, m_sourceInterface, *type,
+                log(Errors::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(*typeName, m_sourceInterface, type,
                                                                          *typeName));
                 return std::make_unique<ErrorExpression>(node);
             }
-            if (isFunctionType(*type))
+            if (isFunctionType(type))
             {
                 log(Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF.args(*typeName, m_sourceInterface,
-                                                                                 *typeName, *type));
+                                                                                 *typeName, type));
                 return std::make_unique<ErrorExpression>(node);
             }
-            if (!isVariableLengthArray(*type))
+            if (!isVariableLengthArray(type))
             {
                 auto size = type->getSizeOf(*this);
                 return std::make_unique<SizeofOperator>(getLanguageOptions(), node.getSizeOfToken(), size,
@@ -1848,15 +1848,15 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                 return std::make_unique<ErrorExpression>(node);
             }
             value = lvalueConversion(std::move(value));
-            if (isVoid(*type))
+            if (isVoid(type))
             {
-                return std::make_unique<Cast>(typeAlloc(*removeQualifiers(std::move(*type))), cast.openParentheses,
+                return std::make_unique<Cast>(typeAlloc(*removeQualifiers(type)), cast.openParentheses,
                                               cast.closeParentheses, std::move(value));
             }
-            if (!isScalar(*type) && !isVector(*type))
+            if (!isScalar(type) && !isVector(type))
             {
                 log(Errors::Semantics::TYPE_IN_CAST_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
-                    cast.typeName, m_sourceInterface, cast.typeName, *type));
+                    cast.typeName, m_sourceInterface, cast.typeName, type));
                 return std::make_unique<ErrorExpression>(node);
             }
             if (!isScalar(value->getType()) && !isVector(value->getType()))
@@ -1865,23 +1865,23 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                     *value, m_sourceInterface, *value));
                 return std::make_unique<ErrorExpression>(node);
             }
-            type = lvalueConversion(*type);
-            if (isVector(*type) || isVector(value->getType()))
+            type = lvalueConversion(type);
+            if (isVector(type) || isVector(value->getType()))
             {
-                if (isVector(*type) != isVector(value->getType()))
+                if (isVector(type) != isVector(value->getType()))
                 {
                     // Only one of them is a vector
-                    if (!isInteger(*type) && !isInteger(value->getType()))
+                    if (!isInteger(type) && !isInteger(value->getType()))
                     {
                         if (isVector(value->getType()))
                         {
                             log(Errors::Semantics::CANNOT_CAST_FROM_VECTOR_TYPE_TO_NON_INTEGER_OR_VECTOR_TYPE.args(
-                                *value, m_sourceInterface, cast.typeName, *type, *value));
+                                *value, m_sourceInterface, cast.typeName, type, *value));
                         }
                         else
                         {
                             log(Errors::Semantics::CANNOT_CAST_TO_VECTOR_TYPE_FROM_NON_INTEGER_OR_VECTOR_TYPE.args(
-                                *value, m_sourceInterface, cast.typeName, *type, *value));
+                                *value, m_sourceInterface, cast.typeName, type, *value));
                         }
                         return std::make_unique<ErrorExpression>(node);
                     }
@@ -1890,12 +1890,12 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                 auto fromSize = value->getType().getSizeOf(*this);
                 if (toSize != fromSize)
                 {
-                    auto toString = "sizeof(" + diag::StringConverter<Type>::inArg(*type, &m_sourceInterface)
+                    auto toString = "sizeof(" + diag::StringConverter<Type>::inArg(type, &m_sourceInterface)
                                     + ") = " + std::to_string(toSize);
                     auto fromString = "sizeof("
                                       + diag::StringConverter<Type>::inArg(value->getType(), &m_sourceInterface)
                                       + ") = " + std::to_string(fromSize);
-                    if (isVector(*type))
+                    if (isVector(type))
                     {
                         log(Errors::Semantics::CANNOT_CAST_TO_VECTOR_TYPE_FROM_TYPE_OF_DIFFERING_SIZE.args(
                             *value, m_sourceInterface, cast.typeName, toString, *value, fromString));
@@ -1908,7 +1908,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                     return std::make_unique<ErrorExpression>(node);
                 }
             }
-            else if (isPointer(*type))
+            else if (isPointer(type))
             {
                 if (!isPointer(value->getType()) && !isInteger(value->getType()))
                 {
@@ -1919,7 +1919,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             }
             else if (isPointer(value->getType()))
             {
-                if (!isPointer(*type) && !isInteger(*type))
+                if (!isPointer(type) && !isInteger(type))
                 {
                     log(Errors::Semantics::CANNOT_CAST_POINTER_TYPE_TO_NON_INTEGER_AND_POINTER_TYPE.args(
                         cast.typeName, m_sourceInterface, cast.typeName, *value));
@@ -2354,11 +2354,11 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             {
                 auto rhsElementType = removeQualifiers(getPointerElementType(rhsValue->getType()));
                 auto valueElementType = removeQualifiers(getPointerElementType(value->getType()));
-                if (isFunctionType(*valueElementType))
+                if (isFunctionType(valueElementType))
                 {
                     log(Errors::Semantics::POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC.args(
                         *value, m_sourceInterface, *value));
-                    if (isFunctionType(*rhsElementType))
+                    if (isFunctionType(rhsElementType))
                     {
                         log(Errors::Semantics::POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC.args(
                             *rhsValue, m_sourceInterface, *rhsValue));
@@ -2366,12 +2366,12 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                 }
                 else
                 {
-                    if (isFunctionType(*rhsElementType))
+                    if (isFunctionType(rhsElementType))
                     {
                         log(Errors::Semantics::POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC.args(
                             *rhsValue, m_sourceInterface, *rhsValue));
                     }
-                    else if (!typesAreCompatible(*valueElementType, *rhsElementType))
+                    else if (!typesAreCompatible(valueElementType, rhsElementType))
                     {
                         log(Errors::Semantics::CANNOT_COMPARE_POINTERS_OF_INCOMPATIBLE_TYPES.args(
                             *value, m_sourceInterface, *value, *token, *rhsValue));
@@ -2482,15 +2482,15 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             {
                 auto valueElementType = removeQualifiers(getPointerElementType(value->getType()));
                 auto rhsElementType = removeQualifiers(getPointerElementType(rhsValue->getType()));
-                if (!isVoid(*valueElementType) && !isVoid(*rhsElementType)
-                    && !typesAreCompatible(*valueElementType, *rhsElementType))
+                if (!isVoid(valueElementType) && !isVoid(rhsElementType)
+                    && !typesAreCompatible(valueElementType, rhsElementType))
                 {
                     log(Errors::Semantics::CANNOT_COMPARE_POINTERS_OF_INCOMPATIBLE_TYPES.args(
                         *value, m_sourceInterface, *value, *token, *rhsValue));
                 }
                 if (valueElementType != rhsElementType)
                 {
-                    if (isVoid(*valueElementType))
+                    if (isVoid(valueElementType))
                     {
                         value =
                             std::make_unique<Conversion>(&rhsValue->getType(), Conversion::Implicit, std::move(value));
@@ -2739,14 +2739,14 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             auto& thirdElementType = getPointerElementType(third->getType());
             auto secondWithoutQualifier = removeQualifiers(secondElementType);
             auto thirdWithoutQualifier = removeQualifiers(thirdElementType);
-            if (!isVoid(*secondWithoutQualifier) && !isVoid(*thirdWithoutQualifier)
-                && !typesAreCompatible(*secondWithoutQualifier, *thirdWithoutQualifier))
+            if (!isVoid(secondWithoutQualifier) && !isVoid(thirdWithoutQualifier)
+                && !typesAreCompatible(secondWithoutQualifier, thirdWithoutQualifier))
             {
                 log(Errors::Semantics::POINTER_TYPES_IN_CONDITIONAL_EXPRESSION_MUST_BE_OF_COMPATIBLE_TYPES.args(
                     *node.getOptionalQuestionMark(), m_sourceInterface, *node.getOptionalQuestionMark(), *second,
                     *node.getOptionalColon(), *third));
             }
-            else if (isVoid(*secondWithoutQualifier) || isVoid(*thirdWithoutQualifier))
+            else if (isVoid(secondWithoutQualifier) || isVoid(*thirdWithoutQualifier))
             {
                 resultType =
                     typeAlloc<PointerType>(false, false, false,
@@ -2756,7 +2756,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             }
             else
             {
-                IntrVarValue<Type> composite = compositeType(*secondWithoutQualifier, *thirdWithoutQualifier);
+                IntrVarValue<Type> composite = compositeType(secondWithoutQualifier, thirdWithoutQualifier);
                 composite->setConst(secondElementType.isConst() || thirdElementType.isConst());
                 composite->setVolatile(secondElementType.isVolatile() || thirdElementType.isVolatile());
                 resultType = typeAlloc<PointerType>(false, false, false, typeAlloc(std::move(*composite)));

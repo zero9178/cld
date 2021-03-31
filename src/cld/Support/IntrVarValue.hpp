@@ -412,10 +412,9 @@ public:
         return *this;
     }
 
-    template <class T, class... Args>
+    template <class T, class... Args, std::enable_if_t<(std::is_same_v<T, SubClasses> || ...)>* = nullptr>
     IntrVarValue(std::in_place_type_t<T>, Args&&... args)
     {
-        static_assert((std::is_same_v<T, SubClasses> || ...));
         auto* object = new (this->m_storage) T(std::forward<Args>(args)...);
         this->m_index = object->index();
     }
@@ -439,7 +438,7 @@ public:
         moveConstructors[this->m_index](this->m_storage, std::move(value));
     }
 
-    template <class T, class... Args>
+    template <class T, class... Args, std::enable_if_t<(std::is_same_v<T, SubClasses> || ...)>* = nullptr>
     T& emplace(Args&&... args)
     {
         *this = IntrVarValue(std::in_place_type<T>, std::forward<Args>(args)...);
@@ -454,6 +453,21 @@ public:
     const Base* CLD_NON_NULL operator->() const
     {
         return &get();
+    }
+
+    Base* CLD_NON_NULL data()
+    {
+        return &get();
+    }
+
+    const Base* CLD_NON_NULL data() const
+    {
+        return &get();
+    }
+
+    operator const Base&() const&
+    {
+        return get();
     }
 
     Base& operator*() &
@@ -472,14 +486,38 @@ public:
     }
 };
 
-template <class T, std::enable_if_t<IsEqualComparable<T, T>{}>* = nullptr>
-bool operator==(const IntrVarValue<T>& lhs, const IntrVarValue<T>& rhs)
+template <class T, class U, std::enable_if_t<IsEqualComparable<T, U>{}>* = nullptr>
+bool operator==(const IntrVarValue<T>& lhs, const IntrVarValue<U>& rhs)
 {
     return *lhs == *rhs;
 }
 
-template <class T, std::enable_if_t<IsEqualComparable<T, T>{}>* = nullptr>
-bool operator!=(const IntrVarValue<T>& lhs, const IntrVarValue<T>& rhs)
+template <class T, class U, std::enable_if_t<IsEqualComparable<T, U>{}>* = nullptr>
+bool operator!=(const IntrVarValue<T>& lhs, const IntrVarValue<U>& rhs)
+{
+    return !(lhs == rhs);
+}
+
+template <class T, class U, std::enable_if_t<IsEqualComparable<T, U>{}>* = nullptr>
+bool operator==(const IntrVarValue<T>& lhs, const U& rhs)
+{
+    return *lhs == rhs;
+}
+
+template <class T, class U, std::enable_if_t<IsEqualComparable<T, U>{}>* = nullptr>
+bool operator==(const T& lhs, const IntrVarValue<U>& rhs)
+{
+    return lhs == *rhs;
+}
+
+template <class T, class U, std::enable_if_t<IsEqualComparable<T, U>{}>* = nullptr>
+bool operator!=(const T& lhs, const IntrVarValue<U>& rhs)
+{
+    return !(lhs == rhs);
+}
+
+template <class T, class U, std::enable_if_t<IsEqualComparable<T, U>{}>* = nullptr>
+bool operator!=(const IntrVarValue<T>& lhs, const U& rhs)
 {
     return !(lhs == rhs);
 }
