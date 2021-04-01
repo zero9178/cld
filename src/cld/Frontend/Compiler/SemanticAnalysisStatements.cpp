@@ -246,14 +246,14 @@ void cld::Semantics::SemanticAnalysis::checkForIllegalSwitchJumps(
                     break;
                 }
             }
-            else if (auto* typeDef = std::get_if<IntrVarValue<Type>>(&decl.declared))
+            else if (auto* typeDef = std::get_if<TypedefInfo>(&decl.declared))
             {
-                if (isVariablyModified(**typeDef))
+                if (isVariablyModified(typeDef->type))
                 {
                     isTypedef = true;
                     illegalJump = true;
                     identifier = decl.identifier;
-                    type = &**typeDef;
+                    type = typeDef->type.data();
                     break;
                 }
             }
@@ -435,14 +435,14 @@ void cld::Semantics::SemanticAnalysis::resolveGotos()
                         break;
                     }
                 }
-                if (auto* typeDef = std::get_if<IntrVarValue<Type>>(&decl.declared))
+                if (auto* typeDef = std::get_if<TypedefInfo>(&decl.declared))
                 {
-                    if (isVariablyModified(**typeDef))
+                    if (isVariablyModified(typeDef->type))
                     {
                         isTypedef = true;
                         illegalJump = true;
                         identifier = decl.identifier;
-                        type = &**typeDef;
+                        type = typeDef->type.data();
                         break;
                     }
                 }

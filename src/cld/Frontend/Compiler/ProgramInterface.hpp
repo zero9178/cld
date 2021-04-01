@@ -50,6 +50,16 @@ struct EnumInfo
     std::string_view name;
 };
 
+struct TypedefInfo
+{
+    std::string_view name;
+    IntrVarValue<Type> type;
+    std::size_t scope;
+    bool isConst : 1;
+    bool isVolatile : 1;
+    const Lexer::CToken* CLD_NULLABLE identifierToken; // nullptr if builtin
+};
+
 class ProgramInterface
 {
 public:
@@ -58,8 +68,8 @@ public:
         const Lexer::CToken* CLD_NULLABLE identifier; // Guaranteed to be non null if the scope isn't global and the
                                                       // declaration isn't a builtin variable like __func__
         using Variant = std::variant<VariableDeclaration * CLD_NON_NULL, FunctionDefinition * CLD_NON_NULL,
-                                     FunctionDeclaration * CLD_NON_NULL, BuiltinFunction * CLD_NON_NULL,
-                                     IntrVarValue<Type>, std::pair<ConstValue, IntrVarValue<Type>>>;
+                                     FunctionDeclaration * CLD_NON_NULL, BuiltinFunction * CLD_NON_NULL, TypedefInfo,
+                                     std::pair<ConstValue, IntrVarValue<Type>>>;
         Variant declared;
     };
 

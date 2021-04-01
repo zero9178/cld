@@ -287,7 +287,7 @@ const cld::Semantics::ProgramInterface::DeclarationInScope::Variant* CLD_NULLABL
                 return PrimitiveType::createDouble(false, false, m_sourceInterface.getLanguageOptions());
             case Types::LongDouble:
                 return PrimitiveType::createLongDouble(false, false, m_sourceInterface.getLanguageOptions());
-            case Types::VAList: return *getTypedef("__builtin_va_list");
+            case Types::VAList: return getTypedef("__builtin_va_list")->type;
             case Types::VoidStar:
                 return PointerType(false, false, false, typeAlloc(PrimitiveType::createVoid(false, false)));
             case Types::ConstVoidStar:
@@ -304,16 +304,16 @@ const cld::Semantics::ProgramInterface::DeclarationInScope::Variant* CLD_NULLABL
     };
 
 #define HANDLE_BUILTIN(a, b) DEF_BUILTIN(b)
-#define HANDLE_X86(signature, name, feature)                                                      \
-    if (m_sourceInterface.getLanguageOptions().targetFeatures->hasFeature(TargetFeatures::IsX86)) \
-    {                                                                                             \
-        std::initializer_list<TargetFeatures::Features> featuresRequired = feature;               \
-        if (std::any_of(featuresRequired.begin(), featuresRequired.end(), [&](auto value) {       \
-                return m_sourceInterface.getLanguageOptions().targetFeatures->hasFeature(value);  \
-            }))                                                                                   \
-        {                                                                                         \
-            DEF_BUILTIN(name);                                                                    \
-        }                                                                                         \
+#define HANDLE_X86(signature, name, feature)                                                                   \
+    if (m_sourceInterface.getLanguageOptions().targetFeatures->hasFeature(TargetFeatures::IsX86))              \
+    {                                                                                                          \
+        std::initializer_list<TargetFeatures::Features> featuresRequired = feature;                            \
+        if (std::any_of(featuresRequired.begin(), featuresRequired.end(),                                      \
+                        [&](auto value)                                                                        \
+                        { return m_sourceInterface.getLanguageOptions().targetFeatures->hasFeature(value); })) \
+        {                                                                                                      \
+            DEF_BUILTIN(name);                                                                                 \
+        }                                                                                                      \
     }
 
 #include "Builtins.def"
@@ -332,15 +332,13 @@ void cld::Semantics::SemanticAnalysis::createBuiltinTypes()
             auto type =
                 PointerType(false, false, false,
                             typeAlloc(PrimitiveType::createChar(false, false, m_sourceInterface.getLanguageOptions())));
-            type.setTypedefName("__builtin_va_list");
-            getCurrentScope().declarations.emplace("__builtin_va_list", DeclarationInScope{nullptr, std::move(type)});
+            insertTypedef({"__builtin_va_list", std::move(type), GLOBAL_SCOPE, false, false, nullptr});
             break;
         }
         case LanguageOptions::BuiltInVaList::VoidPtr:
         {
             auto type = PointerType(false, false, false, typeAlloc(PrimitiveType::createVoid(false, false)));
-            type.setTypedefName("__builtin_va_list");
-            getCurrentScope().declarations.emplace("__builtin_va_list", DeclarationInScope{nullptr, std::move(type)});
+            insertTypedef({"__builtin_va_list", std::move(type), GLOBAL_SCOPE, false, false, nullptr});
             break;
         }
         case LanguageOptions::BuiltInVaList::x86_64ABI:
@@ -364,10 +362,8 @@ void cld::Semantics::SemanticAnalysis::createBuiltinTypes()
                                            0, nullptr, "__va_list_tag"});
             IntrVarValue<Type> elementType = StructType(false, false, m_structDefinitions.back());
             getCurrentScope().types.emplace("__va_list_tag", TagTypeInScope{nullptr, &m_structDefinitions.back()});
-            elementType = ArrayType(false, false, false, false, typeAlloc(*elementType), 1);
-            elementType->setTypedefName("__builtin_va_list");
-            getCurrentScope().declarations.emplace("__builtin_va_list",
-                                                   DeclarationInScope{nullptr, std::move(elementType)});
+            elementType = ArrayType(false, false, false, false, typeAlloc(std::move(*elementType)), 1);
+            insertTypedef({"__builtin_va_list", std::move(elementType), GLOBAL_SCOPE, false, false, nullptr});
             break;
         }
         default: CLD_UNREACHABLE;
@@ -375,10 +371,8 @@ void cld::Semantics::SemanticAnalysis::createBuiltinTypes()
     if (m_sourceInterface.getLanguageOptions().int128Enabled)
     {
         auto type = PrimitiveType::createInt128(false, false);
-        type.setTypedefName("__int128_t");
-        getCurrentScope().declarations.emplace("__int128_t", DeclarationInScope{nullptr, std::move(type)});
+        insertTypedef({"__builtin_va_list", std::move(type), GLOBAL_SCOPE, false, false, nullptr});
         type = PrimitiveType::createUnsignedInt128(false, false);
-        type.setTypedefName("__uint128_t");
-        getCurrentScope().declarations.emplace("__uint128_t", DeclarationInScope{nullptr, std::move(type)});
+        insertTypedef({"__builtin_va_list", std::move(type), GLOBAL_SCOPE, false, false, nullptr});
     }
 }

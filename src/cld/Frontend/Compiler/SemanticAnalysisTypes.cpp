@@ -701,26 +701,26 @@ cld::IntrVarValue<cld::Semantics::Type>
             log(Errors::Semantics::EXPECTED_NO_FURTHER_TYPE_SPECIFIERS_AFTER_TYPENAME.args(
                 *typeSpec[1], m_sourceInterface, llvm::ArrayRef(typeSpec).drop_front()));
         }
-        const auto* type = getTypedef(*name);
-        CLD_ASSERT(type);
+        const auto* typeDef = getTypedef(*name);
+        CLD_ASSERT(typeDef);
         // C99 6.7.3§8:
         // If the specification of an array type includes any type qualifiers, the element type is soqualified, not the
         // array type. If the specification of a function type includes any type qualifiers, the behavior is undefined
-        if (isArray(*type))
+        if (isArray(typeDef->type))
         {
             if (!isConst && !isVolatile)
             {
-                return *type;
+                return typeDef->type;
             }
-            auto& elementType = getArrayElementType(*type);
+            auto& elementType = getArrayElementType(typeDef->type);
             if ((!isConst || elementType.isConst()) && (!isVolatile || elementType.isVolatile()))
             {
-                return *type;
+                return typeDef->type;
             }
             auto newElementType = typeAlloc(elementType);
             newElementType->setConst(elementType.isConst() || isConst);
             newElementType->setVolatile(elementType.isVolatile() || isVolatile);
-            return (*type)->match(
+            return typeDef->type->match(
                 [](const auto&) -> IntrVarValue<Type> { CLD_UNREACHABLE; },
                 [&](const ArrayType& arrayType) -> IntrVarValue<Type> {
                     return ArrayType(arrayType.isConst(), arrayType.isVolatile(), arrayType.isRestricted(),
@@ -735,14 +735,14 @@ cld::IntrVarValue<cld::Semantics::Type>
                                         arrayType.isStatic(), std::move(newElementType), arrayType.getExpression());
                 });
         }
-        if ((isConst && !(*type)->isConst()) || (isVolatile && !(*type)->isVolatile()))
+        if ((isConst && !typeDef->isConst) || (isVolatile && !typeDef->isVolatile))
         {
-            IntrVarValue<Type> copy = *type;
+            IntrVarValue<Type> copy = typeDef->type;
             copy->setConst(isConst || copy->isConst());
             copy->setVolatile(isVolatile || copy->isVolatile());
             return copy;
         }
-        return *type;
+        return typeDef->type;
     }
     if (auto* structOrUnionPtr =
             std::get_if<std::unique_ptr<Syntax::StructOrUnionSpecifier>>(&typeSpec[0]->getVariant()))
@@ -1041,8 +1041,8 @@ cld::IntrVarValue<cld::Semantics::Type>
             {
                 field.indices.insert(field.indices.begin(), static_cast<std::size_t>(-1));
                 field.parentTypes.insert(field.parentTypes.begin(), parentType);
-                if (std::pair(parentType->isConst(), parentType->isVolatile())
-                    > std::pair(field.type->isConst(), field.type->isVolatile()))
+                if ((parentType->isConst() && !field.type->isConst())
+                    || (parentType->isVolatile() && !field.type->isVolatile()))
                 {
                     auto copy = typeAlloc(*field.type);
                     copy->setConst(parentType->isConst() || copy->isConst());

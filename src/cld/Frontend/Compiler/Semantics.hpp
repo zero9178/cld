@@ -34,6 +34,7 @@ namespace cld::Semantics
 struct StructInfo;
 struct UnionInfo;
 struct EnumInfo;
+struct TypedefInfo;
 
 class StructDefinition;
 
@@ -248,7 +249,7 @@ class Type : public AbstractIntrusiveVariant<class PrimitiveType, class ArrayTyp
                                              class EnumType, class PointerType, class VectorType, class ErrorType>,
              public AttributeHolder<TypeAttribute>
 {
-    std::string_view m_name;
+    const TypedefInfo* m_info = nullptr;
     bool m_isConst : 1;
     bool m_isVolatile : 1;
 
@@ -277,29 +278,25 @@ public:
         return m_isVolatile;
     }
 
-    void setConst(bool isConst)
+    void setConst(bool isConst);
+
+    void setVolatile(bool isVolatile);
+
+    [[nodiscard]] std::string_view getTypedefName() const;
+
+    [[nodiscard]] const TypedefInfo* getTypedefInfo() const
     {
-        m_isConst = isConst;
+        return m_info;
     }
 
-    void setVolatile(bool isVolatile)
+    void setTypedef(const TypedefInfo* info)
     {
-        m_isVolatile = isVolatile;
-    }
-
-    [[nodiscard]] std::string_view getTypedefName() const
-    {
-        return m_name;
-    }
-
-    void setTypedefName(std::string_view name)
-    {
-        m_name = name;
+        m_info = info;
     }
 
     [[nodiscard]] bool isTypedef() const
     {
-        return !m_name.empty();
+        return m_info;
     }
 
     [[nodiscard]] bool isUndefined() const

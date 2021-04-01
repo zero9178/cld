@@ -516,7 +516,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::PrimaryExpressionIdentifier& node)
 {
     auto* result = lookupDecl(node.getIdentifier()->getText());
-    if (!result || std::holds_alternative<IntrVarValue<Type>>(*result))
+    if (!result || std::holds_alternative<TypedefInfo>(*result))
     {
         log(Errors::Semantics::UNDECLARED_IDENTIFIER_N.args(*node.getIdentifier(), m_sourceInterface,
                                                             *node.getIdentifier()));
@@ -547,7 +547,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     }
     auto& type = cld::match(
         *result, [](const std::pair<ConstValue, IntrVarValue<Type>>&) -> const Type& { CLD_UNREACHABLE; },
-        [](const IntrVarValue<Type>&) -> const Type& { CLD_UNREACHABLE; },
+        [](const TypedefInfo&) -> const Type& { CLD_UNREACHABLE; },
         [](const BuiltinFunction* builtinFunction) -> const Type& { return builtinFunction->getType(); },
         [&](const auto* ptr) -> const Type&
         {
@@ -588,7 +588,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     expression = lvalueConversion(std::move(expression));
     auto& vaList = *getTypedef("__builtin_va_list");
     if (!expression->getType().isUndefined()
-        && (!typesAreCompatible(expression->getType(), *adjustParameterType(*vaList)) || isConst || isVolatile))
+        && (!typesAreCompatible(expression->getType(), *adjustParameterType(vaList.type)) || isConst || isVolatile))
     {
         log(Errors::Semantics::CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_VA_LIST.args(
             *expression, m_sourceInterface, 1, *expression));
@@ -1029,7 +1029,7 @@ std::unique_ptr<cld::Semantics::CallExpression>
     {
         arguments.push_back(visit(node.getOptionalAssignmentExpressions()[0]));
         auto& vaList = *getTypedef("__builtin_va_list");
-        if (!arguments[0]->getType().isUndefined() && !typesAreCompatible(arguments[0]->getType(), *vaList))
+        if (!arguments[0]->getType().isUndefined() && !typesAreCompatible(arguments[0]->getType(), vaList.type))
         {
             log(Errors::Semantics::CANNOT_PASS_INCOMPATIBLE_TYPE_TO_PARAMETER_N_OF_TYPE_VA_LIST.args(
                 *arguments[0], m_sourceInterface, 1, *arguments[0]));
@@ -1039,7 +1039,7 @@ std::unique_ptr<cld::Semantics::CallExpression>
         // of Windows x64 it's basically as if &list was written. Since this is a builtin call the backend will
         // have to do special handling either way but we'll insert an lvalueConversion now to force array to pointer
         // decay
-        if (isArray(*vaList))
+        if (isArray(vaList.type))
         {
             arguments.back() = lvalueConversion(std::move(arguments.back()));
         }

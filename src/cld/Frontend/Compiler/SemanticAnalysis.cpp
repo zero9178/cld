@@ -550,12 +550,13 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
             }
             thisAttributes = applyAttributes(std::pair{&result, diag::getPointRange(*loc)}, std::move(thisAttributes));
             reportNotApplicableAttributes(thisAttributes);
-            result->setTypedefName(loc->getText());
+            auto isConst = result->isConst();
+            auto isVolatile = result->isVolatile();
             auto [prev, noRedefinition] =
-                getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, result}});
+                insertTypedef({loc->getText(), result, m_currentScope, isConst, isVolatile, loc});
             if (!noRedefinition
-                && (!std::holds_alternative<IntrVarValue<Type>>(prev->second.declared)
-                    || !typesAreCompatible(result, *cld::get<IntrVarValue<Type>>(prev->second.declared))))
+                && (!std::holds_alternative<TypedefInfo>(prev->second.declared)
+                    || !typesAreCompatible(result, cld::get<TypedefInfo>(prev->second.declared).type)))
             {
                 log(Errors::REDEFINITION_OF_SYMBOL_N.args(*loc, m_sourceInterface, *loc));
                 log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
@@ -927,8 +928,7 @@ bool cld::Semantics::SemanticAnalysis::isTypedef(std::string_view name) const
     while (curr != static_cast<std::size_t>(-1))
     {
         auto result = m_scopes[curr].declarations.find(name);
-        if (result != m_scopes[curr].declarations.end()
-            && std::holds_alternative<IntrVarValue<Type>>(result->second.declared))
+        if (result != m_scopes[curr].declarations.end() && std::holds_alternative<TypedefInfo>(result->second.declared))
         {
             return true;
         }
@@ -946,7 +946,7 @@ bool cld::Semantics::SemanticAnalysis::isTypedefInScope(std::string_view name) c
         auto result = m_scopes[curr].declarations.find(name);
         if (result != m_scopes[curr].declarations.end())
         {
-            return std::holds_alternative<IntrVarValue<Type>>(result->second.declared);
+            return std::holds_alternative<TypedefInfo>(result->second.declared);
         }
         curr = m_scopes[curr].previousScope;
     }
@@ -1795,6 +1795,19 @@ bool cld::Semantics::SemanticAnalysis::extensionsEnabled(const cld::Lexer::CToke
            || (token && m_sourceInterface.getFiles()[token->getFileId()].systemHeader);
 }
 
+auto cld::Semantics::SemanticAnalysis::insertTypedef(TypedefInfo typedefInfo)
+    -> std::pair<tsl::ordered_map<std::string_view, DeclarationInScope>::iterator, bool>
+{
+    auto result = getCurrentScope().declarations.emplace(
+        typedefInfo.name, DeclarationInScope{typedefInfo.identifierToken, std::move(typedefInfo)});
+    if (result.second)
+    {
+        cld::get<TypedefInfo>(result.first.value().declared)
+            .type->setTypedef(&cld::get<TypedefInfo>(result.first->second.declared));
+    }
+    return result;
+}
+
 void cld::Semantics::SemanticAnalysis::diagnoseUnusedLocals()
 {
     for (auto& [name, declInScope] : getCurrentScope().declarations)
@@ -1810,7 +1823,7 @@ void cld::Semantics::SemanticAnalysis::diagnoseUnusedLocals()
                 log(Warnings::Semantics::UNUSED_VARIABLE_N.args(*declInScope.identifier, m_sourceInterface,
                                                                 *declInScope.identifier));
             },
-            [](FunctionDefinition*) {}, [](BuiltinFunction*) {}, [](const IntrVarValue<Type>&) {},
+            [](FunctionDefinition*) {}, [](BuiltinFunction*) {}, [](const TypedefInfo&) {},
             [](const std::pair<ConstValue, IntrVarValue<Type>>&) {});
     }
 }

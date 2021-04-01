@@ -466,13 +466,13 @@ llvm::DIType* cld::CGLLVM::CodeGenerator::visitDebug(const Semantics::Type& type
     {
         result = m_debugInfo->createQualifiedType(llvm::dwarf::DW_TAG_const_type, result);
     }
-    if (!type.isTypedef())
+    auto* info = type.getTypedefInfo();
+    if (!info || !info->identifierToken)
     {
         return result;
     }
-    // TODO:
-    // return m_debugInfo->createTypedef(result,type.getName(),);
-    return result;
+    return m_debugInfo->createTypedef(result, info->name, getFile(info->identifierToken),
+                                      getLine(info->identifierToken), m_scopeIdToScope[info->scope]);
 }
 
 void cld::CGLLVM::CodeGenerator::visit(const Semantics::TranslationUnit& translationUnit)

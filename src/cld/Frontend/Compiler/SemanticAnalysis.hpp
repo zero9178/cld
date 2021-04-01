@@ -147,9 +147,9 @@ private:
 
     [[nodiscard]] bool isTypedefInScope(std::string_view name) const;
 
-    [[nodiscard]] const IntrVarValue<Type>* CLD_NULLABLE getTypedef(std::string_view name)
+    [[nodiscard]] const TypedefInfo* CLD_NULLABLE getTypedef(std::string_view name)
     {
-        return std::get_if<IntrVarValue<Type>>(lookupDecl(name));
+        return std::get_if<TypedefInfo>(lookupDecl(name));
     }
 
     [[nodiscard]] const DeclarationInScope::Variant* CLD_NULLABLE getBuiltinFuncDecl(std::string_view name);
@@ -351,6 +351,9 @@ private:
                                     const SwitchStatement& switchStatement, bool isCaseOrDefault);
 
     void createBuiltinTypes();
+
+    std::pair<tsl::ordered_map<std::string_view, DeclarationInScope>::iterator, bool>
+        insertTypedef(TypedefInfo typedefInfo);
 
     [[nodiscard]] ValueReset<bool> enableExtensions(bool extensions);
 

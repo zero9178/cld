@@ -121,6 +121,29 @@ bool cld::Semantics::Type::equals(const cld::Semantics::Type& rhs) const
     return std::tie(m_isConst, m_isVolatile) == std::tie(rhs.m_isConst, rhs.m_isVolatile);
 }
 
+std::string_view cld::Semantics::Type::getTypedefName() const
+{
+    return m_info ? m_info->name : "";
+}
+
+void cld::Semantics::Type::setConst(bool isConst)
+{
+    m_isConst = isConst;
+    if (m_info && m_info->isConst && !isConst)
+    {
+        m_info = nullptr;
+    }
+}
+
+void cld::Semantics::Type::setVolatile(bool isVolatile)
+{
+    m_isVolatile = isVolatile;
+    if (m_info && m_info->isVolatile && !isVolatile)
+    {
+        m_info = nullptr;
+    }
+}
+
 bool cld::Semantics::PointerType::operator==(const cld::Semantics::PointerType& rhs) const
 {
     if (!equals(rhs))
@@ -325,7 +348,7 @@ bool cld::Semantics::isVariableLengthArray(const Type& type)
 
 namespace
 {
-std::string typeToString(const cld::Semantics::Type& arg)
+std::string typeToString(const cld::Semantics::Type& arg, bool respectTypedefs)
 {
     using namespace cld::Semantics;
     std::string qualifiersAndSpecifiers;
@@ -333,8 +356,22 @@ std::string typeToString(const cld::Semantics::Type& arg)
     const Type* maybeCurr = &arg;
     while (maybeCurr)
     {
+        if (auto* info = maybeCurr->getTypedefInfo(); info && respectTypedefs)
+        {
+            if (maybeCurr->isConst() && !info->isConst)
+            {
+                qualifiersAndSpecifiers += "const ";
+            }
+            if (maybeCurr->isVolatile() && !info->isVolatile)
+            {
+                qualifiersAndSpecifiers += "volatile ";
+            }
+            qualifiersAndSpecifiers += cld::to_string(info->name);
+            break;
+        }
         maybeCurr = maybeCurr->match(
-            [&](const PrimitiveType& primitiveType) -> const Type* {
+            [&](const PrimitiveType& primitiveType) -> const Type*
+            {
                 if (maybeCurr->isConst())
                 {
                     qualifiersAndSpecifiers += "const ";
@@ -413,7 +450,7 @@ std::string typeToString(const cld::Semantics::Type& arg)
                     return curr;
                 }
 
-                qualifiersAndSpecifiers = typeToString(*curr) + " " + temp;
+                qualifiersAndSpecifiers = typeToString(*curr, respectTypedefs) + " " + temp;
                 return {};
             },
             [&](const ValArrayType& valArrayType) -> const Type* {
@@ -477,7 +514,8 @@ std::string typeToString(const cld::Semantics::Type& arg)
             },
             [&](const VectorType& vectorType) -> const Type* {
                 qualifiersAndSpecifiers += "__attribute__((vector_size(" + std::to_string(vectorType.getSize())
-                                           + " * sizeof(" + typeToString(vectorType.getType()) + ")))) ";
+                                           + " * sizeof(" + typeToString(vectorType.getType(), respectTypedefs)
+                                           + ")))) ";
                 return &vectorType.getType();
             },
             [&](const FunctionType& functionType) -> const Type* {
@@ -491,10 +529,10 @@ std::string typeToString(const cld::Semantics::Type& arg)
                     declarators += ")";
                     return &functionType.getReturnType();
                 }
-                declarators += typeToString(*functionType.getParameters()[0].type);
+                declarators += typeToString(*functionType.getParameters()[0].type, respectTypedefs);
                 for (auto& iter : llvm::ArrayRef(functionType.getParameters()).drop_front())
                 {
-                    declarators += ", " + typeToString(*iter.type);
+                    declarators += ", " + typeToString(*iter.type, respectTypedefs);
                 }
                 if (functionType.isLastVararg())
                 {
@@ -579,22 +617,22 @@ std::string typeToString(const cld::Semantics::Type& arg)
 
 std::string cld::diag::StringConverter<cld::Semantics::Type>::inArg(const Semantics::Type& arg, const SourceInterface*)
 {
-    return typeToString(arg);
+    return typeToString(arg, true);
 }
 
 std::string cld::diag::CustomFormat<U'f', U'u', U'l', U'l'>::operator()(const Semantics::Type& arg)
 {
-    auto result = typeToString(arg);
+    auto result = typeToString(arg, false);
     if (arg.isTypedef())
     {
-        return "'" + cld::to_string(arg.getTypedefName()) + "' (aka '" + result + "')";
+        return "'" + typeToString(arg, true) + "' (aka '" + result + "')";
     }
     return "'" + result + "'";
 }
 
 std::string cld::diag::CustomFormat<U't', U'y', U'p', U'e'>::operator()(const Semantics::ExpressionBase& arg)
 {
-    return typeToString(arg.getType());
+    return typeToString(arg.getType(), true);
 }
 
 std::string cld::diag::CustomFormat<U'f', U'u', U'l', U'l', U'T', U'y', U'p', U'e'>::operator()(

@@ -1591,10 +1591,40 @@ TEST_CASE("Semantics composite type", "[semantics]")
     }
 }
 
+using namespace cld::Semantics;
+
+namespace
+{
+/***
+ * Assume last thing in the translation unit is a function definition and assumes that the last expression
+ * inside the function definitions compound statement is a non empty expression statement.
+ * Returns the expression of that expression statement
+ * @param source Source code to process
+ * @param options Language options
+ * @return Last expression in the function definition
+ */
+const ExpressionBase& generateExpression(std::string source,
+                                         cld::LanguageOptions options = cld::LanguageOptions::native())
+{
+    auto [translationUnit, errors] = generateSemantics(std::move(source), options);
+    REQUIRE_THAT(errors, ProducesNoErrors());
+    REQUIRE(translationUnit->getGlobals().back()->is<cld::Semantics::FunctionDefinition>());
+    auto& funcDef = translationUnit->getGlobals().back()->as<cld::Semantics::FunctionDefinition>();
+    REQUIRE(
+        std::holds_alternative<cld::IntrVarPtr<Statement>>(funcDef.getCompoundStatement().getCompoundItems().back()));
+    auto& statement = *cld::get<cld::IntrVarPtr<Statement>>(funcDef.getCompoundStatement().getCompoundItems().back());
+    REQUIRE(statement.is<ExpressionStatement>());
+    auto* expr = static_cast<ExpressionStatement&>(statement).getExpression();
+    REQUIRE(expr);
+    return *expr;
+}
+} // namespace
+
 TEST_CASE("Semantics type printing", "[semantics]")
 {
     using namespace cld::Semantics;
-    auto toStr = [](const Type& type) {
+    auto toStr = [](const Type& type)
+    {
         cld::CSourceObject object;
         return cld::diag::StringConverter<Type>::inArg(type, &object);
     };
@@ -1675,36 +1705,83 @@ TEST_CASE("Semantics type printing", "[semantics]")
         auto array = ArrayType(false, false, false, false, &functionPtrPtr, 8);
         CHECK(toStr(AbstractArrayType(false, false, false, &array)) == "char *(*(**[][8])())[]");
     }
+    SECTION("Typedef")
+    {
+        SECTION("Normal")
+        {
+            auto [translationUnit, errors] = generateSemantics("typedef int INTEGER;\n"
+                                                               "INTEGER i;\n");
+            REQUIRE_THAT(errors, ProducesNoErrors());
+            REQUIRE(translationUnit->getGlobals().size() == 1);
+            auto& var = translationUnit->getGlobals()[0]->as<VariableDeclaration>();
+            CHECK(toStr(var.getType()) == "INTEGER");
+        }
+        SECTION("const typedef")
+        {
+            {
+                auto [translationUnit, errors] = generateSemantics("typedef const int INTEGER;\n"
+                                                                   "INTEGER i;\n");
+                REQUIRE_THAT(errors, ProducesNoErrors());
+                REQUIRE(translationUnit->getGlobals().size() == 1);
+                auto& var = translationUnit->getGlobals()[0]->as<VariableDeclaration>();
+                CHECK(toStr(var.getType()) == "INTEGER");
+            }
+            {
+                auto [translationUnit, errors] = generateSemantics("typedef const int INTEGER;\n"
+                                                                   "const INTEGER i;\n");
+                REQUIRE_THAT(errors, ProducesNoErrors());
+                REQUIRE(translationUnit->getGlobals().size() == 1);
+                auto& var = translationUnit->getGlobals()[0]->as<VariableDeclaration>();
+                CHECK(toStr(var.getType()) == "INTEGER");
+            }
+        }
+        SECTION("const variable")
+        {
+            auto [translationUnit, errors] = generateSemantics("typedef int INTEGER;\n"
+                                                               "const INTEGER i;\n");
+            REQUIRE_THAT(errors, ProducesNoErrors());
+            REQUIRE(translationUnit->getGlobals().size() == 1);
+            auto& var = translationUnit->getGlobals()[0]->as<VariableDeclaration>();
+            CHECK(toStr(var.getType()) == "const INTEGER");
+        }
+        SECTION("volatile typedef")
+        {
+            {
+                auto [translationUnit, errors] = generateSemantics("typedef volatile int INTEGER;\n"
+                                                                   "INTEGER i;\n");
+                REQUIRE_THAT(errors, ProducesNoErrors());
+                REQUIRE(translationUnit->getGlobals().size() == 1);
+                auto& var = translationUnit->getGlobals()[0]->as<VariableDeclaration>();
+                CHECK(toStr(var.getType()) == "INTEGER");
+            }
+            {
+                auto [translationUnit, errors] = generateSemantics("typedef volatile int INTEGER;\n"
+                                                                   "volatile INTEGER i;\n");
+                REQUIRE_THAT(errors, ProducesNoErrors());
+                REQUIRE(translationUnit->getGlobals().size() == 1);
+                auto& var = translationUnit->getGlobals()[0]->as<VariableDeclaration>();
+                CHECK(toStr(var.getType()) == "INTEGER");
+            }
+        }
+        SECTION("volatile variable")
+        {
+            auto [translationUnit, errors] = generateSemantics("typedef int INTEGER;\n"
+                                                               "volatile INTEGER i;\n");
+            REQUIRE_THAT(errors, ProducesNoErrors());
+            REQUIRE(translationUnit->getGlobals().size() == 1);
+            auto& var = translationUnit->getGlobals()[0]->as<VariableDeclaration>();
+            CHECK(toStr(var.getType()) == "volatile INTEGER");
+        }
+        SECTION("Loosing cv qualifiers")
+        {
+            auto& expr = generateExpression("typedef const int INTEGER;\n"
+                                            "void foo(INTEGER i) {\n"
+                                            "    +i;\n"
+                                            "}\n");
+            CHECK(toStr(expr.getType()) == "int");
+        }
+    }
 }
-
-using namespace cld::Semantics;
-
-namespace
-{
-/***
- * Assume last thing in the translation unit is a function definition and assumes that the last expression
- * inside the function definitions compound statement is a non empty expression statement.
- * Returns the expression of that expression statement
- * @param source Source code to process
- * @param options Language options
- * @return Last expression in the function definition
- */
-const ExpressionBase& generateExpression(std::string source,
-                                         cld::LanguageOptions options = cld::LanguageOptions::native())
-{
-    auto [translationUnit, errors] = generateSemantics(std::move(source), options);
-    REQUIRE_THAT(errors, ProducesNoErrors());
-    REQUIRE(translationUnit->getGlobals().back()->is<cld::Semantics::FunctionDefinition>());
-    auto& funcDef = translationUnit->getGlobals().back()->as<cld::Semantics::FunctionDefinition>();
-    REQUIRE(
-        std::holds_alternative<cld::IntrVarPtr<Statement>>(funcDef.getCompoundStatement().getCompoundItems().back()));
-    auto& statement = *cld::get<cld::IntrVarPtr<Statement>>(funcDef.getCompoundStatement().getCompoundItems().back());
-    REQUIRE(statement.is<ExpressionStatement>());
-    auto* expr = static_cast<ExpressionStatement&>(statement).getExpression();
-    REQUIRE(expr);
-    return *expr;
-}
-} // namespace
 
 TEST_CASE("Semantics primary expressions", "[semantics]")
 {
