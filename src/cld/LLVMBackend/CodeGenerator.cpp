@@ -45,7 +45,7 @@ cld::CGLLVM::CodeGenerator::CodeGenerator(llvm::Module& module,
         return;
     }
     m_debugInfo.emplace(m_module);
-    llvm::DIFile* mainFile;
+    llvm::DIFile* mainFile = nullptr;
     for (auto& iter : m_sourceInterface.getFiles())
     {
         auto path = cld::fs::u8path(iter.path);

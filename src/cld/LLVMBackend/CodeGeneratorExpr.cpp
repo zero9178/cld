@@ -1637,6 +1637,9 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::Initialize
                         // Vectors cannot contain aggregate types and are therefore always the end of the chain.
                         // Since we also can't take pointer to a vector element we need to handle it specially
                         // and insert here already. currentType is set to null to signify that we are done here
+                        break;
+                        // iter should have been the very last one either way. but inserting a break will silence the
+                        //  static analyzer and not hurt
                     }
                 }
                 if (!currentType)
