@@ -19,7 +19,6 @@
 
 namespace cld
 {
-class Message;
 
 namespace Syntax
 {
@@ -35,8 +34,6 @@ namespace cld::Semantics
 struct StructInfo;
 struct UnionInfo;
 struct EnumInfo;
-
-class Type;
 
 class StructDefinition;
 
@@ -1602,9 +1599,8 @@ class CompoundLiteral final : public ExpressionBase
     bool m_staticLifetime;
 
 public:
-    explicit CompoundLiteral(IntrVarValue<Type> type, Lexer::CTokenIterator openParentheses, Initializer initializer,
-                             Lexer::CTokenIterator closeParentheses, Lexer::CTokenIterator initEnd,
-                             bool staticLifetime);
+    CompoundLiteral(IntrVarValue<Type> type, Lexer::CTokenIterator openParentheses, Initializer initializer,
+                    Lexer::CTokenIterator closeParentheses, Lexer::CTokenIterator initEnd, bool staticLifetime);
 
     [[nodiscard]] Lexer::CTokenIterator getOpenParentheses() const;
 
@@ -1962,22 +1958,17 @@ enum class Linkage : std::uint8_t
 
 class Declaration : public Useable
 {
-    IntrVarValue<Type> m_type;
     Linkage m_linkage;
     Lexer::CTokenIterator m_nameToken;
 
 protected:
     template <class T>
-    Declaration(std::in_place_type_t<T>, IntrVarValue<Type> type, Linkage linkage, Lexer::CTokenIterator nameToken)
-        : Useable(std::in_place_type<T>), m_type(std::move(type)), m_linkage(linkage), m_nameToken(nameToken)
+    Declaration(std::in_place_type_t<T>, Linkage linkage, Lexer::CTokenIterator nameToken)
+        : Useable(std::in_place_type<T>), m_linkage(linkage), m_nameToken(nameToken)
     {
     }
 
 public:
-    [[nodiscard]] const Type& getType() const
-    {
-        return *m_type;
-    }
 
     [[nodiscard]] Linkage getLinkage() const
     {
@@ -2417,11 +2408,11 @@ llvm::ArrayRef<FieldInLayout> getFieldLayout(const Type& recordType);
 class EnumDefinition
 {
     std::string_view m_name;
-    IntrVarValue<Type> m_type;
+    PrimitiveType m_type;
     std::vector<std::pair<std::string_view, llvm::APSInt>> m_values;
 
 public:
-    EnumDefinition(std::string_view name, IntrVarValue<Type> type,
+    EnumDefinition(std::string_view name, PrimitiveType type,
                    std::vector<std::pair<std::string_view, llvm::APSInt>> values)
         : m_name(name), m_type(std::move(type)), m_values(std::move(values))
     {
@@ -2432,9 +2423,9 @@ public:
         return m_name;
     }
 
-    [[nodiscard]] const Type& getType() const
+    [[nodiscard]] const PrimitiveType& getType() const
     {
-        return *m_type;
+        return m_type;
     }
 
     [[nodiscard]] const std::vector<std::pair<std::string_view, llvm::APSInt>>& getValues() const
@@ -2478,14 +2469,20 @@ enum class InlineKind : std::uint8_t
 
 class FunctionDeclaration final : public Declaration, public AttributeHolder<FunctionAttribute>
 {
+    FunctionType m_type;
     InlineKind m_inlineKind;
 
 public:
-    FunctionDeclaration(IntrVarValue<Type> type, Linkage linkage, Lexer::CTokenIterator nameToken,
-                        InlineKind inlineKind)
-        : Declaration(std::in_place_type<FunctionDeclaration>, std::move(type), linkage, nameToken),
+    FunctionDeclaration(FunctionType type, Linkage linkage, Lexer::CTokenIterator nameToken, InlineKind inlineKind)
+        : Declaration(std::in_place_type<FunctionDeclaration>, linkage, nameToken),
+          m_type(std::move(type)),
           m_inlineKind(inlineKind)
     {
+    }
+
+    [[nodiscard]] const FunctionType& getType() const noexcept
+    {
+        return m_type;
     }
 
     [[nodiscard]] bool isInline() const noexcept
@@ -2517,6 +2514,7 @@ public:
     };
 
 private:
+    IntrVarValue<Type> m_type;
     std::vector<VariableAttribute> m_variableAttributes;
     std::optional<Initializer> m_initializer;
     Lifetime m_lifetime;
@@ -2525,11 +2523,17 @@ private:
 public:
     VariableDeclaration(IntrVarValue<Type> type, Linkage linkage, Lifetime lifetime, Lexer::CTokenIterator nameToken,
                         Kind kind, std::optional<Initializer> initializer = {})
-        : Declaration(std::in_place_type<VariableDeclaration>, std::move(type), linkage, nameToken),
+        : Declaration(std::in_place_type<VariableDeclaration>, linkage, nameToken),
+          m_type(std::move(type)),
           m_initializer(std::move(initializer)),
           m_lifetime(lifetime),
           m_kind(kind)
     {
+    }
+
+    [[nodiscard]] const Type& getType() const noexcept
+    {
+        return *m_type;
     }
 
     [[nodiscard]] Lifetime getLifetime() const
@@ -2555,7 +2559,7 @@ public:
 
 class FunctionDefinition final : public Useable, public AttributeHolder<FunctionAttribute>
 {
-    IntrVarValue<Type> m_type;
+    FunctionType m_type;
     Lexer::CTokenIterator m_nameToken;
     std::vector<std::unique_ptr<VariableDeclaration>> m_parameterDeclarations;
     Linkage m_linkage;
@@ -2563,7 +2567,7 @@ class FunctionDefinition final : public Useable, public AttributeHolder<Function
     CompoundStatement m_compoundStatement;
 
 public:
-    FunctionDefinition(IntrVarValue<Type> type, Lexer::CTokenIterator nameToken,
+    FunctionDefinition(FunctionType type, Lexer::CTokenIterator nameToken,
                        std::vector<std::unique_ptr<VariableDeclaration>> parameterDeclarations, Linkage linkage,
                        InlineKind inlineKind, CompoundStatement compoundStatement)
         : Useable(std::in_place_type<FunctionDefinition>),
@@ -2581,9 +2585,9 @@ public:
         return m_nameToken;
     }
 
-    [[nodiscard]] const Type& getType() const
+    [[nodiscard]] const FunctionType& getType() const
     {
-        return *m_type;
+        return m_type;
     }
 
     [[nodiscard]] const std::vector<std::unique_ptr<VariableDeclaration>>& getParameterDeclarations() const&
@@ -2598,7 +2602,7 @@ public:
 
     [[nodiscard]] bool isKandR() const
     {
-        return m_type->as<FunctionType>().isKandR();
+        return m_type.isKandR();
     }
 
     [[nodiscard]] Linkage getLinkage() const
@@ -2634,7 +2638,7 @@ public:
 
 class BuiltinFunction final : public Useable
 {
-    IntrVarValue<Type> m_type;
+    FunctionType m_type;
 
 public:
     enum Kind
@@ -2687,14 +2691,14 @@ private:
     Kind m_kind;
 
 public:
-    BuiltinFunction(IntrVarValue<Type> type, Kind kind)
+    BuiltinFunction(FunctionType type, Kind kind)
         : Useable(std::in_place_type<BuiltinFunction>), m_type(std::move(type)), m_kind(kind)
     {
     }
 
-    [[nodiscard]] const Type& getType() const noexcept
+    [[nodiscard]] const FunctionType& getType() const noexcept
     {
-        return *m_type;
+        return m_type;
     }
 
     [[nodiscard]] Kind getKind() const noexcept

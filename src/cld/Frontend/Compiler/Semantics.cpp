@@ -786,18 +786,7 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::adjustParameterType(cons
 {
     if (isArray(type))
     {
-        auto& elementType = type.match(
-            [](auto&& value) -> const Type&
-            {
-                using T = std::decay_t<decltype(value)>;
-                if constexpr (std::is_same_v<
-                                  ArrayType,
-                                  T> || std::is_same_v<AbstractArrayType, T> || std::is_same_v<ValArrayType, T>)
-                {
-                    return value.getType();
-                }
-                CLD_UNREACHABLE;
-            });
+        auto& elementType = getArrayElementType(type);
         bool restrict = type.match(
             [](auto&& value) -> bool
             {

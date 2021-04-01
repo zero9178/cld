@@ -1049,7 +1049,7 @@ std::unique_ptr<cld::Semantics::CallExpression>
             log(Errors::Semantics::CANNOT_USE_VA_START_OUTSIDE_OF_A_FUNCTION.args(*function, m_sourceInterface,
                                                                                   *function));
         }
-        else if (!getCurrentFunctionScope()->currentFunction->getType().as<FunctionType>().isLastVararg())
+        else if (!getCurrentFunctionScope()->currentFunction->getType().isLastVararg())
         {
             log(Errors::Semantics::CANNOT_USE_VA_START_IN_A_FUNCTION_WITH_FIXED_ARGUMENT_COUNT.args(
                 *function, m_sourceInterface, *function));
@@ -1904,9 +1904,9 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         });
 }
 
-void cld::Semantics::SemanticAnalysis::checkVectorBinaryOp(const IntrVarPtr<ExpressionBase>& lhs,
+bool cld::Semantics::SemanticAnalysis::checkVectorBinaryOp(const IntrVarPtr<ExpressionBase>& lhs,
                                                            Lexer::CTokenIterator token,
-                                                           const IntrVarPtr<ExpressionBase>& rhs, bool* errors)
+                                                           const IntrVarPtr<ExpressionBase>& rhs)
 {
     if (isVector(lhs->getType()) || isVector(rhs->getType()))
     {
@@ -1916,22 +1916,17 @@ void cld::Semantics::SemanticAnalysis::checkVectorBinaryOp(const IntrVarPtr<Expr
             {
                 log(Errors::Semantics::TYPE_OF_VECTOR_OPERANDS_OF_BINARY_OPERATOR_N_MUST_MATCH.args(
                     *token, m_sourceInterface, *token, *lhs, *rhs));
-                if (errors)
-                {
-                    *errors = true;
-                }
+                return true;
             }
         }
         else
         {
             log(Errors::Semantics::CONVERSION_OF_SCALAR_IN_VECTOR_OPERATION_COULD_CAUSE_TRUNCATION.args(
                 *token, m_sourceInterface, *lhs, *rhs));
-            if (errors)
-            {
-                *errors = true;
-            }
+            return true;
         }
     }
+    return false;
 }
 
 cld::IntrVarPtr<cld::Semantics::ExpressionBase> cld::Semantics::SemanticAnalysis::visit(const Syntax::Term& node)
@@ -1963,7 +1958,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase> cld::Semantics::SemanticAnalysis
                         *rhsValue, m_sourceInterface, *token, *rhsValue));
                     errors = true;
                 }
-                checkVectorBinaryOp(value, token, rhsValue, &errors);
+                errors = checkVectorBinaryOp(value, token, rhsValue) || errors;
                 if (value->isUndefined() || rhsValue->isUndefined() || errors)
                 {
                     value = std::make_unique<ErrorExpression>(value->begin(), rhsValue->end());
@@ -1994,7 +1989,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase> cld::Semantics::SemanticAnalysis
                         *rhsValue, m_sourceInterface, *token, *rhsValue));
                     errors = true;
                 }
-                checkVectorBinaryOp(value, token, rhsValue, &errors);
+                errors = checkVectorBinaryOp(value, token, rhsValue) || errors;
                 if (value->isUndefined() || rhsValue->isUndefined() || errors)
                 {
                     value = std::make_unique<ErrorExpression>(value->begin(), rhsValue->end());
@@ -2053,7 +2048,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         }
         else
         {
-            checkVectorBinaryOp(value, token, rhsValue, &errors);
+            errors = checkVectorBinaryOp(value, token, rhsValue) || errors;
         }
         if (value->getType().isUndefined() || rhsValue->getType().isUndefined() || errors)
         {
@@ -2214,7 +2209,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                 *rhsValue, m_sourceInterface, *token, *rhsValue));
             errors = true;
         }
-        checkVectorBinaryOp(value, token, rhsValue, &errors);
+        errors = checkVectorBinaryOp(value, token, rhsValue) || errors;
         if (value->getType().isUndefined() || rhsValue->getType().isUndefined() || errors)
         {
             value = std::make_unique<ErrorExpression>(value->begin(), rhsValue->end());
@@ -2354,9 +2349,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         }
         else if (isVector(value->getType()) || isVector(rhsValue->getType()))
         {
-            bool errors = false;
-            checkVectorBinaryOp(value, token, rhsValue, &errors);
-            if (errors)
+            if (checkVectorBinaryOp(value, token, rhsValue))
             {
                 value = std::make_unique<ErrorExpression>(value->begin(), rhsValue->end());
                 continue;
@@ -2478,9 +2471,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         }
         else if (isVector(value->getType()) || isVector(rhsValue->getType()))
         {
-            bool errors = false;
-            checkVectorBinaryOp(value, token, rhsValue, &errors);
-            if (errors)
+            if (checkVectorBinaryOp(value, token, rhsValue))
             {
                 value = std::make_unique<ErrorExpression>(value->begin(), rhsValue->end());
                 continue;
@@ -2519,7 +2510,7 @@ std::unique_ptr<cld::Semantics::BinaryOperator>
                                                                                         *rhs));
         errors = true;
     }
-    checkVectorBinaryOp(lhs, token, rhs, &errors);
+    errors = checkVectorBinaryOp(lhs, token, rhs) || errors;
     if (errors)
     {
         return std::make_unique<BinaryOperator>(ErrorType{}, std::move(lhs), kind, token, std::move(rhs));

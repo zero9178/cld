@@ -194,7 +194,7 @@ private:
         qualifiersToTypeImpl(const std::vector<DeclarationOrSpecifierQualifier>& directAbstractDeclaratorParentheses,
                              std::vector<GNUAttribute>* attributesOut = nullptr);
 
-    IntrVarValue<Type>
+    PrimitiveType
         primitiveTypeSpecifiersToType(bool isConst, bool isVolatile,
                                       const std::vector<const Syntax::TypeSpecifier * CLD_NON_NULL>& typeSpecs);
 
@@ -248,9 +248,8 @@ private:
                                                           IntrVarPtr<ExpressionBase>&& value,
                                                           Lexer::CTokenIterator opToken);
 
-    // TODO: return bool instead of out parameter
-    void checkVectorBinaryOp(const IntrVarPtr<ExpressionBase>& lhs, Lexer::CTokenIterator token,
-                             const IntrVarPtr<ExpressionBase>& rhs, bool* errors = nullptr);
+    bool checkVectorBinaryOp(const IntrVarPtr<ExpressionBase>& lhs, Lexer::CTokenIterator token,
+                             const IntrVarPtr<ExpressionBase>& rhs);
 
     void checkVectorCompoundAssign(const IntrVarPtr<ExpressionBase>& lhs, const Type& lhsType,
                                    Lexer::CTokenIterator token, const IntrVarPtr<ExpressionBase>& rhs);
@@ -376,7 +375,7 @@ private:
                             const Syntax::PostFixExpressionFunctionCall& node);
 
     std::unique_ptr<FunctionDeclaration>
-        visitFunctionDeclaration(Lexer::CTokenIterator loc, IntrVarValue<Type>&& type,
+        visitFunctionDeclaration(Lexer::CTokenIterator loc, FunctionType&& type,
                                  const Syntax::StorageClassSpecifier* storageClassSpecifier, bool isInline,
                                  std::vector<GNUAttribute>&& attributes);
 

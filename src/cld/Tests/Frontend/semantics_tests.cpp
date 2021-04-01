@@ -478,7 +478,8 @@ TEST_CASE("Semantics declarations", "[semantics]")
             auto& third = def.getCompoundStatement().getCompoundItems()[3];
             REQUIRE(std::holds_alternative<cld::IntrVarPtr<cld::Semantics::Declaration>>(third));
             auto& thirdDecl = *cld::get<cld::IntrVarPtr<cld::Semantics::Declaration>>(third);
-            CHECK(thirdDecl.getType().is<cld::Semantics::ValArrayType>());
+            REQUIRE(thirdDecl.is<cld::Semantics::VariableDeclaration>());
+            CHECK(thirdDecl.as<cld::Semantics::VariableDeclaration>().getType().is<cld::Semantics::ValArrayType>());
             SEMA_PRODUCES("extern int i;\n"
                           "typedef int n[i];",
                           ProducesError(VARIABLY_MODIFIED_TYPEDEF_NOT_ALLOWED_AT_FILE_SCOPE));

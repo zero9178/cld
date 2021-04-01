@@ -288,7 +288,7 @@ std::vector<cld::IntrVarPtr<cld::Semantics::Useable>>
     std::vector<IntrVarPtr<Useable>> result;
     auto& ptr = result
                     .emplace_back(std::make_unique<FunctionDefinition>(
-                        std::move(type), loc, std::move(parameterDeclarations), linkage, inlineKind,
+                        std::move(ft), loc, std::move(parameterDeclarations), linkage, inlineKind,
                         CompoundStatement(m_currentScope, loc, {}, loc)))
                     ->as<FunctionDefinition>();
     attributes = applyAttributes(&ptr, std::move(attributes));
@@ -442,15 +442,15 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                                   std::move_iterator(vector.end()));
         }
 
-        if (isFunctionType(result) && !isTypedef)
+        if (auto* functionType = result->tryAs<FunctionType>(); functionType && !isTypedef)
         {
             if (iter.optionalInitializer)
             {
                 log(Errors::Semantics::FUNCTION_PROTOTYPE_MUST_NOT_HAVE_AN_INITIALIZER.args(
                     *iter.optionalInitializer, m_sourceInterface, *iter.optionalInitializer));
             }
-            if (auto declaration = visitFunctionDeclaration(loc, std::move(result), storageClassSpecifier, isInline,
-                                                            std::move(thisAttributes)))
+            if (auto declaration = visitFunctionDeclaration(loc, std::move(*functionType), storageClassSpecifier,
+                                                            isInline, std::move(thisAttributes)))
             {
                 decls.push_back(std::move(declaration));
             }
@@ -752,7 +752,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
 }
 
 std::unique_ptr<cld::Semantics::FunctionDeclaration> cld::Semantics::SemanticAnalysis::visitFunctionDeclaration(
-    Lexer::CTokenIterator loc, IntrVarValue<Type>&& type, const Syntax::StorageClassSpecifier* storageClassSpecifier,
+    Lexer::CTokenIterator loc, FunctionType&& type, const Syntax::StorageClassSpecifier* storageClassSpecifier,
     bool isInline, std::vector<GNUAttribute>&& attributes)
 {
     Linkage linkage = Linkage::External;
@@ -842,8 +842,8 @@ std::unique_ptr<cld::Semantics::FunctionDeclaration> cld::Semantics::SemanticAna
                 log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
                                                          *prev->second.identifier));
             }
-            *declaration =
-                FunctionDeclaration(std::move(composite), linkage, loc, std::max(inlineKind, prevDecl.getInlineKind()));
+            *declaration = FunctionDeclaration(std::move(composite->as<FunctionType>()), linkage, loc,
+                                               std::max(inlineKind, prevDecl.getInlineKind()));
             declaration->setUses(prevDecl.getUses());
             prev.value().declared = declaration.get();
             return declaration;

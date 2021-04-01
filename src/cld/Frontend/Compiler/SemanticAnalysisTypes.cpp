@@ -1403,7 +1403,7 @@ cld::IntrVarValue<cld::Semantics::Type>
     return StructType(isConst, isVolatile, *cld::get<StructInfo*>(structOrUnionInfo));
 }
 
-cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::primitiveTypeSpecifiersToType(
+cld::Semantics::PrimitiveType cld::Semantics::SemanticAnalysis::primitiveTypeSpecifiersToType(
     bool isConst, bool isVolatile, const std::vector<const Syntax::TypeSpecifier*>& typeSpecs)
 {
     using PrimitiveTypeSpecifier = Syntax::TypeSpecifier::PrimitiveTypeSpecifier;
