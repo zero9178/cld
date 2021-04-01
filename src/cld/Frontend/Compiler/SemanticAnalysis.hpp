@@ -149,7 +149,11 @@ private:
 
     [[nodiscard]] const TypedefInfo* CLD_NULLABLE getTypedef(std::string_view name)
     {
-        return std::get_if<TypedefInfo>(lookupDecl(name));
+        if (auto* info = std::get_if<TypedefInfo*>(lookupDecl(name)))
+        {
+            return *info;
+        }
+        return nullptr;
     }
 
     [[nodiscard]] const DeclarationInScope::Variant* CLD_NULLABLE getBuiltinFuncDecl(std::string_view name);

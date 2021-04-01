@@ -68,8 +68,8 @@ public:
         const Lexer::CToken* CLD_NULLABLE identifier; // Guaranteed to be non null if the scope isn't global and the
                                                       // declaration isn't a builtin variable like __func__
         using Variant = std::variant<VariableDeclaration * CLD_NON_NULL, FunctionDefinition * CLD_NON_NULL,
-                                     FunctionDeclaration * CLD_NON_NULL, BuiltinFunction * CLD_NON_NULL, TypedefInfo,
-                                     std::pair<ConstValue, IntrVarValue<Type>>>;
+                                     FunctionDeclaration * CLD_NON_NULL, BuiltinFunction * CLD_NON_NULL,
+                                     TypedefInfo * CLD_NON_NULL, std::pair<ConstValue, IntrVarValue<Type>>>;
         Variant declared;
     };
 
@@ -98,6 +98,7 @@ protected:
     std::deque<StructInfo> m_structDefinitions;
     std::deque<UnionInfo> m_unionDefinitions;
     std::deque<EnumInfo> m_enumDefinitions;
+    std::deque<TypedefInfo> m_typedefDefinitions;
     std::unordered_map<std::string_view, BuiltinFunction> m_usedBuiltins;
 
     cld::not_null<Type> typeAlloc(const Type& value)

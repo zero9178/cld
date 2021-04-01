@@ -516,7 +516,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::PrimaryExpressionIdentifier& node)
 {
     auto* result = lookupDecl(node.getIdentifier()->getText());
-    if (!result || std::holds_alternative<TypedefInfo>(*result))
+    if (!result || std::holds_alternative<TypedefInfo*>(*result))
     {
         log(Errors::Semantics::UNDECLARED_IDENTIFIER_N.args(*node.getIdentifier(), m_sourceInterface,
                                                             *node.getIdentifier()));
@@ -547,7 +547,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     }
     auto& type = cld::match(
         *result, [](const std::pair<ConstValue, IntrVarValue<Type>>&) -> const Type& { CLD_UNREACHABLE; },
-        [](const TypedefInfo&) -> const Type& { CLD_UNREACHABLE; },
+        [](const TypedefInfo*) -> const Type& { CLD_UNREACHABLE; },
         [](const BuiltinFunction* builtinFunction) -> const Type& { return builtinFunction->getType(); },
         [&](const auto* ptr) -> const Type&
         {
