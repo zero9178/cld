@@ -129,7 +129,11 @@ class IntrVarAllocator<Base, AbstractIntrusiveVariant<Subclasses...>>
         auto head = std::find_if_not(m_heads.begin(), m_heads.end(), &slabFull);
         if (head == m_heads.end())
         {
-            return m_heads.insert(m_heads.end(), m_slabs.emplace_back(std::make_unique<Slab>())->storage);
+            auto newSlab = std::make_unique<Slab>();
+            auto insertPoint = std::lower_bound(m_slabs.begin(), m_slabs.end(), newSlab);
+            auto index = insertPoint - m_slabs.begin();
+            auto* storage = (*m_slabs.insert(insertPoint, std::move(newSlab)))->storage;
+            return m_heads.insert(m_heads.begin() + index, storage);
         }
         return head;
     }
@@ -233,11 +237,11 @@ public:
     {
         Base* casted = const_cast<Base*>(object.get());
         std::byte* pointerIntoObject = reinterpret_cast<std::byte*>(casted);
-        auto slab =
-            std::find_if(m_slabs.begin(), m_slabs.end(),
-                         [pointerIntoObject](const std::unique_ptr<Slab>& slab)
-                         { return pointerIntoObject >= slab->storage && pointerIntoObject < std::end(slab->storage); });
+        auto slab = std::lower_bound(m_slabs.begin(), m_slabs.end(), pointerIntoObject,
+                                     [](const std::unique_ptr<Slab>& slab, std::byte* value)
+                                     { return std::end(slab->storage) < value; });
         CLD_ASSERT(slab != m_slabs.end());
+        CLD_ASSERT((*slab)->storage <= pointerIntoObject && pointerIntoObject < std::end((*slab)->storage));
         auto& metadata = (*slab)->metadata[(pointerIntoObject - (*slab)->storage) / allocSize];
         if (metadata.destroyed)
         {
