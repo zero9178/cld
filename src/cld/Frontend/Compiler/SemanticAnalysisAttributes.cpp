@@ -236,15 +236,13 @@ void cld::Semantics::SemanticAnalysis::applyVectorSizeAttribute(AffectsTypeVaria
         applicant,
         [&](const std::pair<IntrVarValue<Type>*, diag::PointRange>& pair)
         {
-            pair.first->emplace<VectorType>(baseType.isConst(), baseType.isVolatile(),
-                                            typeAlloc(*removeQualifiers(std::move(baseType))),
-                                            multiple.getInteger().getZExtValue());
+            pair.first->emplace<VectorType>(typeAlloc(*removeQualifiers(std::move(baseType))),
+                                            multiple.getInteger().getZExtValue(), flag::useFlags = baseType.getFlags());
         },
         [&](VariableDeclaration* variableDeclaration)
         {
-            auto newType =
-                VectorType(baseType.isConst(), baseType.isVolatile(), typeAlloc(*removeQualifiers(std::move(baseType))),
-                           multiple.getInteger().getZExtValue());
+            auto newType = VectorType(typeAlloc(*removeQualifiers(std::move(baseType))),
+                                      multiple.getInteger().getZExtValue(), flag::useFlags = baseType.getFlags());
             *variableDeclaration =
                 VariableDeclaration(newType, variableDeclaration->getLinkage(), variableDeclaration->getLifetime(),
                                     variableDeclaration->getNameToken(), variableDeclaration->getKind(),

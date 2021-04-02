@@ -11,27 +11,96 @@
 #include "SemanticUtil.hpp"
 #include "Syntax.hpp"
 
-cld::Semantics::PrimitiveType
-    cld::Semantics::PrimitiveType::fromUnderlyingType(bool isConst, bool isVolatile,
-                                                      cld::LanguageOptions::UnderlyingType underlyingType,
-                                                      const cld::LanguageOptions& options)
+cld::Semantics::PrimitiveType::PrimitiveType(LanguageOptions::UnderlyingType underlyingType,
+                                             const cld::LanguageOptions& options, TypeFlags flags)
+    : PrimitiveType(
+        [&]
+        {
+            switch (underlyingType)
+            {
+                case cld::LanguageOptions::UnderlyingType::UnsignedShort: return UnsignedShort;
+                case cld::LanguageOptions::UnderlyingType::Int: return Int;
+                case cld::LanguageOptions::UnderlyingType::UnsignedInt: return UnsignedInt;
+                case cld::LanguageOptions::UnderlyingType::Long: return Long;
+                case cld::LanguageOptions::UnderlyingType::UnsignedLong: return UnsignedLong;
+                case cld::LanguageOptions::UnderlyingType::LongLong: return LongLong;
+                case cld::LanguageOptions::UnderlyingType::UnsignedLongLong: return UnsignedLongLong;
+            }
+            CLD_UNREACHABLE;
+        }(),
+        options, flags)
 {
-    switch (underlyingType)
+}
+
+cld::Semantics::PrimitiveType::PrimitiveType(PrimitiveType::Kind kind, const cld::LanguageOptions& options,
+                                             TypeFlags flags)
+    : Type(std::in_place_type<PrimitiveType>, flags & ~(Static | Restricted | VARArg | KAndR)), m_kind(kind)
+{
+    m_isFloatingPoint = false;
+    m_isSigned = true;
+    switch (kind)
     {
-        case cld::LanguageOptions::UnderlyingType::UnsignedShort:
-            return PrimitiveType::createUnsignedShort(isConst, isVolatile, options);
-        case cld::LanguageOptions::UnderlyingType::Int: return PrimitiveType::createInt(isConst, isVolatile, options);
-        case cld::LanguageOptions::UnderlyingType::UnsignedInt:
-            return PrimitiveType::createUnsignedInt(isConst, isVolatile, options);
-        case cld::LanguageOptions::UnderlyingType::Long: return PrimitiveType::createLong(isConst, isVolatile, options);
-        case cld::LanguageOptions::UnderlyingType::UnsignedLong:
-            return PrimitiveType::createUnsignedLong(isConst, isVolatile, options);
-        case cld::LanguageOptions::UnderlyingType::LongLong:
-            return PrimitiveType::createLongLong(isConst, isVolatile, options);
-        case cld::LanguageOptions::UnderlyingType::UnsignedLongLong:
-            return PrimitiveType::createUnsignedLongLong(isConst, isVolatile, options);
+        case Char:
+            m_isSigned = options.charIsSigned;
+            m_bitCount = 8;
+            m_alignOf = 1;
+            break;
+        case UnsignedChar: m_isSigned = false; [[fallthrough]];
+        case SignedChar:
+            m_bitCount = 8;
+            m_alignOf = 1;
+            break;
+        case Bool:
+            m_isSigned = false;
+            m_bitCount = 1;
+            m_alignOf = 1;
+            break;
+        case UnsignedShort: m_isSigned = false; [[fallthrough]];
+        case Short:
+            m_bitCount = options.sizeOfShort * 8;
+            m_alignOf = options.sizeOfShort;
+            break;
+        case UnsignedInt: m_isSigned = false; [[fallthrough]];
+        case Int:
+            m_bitCount = options.sizeOfInt * 8;
+            m_alignOf = options.sizeOfInt;
+            break;
+        case UnsignedLong: m_isSigned = false; [[fallthrough]];
+        case Long:
+            m_bitCount = options.sizeOfLong * 8;
+            m_alignOf = options.sizeOfLong;
+            break;
+        case UnsignedLongLong: m_isSigned = false; [[fallthrough]];
+        case LongLong:
+            m_bitCount = 64;
+            m_alignOf = options.alignOfLongLong;
+            break;
+        case Float:
+            m_isFloatingPoint = true;
+            m_bitCount = 32;
+            m_alignOf = 4;
+            break;
+        case Double:
+            m_isFloatingPoint = true;
+            m_bitCount = 64;
+            m_alignOf = options.alignOfDouble;
+            break;
+        case LongDouble:
+            m_isFloatingPoint = true;
+            m_bitCount = options.sizeOfLongDoubleBits;
+            m_alignOf = options.alignOfLongDouble;
+            break;
+        case Void:
+            m_bitCount = 0;
+            m_alignOf = 0;
+            break;
+        case UnsignedInt128: m_isSigned = false; [[fallthrough]];
+        case Int128:
+            m_bitCount = 128;
+            m_alignOf = 16;
+            break;
+        default: CLD_UNREACHABLE;
     }
-    CLD_UNREACHABLE;
 }
 
 bool cld::Semantics::ArrayType::operator==(const cld::Semantics::ArrayType& rhs) const
@@ -40,8 +109,7 @@ bool cld::Semantics::ArrayType::operator==(const cld::Semantics::ArrayType& rhs)
     {
         return false;
     }
-    return std::tie(m_restricted, m_static, m_size, *m_type)
-           == std::tie(rhs.m_restricted, rhs.m_static, rhs.m_size, *rhs.m_type);
+    return std::tie(m_size, *m_type) == std::tie(rhs.m_size, *rhs.m_type);
 }
 
 bool cld::Semantics::ArrayType::operator!=(const cld::Semantics::ArrayType& rhs) const
@@ -118,7 +186,7 @@ std::uint64_t cld::Semantics::Type::getAlignOf(const ProgramInterface& program) 
 
 bool cld::Semantics::Type::equals(const cld::Semantics::Type& rhs) const
 {
-    return std::tie(m_isConst, m_isVolatile) == std::tie(rhs.m_isConst, rhs.m_isVolatile);
+    return m_flags == rhs.m_flags;
 }
 
 std::string_view cld::Semantics::Type::getTypedefName() const
@@ -128,7 +196,14 @@ std::string_view cld::Semantics::Type::getTypedefName() const
 
 void cld::Semantics::Type::setConst(bool isConst)
 {
-    m_isConst = isConst;
+    if (isConst)
+    {
+        m_flags = static_cast<TypeFlags>(m_flags | Const);
+    }
+    else
+    {
+        m_flags = static_cast<TypeFlags>(m_flags & ~Const);
+    }
     if (m_info && m_info->isConst && !isConst)
     {
         m_info = nullptr;
@@ -137,7 +212,14 @@ void cld::Semantics::Type::setConst(bool isConst)
 
 void cld::Semantics::Type::setVolatile(bool isVolatile)
 {
-    m_isVolatile = isVolatile;
+    if (isVolatile)
+    {
+        m_flags = static_cast<TypeFlags>(m_flags | Volatile);
+    }
+    else
+    {
+        m_flags = static_cast<TypeFlags>(m_flags & ~Volatile);
+    }
     if (m_info && m_info->isVolatile && !isVolatile)
     {
         m_info = nullptr;
@@ -150,7 +232,7 @@ bool cld::Semantics::PointerType::operator==(const cld::Semantics::PointerType& 
     {
         return false;
     }
-    return std::tie(m_restricted, *m_elementType) == std::tie(rhs.m_restricted, *rhs.m_elementType);
+    return *m_elementType == *rhs.m_elementType;
 }
 
 bool cld::Semantics::PointerType::operator!=(const cld::Semantics::PointerType& rhs) const
@@ -208,8 +290,7 @@ bool cld::Semantics::ValArrayType::operator==(const cld::Semantics::ValArrayType
     {
         return false;
     }
-    return std::tie(m_restricted, m_static, m_expression, *m_type)
-           == std::tie(rhs.m_restricted, rhs.m_static, rhs.m_expression, *rhs.m_type);
+    return std::tie(m_expression, *m_type) == std::tie(rhs.m_expression, *rhs.m_type);
 }
 
 bool cld::Semantics::ValArrayType::operator!=(const cld::Semantics::ValArrayType& rhs) const
@@ -220,10 +301,6 @@ bool cld::Semantics::ValArrayType::operator!=(const cld::Semantics::ValArrayType
 bool cld::Semantics::FunctionType::operator==(const cld::Semantics::FunctionType& rhs) const
 {
     if (!equals(rhs))
-    {
-        return false;
-    }
-    if (m_lastIsVararg != rhs.m_lastIsVararg || m_isKandR != rhs.m_isKandR)
     {
         return false;
     }
@@ -246,7 +323,7 @@ bool cld::Semantics::AbstractArrayType::operator==(const cld::Semantics::Abstrac
     {
         return false;
     }
-    return std::tie(m_restricted, *m_type) == std::tie(rhs.m_restricted, *rhs.m_type);
+    return *m_type == *rhs.m_type;
 }
 
 bool cld::Semantics::AbstractArrayType::operator!=(const cld::Semantics::AbstractArrayType& rhs) const
@@ -825,19 +902,7 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::adjustParameterType(cons
     if (isArray(type))
     {
         auto& elementType = getArrayElementType(type);
-        bool restrict = type.match(
-            [](auto&& value) -> bool
-            {
-                using T = std::decay_t<decltype(value)>;
-                if constexpr (std::is_same_v<
-                                  ArrayType,
-                                  T> || std::is_same_v<AbstractArrayType, T> || std::is_same_v<ValArrayType, T>)
-                {
-                    return value.isRestricted();
-                }
-                CLD_UNREACHABLE;
-            });
-        return PointerType(type.isConst(), type.isVolatile(), restrict, &elementType);
+        return PointerType(&elementType, flag::useFlags = type.getFlags());
     }
     return type;
 }

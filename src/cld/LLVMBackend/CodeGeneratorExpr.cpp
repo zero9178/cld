@@ -606,8 +606,8 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::UnaryOpera
         case Semantics::UnaryOperator::BooleanNegate:
         {
             value = m_builder.CreateNot(boolToi1(value));
-            return m_builder.CreateZExt(value, visit(Semantics::PrimitiveType::createInt(
-                                                   false, false, m_sourceInterface.getLanguageOptions())));
+            return m_builder.CreateZExt(value, visit(Semantics::PrimitiveType(Semantics::PrimitiveType::Int,
+                                                                              m_sourceInterface.getLanguageOptions())));
         }
         case Semantics::UnaryOperator::BitwiseNegate: return m_builder.CreateNot(value);
     }
@@ -618,8 +618,8 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::SizeofOper
 {
     if (sizeofOperator.getSize())
     {
-        auto* type =
-            visit(Semantics::PrimitiveType::createSizeT(false, false, m_programInterface.getLanguageOptions()));
+        auto* type = visit(Semantics::PrimitiveType(m_programInterface.getLanguageOptions().sizeTType,
+                                                    m_programInterface.getLanguageOptions()));
         return llvm::ConstantInt::get(type, *sizeofOperator.getSize());
     }
     const Semantics::Type& type = cld::match(
@@ -1007,8 +1007,8 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::CallExpres
             case Semantics::BuiltinFunction::Inff: return llvm::ConstantFP::getInfinity(m_builder.getFloatTy());
             case Semantics::BuiltinFunction::Infl:
             {
-                auto* type = visit(
-                    Semantics::PrimitiveType::createLongDouble(false, false, m_sourceInterface.getLanguageOptions()));
+                auto* type = visit(Semantics::PrimitiveType(Semantics::PrimitiveType::LongDouble,
+                                                            m_sourceInterface.getLanguageOptions()));
                 return llvm::ConstantFP::getInfinity(type);
             }
             case Semantics::BuiltinFunction::SyncSynchronize:
@@ -1122,8 +1122,8 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::CallExpres
                     llvm::IntegerType* intPtrType = m_module.getDataLayout().getIntPtrType(m_module.getContext(), 0);
                     value = m_builder.CreatePtrToInt(value, intPtrType);
                     pointer = createPointerCast(pointer, llvm::PointerType::getUnqual(intPtrType));
-                    type =
-                        Semantics::PrimitiveType::createLongLong(false, false, m_sourceInterface.getLanguageOptions());
+                    type = Semantics::PrimitiveType(Semantics::PrimitiveType::LongLong,
+                                                    m_sourceInterface.getLanguageOptions());
                 }
                 llvm::AtomicRMWInst::BinOp inst;
                 switch (builtin.getKind())
@@ -1227,7 +1227,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::CallExpres
         {
             arguments.push_back({&iter->getType(), ""});
         }
-        cldFt = Semantics::FunctionType(&cldFt.getReturnType(), std::move(arguments), false, false);
+        cldFt = Semantics::FunctionType(&cldFt.getReturnType(), std::move(arguments));
         ft = llvm::cast<llvm::FunctionType>(visit(cldFt));
     }
     if (isKandR)
@@ -1378,12 +1378,14 @@ llvm::Value* visitStaticInitializerList(cld::CGLLVM::CodeGenerator& codeGenerato
                 auto* elementType = cld::match(
                     constant.getValue(),
                     [&](const std::string&) -> llvm::Type* {
-                        return codeGenerator.visit(cld::Semantics::PrimitiveType::createChar(
-                            false, false, codeGenerator.getProgramInterface().getLanguageOptions()));
+                        return codeGenerator.visit(
+                            cld::Semantics::PrimitiveType(cld::Semantics::PrimitiveType::Char,
+                                                          codeGenerator.getProgramInterface().getLanguageOptions()));
                     },
                     [&](const cld::Lexer::NonCharString&) -> llvm::Type* {
-                        return codeGenerator.visit(cld::Semantics::PrimitiveType::createWcharT(
-                            false, false, codeGenerator.getProgramInterface().getLanguageOptions()));
+                        return codeGenerator.visit(cld::Semantics::PrimitiveType(
+                            codeGenerator.getProgramInterface().getLanguageOptions().wcharUnderlyingType,
+                            codeGenerator.getProgramInterface().getLanguageOptions()));
                     },
                     [](const auto&) -> llvm::Type* { CLD_UNREACHABLE; });
                 for (std::size_t i = 0; i < size; i++)

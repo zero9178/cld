@@ -442,60 +442,50 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
 std::unique_ptr<cld::Semantics::Constant>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::PrimaryExpressionConstant& node)
 {
+    const auto& options = getLanguageOptions();
     if (std::holds_alternative<llvm::APSInt>(node.getValue()) || std::holds_alternative<llvm::APFloat>(node.getValue()))
     {
         switch (node.getType())
         {
             case Lexer::CToken::Type::None: CLD_UNREACHABLE;
             case Lexer::CToken::Type::UnsignedShort:
-                return std::make_unique<Constant>(
-                    PrimitiveType::createUnsignedShort(false, false, m_sourceInterface.getLanguageOptions()),
-                    node.getValue(), node.begin(), node.end());
+                return std::make_unique<Constant>(PrimitiveType(PrimitiveType::UnsignedShort, options), node.getValue(),
+                                                  node.begin(), node.end());
             case Lexer::CToken::Type::Int:
-                return std::make_unique<Constant>(
-                    PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions()), node.getValue(),
-                    node.begin(), node.end());
+                return std::make_unique<Constant>(PrimitiveType(PrimitiveType::Int, options), node.getValue(),
+                                                  node.begin(), node.end());
             case Lexer::CToken::Type::UnsignedInt:
-                return std::make_unique<Constant>(
-                    PrimitiveType::createUnsignedInt(false, false, m_sourceInterface.getLanguageOptions()),
-                    node.getValue(), node.begin(), node.end());
+                return std::make_unique<Constant>(PrimitiveType(PrimitiveType::UnsignedInt, options), node.getValue(),
+                                                  node.begin(), node.end());
             case Lexer::CToken::Type::Long:
-                return std::make_unique<Constant>(
-                    PrimitiveType::createLong(false, false, m_sourceInterface.getLanguageOptions()), node.getValue(),
-                    node.begin(), node.end());
+                return std::make_unique<Constant>(PrimitiveType(PrimitiveType::Long, options), node.getValue(),
+                                                  node.begin(), node.end());
             case Lexer::CToken::Type::UnsignedLong:
-                return std::make_unique<Constant>(
-                    PrimitiveType::createUnsignedLong(false, false, m_sourceInterface.getLanguageOptions()),
-                    node.getValue(), node.begin(), node.end());
+                return std::make_unique<Constant>(PrimitiveType(PrimitiveType::UnsignedLong, options), node.getValue(),
+                                                  node.begin(), node.end());
             case Lexer::CToken::Type::LongLong:
-                return std::make_unique<Constant>(
-                    PrimitiveType::createLongLong(false, false, m_sourceInterface.getLanguageOptions()),
-                    node.getValue(), node.begin(), node.end());
+                return std::make_unique<Constant>(PrimitiveType(PrimitiveType::LongLong, options), node.getValue(),
+                                                  node.begin(), node.end());
             case Lexer::CToken::Type::UnsignedLongLong:
-                return std::make_unique<Constant>(
-                    PrimitiveType::createUnsignedLongLong(false, false, m_sourceInterface.getLanguageOptions()),
-                    node.getValue(), node.begin(), node.end());
+                return std::make_unique<Constant>(PrimitiveType(PrimitiveType::UnsignedLongLong, options),
+                                                  node.getValue(), node.begin(), node.end());
             case Lexer::CToken::Type::Float:
-                return std::make_unique<Constant>(PrimitiveType::createFloat(false, false), node.getValue(),
+                return std::make_unique<Constant>(PrimitiveType(PrimitiveType::Float, options), node.getValue(),
                                                   node.begin(), node.end());
             case Lexer::CToken::Type::Double:
-                return std::make_unique<Constant>(
-                    PrimitiveType::createDouble(false, false, m_sourceInterface.getLanguageOptions()), node.getValue(),
-                    node.begin(), node.end());
+                return std::make_unique<Constant>(PrimitiveType(PrimitiveType::Double, options), node.getValue(),
+                                                  node.begin(), node.end());
             case Lexer::CToken::Type::LongDouble:
-                return std::make_unique<Constant>(
-                    PrimitiveType::createLongDouble(false, false, m_sourceInterface.getLanguageOptions()),
-                    node.getValue(), node.begin(), node.end());
+                return std::make_unique<Constant>(PrimitiveType(PrimitiveType::LongDouble, options), node.getValue(),
+                                                  node.begin(), node.end());
         }
     }
     else if (std::holds_alternative<std::string>(node.getValue()))
     {
         auto& string = cld::get<std::string>(node.getValue());
         return std::make_unique<Constant>(
-            ArrayType(false, false, false, false,
-                      typeAlloc(PrimitiveType::createChar(false, false, m_sourceInterface.getLanguageOptions())),
-                      string.size() + 1),
-            node.getValue(), node.begin(), node.end());
+            ArrayType(typeAlloc<PrimitiveType>(PrimitiveType::Char, options), string.size() + 1), node.getValue(),
+            node.begin(), node.end());
     }
     else if (std::holds_alternative<Lexer::NonCharString>(node.getValue()))
     {
@@ -503,9 +493,7 @@ std::unique_ptr<cld::Semantics::Constant>
         if (string.type == Lexer::NonCharString::Wide)
         {
             return std::make_unique<Constant>(
-                ArrayType(false, false, false, false,
-                          typeAlloc(PrimitiveType::createWcharT(false, false, m_sourceInterface.getLanguageOptions())),
-                          string.characters.size() + 1),
+                ArrayType(typeAlloc<PrimitiveType>(options.wcharUnderlyingType, options), string.characters.size() + 1),
                 node.getValue(), node.begin(), node.end());
         }
     }
@@ -609,6 +597,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
 cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::PrimaryExpressionBuiltinOffsetOf& node)
 {
+    auto retType = PrimitiveType(getLanguageOptions().sizeTType, getLanguageOptions());
     auto type =
         declaratorsToType(node.getTypeName().getSpecifierQualifiers(), node.getTypeName().getAbstractDeclarator());
     if (type->isUndefined() || !isRecord(type))
@@ -618,23 +607,20 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             log(Errors::Semantics::TYPE_N_IN_OFFSETOF_MUST_BE_A_STRUCT_OR_UNION_TYPE.args(
                 node.getTypeName(), m_sourceInterface, type, node.getTypeName()));
         }
-        return std::make_unique<ErrorExpression>(
-            PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()), node);
+        return std::make_unique<ErrorExpression>(std::move(retType), node);
     }
     auto& fields = getFields(type);
     auto result = fields.find(node.getMemberName()->getText());
     if (result == fields.end())
     {
         reportNoMember(type, *node.getMemberName());
-        return std::make_unique<ErrorExpression>(
-            PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()), node);
+        return std::make_unique<ErrorExpression>(std::move(retType), node);
     }
     if (result->second.bitFieldBounds)
     {
         log(Errors::Semantics::BITFIELD_NOT_ALLOWED_IN_OFFSET_OF.args(*node.getMemberName(), m_sourceInterface,
                                                                       *node.getMemberName()));
-        return std::make_unique<ErrorExpression>(
-            PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()), node);
+        return std::make_unique<ErrorExpression>(std::move(retType), node);
     }
     llvm::ArrayRef<Lexer::CToken> range(node.getMemberName(), node.getMemberName() + 1);
     std::uint64_t currentOffset = 0;
@@ -660,23 +646,20 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             {
                 log(Errors::Semantics::EXPECTED_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_THE_DOT_OPERATOR_2.args(
                     range, m_sourceInterface, range, *currentType));
-                return std::make_unique<ErrorExpression>(
-                    PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()), node);
+                return std::make_unique<ErrorExpression>(std::move(retType), node);
             }
             auto& subFields = getFields(*currentType);
             auto subResult = subFields.find(cld::get<Lexer::CTokenIterator>(iter)->getText());
             if (subResult == subFields.end())
             {
                 reportNoMember(*currentType, *cld::get<Lexer::CTokenIterator>(iter));
-                return std::make_unique<ErrorExpression>(
-                    PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()), node);
+                return std::make_unique<ErrorExpression>(std::move(retType), node);
             }
             if (subResult->second.bitFieldBounds)
             {
                 log(Errors::Semantics::BITFIELD_NOT_ALLOWED_IN_OFFSET_OF.args(
                     *cld::get<Lexer::CTokenIterator>(iter), m_sourceInterface, *cld::get<Lexer::CTokenIterator>(iter)));
-                return std::make_unique<ErrorExpression>(
-                    PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()), node);
+                return std::make_unique<ErrorExpression>(std::move(retType), node);
             }
             range = llvm::ArrayRef(node.getMemberName(), cld::get<Lexer::CTokenIterator>(iter) + 1);
             for (auto& index : result->second.indices)
@@ -698,15 +681,13 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             {
                 log(Errors::Semantics::EXPECTED_ARRAY_TYPE_ON_THE_LEFT_SIDE_OF_THE_SUBSCRIPT_OPERATOR.args(
                     range, m_sourceInterface, range, *currentType));
-                return std::make_unique<ErrorExpression>(
-                    PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()), node);
+                return std::make_unique<ErrorExpression>(std::move(retType), node);
             }
             auto& subscript = cld::get<Syntax::PrimaryExpressionBuiltinOffsetOf::Subscript>(iter);
             auto expression = visit(*subscript.expression);
             if (expression->isUndefined())
             {
-                return std::make_unique<ErrorExpression>(
-                    PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()), node);
+                return std::make_unique<ErrorExpression>(std::move(retType), node);
             }
             auto constant = evaluateConstantExpression(*expression);
             if (!constant)
@@ -715,15 +696,13 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                 {
                     log(mes);
                 }
-                return std::make_unique<ErrorExpression>(
-                    PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()), node);
+                return std::make_unique<ErrorExpression>(std::move(retType), node);
             }
             if (!isInteger(expression->getType()))
             {
                 log(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS.args(
                     *expression, m_sourceInterface, *expression));
-                return std::make_unique<ErrorExpression>(
-                    PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions()), node);
+                return std::make_unique<ErrorExpression>(std::move(retType), node);
             }
             auto size = getArrayElementType(*currentType).getSizeOf(*this);
             if (constant->getInteger().isSigned())
@@ -1066,11 +1045,10 @@ std::unique_ptr<cld::Semantics::CallExpression>
         arguments.push_back(lvalueConversion(std::move(expression)));
     }
     auto* functionType = &function->getType();
-    return std::make_unique<CallExpression>(PrimitiveType::createVoid(false, false),
-                                            std::make_unique<Conversion>(PointerType(false, false, false, functionType),
-                                                                         Conversion::LValue, std::move(function)),
-                                            node.getOpenParentheses(), std::move(arguments),
-                                            node.getCloseParentheses());
+    return std::make_unique<CallExpression>(
+        PrimitiveType(PrimitiveType::Void, getLanguageOptions()),
+        std::make_unique<Conversion>(PointerType(functionType), Conversion::LValue, std::move(function)),
+        node.getOpenParentheses(), std::move(arguments), node.getCloseParentheses());
 }
 
 std::unique_ptr<cld::Semantics::CallExpression>
@@ -1136,8 +1114,8 @@ std::unique_ptr<cld::Semantics::CallExpression>
         }
     }
     return std::make_unique<CallExpression>(
-        PrimitiveType::createVoid(false, false),
-        std::make_unique<Conversion>(PointerType(false, false, false, &ft), Conversion::LValue, std::move(function)),
+        PrimitiveType(PrimitiveType::Void, getLanguageOptions()),
+        std::make_unique<Conversion>(PointerType(&ft), Conversion::LValue, std::move(function)),
         node.getOpenParentheses(), std::move(arguments), node.getCloseParentheses());
 }
 
@@ -1186,8 +1164,8 @@ std::unique_ptr<cld::Semantics::CallExpression>
         }
     }
     return std::make_unique<CallExpression>(
-        PrimitiveType::createVoid(false, false),
-        std::make_unique<Conversion>(PointerType(false, false, false, &ft), Conversion::LValue, std::move(function)),
+        PrimitiveType(PrimitiveType::Void, getLanguageOptions()),
+        std::make_unique<Conversion>(PointerType(&ft), Conversion::LValue, std::move(function)),
         node.getOpenParentheses(), std::move(arguments), node.getCloseParentheses());
 }
 
@@ -1196,8 +1174,7 @@ std::unique_ptr<cld::Semantics::CallExpression>
                                                             IntrVarPtr<ExpressionBase>&& function)
 {
     auto& type = function->getType();
-    function =
-        std::make_unique<Conversion>(PointerType(false, false, false, &type), Conversion::LValue, std::move(function));
+    function = std::make_unique<Conversion>(PointerType(&type), Conversion::LValue, std::move(function));
     auto& ft = getPointerElementType(function->getType()).as<FunctionType>();
 
     IntrVarValue<Type> placeholder = ErrorType{};
@@ -1450,8 +1427,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     else
     {
         auto& type = function->getType();
-        function = std::make_unique<Conversion>(PointerType(false, false, false, &type), Conversion::LValue,
-                                                std::move(function));
+        function = std::make_unique<Conversion>(PointerType(&type), Conversion::LValue, std::move(function));
     }
     auto& ft = getPointerElementType(function->getType()).as<FunctionType>();
     std::vector<IntrVarPtr<ExpressionBase>> arguments;
@@ -1571,8 +1547,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         std::size_t size = 0;
         value = visit(node.getInitializerList(), type, !inFunction() || m_inStaticInitializer, &size);
         auto& abstractArrayType = type->as<AbstractArrayType>();
-        type = ArrayType(type->isConst(), type->isVolatile(), abstractArrayType.isRestricted(), false,
-                         &abstractArrayType.getType(), size);
+        type = ArrayType(&abstractArrayType.getType(), size, flag::useFlags = type->getFlags());
     }
     else
     {
@@ -1638,9 +1613,9 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                 log(Errors::Semantics::CANNOT_TAKE_ADDRESS_OF_TEMPORARY.args(*value, m_sourceInterface,
                                                                              *node.getUnaryToken(), *value));
             }
-            return std::make_unique<UnaryOperator>(PointerType(false, false, false, typeAlloc(value->getType())),
-                                                   ValueCategory::Rvalue, UnaryOperator::AddressOf,
-                                                   node.getUnaryToken(), std::move(value));
+            auto element = typeAlloc(value->getType());
+            return std::make_unique<UnaryOperator>(PointerType(element), ValueCategory::Rvalue,
+                                                   UnaryOperator::AddressOf, node.getUnaryToken(), std::move(value));
         }
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Asterisk:
         {
@@ -1669,7 +1644,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                     *node.getUnaryToken(), m_sourceInterface, *node.getUnaryToken(), *value));
                 return std::make_unique<ErrorExpression>(node);
             }
-            auto& type = value->getType();
+            IntrVarValue type = value->getType();
             return std::make_unique<UnaryOperator>(
                 type, ValueCategory::Rvalue,
                 node.getOperator() == Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Minus ?
@@ -1701,9 +1676,9 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                     *node.getUnaryToken(), m_sourceInterface, *node.getUnaryToken(), *value));
             }
             value = toBool(std::move(value));
-            return std::make_unique<UnaryOperator>(
-                PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions()), ValueCategory::Rvalue,
-                UnaryOperator::BooleanNegate, node.getUnaryToken(), std::move(value));
+            return std::make_unique<UnaryOperator>(PrimitiveType(PrimitiveType::Int, getLanguageOptions()),
+                                                   ValueCategory::Rvalue, UnaryOperator::BooleanNegate,
+                                                   node.getUnaryToken(), std::move(value));
         }
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator ::GNUExtension: return value;
     }
@@ -1739,12 +1714,12 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             if (!isVariableLengthArray(type))
             {
                 auto size = exp->getType().getSizeOf(*this);
-                return std::make_unique<SizeofOperator>(m_sourceInterface.getLanguageOptions(), node.getSizeOfToken(),
-                                                        size, std::move(exp));
+                return std::make_unique<SizeofOperator>(getLanguageOptions(), node.getSizeOfToken(), size,
+                                                        std::move(exp));
             }
 
-            return std::make_unique<SizeofOperator>(m_sourceInterface.getLanguageOptions(), node.getSizeOfToken(),
-                                                    std::nullopt, std::move(exp));
+            return std::make_unique<SizeofOperator>(getLanguageOptions(), node.getSizeOfToken(), std::nullopt,
+                                                    std::move(exp));
         },
         [&](const std::unique_ptr<Syntax::TypeName>& typeName) -> IntrVarPtr<ExpressionBase> {
             std::vector<GNUAttribute> attributes;
@@ -1787,14 +1762,12 @@ std::unique_ptr<cld::Semantics::Constant>
     CLD_ASSERT(m_definedCallback);
     if (m_definedCallback(node.getIdentifier()))
     {
-        return std::make_unique<Constant>(
-            PrimitiveType::createLongLong(false, false, m_sourceInterface.getLanguageOptions()),
-            llvm::APSInt(llvm::APInt(64, 1), false), node.begin(), node.end());
+        return std::make_unique<Constant>(PrimitiveType(PrimitiveType::LongLong, getLanguageOptions()),
+                                          llvm::APSInt(llvm::APInt(64, 1), false), node.begin(), node.end());
     }
 
-    return std::make_unique<Constant>(
-        PrimitiveType::createLongLong(false, false, m_sourceInterface.getLanguageOptions()), llvm::APSInt(64, false),
-        node.begin(), node.end());
+    return std::make_unique<Constant>(PrimitiveType(PrimitiveType::LongLong, getLanguageOptions()),
+                                      llvm::APSInt(64, false), node.begin(), node.end());
 }
 
 cld::IntrVarPtr<cld::Semantics::ExpressionBase>
@@ -2114,8 +2087,8 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                             *value, m_sourceInterface, *value, *token, *rhsValue));
                     }
                     value = std::make_unique<BinaryOperator>(
-                        PrimitiveType::createPtrdiffT(false, false, m_sourceInterface.getLanguageOptions()),
-                        std::move(value), BinaryOperator::Subtraction, token, std::move(rhsValue));
+                        PrimitiveType(getLanguageOptions().ptrdiffType, getLanguageOptions()), std::move(value),
+                        BinaryOperator::Subtraction, token, std::move(rhsValue));
                 }
                 else
                 {
@@ -2240,38 +2213,34 @@ cld::Semantics::VectorType cld::Semantics::SemanticAnalysis::vectorCompResultTyp
                 }
                 [[fallthrough]];
             case PrimitiveType::UnsignedChar:
-                return VectorType(false, false, typeAlloc(PrimitiveType::createSignedChar(false, false)), elementCount);
+                return VectorType(typeAlloc<PrimitiveType>(PrimitiveType::SignedChar, options), elementCount);
             case PrimitiveType::UnsignedShort:
-                return VectorType(false, false, typeAlloc(PrimitiveType::createShort(false, false, options)),
-                                  elementCount);
+                return VectorType(typeAlloc<PrimitiveType>(PrimitiveType::Short, options), elementCount);
             case PrimitiveType::UnsignedInt:
-                return VectorType(false, false, typeAlloc(PrimitiveType::createInt(false, false, options)),
-                                  elementCount);
+                return VectorType(typeAlloc<PrimitiveType>(PrimitiveType::Int, options), elementCount);
             case PrimitiveType::UnsignedLong:
-                return VectorType(false, false, typeAlloc(PrimitiveType::createLong(false, false, options)),
-                                  elementCount);
+                return VectorType(typeAlloc<PrimitiveType>(PrimitiveType::Long, options), elementCount);
             case PrimitiveType::UnsignedLongLong:
-                return VectorType(false, false, typeAlloc(PrimitiveType::createLongLong(false, false, options)),
-                                  elementCount);
+                return VectorType(typeAlloc<PrimitiveType>(PrimitiveType::LongLong, options), elementCount);
             default: return vectorType;
         }
     }
     auto bitWidth = getVectorElementType(vectorType).as<PrimitiveType>().getBitCount();
     if (bitWidth == options.sizeOfShort * 8)
     {
-        return VectorType(false, false, typeAlloc(PrimitiveType::createShort(false, false, options)), elementCount);
+        return VectorType(typeAlloc<PrimitiveType>(PrimitiveType::Short, options), elementCount);
     }
     if (bitWidth == options.sizeOfInt * 8)
     {
-        return VectorType(false, false, typeAlloc(PrimitiveType::createInt(false, false, options)), elementCount);
+        return VectorType(typeAlloc<PrimitiveType>(PrimitiveType::Int, options), elementCount);
     }
     if (bitWidth == options.sizeOfLong * 8)
     {
-        return VectorType(false, false, typeAlloc(PrimitiveType::createLong(false, false, options)), elementCount);
+        return VectorType(typeAlloc<PrimitiveType>(PrimitiveType::Long, options), elementCount);
     }
     if (bitWidth == 64)
     {
-        return VectorType(false, false, typeAlloc(PrimitiveType::createLongLong(false, false, options)), elementCount);
+        return VectorType(typeAlloc<PrimitiveType>(PrimitiveType::LongLong, options), elementCount);
     }
     CLD_UNREACHABLE;
 }
@@ -2286,7 +2255,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     }
     for (auto& [kind, token, rhs] : node.getOptionalShiftExpressions())
     {
-        IntrVarValue<Type> resultType = PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions());
+        IntrVarValue<Type> resultType = PrimitiveType(PrimitiveType::Int, getLanguageOptions());
         auto rhsValue = visit(rhs);
         if ((isArithmetic(value->getType()) && isArithmetic(rhsValue->getType())) || isVector(value->getType())
             || isVector(rhsValue->getType()))
@@ -2384,7 +2353,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     }
     for (auto& [kind, token, rhs] : node.getOptionalRelationalExpressions())
     {
-        IntrVarValue<Type> resultType = PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions());
+        IntrVarValue<Type> resultType = PrimitiveType(PrimitiveType::Int, getLanguageOptions());
         auto rhsValue = visit(rhs);
         if ((isArithmetic(value->getType()) && isArithmetic(rhsValue->getType())) || isVector(value->getType())
             || isVector(rhsValue->getType()))
@@ -2582,9 +2551,8 @@ std::unique_ptr<cld::Semantics::BinaryOperator>
     }
     lhs = toBool(std::move(lhs));
     rhs = toBool(std::move(rhs));
-    return std::make_unique<BinaryOperator>(
-        PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions()), std::move(lhs), kind, token,
-        std::move(rhs));
+    return std::make_unique<BinaryOperator>(PrimitiveType(PrimitiveType::Int, getLanguageOptions()), std::move(lhs),
+                                            kind, token, std::move(rhs));
 }
 
 cld::IntrVarPtr<cld::Semantics::ExpressionBase>
@@ -2714,17 +2682,17 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             }
             else if (isVoid(secondWithoutQualifier) || isVoid(*thirdWithoutQualifier))
             {
-                resultType.emplace<PointerType>(false, false, false,
-                                                typeAlloc(PrimitiveType::createVoid(
-                                                    secondElementType.isConst() || thirdElementType.isConst(),
-                                                    secondElementType.isVolatile() || thirdElementType.isVolatile())));
+                resultType.emplace<PointerType>(typeAlloc<PrimitiveType>(
+                    PrimitiveType::Void, getLanguageOptions(),
+                    flag::isConst = secondElementType.isConst() || thirdElementType.isConst(),
+                    flag::isVolatile = secondElementType.isVolatile() || thirdElementType.isVolatile()));
             }
             else
             {
                 IntrVarValue<Type> composite = compositeType(secondWithoutQualifier, thirdWithoutQualifier);
                 composite->setConst(secondElementType.isConst() || thirdElementType.isConst());
                 composite->setVolatile(secondElementType.isVolatile() || thirdElementType.isVolatile());
-                resultType.emplace<PointerType>(false, false, false, typeAlloc(std::move(*composite)));
+                resultType.emplace<PointerType>(typeAlloc(std::move(*composite)));
             }
         }
     }
@@ -2772,16 +2740,14 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         if (isArray(expression->getType()))
         {
             auto& elementType = getArrayElementType(expression->getType());
-            return std::make_unique<Conversion>(PointerType(false, false, false, &elementType), Conversion::Implicit,
-                                                std::move(expression));
+            return std::make_unique<Conversion>(PointerType(&elementType), Conversion::Implicit, std::move(expression));
         }
         return std::move(expression);
     }
     if (isArray(expression->getType()))
     {
         auto& elementType = getArrayElementType(expression->getType());
-        return std::make_unique<Conversion>(PointerType(false, false, false, &elementType), Conversion::LValue,
-                                            std::move(expression));
+        return std::make_unique<Conversion>(PointerType(&elementType), Conversion::LValue, std::move(expression));
     }
     if (isFunctionType(expression->getType()))
     {
@@ -2791,8 +2757,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                                                                                      *expression));
         }
         auto type = typeAlloc(expression->getType());
-        return std::make_unique<Conversion>(PointerType(false, false, false, type), Conversion::LValue,
-                                            std::move(expression));
+        return std::make_unique<Conversion>(PointerType(type), Conversion::LValue, std::move(expression));
     }
     auto& type = expression->getType();
     if (!type.isVolatile() && !type.isConst() && (!type.is<PointerType>() || !type.as<PointerType>().isRestricted()))
@@ -2805,7 +2770,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     newType->setVolatile(false);
     if (auto* pointer = newType->tryAs<PointerType>())
     {
-        newType = PointerType(false, false, false, &pointer->getElementType());
+        newType = PointerType(&pointer->getElementType());
     }
     return std::make_unique<Conversion>(std::move(newType), Conversion::LValue, std::move(expression));
 }
@@ -2815,11 +2780,11 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::lvalue
     if (isArray(type))
     {
         auto& elementType = getArrayElementType(type);
-        return PointerType(false, false, false, &elementType);
+        return PointerType(&elementType);
     }
     if (isFunctionType(type))
     {
-        return PointerType(false, false, false, typeAlloc(std::move(*type)));
+        return PointerType(typeAlloc(std::move(*type)));
     }
     // If the expression isn't an lvalue and not qualified then conversion is redundant
     if (!type->isVolatile() && !type->isConst()
@@ -2831,7 +2796,7 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::lvalue
     type->setVolatile(false);
     if (auto* pointer = type->tryAs<PointerType>())
     {
-        type.emplace<PointerType>(false, false, false, &pointer->getElementType());
+        type.emplace<PointerType>(&pointer->getElementType());
     }
     return type;
 }
@@ -2849,9 +2814,8 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     {
         return std::move(expression);
     }
-    return std::make_unique<Conversion>(
-        PrimitiveType::createDouble(false, false, m_sourceInterface.getLanguageOptions()),
-        Conversion::DefaultArgumentPromotion, std::move(expression));
+    return std::make_unique<Conversion>(PrimitiveType(PrimitiveType::Double, getLanguageOptions()),
+                                        Conversion::DefaultArgumentPromotion, std::move(expression));
 }
 
 cld::IntrVarPtr<cld::Semantics::ExpressionBase>
@@ -2868,18 +2832,18 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         return std::move(expression);
     }
     auto& prim = expression->getType().as<PrimitiveType>();
-    if (prim.isFloatingPoint() || prim.getBitCount() >= m_sourceInterface.getLanguageOptions().sizeOfInt * 8)
+    if (prim.isFloatingPoint() || prim.getBitCount() >= getLanguageOptions().sizeOfInt * 8)
     {
         return std::move(expression);
     }
-    return std::make_unique<Conversion>(PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions()),
+    return std::make_unique<Conversion>(PrimitiveType(PrimitiveType::Int, getLanguageOptions()),
                                         Conversion::IntegerPromotion, std::move(expression));
 }
 
 std::unique_ptr<cld::Semantics::Conversion>
     cld::Semantics::SemanticAnalysis::toBool(IntrVarPtr<ExpressionBase>&& expression)
 {
-    return std::make_unique<Conversion>(PrimitiveType::createUnderlineBool(false, false), Conversion::Implicit,
+    return std::make_unique<Conversion>(PrimitiveType(PrimitiveType::Bool, getLanguageOptions()), Conversion::Implicit,
                                         std::move(expression));
 }
 
@@ -3098,12 +3062,10 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(
         (void)floating;
         switch (biggest)
         {
-            case PrimitiveType::Kind::Float: type = PrimitiveType::createFloat(false, false); break;
-            case PrimitiveType::Kind::Double:
-                type = PrimitiveType::createDouble(false, false, m_sourceInterface.getLanguageOptions());
-                break;
+            case PrimitiveType::Kind::Float: type = PrimitiveType(PrimitiveType::Float, getLanguageOptions()); break;
+            case PrimitiveType::Kind::Double: type = PrimitiveType(PrimitiveType::Double, getLanguageOptions()); break;
             case PrimitiveType::Kind::LongDouble:
-                type = PrimitiveType::createLongDouble(false, false, m_sourceInterface.getLanguageOptions());
+                type = PrimitiveType(PrimitiveType::LongDouble, getLanguageOptions());
                 break;
             default: CLD_UNREACHABLE;
         }
@@ -3135,7 +3097,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     if (isArray(type))
     {
         auto& elementType = getArrayElementType(type);
-        if (!isCharacterLikeType(elementType, m_sourceInterface.getLanguageOptions()))
+        if (!isCharacterLikeType(elementType, getLanguageOptions()))
         {
             log(Errors::Semantics::ARRAY_MUST_BE_INITIALIZED_WITH_INITIALIZER_LIST.args(*expression, m_sourceInterface,
                                                                                         *expression));
@@ -3237,8 +3199,8 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             }
         }
         else if (elementType.is<PrimitiveType>()
-                 && *removeQualifiers(elementType)
-                        == PrimitiveType::createWcharT(false, false, m_sourceInterface.getLanguageOptions()))
+                 && removeQualifiers(elementType)
+                        == PrimitiveType(getLanguageOptions().wcharUnderlyingType, getLanguageOptions()))
         {
             if (expression->is<Constant>()
                 && std::holds_alternative<Lexer::NonCharString>(expression->as<Constant>().getValue()))
@@ -3754,7 +3716,7 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const Syntax
                 expression = lvalueConversion(std::move(expression));
             }
             else if (currentIndex == 0 && &top == current && node.getNonCommaExpressionsAndBlocks().size() == 1
-                     && designationList.empty() && isCharArray(*top.type, m_sourceInterface.getLanguageOptions()))
+                     && designationList.empty() && isCharArray(*top.type, getLanguageOptions()))
             {
                 // Handles the case of a string literal being used to initialize the top level object with optional
                 // braces surrounding it
@@ -3763,7 +3725,7 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const Syntax
             while (isAggregate(*current->at(currentIndex).type))
             {
                 if (typesAreCompatible(*removeQualifiers(expression->getType()), *current->at(currentIndex).type)
-                    || (isCharArray(*current->at(currentIndex).type, m_sourceInterface.getLanguageOptions())
+                    || (isCharArray(*current->at(currentIndex).type, getLanguageOptions())
                         && isStringLiteralExpr(*expression)))
                 {
                     break;

@@ -44,219 +44,32 @@ class EnumDefinition;
 
 class ProgramInterface;
 
-namespace detail
-{
-enum class TypeFlags : std::uint8_t
-{
-    Nothing = 0,
-    Const = 0b1,
-    Volatile = 0b10,
-    Restricted = 0b100,
-    Static = 0b1000,
-};
-
-using TypeFlagsUT = std::underlying_type_t<TypeFlags>;
-
-template <class Left, class Right>
-struct OrExpr
-{
-    Left left;
-    Right right;
-
-    constexpr operator TypeFlags() const
-    {
-        return static_cast<TypeFlags>(static_cast<TypeFlagsUT>(left) | static_cast<TypeFlagsUT>(right));
-    }
-};
-
-template <class T>
-struct IsOrExpr : std::false_type
-{
-};
-
-template <class Left, class Right>
-struct IsOrExpr<OrExpr<Left, Right>> : std::true_type
-{
-};
-
-template <class Left, class Right>
-struct AndExpr
-{
-    Left left;
-    Right right;
-
-    constexpr operator TypeFlags() const
-    {
-        return static_cast<TypeFlags>(static_cast<TypeFlagsUT>(left) & static_cast<TypeFlagsUT>(right));
-    }
-};
-
-template <class T>
-struct IsAndExpr : std::false_type
-{
-};
-
-template <class Left, class Right>
-struct IsAndExpr<AndExpr<Left, Right>> : std::true_type
-{
-};
-
-template <TypeFlags value>
-struct Constant
-{
-    constexpr operator TypeFlags() const
-    {
-        return value;
-    }
-};
-
-template <class T>
-auto isConstant(const T&) -> std::false_type;
-
-template <TypeFlags value>
-auto isConstant(const Constant<value>&) -> std::true_type;
-
-struct Value
-{
-    TypeFlags value;
-
-    constexpr operator TypeFlags() const
-    {
-        return value;
-    }
-};
-
-template <class T>
-constexpr bool typeAllowedInExpr()
-{
-    return std::is_same_v<T, TypeFlags> || std::is_same_v<T, Value> || IsOrExpr<T>{} || IsAndExpr<T>{}
-           || decltype(isConstant(std::declval<T>())){};
-}
-
-template <class T>
-constexpr auto toValue(const T& value)
-{
-    if constexpr (std::is_same_v<T, TypeFlags>)
-    {
-        return Value{value};
-    }
-    else
-    {
-        return value;
-    }
-}
-
-template <class Left, class Right,
-          std::enable_if_t<(typeAllowedInExpr<Left>() && typeAllowedInExpr<Right>())>* = nullptr>
-constexpr OrExpr<Left, Right> operator|(const Left& left, const Right& right)
-{
-    return OrExpr{toValue(left), toValue(right)};
-}
-
-template <TypeFlags left, TypeFlags right>
-constexpr auto operator|(const Constant<left>&, const Constant<right>&)
-    -> Constant<static_cast<TypeFlags>(static_cast<TypeFlagsUT>(left) | static_cast<TypeFlagsUT>(right))>
-{
-    return {};
-}
-
-template <class Left, class Right,
-          std::enable_if_t<(typeAllowedInExpr<Left>() && typeAllowedInExpr<Right>())>* = nullptr>
-constexpr AndExpr<Left, Right> operator&(const Left& left, const Right& right)
-{
-    return AndExpr{toValue(left), toValue(right)};
-}
-
-template <TypeFlags left, TypeFlags right>
-constexpr auto operator&(const Constant<left>&, const Constant<right>&)
-    -> Constant<static_cast<TypeFlags>(static_cast<TypeFlagsUT>(left) & static_cast<TypeFlagsUT>(right))>
-{
-    return {};
-}
-
-template <TypeFlags... allowedValues, class T>
-constexpr auto containsOnlyAllowed(const T& arg) -> std::enable_if_t<typeAllowedInExpr<T>(), bool>
-{
-    struct MaskValue
-    {
-        TypeFlagsUT knownBitMask;
-        TypeFlagsUT knownBitValues;
-    };
-    MaskValue result = YComb{[&](auto&& self, const auto& arg) -> MaskValue {
-        using U = std::decay_t<decltype(arg)>;
-        if constexpr (IsOrExpr<U>{})
-        {
-            MaskValue left = self(arg.left);
-            MaskValue right = self(arg.right);
-            return {static_cast<TypeFlagsUT>((left.knownBitValues & left.knownBitMask)
-                                             | (right.knownBitValues & right.knownBitValues)
-                                             | (left.knownBitMask & right.knownBitMask)),
-                    static_cast<TypeFlagsUT>((left.knownBitValues & left.knownBitMask)
-                                             | (right.knownBitValues & right.knownBitValues))};
-        }
-        else if constexpr (IsAndExpr<U>{})
-        {
-            MaskValue left = self(arg.left);
-            MaskValue right = self(arg.right);
-            auto knownBits = (~(~left.knownBitMask | left.knownBitValues))
-                             | (~(~right.knownBitMask | right.knownBitValues))
-                             | (left.knownBitMask & right.knownBitMask);
-            return {static_cast<TypeFlagsUT>(knownBits),
-                    static_cast<TypeFlagsUT>((left.knownBitValues & left.knownBitMask)
-                                             & (right.knownBitValues & right.knownBitValues))};
-        }
-        else if constexpr (std::is_same_v<U, Value>)
-        {
-            return {0, 0};
-        }
-        else if constexpr (decltype(isConstant(std::declval<U>())){})
-        {
-            return {static_cast<TypeFlagsUT>(-1), static_cast<TypeFlagsUT>(static_cast<TypeFlags>(arg))};
-        }
-        else
-        {
-            CLD_UNREACHABLE;
-        }
-    }}(arg);
-    auto mask = (static_cast<TypeFlagsUT>(allowedValues) | ...);
-    return (result.knownBitValues & result.knownBitMask & (~mask)) == 0;
-}
-
-inline TypeFlags& operator|=(TypeFlags& left, const TypeFlags right)
-{
-    left = static_cast<TypeFlags>(static_cast<TypeFlagsUT>(left) | static_cast<TypeFlagsUT>(right));
-    return left;
-}
-
-inline TypeFlags& operator&=(TypeFlags& left, const TypeFlags right)
-{
-    left = static_cast<TypeFlags>(static_cast<TypeFlagsUT>(left) & static_cast<TypeFlagsUT>(right));
-    return left;
-}
-
-} // namespace detail
-
-using detail::TypeFlags;
-
-constexpr auto NothingFlag = detail::Constant<TypeFlags::Nothing>{};
-constexpr auto ConstFlag = detail::Constant<TypeFlags::Const>{};
-constexpr auto VolatileFlag = detail::Constant<TypeFlags::Volatile>{};
-constexpr auto RestrictedFlag = detail::Constant<TypeFlags::Restricted>{};
-constexpr auto StaticFlag = detail::Constant<TypeFlags::Static>{};
-
 class Type : public AbstractIntrusiveVariant<class PrimitiveType, class ArrayType, class AbstractArrayType,
                                              class ValArrayType, class FunctionType, class StructType, class UnionType,
                                              class EnumType, class PointerType, class VectorType, class ErrorType>,
              public AttributeHolder<TypeAttribute>
 {
+public:
+    enum TypeFlags : std::uint8_t
+    {
+        Nothing = 0,
+        Const = 0b1,
+        Volatile = 0b10,
+        Restricted = 0b100,
+        Static = 0b1000,
+        VARArg = 0b10000,
+        KAndR = 0b100000,
+    };
+
+private:
     const TypedefInfo* m_info = nullptr;
-    bool m_isConst : 1;
-    bool m_isVolatile : 1;
 
 protected:
+    TypeFlags m_flags;
+
     template <class T>
-    explicit Type(std::in_place_type_t<T>, bool isConst, bool isVolatile)
-        : AbstractIntrusiveVariant(std::in_place_type<T>), m_isConst(isConst), m_isVolatile(isVolatile)
+    Type(std::in_place_type_t<T>, TypeFlags flags)
+        : AbstractIntrusiveVariant(std::in_place_type<T>), m_flags(static_cast<TypeFlags>(flags))
     {
     }
 
@@ -270,12 +83,17 @@ protected:
 public:
     [[nodiscard]] bool isConst() const
     {
-        return m_isConst;
+        return m_flags & Const;
     }
 
     [[nodiscard]] bool isVolatile() const
     {
-        return m_isVolatile;
+        return m_flags & Volatile;
+    }
+
+    [[nodiscard]] TypeFlags getFlags() const
+    {
+        return m_flags;
     }
 
     void setConst(bool isConst);
@@ -313,6 +131,101 @@ public:
     [[nodiscard]] std::uint64_t getAlignOf(const ProgramInterface& program) const;
 };
 
+inline Type::TypeFlags operator|(Type::TypeFlags lhs, Type::TypeFlags rhs)
+{
+    using UT = std::underlying_type_t<Type::TypeFlags>;
+    return static_cast<Type::TypeFlags>(static_cast<UT>(lhs) | static_cast<UT>(rhs));
+}
+
+inline Type::TypeFlags operator&(Type::TypeFlags lhs, Type::TypeFlags rhs)
+{
+    using UT = std::underlying_type_t<Type::TypeFlags>;
+    return static_cast<Type::TypeFlags>(static_cast<UT>(lhs) & static_cast<UT>(rhs));
+}
+
+inline Type::TypeFlags operator~(Type::TypeFlags lhs)
+{
+    using UT = std::underlying_type_t<Type::TypeFlags>;
+    return static_cast<Type::TypeFlags>(~static_cast<UT>(lhs));
+}
+
+namespace detail
+{
+template <Type::TypeFlags flag>
+struct FlagParameter
+{
+    bool value;
+
+    Type::TypeFlags result() const
+    {
+        return value ? flag : Type::Nothing;
+    }
+
+    constexpr inline static auto kind = flag;
+};
+
+template <>
+struct FlagParameter<Type::Nothing>
+{
+    Type::TypeFlags value;
+
+    Type::TypeFlags result() const
+    {
+        return value;
+    }
+
+    constexpr inline static auto kind = Type::Nothing;
+};
+
+template <Type::TypeFlags flag>
+auto isFlagParameter(const FlagParameter<flag>&) -> std::true_type;
+
+template <class T>
+auto isFlagParameter(const T&) -> std::false_type;
+
+template <Type::TypeFlags flag>
+struct FlagFactory
+{
+    FlagParameter<flag> operator=(bool value) const
+    {
+        return FlagParameter<flag>{value};
+    }
+};
+
+template <>
+struct FlagFactory<Type::Nothing>
+{
+    FlagParameter<Type::Nothing> operator=(Type::TypeFlags value) const
+    {
+        return FlagParameter<Type::Nothing>{value};
+    }
+};
+
+template <class... Args>
+constexpr bool areFlags()
+{
+    return (decltype(isFlagParameter(std::declval<Args>())){} && ...);
+}
+
+template <Type::TypeFlags flag, class... Args>
+constexpr bool contains()
+{
+    return (false || ... || (Args::kind == flag));
+}
+
+} // namespace detail
+
+namespace flag
+{
+constexpr static detail::FlagFactory<Type::Const> isConst;
+constexpr static detail::FlagFactory<Type::Volatile> isVolatile;
+constexpr static detail::FlagFactory<Type::Restricted> isRestricted;
+constexpr static detail::FlagFactory<Type::Static> isStatic;
+constexpr static detail::FlagFactory<Type::VARArg> isVARArg;
+constexpr static detail::FlagFactory<Type::KAndR> isKAndR;
+constexpr static detail::FlagFactory<Type::Nothing> useFlags;
+} // namespace flag
+
 class PrimitiveType final : public Type
 {
     std::uint8_t m_bitCount;
@@ -346,137 +259,30 @@ public:
 private:
     Kind m_kind;
 
-    PrimitiveType(bool isConst, bool isVolatile, bool isFloatingPoint, bool isSigned, std::uint8_t bitCount,
-                  std::uint8_t alignOf, Kind kind)
-        : Type(std::in_place_type<PrimitiveType>, isConst, isVolatile),
-          m_bitCount(bitCount),
-          m_alignOf(alignOf),
-          m_isFloatingPoint(isFloatingPoint),
-          m_isSigned(isSigned),
-          m_kind(kind)
-    {
-    }
+    PrimitiveType(Kind kind, const LanguageOptions& options, TypeFlags flags);
+
+    PrimitiveType(LanguageOptions::UnderlyingType underlyingType, const LanguageOptions& options, TypeFlags flags);
 
 public:
-    [[nodiscard]] static PrimitiveType create(bool isConst, bool isVolatile, bool isFloatingPoint, bool isSigned,
-                                              std::uint8_t bitCount, std::uint8_t alignOf, Kind kind)
+    template <class... Flags, std::enable_if_t<detail::areFlags<Flags...>()>* = nullptr>
+    PrimitiveType(Kind kind, const LanguageOptions& options, Flags&&... flags)
+        : PrimitiveType(kind, options, (Nothing | ... | flags.result()))
     {
-        return PrimitiveType(isConst, isVolatile, isFloatingPoint, isSigned, bitCount, alignOf, kind);
+        static_assert(!detail::contains<Type::Restricted, Flags...>(), "PrimitiveType can't be restricted");
+        static_assert(!detail::contains<Type::Static, Flags...>(), "PrimitiveType can't be static");
+        static_assert(!detail::contains<Type::VARArg, Flags...>(), "PrimitiveType can't be vararg");
+        static_assert(!detail::contains<Type::KAndR, Flags...>(), "PrimitiveType can't be k&r");
     }
 
-    [[nodiscard]] static PrimitiveType createChar(bool isConst, bool isVolatile, const LanguageOptions& options)
+    template <class... Flags, std::enable_if_t<detail::areFlags<Flags...>()>* = nullptr>
+    PrimitiveType(LanguageOptions::UnderlyingType underlyingType, const LanguageOptions& options, Flags&&... flags)
+        : PrimitiveType(underlyingType, options, (Nothing | ... | flags.result()))
     {
-        return create(isConst, isVolatile, false, options.charIsSigned, 8, 1, Kind::Char);
+        static_assert(!detail::contains<Type::Restricted, Flags...>(), "PrimitiveType can't be restricted");
+        static_assert(!detail::contains<Type::Static, Flags...>(), "PrimitiveType can't be static");
+        static_assert(!detail::contains<Type::VARArg, Flags...>(), "PrimitiveType can't be vararg");
+        static_assert(!detail::contains<Type::KAndR, Flags...>(), "PrimitiveType can't be k&r");
     }
-
-    [[nodiscard]] static PrimitiveType createSignedChar(bool isConst, bool isVolatile)
-    {
-        return create(isConst, isVolatile, false, true, 8, 1, Kind::SignedChar);
-    }
-
-    [[nodiscard]] static PrimitiveType createUnderlineBool(bool isConst, bool isVolatile)
-    {
-        return create(isConst, isVolatile, false, false, 1, 1, Kind::Bool);
-    }
-
-    [[nodiscard]] static PrimitiveType createUnsignedChar(bool isConst, bool isVolatile)
-    {
-        return create(isConst, isVolatile, false, false, 8, 1, Kind::UnsignedChar);
-    }
-
-    [[nodiscard]] static PrimitiveType createShort(bool isConst, bool isVolatile, const LanguageOptions& options)
-    {
-        return create(isConst, isVolatile, false, true, options.sizeOfShort * 8, options.sizeOfShort, Kind::Short);
-    }
-
-    [[nodiscard]] static PrimitiveType createUnsignedShort(bool isConst, bool isVolatile,
-                                                           const LanguageOptions& options)
-    {
-        return create(isConst, isVolatile, false, false, options.sizeOfShort * 8, options.sizeOfShort,
-                      Kind::UnsignedShort);
-    }
-
-    [[nodiscard]] static PrimitiveType createInt(bool isConst, bool isVolatile, const LanguageOptions& options)
-    {
-        return create(isConst, isVolatile, false, true, options.sizeOfInt * 8, options.sizeOfInt, Kind::Int);
-    }
-
-    [[nodiscard]] static PrimitiveType createUnsignedInt(bool isConst, bool isVolatile, const LanguageOptions& options)
-    {
-        return create(isConst, isVolatile, false, false, options.sizeOfInt * 8, options.sizeOfInt, Kind::UnsignedInt);
-    }
-
-    [[nodiscard]] static PrimitiveType createLong(bool isConst, bool isVolatile, const LanguageOptions& options)
-    {
-        return create(isConst, isVolatile, false, true, options.sizeOfLong * 8, options.sizeOfLong, Kind::Long);
-    }
-
-    [[nodiscard]] static PrimitiveType createUnsignedLong(bool isConst, bool isVolatile, const LanguageOptions& options)
-    {
-        return create(isConst, isVolatile, false, false, options.sizeOfLong * 8, options.sizeOfLong,
-                      Kind::UnsignedLong);
-    }
-
-    [[nodiscard]] static PrimitiveType createLongLong(bool isConst, bool isVolatile, const LanguageOptions& options)
-    {
-        return create(isConst, isVolatile, false, true, 64, options.alignOfLongLong, Kind::LongLong);
-    }
-
-    [[nodiscard]] static PrimitiveType createUnsignedLongLong(bool isConst, bool isVolatile,
-                                                              const LanguageOptions& options)
-    {
-        return create(isConst, isVolatile, false, false, 64, options.alignOfLongLong, Kind::UnsignedLongLong);
-    }
-
-    [[nodiscard]] static PrimitiveType createFloat(bool isConst, bool isVolatile)
-    {
-        return create(isConst, isVolatile, true, true, 32, 4, Kind::Float);
-    }
-
-    [[nodiscard]] static PrimitiveType createDouble(bool isConst, bool isVolatile, const LanguageOptions& options)
-    {
-        return create(isConst, isVolatile, true, true, 64, options.alignOfDouble, Kind::Double);
-    }
-
-    [[nodiscard]] static PrimitiveType createLongDouble(bool isConst, bool isVolatile, const LanguageOptions& options)
-    {
-        return create(isConst, isVolatile, true, true, options.sizeOfLongDoubleBits, options.alignOfLongDouble,
-                      Kind::LongDouble);
-    }
-
-    [[nodiscard]] static PrimitiveType createVoid(bool isConst, bool isVolatile)
-    {
-        return create(isConst, isVolatile, false, true, 0, 0, Kind::Void);
-    }
-
-    [[nodiscard]] static PrimitiveType createInt128(bool isConst, bool isVolatile)
-    {
-        return create(isConst, isVolatile, false, true, 128, 16, Kind::Int128);
-    }
-
-    [[nodiscard]] static PrimitiveType createUnsignedInt128(bool isConst, bool isVolatile)
-    {
-        return create(isConst, isVolatile, false, false, 128, 16, Kind::UnsignedInt128);
-    }
-
-    [[nodiscard]] static PrimitiveType createPtrdiffT(bool isConst, bool isVolatile, const LanguageOptions& options)
-    {
-        return fromUnderlyingType(isConst, isVolatile, options.ptrdiffType, options);
-    }
-
-    [[nodiscard]] static PrimitiveType createSizeT(bool isConst, bool isVolatile, const LanguageOptions& options)
-    {
-        return fromUnderlyingType(isConst, isVolatile, options.sizeTType, options);
-    }
-
-    [[nodiscard]] static PrimitiveType createWcharT(bool isConst, bool isVolatile, const LanguageOptions& options)
-    {
-        return fromUnderlyingType(isConst, isVolatile, options.wcharUnderlyingType, options);
-    }
-
-    [[nodiscard]] static PrimitiveType fromUnderlyingType(bool isConst, bool isVolatile,
-                                                          LanguageOptions::UnderlyingType underlyingType,
-                                                          const LanguageOptions& options);
 
     [[nodiscard]] bool isFloatingPoint() const
     {
@@ -522,18 +328,16 @@ class ArrayType final : public Type
 {
     const Type* m_type;
     std::uint64_t m_size;
-    bool m_restricted : 1;
-    bool m_static : 1;
 
 public:
-    ArrayType(bool isConst, bool isVolatile, bool isRestricted, bool isStatic, cld::not_null<const Type> type,
-              std::uint64_t size)
-        : Type(std::in_place_type<ArrayType>, isConst, isVolatile),
+    template <class... Flags, std::enable_if_t<detail::areFlags<Flags...>()>* = nullptr>
+    ArrayType(cld::not_null<const Type> type, std::uint64_t size, Flags&&... flags)
+        : Type(std::in_place_type<ArrayType>, (Nothing | ... | flags.result()) & ~(VARArg | KAndR)),
           m_type(type),
-          m_size(size),
-          m_restricted(isRestricted),
-          m_static(isStatic)
+          m_size(size)
     {
+        static_assert(!detail::contains<Type::VARArg, Flags...>(), "ArrayType can't be vararg");
+        static_assert(!detail::contains<Type::KAndR, Flags...>(), "ArrayType can't be k&r");
     }
 
     [[nodiscard]] const Type& getType() const
@@ -548,12 +352,12 @@ public:
 
     [[nodiscard]] bool isRestricted() const
     {
-        return m_restricted;
+        return m_flags & Restricted;
     }
 
     [[nodiscard]] bool isStatic() const
     {
-        return m_static;
+        return m_flags & Static;
     }
 
     [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface& program) const;
@@ -568,12 +372,16 @@ public:
 class AbstractArrayType final : public Type
 {
     const Type* m_type;
-    bool m_restricted;
 
 public:
-    [[nodiscard]] AbstractArrayType(bool isConst, bool isVolatile, bool isRestricted, cld::not_null<const Type> type)
-        : Type(std::in_place_type<AbstractArrayType>, isConst, isVolatile), m_type(type), m_restricted(isRestricted)
+    template <class... Flags, std::enable_if_t<detail::areFlags<Flags...>()>* = nullptr>
+    AbstractArrayType(cld::not_null<const Type> type, Flags&&... flags)
+        : Type(std::in_place_type<AbstractArrayType>, (Nothing | ... | flags.result()) & ~(Static | VARArg | KAndR)),
+          m_type(type)
     {
+        static_assert(!detail::contains<Type::Static, Flags...>(), "ArrayType can't be static");
+        static_assert(!detail::contains<Type::VARArg, Flags...>(), "ArrayType can't be vararg");
+        static_assert(!detail::contains<Type::KAndR, Flags...>(), "ArrayType can't be k&r");
     }
 
     [[nodiscard]] const Type& getType() const
@@ -583,7 +391,7 @@ public:
 
     [[nodiscard]] bool isRestricted() const
     {
-        return m_restricted;
+        return m_flags & Restricted;
     }
 
     [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface&) const
@@ -603,19 +411,17 @@ class ExpressionBase;
 class ValArrayType final : public Type
 {
     const Type* m_type;
-    bool m_restricted : 1;
-    bool m_static : 1;
     std::shared_ptr<const ExpressionBase> m_expression;
 
 public:
-    [[nodiscard]] ValArrayType(bool isConst, bool isVolatile, bool isRestricted, bool isStatic,
-                               cld::not_null<const Type> type, std::shared_ptr<const ExpressionBase> expression)
-        : Type(std::in_place_type<ValArrayType>, isConst, isVolatile),
+    template <class... Flags, std::enable_if_t<detail::areFlags<Flags...>()>* = nullptr>
+    ValArrayType(cld::not_null<const Type> type, std::shared_ptr<const ExpressionBase> expression, Flags&&... flags)
+        : Type(std::in_place_type<ValArrayType>, (Nothing | ... | flags.result()) & ~(VARArg | KAndR)),
           m_type(type),
-          m_restricted(isRestricted),
-          m_static(isStatic),
           m_expression(std::move(expression))
     {
+        static_assert(!detail::contains<Type::VARArg, Flags...>(), "ValArrayType can't be vararg");
+        static_assert(!detail::contains<Type::KAndR, Flags...>(), "ValArrayType can't be k&r");
     }
 
     [[nodiscard]] const Type& getType() const
@@ -625,12 +431,12 @@ public:
 
     [[nodiscard]] bool isRestricted() const
     {
-        return m_restricted;
+        return m_flags & Restricted;
     }
 
     [[nodiscard]] bool isStatic() const
     {
-        return m_static;
+        return m_flags & Static;
     }
 
     // NULLABLE
@@ -663,18 +469,19 @@ public:
 private:
     const Type* m_returnType;
     std::vector<Parameter> m_parameters;
-    bool m_lastIsVararg : 1;
-    bool m_isKandR : 1;
 
 public:
-    FunctionType(cld::not_null<const Type> returnType, std::vector<Parameter>&& parameters, bool lastIsVararg,
-                 bool isKandR)
-        : Type(std::in_place_type<FunctionType>, false, false),
+    template <class... Flags, std::enable_if_t<detail::areFlags<Flags...>()>* = nullptr>
+    explicit FunctionType(cld::not_null<const Type> returnType, std::vector<Parameter>&& parameters, Flags&&... flags)
+        : Type(std::in_place_type<FunctionType>,
+               (Nothing | ... | flags.result()) & ~(Const | Volatile | Restricted | Static)),
           m_returnType(returnType),
-          m_parameters(std::move(parameters)),
-          m_lastIsVararg(lastIsVararg),
-          m_isKandR(isKandR)
+          m_parameters(std::move(parameters))
     {
+        static_assert(!detail::contains<Type::Const, Flags...>(), "FunctionType can't be const");
+        static_assert(!detail::contains<Type::Volatile, Flags...>(), "FunctionType can't be volatile");
+        static_assert(!detail::contains<Type::Restricted, Flags...>(), "FunctionType can't be restricted");
+        static_assert(!detail::contains<Type::Static, Flags...>(), "PrimitiveType can't be static");
     }
 
     [[nodiscard]] const Type& getReturnType() const
@@ -689,12 +496,12 @@ public:
 
     [[nodiscard]] bool isLastVararg() const
     {
-        return m_lastIsVararg;
+        return m_flags & VARArg;
     }
 
     [[nodiscard]] bool isKandR() const
     {
-        return m_isKandR;
+        return m_flags & KAndR;
     }
 
     [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface&) const
@@ -717,9 +524,16 @@ class StructType final : public Type
     const StructInfo* m_info;
 
 public:
-    StructType(bool isConst, bool isVolatile, const StructInfo& info)
-        : Type(std::in_place_type<StructType>, isConst, isVolatile), m_info(&info)
+    template <class... Flags, std::enable_if_t<detail::areFlags<Flags...>()>* = nullptr>
+    explicit StructType(const StructInfo& info, Flags&&... flags)
+        : Type(std::in_place_type<StructType>,
+               (Nothing | ... | flags.result()) & ~(Restricted | Static | VARArg | KAndR)),
+          m_info(&info)
     {
+        static_assert(!detail::contains<Type::Restricted, Flags...>(), "StructType can't be restricted");
+        static_assert(!detail::contains<Type::Static, Flags...>(), "StructType can't be static");
+        static_assert(!detail::contains<Type::VARArg, Flags...>(), "StructType can't be vararg");
+        static_assert(!detail::contains<Type::KAndR, Flags...>(), "StructType can't be k&r");
     }
 
     [[nodiscard]] std::string_view getStructName() const;
@@ -755,9 +569,16 @@ class UnionType final : public Type
     const UnionInfo* m_info;
 
 public:
-    UnionType(bool isConst, bool isVolatile, const UnionInfo& info)
-        : Type(std::in_place_type<UnionType>, isConst, isVolatile), m_info(&info)
+    template <class... Flags, std::enable_if_t<detail::areFlags<Flags...>()>* = nullptr>
+    explicit UnionType(const UnionInfo& info, Flags&&... flags)
+        : Type(std::in_place_type<UnionType>,
+               (Nothing | ... | flags.result()) & ~(Restricted | Static | VARArg | KAndR)),
+          m_info(&info)
     {
+        static_assert(!detail::contains<Type::Restricted, Flags...>(), "UnionType can't be restricted");
+        static_assert(!detail::contains<Type::Static, Flags...>(), "UnionType can't be static");
+        static_assert(!detail::contains<Type::VARArg, Flags...>(), "UnionType can't be vararg");
+        static_assert(!detail::contains<Type::KAndR, Flags...>(), "UnionType can't be k&r");
     }
 
     [[nodiscard]] std::string_view getUnionName() const;
@@ -793,9 +614,16 @@ class EnumType final : public Type
     const EnumInfo* m_info;
 
 public:
-    EnumType(bool isConst, bool isVolatile, const EnumInfo& info)
-        : Type(std::in_place_type<EnumType>, isConst, isVolatile), m_info(&info)
+    template <class... Flags, std::enable_if_t<detail::areFlags<Flags...>()>* = nullptr>
+    explicit EnumType(const EnumInfo& info, Flags&&... flags)
+        : Type(std::in_place_type<EnumType>,
+               (Nothing | ... | flags.result()) & ~(Restricted | Static | VARArg | KAndR)),
+          m_info(&info)
     {
+        static_assert(!detail::contains<Type::Restricted, Flags...>(), "EnumType can't be restricted");
+        static_assert(!detail::contains<Type::Static, Flags...>(), "EnumType can't be static");
+        static_assert(!detail::contains<Type::VARArg, Flags...>(), "EnumType can't be vararg");
+        static_assert(!detail::contains<Type::KAndR, Flags...>(), "EnumType can't be k&r");
     }
 
     [[nodiscard]] std::string_view getEnumName() const;
@@ -829,14 +657,16 @@ public:
 class PointerType final : public Type
 {
     const Type* m_elementType;
-    bool m_restricted;
 
 public:
-    PointerType(bool isConst, bool isVolatile, bool isRestricted, cld::not_null<const Type> elementType)
-        : Type(std::in_place_type<PointerType>, isConst, isVolatile),
-          m_elementType(elementType),
-          m_restricted(isRestricted)
+    template <class... Flags, std::enable_if_t<detail::areFlags<Flags...>()>* = nullptr>
+    explicit PointerType(cld::not_null<const Type> elementType, Flags&&... flags)
+        : Type(std::in_place_type<PointerType>, (Nothing | ... | flags.result()) & ~(Static | VARArg | KAndR)),
+          m_elementType(elementType)
     {
+        static_assert(!detail::contains<Type::Static, Flags...>(), "PointerType can't be static");
+        static_assert(!detail::contains<Type::VARArg, Flags...>(), "PointerType can't be vararg");
+        static_assert(!detail::contains<Type::KAndR, Flags...>(), "PointerType can't be k&r");
     }
 
     [[nodiscard]] const Type& getElementType() const
@@ -846,7 +676,7 @@ public:
 
     [[nodiscard]] bool isRestricted() const
     {
-        return m_restricted;
+        return m_flags & Restricted;
     }
 
     [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface& program) const;
@@ -864,9 +694,17 @@ class VectorType final : public Type
     std::uint64_t m_size;
 
 public:
-    VectorType(bool isConst, bool isVolatile, cld::not_null<const Type> type, std::uint64_t size)
-        : Type(std::in_place_type<VectorType>, isConst, isVolatile), m_elementType(type), m_size(size)
+    template <class... Flags, std::enable_if_t<detail::areFlags<Flags...>()>* = nullptr>
+    VectorType(cld::not_null<const Type> elementType, std::uint64_t size, Flags&&... flags)
+        : Type(std::in_place_type<VectorType>,
+               (Nothing | ... | flags.result()) & ~(Restricted | Static | VARArg | KAndR)),
+          m_elementType(elementType),
+          m_size(size)
     {
+        static_assert(!detail::contains<Type::Restricted, Flags...>(), "VectorType can't be restricted");
+        static_assert(!detail::contains<Type::Static, Flags...>(), "VectorType can't be static");
+        static_assert(!detail::contains<Type::VARArg, Flags...>(), "VectorType can't be vararg");
+        static_assert(!detail::contains<Type::KAndR, Flags...>(), "VectorType can't be k&r");
     }
 
     [[nodiscard]] const Type& getType() const
@@ -891,7 +729,10 @@ public:
 class ErrorType : public Type
 {
 public:
-    ErrorType() : Type(std::in_place_type<ErrorType>, false, false) {}
+    template <class... Flags, std::enable_if_t<detail::areFlags<Flags...>()>* = nullptr>
+    ErrorType(Flags&&... flags) : Type(std::in_place_type<ErrorType>, (Nothing | ... | flags.result()))
+    {
+    }
 };
 
 enum class ValueCategory : std::uint8_t
@@ -1362,8 +1203,8 @@ private:
 public:
     SizeofOperator(const LanguageOptions& options, Lexer::CTokenIterator sizeOfToken, std::optional<std::uint64_t> size,
                    Variant variant)
-        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>,
-                         PrimitiveType::createSizeT(false, false, options), ValueCategory::Rvalue),
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, PrimitiveType(options.sizeTType, options),
+                         ValueCategory::Rvalue),
           m_sizeOfToken(sizeOfToken),
           m_size(size),
           m_variant(std::move(variant))
@@ -1671,8 +1512,8 @@ class BuiltinOffsetOf final : public ExpressionBase
 public:
     BuiltinOffsetOf(const LanguageOptions& options, Lexer::CTokenIterator builtinToken,
                     Lexer::CTokenIterator openParentheses, std::uint64_t offset, Lexer::CTokenIterator closeParentheses)
-        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>,
-                         PrimitiveType::createSizeT(false, false, options), ValueCategory::Rvalue),
+        : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, PrimitiveType(options.sizeTType, options),
+                         ValueCategory::Rvalue),
           m_builtinToken(builtinToken),
           m_openParentheses(openParentheses),
           m_offset(offset),
@@ -3071,7 +2912,7 @@ inline bool cld::Semantics::isCharacterLikeType(const Type& type, const Language
     {
         return true;
     }
-    return *removeQualifiers(type) == PrimitiveType::createWcharT(false, false, options);
+    return removeQualifiers(type) == PrimitiveType(options.wcharUnderlyingType, options);
 }
 
 inline bool cld::Semantics::isAggregate(const Type& type)
@@ -3100,7 +2941,7 @@ inline cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::removeQualifiers(
             copy->setVolatile(false);
             return copy;
         }
-        return PointerType(false, false, false, &getPointerElementType(type));
+        return PointerType(&getPointerElementType(type));
     }
     return type;
 }

@@ -10,7 +10,9 @@
 
 #include "TestConfig.hpp"
 
-static std::pair<const cld::Semantics::TranslationUnit * CLD_NON_NULL, std::string>
+using namespace cld::Semantics;
+
+static std::pair<const TranslationUnit * CLD_NON_NULL, std::string>
     generateSemantics(std::string_view source, const cld::LanguageOptions& options)
 {
     std::string storage;
@@ -29,18 +31,18 @@ static std::pair<const cld::Semantics::TranslationUnit * CLD_NON_NULL, std::stri
     auto parsing = cld::Parser::buildTree(ctokens, &ss, &errors);
     UNSCOPED_INFO(storage);
     REQUIRE_FALSE(errors);
-    static cld::Semantics::Program program;
-    program = cld::Semantics::analyse(parsing, std::move(ctokens), &ss);
+    static Program program;
+    program = analyse(parsing, std::move(ctokens), &ss);
     return {&program.getTranslationUnit(), ss.str()};
 }
 
-static std::pair<const cld::Semantics::TranslationUnit * CLD_NON_NULL, std::string>
+static std::pair<const TranslationUnit * CLD_NON_NULL, std::string>
     generateSemantics(std::string_view source, cld::Triple triple = cld::Triple::native())
 {
     return generateSemantics(source, cld::LanguageOptions::fromTriple(triple));
 }
 
-static cld::Semantics::Program generateProgram(std::string_view source, cld::Triple triple = cld::Triple::native())
+static Program generateProgram(std::string_view source, cld::Triple triple = cld::Triple::native())
 {
     std::string storage;
     llvm::raw_string_ostream ss(storage);
@@ -58,7 +60,7 @@ static cld::Semantics::Program generateProgram(std::string_view source, cld::Tri
     auto parsing = cld::Parser::buildTree(ctokens, &ss, &errors);
     UNSCOPED_INFO(storage);
     REQUIRE_FALSE(errors);
-    return cld::Semantics::analyse(parsing, std::move(ctokens), &ss);
+    return analyse(parsing, std::move(ctokens), &ss);
 }
 
 #define SEMA_PRODUCES(source, matcher)               \
@@ -90,22 +92,20 @@ TEST_CASE("Semantics declarations", "[semantics]")
         REQUIRE_THAT(errors, ProducesNoErrors());
         REQUIRE(translationUnit->getGlobals().size() == 2);
         {
-            REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
-            auto* decl = &translationUnit->getGlobals()[0]->as<cld::Semantics::VariableDeclaration>();
-            CHECK(decl->getLinkage() == cld::Semantics::Linkage::External);
-            CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
+            REQUIRE(translationUnit->getGlobals()[0]->is<VariableDeclaration>());
+            auto* decl = &translationUnit->getGlobals()[0]->as<VariableDeclaration>();
+            CHECK(decl->getLinkage() == Linkage::External);
+            CHECK(decl->getLifetime() == Lifetime::Static);
             CHECK(decl->getNameToken()->getText() == "i");
-            CHECK(decl->getType()
-                  == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(decl->getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
         }
         {
-            REQUIRE(translationUnit->getGlobals()[1]->is<cld::Semantics::VariableDeclaration>());
-            auto* decl = &translationUnit->getGlobals()[1]->as<cld::Semantics::VariableDeclaration>();
-            CHECK(decl->getLinkage() == cld::Semantics::Linkage::External);
-            CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
+            REQUIRE(translationUnit->getGlobals()[1]->is<VariableDeclaration>());
+            auto* decl = &translationUnit->getGlobals()[1]->as<VariableDeclaration>();
+            CHECK(decl->getLinkage() == Linkage::External);
+            CHECK(decl->getLifetime() == Lifetime::Static);
             CHECK(decl->getNameToken()->getText() == "f");
-            CHECK(decl->getType()
-                  == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(decl->getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
         }
     }
     SECTION("Linkage")
@@ -117,22 +117,22 @@ TEST_CASE("Semantics declarations", "[semantics]")
                 auto [translationUnit, errors] = generateSemantics("extern int i;");
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
-                REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
-                auto* decl = &translationUnit->getGlobals()[0]->as<cld::Semantics::VariableDeclaration>();
-                CHECK(decl->getLinkage() == cld::Semantics::Linkage::External);
-                CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
-                CHECK(decl->getKind() == cld::Semantics::VariableDeclaration::Kind::DeclarationOnly);
+                REQUIRE(translationUnit->getGlobals()[0]->is<VariableDeclaration>());
+                auto* decl = &translationUnit->getGlobals()[0]->as<VariableDeclaration>();
+                CHECK(decl->getLinkage() == Linkage::External);
+                CHECK(decl->getLifetime() == Lifetime::Static);
+                CHECK(decl->getKind() == VariableDeclaration::Kind::DeclarationOnly);
             }
             SECTION("With init")
             {
                 auto [translationUnit, errors] = generateSemantics("extern int i = 5;");
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
-                REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
-                auto* decl = &translationUnit->getGlobals()[0]->as<cld::Semantics::VariableDeclaration>();
-                CHECK(decl->getLinkage() == cld::Semantics::Linkage::External);
-                CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
-                CHECK(decl->getKind() == cld::Semantics::VariableDeclaration::Kind::DeclarationOnly);
+                REQUIRE(translationUnit->getGlobals()[0]->is<VariableDeclaration>());
+                auto* decl = &translationUnit->getGlobals()[0]->as<VariableDeclaration>();
+                CHECK(decl->getLinkage() == Linkage::External);
+                CHECK(decl->getLifetime() == Lifetime::Static);
+                CHECK(decl->getKind() == VariableDeclaration::Kind::DeclarationOnly);
             }
             SEMA_PRODUCES("void foo(void) {\n"
                           " extern int i = 0;\n"
@@ -147,11 +147,11 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                    "extern int i;");
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 2);
-                REQUIRE(translationUnit->getGlobals()[1]->is<cld::Semantics::VariableDeclaration>());
-                auto* decl = &translationUnit->getGlobals()[1]->as<cld::Semantics::VariableDeclaration>();
-                CHECK(decl->getLinkage() == cld::Semantics::Linkage::Internal);
-                CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
-                CHECK(decl->getKind() == cld::Semantics::VariableDeclaration::Kind::TentativeDefinition);
+                REQUIRE(translationUnit->getGlobals()[1]->is<VariableDeclaration>());
+                auto* decl = &translationUnit->getGlobals()[1]->as<VariableDeclaration>();
+                CHECK(decl->getLinkage() == Linkage::Internal);
+                CHECK(decl->getLifetime() == Lifetime::Static);
+                CHECK(decl->getKind() == VariableDeclaration::Kind::TentativeDefinition);
                 SEMA_PRODUCES("static int i;\n"
                               "int i;",
                               ProducesError(STATIC_VARIABLE_N_REDEFINED_WITHOUT_STATIC, "'i'"));
@@ -163,9 +163,9 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                    "int foo(void) { }");
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 3);
-                REQUIRE(translationUnit->getGlobals()[2]->is<cld::Semantics::FunctionDefinition>());
-                auto* def = &translationUnit->getGlobals()[2]->as<cld::Semantics::FunctionDefinition>();
-                CHECK(def->getLinkage() == cld::Semantics::Linkage::Internal);
+                REQUIRE(translationUnit->getGlobals()[2]->is<FunctionDefinition>());
+                auto* def = &translationUnit->getGlobals()[2]->as<FunctionDefinition>();
+                CHECK(def->getLinkage() == Linkage::Internal);
             }
         }
         SECTION("Static re-definition/declaration")
@@ -187,22 +187,22 @@ TEST_CASE("Semantics declarations", "[semantics]")
                 auto [translationUnit, errors] = generateSemantics("static int i;");
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
-                REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
-                auto* decl = &translationUnit->getGlobals()[0]->as<cld::Semantics::VariableDeclaration>();
-                CHECK(decl->getLinkage() == cld::Semantics::Linkage::Internal);
-                CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
-                CHECK(decl->getKind() == cld::Semantics::VariableDeclaration::Kind::TentativeDefinition);
+                REQUIRE(translationUnit->getGlobals()[0]->is<VariableDeclaration>());
+                auto* decl = &translationUnit->getGlobals()[0]->as<VariableDeclaration>();
+                CHECK(decl->getLinkage() == Linkage::Internal);
+                CHECK(decl->getLifetime() == Lifetime::Static);
+                CHECK(decl->getKind() == VariableDeclaration::Kind::TentativeDefinition);
             }
             SECTION("Definition")
             {
                 auto [translationUnit, errors] = generateSemantics("static int i = 0;");
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
-                REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
-                auto* decl = &translationUnit->getGlobals()[0]->as<cld::Semantics::VariableDeclaration>();
-                CHECK(decl->getLinkage() == cld::Semantics::Linkage::Internal);
-                CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
-                CHECK(decl->getKind() == cld::Semantics::VariableDeclaration::Kind::Definition);
+                REQUIRE(translationUnit->getGlobals()[0]->is<VariableDeclaration>());
+                auto* decl = &translationUnit->getGlobals()[0]->as<VariableDeclaration>();
+                CHECK(decl->getLinkage() == Linkage::Internal);
+                CHECK(decl->getLifetime() == Lifetime::Static);
+                CHECK(decl->getKind() == VariableDeclaration::Kind::Definition);
             }
             SEMA_PRODUCES("static int i;\n"
                           "static int i;",
@@ -227,13 +227,13 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                    "}\n");
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
-                REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::FunctionDefinition>());
-                auto& func = translationUnit->getGlobals()[0]->as<cld::Semantics::FunctionDefinition>();
+                REQUIRE(translationUnit->getGlobals()[0]->is<FunctionDefinition>());
+                auto& func = translationUnit->getGlobals()[0]->as<FunctionDefinition>();
                 REQUIRE(func.getCompoundStatement().getCompoundItems().size() >= 1);
                 auto& var = func.getCompoundStatement().getCompoundItems().back();
-                REQUIRE(std::holds_alternative<cld::IntrVarPtr<cld::Semantics::Declaration>>(var));
-                auto& decl = *cld::get<cld::IntrVarPtr<cld::Semantics::Declaration>>(var);
-                CHECK(decl.getLinkage() == cld::Semantics::Linkage::None);
+                REQUIRE(std::holds_alternative<cld::IntrVarPtr<Declaration>>(var));
+                auto& decl = *cld::get<cld::IntrVarPtr<Declaration>>(var);
+                CHECK(decl.getLinkage() == Linkage::None);
             }
             SECTION("extern")
             {
@@ -243,13 +243,13 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                    "}\n");
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
-                REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::FunctionDefinition>());
-                auto& func = translationUnit->getGlobals()[0]->as<cld::Semantics::FunctionDefinition>();
+                REQUIRE(translationUnit->getGlobals()[0]->is<FunctionDefinition>());
+                auto& func = translationUnit->getGlobals()[0]->as<FunctionDefinition>();
                 REQUIRE(func.getCompoundStatement().getCompoundItems().size() >= 1);
                 auto& var = func.getCompoundStatement().getCompoundItems().back();
-                REQUIRE(std::holds_alternative<cld::IntrVarPtr<cld::Semantics::Declaration>>(var));
-                auto& decl = *cld::get<cld::IntrVarPtr<cld::Semantics::Declaration>>(var);
-                CHECK(decl.getLinkage() == cld::Semantics::Linkage::External);
+                REQUIRE(std::holds_alternative<cld::IntrVarPtr<Declaration>>(var));
+                auto& decl = *cld::get<cld::IntrVarPtr<Declaration>>(var);
+                CHECK(decl.getLinkage() == Linkage::External);
             }
         }
         SECTION("Objects at file scope are external by default")
@@ -257,20 +257,20 @@ TEST_CASE("Semantics declarations", "[semantics]")
             auto [translationUnit, errors] = generateSemantics("int i;");
             REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit->getGlobals().size() == 1);
-            REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
-            auto* decl = &translationUnit->getGlobals()[0]->as<cld::Semantics::VariableDeclaration>();
-            CHECK(decl->getLinkage() == cld::Semantics::Linkage::External);
-            CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
+            REQUIRE(translationUnit->getGlobals()[0]->is<VariableDeclaration>());
+            auto* decl = &translationUnit->getGlobals()[0]->as<VariableDeclaration>();
+            CHECK(decl->getLinkage() == Linkage::External);
+            CHECK(decl->getLifetime() == Lifetime::Static);
         }
         SECTION("Internal linkage")
         {
             auto [translationUnit, errors] = generateSemantics("static int i;");
             REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit->getGlobals().size() == 1);
-            REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
-            auto* decl = &translationUnit->getGlobals()[0]->as<cld::Semantics::VariableDeclaration>();
-            CHECK(decl->getLinkage() == cld::Semantics::Linkage::Internal);
-            CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
+            REQUIRE(translationUnit->getGlobals()[0]->is<VariableDeclaration>());
+            auto* decl = &translationUnit->getGlobals()[0]->as<VariableDeclaration>();
+            CHECK(decl->getLinkage() == Linkage::Internal);
+            CHECK(decl->getLifetime() == Lifetime::Static);
         }
         SEMA_PRODUCES("static extern int i;",
                       ProducesError(ONLY_ONE_STORAGE_SPECIFIER) && ProducesNote(PREVIOUS_STORAGE_SPECIFIER_HERE));
@@ -282,9 +282,9 @@ TEST_CASE("Semantics declarations", "[semantics]")
             auto [translationUnit, errors] = generateSemantics("int i;");
             REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit->getGlobals().size() == 1);
-            REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
-            auto* decl = &translationUnit->getGlobals()[0]->as<cld::Semantics::VariableDeclaration>();
-            CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
+            REQUIRE(translationUnit->getGlobals()[0]->is<VariableDeclaration>());
+            auto* decl = &translationUnit->getGlobals()[0]->as<VariableDeclaration>();
+            CHECK(decl->getLifetime() == Lifetime::Static);
             SEMA_PRODUCES("auto int i;", ProducesError(DECLARATIONS_AT_FILE_SCOPE_CANNOT_BE_AUTO));
             SEMA_PRODUCES("register int i;", ProducesError(DECLARATIONS_AT_FILE_SCOPE_CANNOT_BE_REGISTER));
         }
@@ -298,15 +298,15 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                    "}\n");
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
-                REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::FunctionDefinition>());
-                auto& func = translationUnit->getGlobals()[0]->as<cld::Semantics::FunctionDefinition>();
+                REQUIRE(translationUnit->getGlobals()[0]->is<FunctionDefinition>());
+                auto& func = translationUnit->getGlobals()[0]->as<FunctionDefinition>();
                 REQUIRE(func.getCompoundStatement().getCompoundItems().size() >= 1);
                 auto& var = func.getCompoundStatement().getCompoundItems().back();
-                REQUIRE(std::holds_alternative<cld::IntrVarPtr<cld::Semantics::Declaration>>(var));
-                auto& decl = *cld::get<cld::IntrVarPtr<cld::Semantics::Declaration>>(var);
-                auto* varDecl = decl.tryAs<cld::Semantics::VariableDeclaration>();
+                REQUIRE(std::holds_alternative<cld::IntrVarPtr<Declaration>>(var));
+                auto& decl = *cld::get<cld::IntrVarPtr<Declaration>>(var);
+                auto* varDecl = decl.tryAs<VariableDeclaration>();
                 REQUIRE(varDecl);
-                CHECK(varDecl->getLifetime() == cld::Semantics::Lifetime::Automatic);
+                CHECK(varDecl->getLifetime() == Lifetime::Automatic);
             }
             SECTION("auto")
             {
@@ -316,15 +316,15 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                    "}\n");
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
-                REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::FunctionDefinition>());
-                auto& func = translationUnit->getGlobals()[0]->as<cld::Semantics::FunctionDefinition>();
+                REQUIRE(translationUnit->getGlobals()[0]->is<FunctionDefinition>());
+                auto& func = translationUnit->getGlobals()[0]->as<FunctionDefinition>();
                 REQUIRE(func.getCompoundStatement().getCompoundItems().size() >= 1);
                 auto& var = func.getCompoundStatement().getCompoundItems().back();
-                REQUIRE(std::holds_alternative<cld::IntrVarPtr<cld::Semantics::Declaration>>(var));
-                auto& decl = *cld::get<cld::IntrVarPtr<cld::Semantics::Declaration>>(var);
-                auto* varDecl = decl.tryAs<cld::Semantics::VariableDeclaration>();
+                REQUIRE(std::holds_alternative<cld::IntrVarPtr<Declaration>>(var));
+                auto& decl = *cld::get<cld::IntrVarPtr<Declaration>>(var);
+                auto* varDecl = decl.tryAs<VariableDeclaration>();
                 REQUIRE(varDecl);
-                CHECK(varDecl->getLifetime() == cld::Semantics::Lifetime::Automatic);
+                CHECK(varDecl->getLifetime() == Lifetime::Automatic);
             }
             SECTION("static")
             {
@@ -334,15 +334,15 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                    "}\n");
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
-                REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::FunctionDefinition>());
-                auto& func = translationUnit->getGlobals()[0]->as<cld::Semantics::FunctionDefinition>();
+                REQUIRE(translationUnit->getGlobals()[0]->is<FunctionDefinition>());
+                auto& func = translationUnit->getGlobals()[0]->as<FunctionDefinition>();
                 REQUIRE(func.getCompoundStatement().getCompoundItems().size() >= 1);
                 auto& var = func.getCompoundStatement().getCompoundItems().back();
-                REQUIRE(std::holds_alternative<cld::IntrVarPtr<cld::Semantics::Declaration>>(var));
-                auto& decl = *cld::get<cld::IntrVarPtr<cld::Semantics::Declaration>>(var);
-                auto* varDecl = decl.tryAs<cld::Semantics::VariableDeclaration>();
+                REQUIRE(std::holds_alternative<cld::IntrVarPtr<Declaration>>(var));
+                auto& decl = *cld::get<cld::IntrVarPtr<Declaration>>(var);
+                auto* varDecl = decl.tryAs<VariableDeclaration>();
                 REQUIRE(varDecl);
-                CHECK(varDecl->getLifetime() == cld::Semantics::Lifetime::Static);
+                CHECK(varDecl->getLifetime() == Lifetime::Static);
             }
             SECTION("extern")
             {
@@ -352,15 +352,15 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                    "}\n");
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
-                REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::FunctionDefinition>());
-                auto& func = translationUnit->getGlobals()[0]->as<cld::Semantics::FunctionDefinition>();
+                REQUIRE(translationUnit->getGlobals()[0]->is<FunctionDefinition>());
+                auto& func = translationUnit->getGlobals()[0]->as<FunctionDefinition>();
                 REQUIRE(func.getCompoundStatement().getCompoundItems().size() >= 1);
                 auto& var = func.getCompoundStatement().getCompoundItems().back();
-                REQUIRE(std::holds_alternative<cld::IntrVarPtr<cld::Semantics::Declaration>>(var));
-                auto& decl = *cld::get<cld::IntrVarPtr<cld::Semantics::Declaration>>(var);
-                auto* varDecl = decl.tryAs<cld::Semantics::VariableDeclaration>();
+                REQUIRE(std::holds_alternative<cld::IntrVarPtr<Declaration>>(var));
+                auto& decl = *cld::get<cld::IntrVarPtr<Declaration>>(var);
+                auto* varDecl = decl.tryAs<VariableDeclaration>();
                 REQUIRE(varDecl);
-                CHECK(varDecl->getLifetime() == cld::Semantics::Lifetime::Static);
+                CHECK(varDecl->getLifetime() == Lifetime::Static);
             }
             SECTION("register")
             {
@@ -370,11 +370,11 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                        "{}\n");
                     REQUIRE_THAT(errors, ProducesNoErrors());
                     REQUIRE(translationUnit->getGlobals().size() == 1);
-                    REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::FunctionDefinition>());
-                    auto& func = translationUnit->getGlobals()[0]->as<cld::Semantics::FunctionDefinition>();
+                    REQUIRE(translationUnit->getGlobals()[0]->is<FunctionDefinition>());
+                    auto& func = translationUnit->getGlobals()[0]->as<FunctionDefinition>();
                     REQUIRE(func.getParameterDeclarations().size() == 1);
                     auto& decl = *func.getParameterDeclarations()[0];
-                    CHECK(decl.getLifetime() == cld::Semantics::Lifetime::Register);
+                    CHECK(decl.getLifetime() == Lifetime::Register);
                 }
                 SECTION("Identifier list")
                 {
@@ -382,11 +382,11 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                        "{}\n");
                     REQUIRE_THAT(errors, ProducesNoErrors());
                     REQUIRE(translationUnit->getGlobals().size() == 1);
-                    REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::FunctionDefinition>());
-                    auto& func = translationUnit->getGlobals()[0]->as<cld::Semantics::FunctionDefinition>();
+                    REQUIRE(translationUnit->getGlobals()[0]->is<FunctionDefinition>());
+                    auto& func = translationUnit->getGlobals()[0]->as<FunctionDefinition>();
                     REQUIRE(func.getParameterDeclarations().size() == 1);
                     auto& decl = *func.getParameterDeclarations()[0];
-                    CHECK(decl.getLifetime() == cld::Semantics::Lifetime::Register);
+                    CHECK(decl.getLifetime() == Lifetime::Register);
                 }
             }
         }
@@ -399,11 +399,10 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                "ld d;");
             REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit->getGlobals().size() == 1);
-            REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
-            auto* decl = &translationUnit->getGlobals()[0]->as<cld::Semantics::VariableDeclaration>();
+            REQUIRE(translationUnit->getGlobals()[0]->is<VariableDeclaration>());
+            auto* decl = &translationUnit->getGlobals()[0]->as<VariableDeclaration>();
             CHECK(decl->getNameToken()->getText() == "d");
-            CHECK(decl->getType()
-                  == cld::Semantics::PrimitiveType::createLongDouble(false, false, cld::LanguageOptions::native()));
+            CHECK(decl->getType() == PrimitiveType(PrimitiveType::LongDouble, cld::LanguageOptions::native()));
             CHECK(decl->getType().isTypedef());
         }
         SECTION("Stacking const volatile")
@@ -412,11 +411,12 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                "const volatile ld d;");
             REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit->getGlobals().size() == 1);
-            REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
-            auto* decl = &translationUnit->getGlobals()[0]->as<cld::Semantics::VariableDeclaration>();
+            REQUIRE(translationUnit->getGlobals()[0]->is<VariableDeclaration>());
+            auto* decl = &translationUnit->getGlobals()[0]->as<VariableDeclaration>();
             CHECK(decl->getNameToken()->getText() == "d");
             CHECK(decl->getType()
-                  == cld::Semantics::PrimitiveType::createLongDouble(true, true, cld::LanguageOptions::native()));
+                  == PrimitiveType(PrimitiveType::LongDouble, cld::LanguageOptions::native(), flag::isConst = true,
+                                   flag::isVolatile = true));
         }
         SECTION("Can't remove const volatile")
         {
@@ -424,11 +424,12 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                "ld d;");
             REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit->getGlobals().size() == 1);
-            REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
-            auto* decl = &translationUnit->getGlobals()[0]->as<cld::Semantics::VariableDeclaration>();
+            REQUIRE(translationUnit->getGlobals()[0]->is<VariableDeclaration>());
+            auto* decl = &translationUnit->getGlobals()[0]->as<VariableDeclaration>();
             CHECK(decl->getNameToken()->getText() == "d");
             CHECK(decl->getType()
-                  == cld::Semantics::PrimitiveType::createLongDouble(true, true, cld::LanguageOptions::native()));
+                  == PrimitiveType(PrimitiveType::LongDouble, cld::LanguageOptions::native(), flag::isConst = true,
+                                   flag::isVolatile = true));
         }
         SECTION("Combine qualifiers")
         {
@@ -436,11 +437,12 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                "volatile ld d;");
             REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit->getGlobals().size() == 1);
-            REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
-            auto* decl = &translationUnit->getGlobals()[0]->as<cld::Semantics::VariableDeclaration>();
+            REQUIRE(translationUnit->getGlobals()[0]->is<VariableDeclaration>());
+            auto* decl = &translationUnit->getGlobals()[0]->as<VariableDeclaration>();
             CHECK(decl->getNameToken()->getText() == "d");
             CHECK(decl->getType()
-                  == cld::Semantics::PrimitiveType::createLongDouble(true, true, cld::LanguageOptions::native()));
+                  == PrimitiveType(PrimitiveType::LongDouble, cld::LanguageOptions::native(), flag::isConst = true,
+                                   flag::isVolatile = true));
         }
         SECTION("Qualifiers on array types")
         {
@@ -448,12 +450,12 @@ TEST_CASE("Semantics declarations", "[semantics]")
                                                                "volatile ld d;");
             REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit->getGlobals().size() == 1);
-            REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
-            auto* decl = &translationUnit->getGlobals()[0]->as<cld::Semantics::VariableDeclaration>();
+            REQUIRE(translationUnit->getGlobals()[0]->is<VariableDeclaration>());
+            auto* decl = &translationUnit->getGlobals()[0]->as<VariableDeclaration>();
             CHECK(decl->getNameToken()->getText() == "d");
             auto longDouble =
-                cld::Semantics::PrimitiveType::createLongDouble(false, true, cld::LanguageOptions::native());
-            CHECK(decl->getType() == cld::Semantics::ArrayType(false, false, false, false, &longDouble, 5));
+                PrimitiveType(PrimitiveType::LongDouble, cld::LanguageOptions::native(), flag::isVolatile = true);
+            CHECK(decl->getType() == ArrayType(&longDouble, 5));
         }
         SECTION("Variable length array")
         {
@@ -464,22 +466,22 @@ TEST_CASE("Semantics declarations", "[semantics]")
             REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit->getGlobals().size() == 1);
             auto& global = translationUnit->getGlobals()[0];
-            REQUIRE(global->is<cld::Semantics::FunctionDefinition>());
-            auto& def = global->as<cld::Semantics::FunctionDefinition>();
+            REQUIRE(global->is<FunctionDefinition>());
+            auto& def = global->as<FunctionDefinition>();
             REQUIRE(def.getCompoundStatement().getCompoundItems().size() >= 4);
             auto& first = def.getCompoundStatement().getCompoundItems()[1];
-            REQUIRE(std::holds_alternative<std::shared_ptr<const cld::Semantics::ExpressionBase>>(first));
-            auto& firstExpr = *cld::get<std::shared_ptr<const cld::Semantics::ExpressionBase>>(first);
-            CHECK(firstExpr.is<cld::Semantics::BinaryOperator>());
+            REQUIRE(std::holds_alternative<std::shared_ptr<const ExpressionBase>>(first));
+            auto& firstExpr = *cld::get<std::shared_ptr<const ExpressionBase>>(first);
+            CHECK(firstExpr.is<BinaryOperator>());
             auto& second = def.getCompoundStatement().getCompoundItems()[2];
-            REQUIRE(std::holds_alternative<std::shared_ptr<const cld::Semantics::ExpressionBase>>(second));
-            auto& secondExpr = *cld::get<std::shared_ptr<const cld::Semantics::ExpressionBase>>(second);
-            CHECK(secondExpr.is<cld::Semantics::UnaryOperator>());
+            REQUIRE(std::holds_alternative<std::shared_ptr<const ExpressionBase>>(second));
+            auto& secondExpr = *cld::get<std::shared_ptr<const ExpressionBase>>(second);
+            CHECK(secondExpr.is<UnaryOperator>());
             auto& third = def.getCompoundStatement().getCompoundItems()[3];
-            REQUIRE(std::holds_alternative<cld::IntrVarPtr<cld::Semantics::Declaration>>(third));
-            auto& thirdDecl = *cld::get<cld::IntrVarPtr<cld::Semantics::Declaration>>(third);
-            REQUIRE(thirdDecl.is<cld::Semantics::VariableDeclaration>());
-            CHECK(thirdDecl.as<cld::Semantics::VariableDeclaration>().getType().is<cld::Semantics::ValArrayType>());
+            REQUIRE(std::holds_alternative<cld::IntrVarPtr<Declaration>>(third));
+            auto& thirdDecl = *cld::get<cld::IntrVarPtr<Declaration>>(third);
+            REQUIRE(thirdDecl.is<VariableDeclaration>());
+            CHECK(thirdDecl.as<VariableDeclaration>().getType().is<ValArrayType>());
             SEMA_PRODUCES("extern int i;\n"
                           "typedef int n[i];",
                           ProducesError(VARIABLY_MODIFIED_TYPEDEF_NOT_ALLOWED_AT_FILE_SCOPE));
@@ -565,44 +567,40 @@ TEST_CASE("Semantics primitive declarations", "[semantics]")
                       ProducesError(DECLARATION_MUST_NOT_BE_VOID));
     }
     auto options = cld::LanguageOptions::fromTriple(x64linux);
-    std::vector<std::pair<cld::Semantics::PrimitiveType, std::vector<std::string_view>>> table = {
-        {cld::Semantics::PrimitiveType::createChar(isConst, isVolatile, options), {"char"}},
-        {cld::Semantics::PrimitiveType::createSignedChar(isConst, isVolatile), {"signed", "char"}},
-        {cld::Semantics::PrimitiveType::createUnsignedChar(isConst, isVolatile), {"unsigned", "char"}},
-        {cld::Semantics::PrimitiveType::createShort(isConst, isVolatile, options), {"short"}},
-        {cld::Semantics::PrimitiveType::createShort(isConst, isVolatile, options), {"short", "int"}},
-        {cld::Semantics::PrimitiveType::createShort(isConst, isVolatile, options), {"short", "int", "signed"}},
-        {cld::Semantics::PrimitiveType::createShort(isConst, isVolatile, options), {"short", "signed"}},
-        {cld::Semantics::PrimitiveType::createUnsignedShort(isConst, isVolatile, options), {"short", "unsigned"}},
-        {cld::Semantics::PrimitiveType::createUnsignedShort(isConst, isVolatile, options),
-         {"short", "unsigned", "int"}},
-        {cld::Semantics::PrimitiveType::createInt(isConst, isVolatile, options), {"int"}},
-        {cld::Semantics::PrimitiveType::createInt(isConst, isVolatile, options), {"int", "signed"}},
-        {cld::Semantics::PrimitiveType::createInt(isConst, isVolatile, options), {"signed"}},
-        {cld::Semantics::PrimitiveType::createUnsignedInt(isConst, isVolatile, options), {"unsigned"}},
-        {cld::Semantics::PrimitiveType::createUnsignedInt(isConst, isVolatile, options), {"unsigned", "int"}},
-        {cld::Semantics::PrimitiveType::createLong(isConst, isVolatile, options), {"long"}},
-        {cld::Semantics::PrimitiveType::createLong(isConst, isVolatile, options), {"long", "int"}},
-        {cld::Semantics::PrimitiveType::createLong(isConst, isVolatile, options), {"long", "int", "signed"}},
-        {cld::Semantics::PrimitiveType::createLong(isConst, isVolatile, options), {"long", "signed"}},
-        {cld::Semantics::PrimitiveType::createUnsignedLong(isConst, isVolatile, options), {"long", "unsigned"}},
-        {cld::Semantics::PrimitiveType::createUnsignedLong(isConst, isVolatile, options), {"long", "unsigned", "int"}},
-        {cld::Semantics::PrimitiveType::createLongLong(isConst, isVolatile, options), {"long", "long"}},
-        {cld::Semantics::PrimitiveType::createLongLong(isConst, isVolatile, options), {"long", "long", "int"}},
-        {cld::Semantics::PrimitiveType::createLongLong(isConst, isVolatile, options),
-         {"long", "long", "int", "signed"}},
-        {cld::Semantics::PrimitiveType::createLongLong(isConst, isVolatile, options), {"long", "long", "signed"}},
-        {cld::Semantics::PrimitiveType::createUnsignedLongLong(isConst, isVolatile, options),
-         {"long", "long", "int", "unsigned"}},
-        {cld::Semantics::PrimitiveType::createUnsignedLongLong(isConst, isVolatile, options),
-         {"long", "long", "unsigned"}},
-        {cld::Semantics::PrimitiveType::createFloat(isConst, isVolatile), {"float"}},
-        {cld::Semantics::PrimitiveType::createDouble(isConst, isVolatile, options), {"double"}},
-        {cld::Semantics::PrimitiveType::createLongDouble(isConst, isVolatile, options), {"long", "double"}},
-        {cld::Semantics::PrimitiveType::createUnderlineBool(isConst, isVolatile), {"_Bool"}},
-        {cld::Semantics::PrimitiveType::createInt128(isConst, isVolatile), {"__int128"}},
-        {cld::Semantics::PrimitiveType::createInt128(isConst, isVolatile), {"signed", "__int128"}},
-        {cld::Semantics::PrimitiveType::createUnsignedInt128(isConst, isVolatile), {"unsigned", "__int128"}},
+    std::vector<std::pair<PrimitiveType::Kind, std::vector<std::string_view>>> table = {
+        {PrimitiveType::Char, {"char"}},
+        {PrimitiveType::SignedChar, {"signed", "char"}},
+        {PrimitiveType::UnsignedChar, {"unsigned", "char"}},
+        {PrimitiveType::Short, {"short"}},
+        {PrimitiveType::Short, {"short", "int"}},
+        {PrimitiveType::Short, {"short", "int", "signed"}},
+        {PrimitiveType::Short, {"short", "signed"}},
+        {PrimitiveType::UnsignedShort, {"short", "unsigned"}},
+        {PrimitiveType::UnsignedShort, {"short", "unsigned", "int"}},
+        {PrimitiveType::Int, {"int"}},
+        {PrimitiveType::Int, {"int", "signed"}},
+        {PrimitiveType::Int, {"signed"}},
+        {PrimitiveType::UnsignedInt, {"unsigned"}},
+        {PrimitiveType::UnsignedInt, {"unsigned", "int"}},
+        {PrimitiveType::Long, {"long"}},
+        {PrimitiveType::Long, {"long", "int"}},
+        {PrimitiveType::Long, {"long", "int", "signed"}},
+        {PrimitiveType::Long, {"long", "signed"}},
+        {PrimitiveType::UnsignedLong, {"long", "unsigned"}},
+        {PrimitiveType::UnsignedLong, {"long", "unsigned", "int"}},
+        {PrimitiveType::LongLong, {"long", "long"}},
+        {PrimitiveType::LongLong, {"long", "long", "int"}},
+        {PrimitiveType::LongLong, {"long", "long", "int", "signed"}},
+        {PrimitiveType::LongLong, {"long", "long", "signed"}},
+        {PrimitiveType::UnsignedLongLong, {"long", "long", "int", "unsigned"}},
+        {PrimitiveType::UnsignedLongLong, {"long", "long", "unsigned"}},
+        {PrimitiveType::Float, {"float"}},
+        {PrimitiveType::Double, {"double"}},
+        {PrimitiveType::LongDouble, {"long", "double"}},
+        {PrimitiveType::Bool, {"_Bool"}},
+        {PrimitiveType::Int128, {"__int128"}},
+        {PrimitiveType::Int128, {"signed", "__int128"}},
+        {PrimitiveType::UnsignedInt128, {"unsigned", "__int128"}},
     };
     for (auto& [type, variants] : table)
     {
@@ -625,12 +623,13 @@ TEST_CASE("Semantics primitive declarations", "[semantics]")
             auto [translationUnit, errors] = generateSemantics(text + " i;", options);
             REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit->getGlobals().size() == 1);
-            REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
-            auto* decl = &translationUnit->getGlobals()[0]->as<cld::Semantics::VariableDeclaration>();
+            REQUIRE(translationUnit->getGlobals()[0]->is<VariableDeclaration>());
+            auto* decl = &translationUnit->getGlobals()[0]->as<VariableDeclaration>();
             CHECK(decl->getNameToken()->getText() == "i");
-            CHECK(decl->getType() == type);
-            CHECK(decl->getLinkage() == cld::Semantics::Linkage::External);
-            CHECK(decl->getLifetime() == cld::Semantics::Lifetime::Static);
+            CHECK(decl->getType()
+                  == PrimitiveType(type, options, flag::isConst = isConst, flag::isVolatile = isVolatile));
+            CHECK(decl->getLinkage() == Linkage::External);
+            CHECK(decl->getLifetime() == Lifetime::Static);
         } while (std::next_permutation(variants.begin(), variants.end()));
     }
     SEMA_PRODUCES("float int i;", ProducesError(CANNOT_COMBINE_N_WITH_N, "'float'", "'int'"));
@@ -659,11 +658,11 @@ TEST_CASE("Semantics pointer declarations", "[semantics]")
             auto [translationUnit, errors] = generateSemantics("int *f;");
             REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit->getGlobals().size() == 1);
-            REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
-            auto* decl = &translationUnit->getGlobals()[0]->as<cld::Semantics::VariableDeclaration>();
+            REQUIRE(translationUnit->getGlobals()[0]->is<VariableDeclaration>());
+            auto* decl = &translationUnit->getGlobals()[0]->as<VariableDeclaration>();
             CHECK(decl->getNameToken()->getText() == "f");
-            auto integer = cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native());
-            CHECK(decl->getType() == cld::Semantics::PointerType(false, false, false, &integer));
+            auto integer = PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native());
+            CHECK(decl->getType() == PointerType(&integer));
         }
         SECTION("Element qualified")
         {
@@ -683,12 +682,12 @@ TEST_CASE("Semantics pointer declarations", "[semantics]")
                 auto [translationUnit, errors] = generateSemantics(text);
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
-                REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
-                auto* decl = &translationUnit->getGlobals()[0]->as<cld::Semantics::VariableDeclaration>();
+                REQUIRE(translationUnit->getGlobals()[0]->is<VariableDeclaration>());
+                auto* decl = &translationUnit->getGlobals()[0]->as<VariableDeclaration>();
                 CHECK(decl->getNameToken()->getText() == "f");
-                auto integer =
-                    cld::Semantics::PrimitiveType::createInt(isConst, isVolatile, cld::LanguageOptions::native());
-                CHECK(decl->getType() == cld::Semantics::PointerType(false, false, false, &integer));
+                auto integer = PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native(),
+                                             flag::isConst = isConst, flag::isVolatile = isVolatile);
+                CHECK(decl->getType() == PointerType(&integer));
             }
             SECTION("East const")
             {
@@ -707,12 +706,12 @@ TEST_CASE("Semantics pointer declarations", "[semantics]")
                 auto [translationUnit, errors] = generateSemantics(text);
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
-                REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
-                auto* decl = &translationUnit->getGlobals()[0]->as<cld::Semantics::VariableDeclaration>();
+                REQUIRE(translationUnit->getGlobals()[0]->is<VariableDeclaration>());
+                auto* decl = &translationUnit->getGlobals()[0]->as<VariableDeclaration>();
                 CHECK(decl->getNameToken()->getText() == "f");
-                auto integer =
-                    cld::Semantics::PrimitiveType::createInt(isConst, isVolatile, cld::LanguageOptions::native());
-                CHECK(decl->getType() == cld::Semantics::PointerType(false, false, false, &integer));
+                auto integer = PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native(),
+                                             flag::isConst = isConst, flag::isVolatile = isVolatile);
+                CHECK(decl->getType() == PointerType(&integer));
             }
         }
         SECTION("Pointer qualified")
@@ -737,11 +736,13 @@ TEST_CASE("Semantics pointer declarations", "[semantics]")
             auto [translationUnit, errors] = generateSemantics(text);
             REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit->getGlobals().size() == 1);
-            REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
-            auto* decl = &translationUnit->getGlobals()[0]->as<cld::Semantics::VariableDeclaration>();
+            REQUIRE(translationUnit->getGlobals()[0]->is<VariableDeclaration>());
+            auto* decl = &translationUnit->getGlobals()[0]->as<VariableDeclaration>();
             CHECK(decl->getNameToken()->getText() == "f");
-            auto integer = cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native());
-            CHECK(decl->getType() == cld::Semantics::PointerType(isConst, isVolatile, isRestrict, &integer));
+            auto integer = PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native());
+            CHECK(decl->getType()
+                  == PointerType(&integer, flag::isConst = isConst, flag::isVolatile = isVolatile,
+                                 flag::isRestricted = isRestrict));
         }
         SECTION("restrict")
         {
@@ -762,23 +763,23 @@ TEST_CASE("Semantics array declarations", "[semantics]")
             auto [translationUnit, errors] = generateSemantics("int f[1];");
             REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit->getGlobals().size() == 1);
-            REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
-            auto* decl = &translationUnit->getGlobals()[0]->as<cld::Semantics::VariableDeclaration>();
+            REQUIRE(translationUnit->getGlobals()[0]->is<VariableDeclaration>());
+            auto* decl = &translationUnit->getGlobals()[0]->as<VariableDeclaration>();
             CHECK(decl->getNameToken()->getText() == "f");
-            auto integer = cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native());
-            CHECK(decl->getType() == cld::Semantics::ArrayType(false, false, false, false, &integer, 1));
+            auto integer = PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native());
+            CHECK(decl->getType() == ArrayType(&integer, 1));
         }
         SECTION("Order")
         {
             auto [translationUnit, errors] = generateSemantics("int (*f[1]);");
             REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit->getGlobals().size() == 1);
-            REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
-            auto* decl = &translationUnit->getGlobals()[0]->as<cld::Semantics::VariableDeclaration>();
+            REQUIRE(translationUnit->getGlobals()[0]->is<VariableDeclaration>());
+            auto* decl = &translationUnit->getGlobals()[0]->as<VariableDeclaration>();
             CHECK(decl->getNameToken()->getText() == "f");
-            auto integer = cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native());
-            auto pointer = cld::Semantics::PointerType(false, false, false, &integer);
-            CHECK(decl->getType() == cld::Semantics::ArrayType(false, false, false, false, &pointer, 1));
+            auto integer = PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native());
+            auto pointer = PointerType(&integer);
+            CHECK(decl->getType() == ArrayType(&pointer, 1));
         }
         SEMA_PRODUCES("int f[0];", ProducesError(ARRAY_SIZE_MUST_BE_GREATER_THAN_ZERO));
         SEMA_PRODUCES("int f[-5];", ProducesError(ARRAY_SIZE_MUST_BE_GREATER_THAN_ZERO));
@@ -830,13 +831,12 @@ TEST_CASE("Semantics function prototypes", "[semantics]")
         auto [translationUnit, errors] = generateSemantics("int f(int,float);");
         REQUIRE_THAT(errors, ProducesNoErrors());
         REQUIRE(translationUnit->getGlobals().size() == 1);
-        REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::FunctionDeclaration>());
-        auto* decl = &translationUnit->getGlobals()[0]->as<cld::Semantics::FunctionDeclaration>();
+        REQUIRE(translationUnit->getGlobals()[0]->is<FunctionDeclaration>());
+        auto* decl = &translationUnit->getGlobals()[0]->as<FunctionDeclaration>();
         CHECK(decl->getNameToken()->getText() == "f");
-        auto integer = cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native());
-        auto floating = cld::Semantics::PrimitiveType::createFloat(false, false);
-        CHECK(decl->getType()
-              == cld::Semantics::FunctionType(&integer, {{&integer, ""}, {&floating, ""}}, false, false));
+        auto integer = PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native());
+        auto floating = PrimitiveType(PrimitiveType::Float, cld::LanguageOptions::native());
+        CHECK(decl->getType() == FunctionType(&integer, {{&integer, ""}, {&floating, ""}}));
     }
     SECTION("Parameters")
     {
@@ -861,14 +861,14 @@ TEST_CASE("Semantics function prototypes", "[semantics]")
                                                            cld::Tests::x64windowsGnu);
         REQUIRE_THAT(errors, ProducesNoErrors());
         REQUIRE(translationUnit->getGlobals().size() == 1);
-        REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::FunctionDeclaration>());
-        auto* decl = &translationUnit->getGlobals()[0]->as<cld::Semantics::FunctionDeclaration>();
+        REQUIRE(translationUnit->getGlobals()[0]->is<FunctionDeclaration>());
+        auto* decl = &translationUnit->getGlobals()[0]->as<FunctionDeclaration>();
         CHECK(decl->getNameToken()->getText() == "atexit");
-        auto integer = cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native());
-        auto voidType = cld::Semantics::PrimitiveType::createVoid(false, false);
-        auto callBack = cld::Semantics::FunctionType(&voidType, {}, false, false);
-        auto pointer = cld::Semantics::PointerType(false, false, false, &callBack);
-        CHECK(decl->getType() == cld::Semantics::FunctionType(&integer, {{&pointer, ""}}, false, false));
+        auto integer = PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native());
+        auto voidType = PrimitiveType(PrimitiveType::Void, cld::LanguageOptions::native());
+        auto callBack = FunctionType(&voidType,{});
+        auto pointer = PointerType(&callBack);
+        CHECK(decl->getType() == FunctionType(&integer, {{&pointer, ""}}));
     }
     SEMA_PRODUCES("int f(int) = 5;", ProducesError(FUNCTION_PROTOTYPE_MUST_NOT_HAVE_AN_INITIALIZER));
     SEMA_PRODUCES("int f(void) {\n"
@@ -889,11 +889,11 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
         auto [translationUnit, errors] = generateSemantics("struct A{ int i; float f, r; } a;");
         REQUIRE_THAT(errors, ProducesNoErrors());
         REQUIRE(translationUnit->getGlobals().size() == 1);
-        REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
-        auto* decl = &translationUnit->getGlobals()[0]->as<cld::Semantics::VariableDeclaration>();
+        REQUIRE(translationUnit->getGlobals()[0]->is<VariableDeclaration>());
+        auto* decl = &translationUnit->getGlobals()[0]->as<VariableDeclaration>();
         CHECK(decl->getNameToken()->getText() == "a");
-        REQUIRE(decl->getType().is<cld::Semantics::StructType>());
-        CHECK(decl->getType().as<cld::Semantics::StructType>().getStructName() == "A");
+        REQUIRE(decl->getType().is<StructType>());
+        CHECK(decl->getType().as<StructType>().getStructName() == "A");
     }
     SECTION("Defining two variables with one struct definition")
     {
@@ -907,19 +907,18 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
         auto [translationUnit, errors] = generateSemantics("union A{ int i; float f, r; } a;");
         REQUIRE_THAT(errors, ProducesNoErrors());
         REQUIRE(translationUnit->getGlobals().size() == 1);
-        REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
-        auto* decl = &translationUnit->getGlobals()[0]->as<cld::Semantics::VariableDeclaration>();
+        REQUIRE(translationUnit->getGlobals()[0]->is<VariableDeclaration>());
+        auto* decl = &translationUnit->getGlobals()[0]->as<VariableDeclaration>();
         CHECK(decl->getNameToken()->getText() == "a");
-        REQUIRE(decl->getType().is<cld::Semantics::UnionType>());
-        CHECK(decl->getType().as<cld::Semantics::UnionType>().getUnionName() == "A");
+        REQUIRE(decl->getType().is<UnionType>());
+        CHECK(decl->getType().as<UnionType>().getUnionName() == "A");
     }
     SECTION("Union alignment")
     {
         auto program = generateProgram("union A{ int i[3]; int* f; } a;");
-        auto* unionInfo =
-            program.lookupType<cld::Semantics::UnionInfo>("A", cld::Semantics::ProgramInterface::GLOBAL_SCOPE);
+        auto* unionInfo = program.lookupType<UnionInfo>("A", ProgramInterface::GLOBAL_SCOPE);
         REQUIRE(unionInfo);
-        auto* unionDef = std::get_if<cld::Semantics::UnionDefinition>(&unionInfo->type);
+        auto* unionDef = std::get_if<UnionDefinition>(&unionInfo->type);
         REQUIRE(unionDef);
         CHECK(unionDef->getAlignOf() == cld::LanguageOptions::native().sizeOfVoidStar);
         CHECK(unionDef->getSizeOf() == 4 * cld::LanguageOptions::native().sizeOfInt);
@@ -928,44 +927,48 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
     {
         auto program = generateProgram("struct { int i; float f, r; } a;");
         REQUIRE(program.getTranslationUnit().getGlobals().size() == 1);
-        REQUIRE(program.getTranslationUnit().getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
-        auto* decl = &program.getTranslationUnit().getGlobals()[0]->as<cld::Semantics::VariableDeclaration>();
+        REQUIRE(program.getTranslationUnit().getGlobals()[0]->is<VariableDeclaration>());
+        auto* decl = &program.getTranslationUnit().getGlobals()[0]->as<VariableDeclaration>();
         CHECK(decl->getNameToken()->getText() == "a");
-        REQUIRE(decl->getType().is<cld::Semantics::StructType>());
-        CHECK(decl->getType().as<cld::Semantics::StructType>().isAnonymous());
-        auto& fields = cld::Semantics::getFields(decl->getType());
+        REQUIRE(decl->getType().is<StructType>());
+        CHECK(decl->getType().as<StructType>().isAnonymous());
+        auto& fields = getFields(decl->getType());
         CHECK(fields.size() == 3);
         CHECK(fields.values_container()[0].second.name == "i");
         CHECK(*fields.values_container()[0].second.type
-              == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+              == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
         CHECK_FALSE(fields.values_container()[0].second.bitFieldBounds);
         CHECK(fields.values_container()[1].second.name == "f");
-        CHECK(*fields.values_container()[1].second.type == cld::Semantics::PrimitiveType::createFloat(false, false));
+        CHECK(*fields.values_container()[1].second.type
+              == PrimitiveType(PrimitiveType::Float, cld::LanguageOptions::native()));
         CHECK_FALSE(fields.values_container()[1].second.bitFieldBounds);
         CHECK(fields.values_container()[2].second.name == "r");
-        CHECK(*fields.values_container()[2].second.type == cld::Semantics::PrimitiveType::createFloat(false, false));
+        CHECK(*fields.values_container()[2].second.type
+              == PrimitiveType(PrimitiveType::Float, cld::LanguageOptions::native()));
         CHECK_FALSE(fields.values_container()[2].second.bitFieldBounds);
     }
     SECTION("Anonymous union")
     {
         auto program = generateProgram("union { int i; float f, r; } a;");
         REQUIRE(program.getTranslationUnit().getGlobals().size() == 1);
-        REQUIRE(program.getTranslationUnit().getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
-        auto* decl = &program.getTranslationUnit().getGlobals()[0]->as<cld::Semantics::VariableDeclaration>();
+        REQUIRE(program.getTranslationUnit().getGlobals()[0]->is<VariableDeclaration>());
+        auto* decl = &program.getTranslationUnit().getGlobals()[0]->as<VariableDeclaration>();
         CHECK(decl->getNameToken()->getText() == "a");
-        REQUIRE(decl->getType().is<cld::Semantics::UnionType>());
-        CHECK(decl->getType().as<cld::Semantics::UnionType>().isAnonymous());
-        auto& fields = cld::Semantics::getFields(decl->getType());
+        REQUIRE(decl->getType().is<UnionType>());
+        CHECK(decl->getType().as<UnionType>().isAnonymous());
+        auto& fields = getFields(decl->getType());
         CHECK(fields.size() == 3);
         CHECK(fields.values_container()[0].second.name == "i");
         CHECK(*fields.values_container()[0].second.type
-              == cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+              == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
         CHECK_FALSE(fields.values_container()[0].second.bitFieldBounds);
         CHECK(fields.values_container()[1].second.name == "f");
-        CHECK(*fields.values_container()[1].second.type == cld::Semantics::PrimitiveType::createFloat(false, false));
+        CHECK(*fields.values_container()[1].second.type
+              == PrimitiveType(PrimitiveType::Float, cld::LanguageOptions::native()));
         CHECK_FALSE(fields.values_container()[1].second.bitFieldBounds);
         CHECK(fields.values_container()[2].second.name == "r");
-        CHECK(*fields.values_container()[2].second.type == cld::Semantics::PrimitiveType::createFloat(false, false));
+        CHECK(*fields.values_container()[2].second.type
+              == PrimitiveType(PrimitiveType::Float, cld::LanguageOptions::native()));
         CHECK_FALSE(fields.values_container()[2].second.bitFieldBounds);
     }
     SECTION("Bitfields")
@@ -989,10 +992,10 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
                                                                    x64windowsMsvc);
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
-                REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
-                auto* decl = &translationUnit->getGlobals()[0]->as<cld::Semantics::VariableDeclaration>();
-                REQUIRE(decl->getType().is<cld::Semantics::ArrayType>());
-                auto& array = decl->getType().as<cld::Semantics::ArrayType>();
+                REQUIRE(translationUnit->getGlobals()[0]->is<VariableDeclaration>());
+                auto* decl = &translationUnit->getGlobals()[0]->as<VariableDeclaration>();
+                REQUIRE(decl->getType().is<ArrayType>());
+                auto& array = decl->getType().as<ArrayType>();
                 CHECK(array.getSize() == 8);
             }
             SECTION("System V bitfields")
@@ -1011,10 +1014,10 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
                                                                    x64linux);
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
-                REQUIRE(translationUnit->getGlobals()[0]->is<cld::Semantics::VariableDeclaration>());
-                auto* decl = &translationUnit->getGlobals()[0]->as<cld::Semantics::VariableDeclaration>();
-                REQUIRE(decl->getType().is<cld::Semantics::ArrayType>());
-                auto& array = decl->getType().as<cld::Semantics::ArrayType>();
+                REQUIRE(translationUnit->getGlobals()[0]->is<VariableDeclaration>());
+                auto* decl = &translationUnit->getGlobals()[0]->as<VariableDeclaration>();
+                REQUIRE(decl->getType().is<ArrayType>());
+                auto& array = decl->getType().as<ArrayType>();
                 CHECK(array.getSize() == 4);
             }
         }
@@ -1030,9 +1033,9 @@ TEST_CASE("Semantics struct and union type", "[semantics]")
                                       "    _Bool f : 1;\n"
                                       "};";
             auto program = generateProgram(source, cld::Tests::x64windowsMsvc);
-            auto* structInfo = program.lookupType<cld::Semantics::StructInfo>("A", 0);
+            auto* structInfo = program.lookupType<StructInfo>("A", 0);
             REQUIRE(structInfo);
-            auto* structDef = std::get_if<cld::Semantics::StructDefinition>(&structInfo->type);
+            auto* structDef = std::get_if<StructDefinition>(&structInfo->type);
             REQUIRE(structDef);
             REQUIRE(structDef->getFields().size() == 6);
             CHECK(structDef->getMemLayout().size() == 2);
@@ -1157,10 +1160,10 @@ TEST_CASE("Semantics enums", "[semantics]")
             std::uint64_t i = 1;
             for (auto& iter : tu->getGlobals())
             {
-                auto* decl = iter->tryAs<cld::Semantics::VariableDeclaration>();
+                auto* decl = iter->tryAs<VariableDeclaration>();
                 REQUIRE(decl);
-                REQUIRE(decl->getType().is<cld::Semantics::ArrayType>());
-                auto& array = decl->getType().as<cld::Semantics::ArrayType>();
+                REQUIRE(decl->getType().is<ArrayType>());
+                auto& array = decl->getType().as<ArrayType>();
                 CHECK(array.getSize() == i++);
             }
         }
@@ -1178,10 +1181,10 @@ TEST_CASE("Semantics enums", "[semantics]")
             std::uint64_t i = 5;
             for (auto& iter : tu->getGlobals())
             {
-                auto* decl = iter->tryAs<cld::Semantics::VariableDeclaration>();
+                auto* decl = iter->tryAs<VariableDeclaration>();
                 REQUIRE(decl);
-                REQUIRE(decl->getType().is<cld::Semantics::ArrayType>());
-                auto& array = decl->getType().as<cld::Semantics::ArrayType>();
+                REQUIRE(decl->getType().is<ArrayType>());
+                auto& array = decl->getType().as<ArrayType>();
                 CHECK(array.getSize() == i--);
             }
         }
@@ -1206,10 +1209,10 @@ TEST_CASE("Semantics enums", "[semantics]")
             std::uint64_t i = 1;
             for (auto& iter : tu->getGlobals())
             {
-                auto* decl = iter->tryAs<cld::Semantics::VariableDeclaration>();
+                auto* decl = iter->tryAs<VariableDeclaration>();
                 REQUIRE(decl);
-                REQUIRE(decl->getType().is<cld::Semantics::ArrayType>());
-                auto& array = decl->getType().as<cld::Semantics::ArrayType>();
+                REQUIRE(decl->getType().is<ArrayType>());
+                auto& array = decl->getType().as<ArrayType>();
                 CHECK(array.getSize() == i++);
             }
         }
@@ -1227,10 +1230,10 @@ TEST_CASE("Semantics enums", "[semantics]")
             std::uint64_t i = 5;
             for (auto& iter : tu->getGlobals())
             {
-                auto* decl = iter->tryAs<cld::Semantics::VariableDeclaration>();
+                auto* decl = iter->tryAs<VariableDeclaration>();
                 REQUIRE(decl);
-                REQUIRE(decl->getType().is<cld::Semantics::ArrayType>());
-                auto& array = decl->getType().as<cld::Semantics::ArrayType>();
+                REQUIRE(decl->getType().is<ArrayType>());
+                auto& array = decl->getType().as<ArrayType>();
                 CHECK(array.getSize() == i--);
             }
         }
@@ -1295,22 +1298,20 @@ TEST_CASE("Semantics function definitions")
                                                            "{}");
         REQUIRE(translationUnit->getGlobals().size() == 1);
         auto& first = translationUnit->getGlobals()[0];
-        REQUIRE(first->is<cld::Semantics::FunctionDefinition>());
-        auto& functionDefinition = first->as<cld::Semantics::FunctionDefinition>();
+        REQUIRE(first->is<FunctionDefinition>());
+        auto& functionDefinition = first->as<FunctionDefinition>();
         REQUIRE(functionDefinition.getParameterDeclarations().size() == 4);
         CHECK(functionDefinition.getParameterDeclarations()[0]->getNameToken()->getText() == "compr");
-        auto charType = cld::Semantics::PrimitiveType::createChar(false, false, cld::LanguageOptions::native());
-        CHECK(functionDefinition.getParameterDeclarations()[0]->getType()
-              == cld::Semantics::PointerType(false, false, false, &charType));
+        auto charType = PrimitiveType(PrimitiveType::Char, cld::LanguageOptions::native());
+        CHECK(functionDefinition.getParameterDeclarations()[0]->getType() == PointerType(&charType));
         CHECK(functionDefinition.getParameterDeclarations()[1]->getNameToken()->getText() == "comprLen");
         CHECK(functionDefinition.getParameterDeclarations()[1]->getType()
-              == cld::Semantics::PrimitiveType::createLong(false, false, cld::LanguageOptions::native()));
+              == PrimitiveType(PrimitiveType::Long, cld::LanguageOptions::native()));
         CHECK(functionDefinition.getParameterDeclarations()[2]->getNameToken()->getText() == "uncompr");
-        CHECK(functionDefinition.getParameterDeclarations()[2]->getType()
-              == cld::Semantics::PointerType(false, false, false, &charType));
+        CHECK(functionDefinition.getParameterDeclarations()[2]->getType() == PointerType(&charType));
         CHECK(functionDefinition.getParameterDeclarations()[3]->getNameToken()->getText() == "uncomprLen");
         CHECK(functionDefinition.getParameterDeclarations()[3]->getType()
-              == cld::Semantics::PrimitiveType::createLong(false, false, cld::LanguageOptions::native()));
+              == PrimitiveType(PrimitiveType::Long, cld::LanguageOptions::native()));
         SEMA_PRODUCES("void foo(voi)\n"
                       "{}",
                       ProducesError(PARAMETER_N_IN_IDENTIFIER_LIST_DOES_NOT_HAVE_A_MATCHING_DECLARATION, "'voi'"));
@@ -1576,22 +1577,20 @@ TEST_CASE("Semantics composite type", "[semantics]")
                                                            "int f(int (*)(char *),double (*)[]);");
         REQUIRE_THAT(errors, ProducesNoErrors());
         REQUIRE(translationUnit->getGlobals().size() == 2);
-        REQUIRE(translationUnit->getGlobals()[1]->is<cld::Semantics::FunctionDeclaration>());
-        auto* decl = &translationUnit->getGlobals()[1]->as<cld::Semantics::FunctionDeclaration>();
+        REQUIRE(translationUnit->getGlobals()[1]->is<FunctionDeclaration>());
+        auto* decl = &translationUnit->getGlobals()[1]->as<FunctionDeclaration>();
         CHECK(decl->getNameToken()->getText() == "f");
-        auto integer = cld::Semantics::PrimitiveType::createInt(false, false, cld::LanguageOptions::native());
-        auto doubleType = cld::Semantics::PrimitiveType::createDouble(false, false, cld::LanguageOptions::native());
-        auto charType = cld::Semantics::PrimitiveType::createChar(false, false, cld::LanguageOptions::native());
-        auto charStar = cld::Semantics::PointerType(false, false, false, &charType);
-        auto function = cld::Semantics::FunctionType(&integer, {{&charStar, ""}}, false, false);
-        auto ptr1 = cld::Semantics::PointerType(false, false, false, &function);
-        auto array = cld::Semantics::ArrayType(false, false, false, false, &doubleType, 3);
-        auto ptr2 = cld::Semantics::PointerType(false, false, false, &array);
-        CHECK(decl->getType() == cld::Semantics::FunctionType(&integer, {{&ptr1, ""}, {&ptr2, ""}}, false, false));
+        auto integer = PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native());
+        auto doubleType = PrimitiveType(PrimitiveType::Double, cld::LanguageOptions::native());
+        auto charType = PrimitiveType(PrimitiveType::Char, cld::LanguageOptions::native());
+        auto charStar = PointerType(&charType);
+        auto function = FunctionType(&integer, {{&charStar, ""}});
+        auto ptr1 = PointerType(&function);
+        auto array = ArrayType(&doubleType, 3);
+        auto ptr2 = PointerType(&array);
+        CHECK(decl->getType() == FunctionType(&integer, {{&ptr1, ""}, {&ptr2, ""}}));
     }
 }
-
-using namespace cld::Semantics;
 
 namespace
 {
@@ -1608,8 +1607,8 @@ const ExpressionBase& generateExpression(std::string source,
 {
     auto [translationUnit, errors] = generateSemantics(std::move(source), options);
     REQUIRE_THAT(errors, ProducesNoErrors());
-    REQUIRE(translationUnit->getGlobals().back()->is<cld::Semantics::FunctionDefinition>());
-    auto& funcDef = translationUnit->getGlobals().back()->as<cld::Semantics::FunctionDefinition>();
+    REQUIRE(translationUnit->getGlobals().back()->is<FunctionDefinition>());
+    auto& funcDef = translationUnit->getGlobals().back()->as<FunctionDefinition>();
     REQUIRE(
         std::holds_alternative<cld::IntrVarPtr<Statement>>(funcDef.getCompoundStatement().getCompoundItems().back()));
     auto& statement = *cld::get<cld::IntrVarPtr<Statement>>(funcDef.getCompoundStatement().getCompoundItems().back());
@@ -1630,80 +1629,82 @@ TEST_CASE("Semantics type printing", "[semantics]")
     };
     SECTION("Primitives")
     {
-        CHECK(toStr(PrimitiveType::createVoid(false, false)) == "void");
-        CHECK(toStr(PrimitiveType::createVoid(true, false)) == "const void");
-        CHECK(toStr(PrimitiveType::createVoid(false, true)) == "volatile void");
-        CHECK(toStr(PrimitiveType::createVoid(true, true)) == "const volatile void");
-        CHECK(toStr(PrimitiveType::createChar(false, false, cld::LanguageOptions::native())) == "char");
-        CHECK(toStr(PrimitiveType::createSignedChar(false, false)) == "signed char");
-        CHECK(toStr(PrimitiveType::createUnsignedChar(false, false)) == "unsigned char");
-        CHECK(toStr(PrimitiveType::createShort(false, false, cld::LanguageOptions::native())) == "short");
-        CHECK(toStr(PrimitiveType::createUnsignedShort(false, false, cld::LanguageOptions::native()))
-              == "unsigned short");
-        CHECK(toStr(PrimitiveType::createInt(false, false, cld::LanguageOptions::native())) == "int");
-        CHECK(toStr(PrimitiveType::createUnsignedInt(false, false, cld::LanguageOptions::native())) == "unsigned int");
-        CHECK(toStr(PrimitiveType::createLong(false, false, cld::LanguageOptions::native())) == "long");
-        CHECK(toStr(PrimitiveType::createUnsignedLong(false, false, cld::LanguageOptions::native()))
-              == "unsigned long");
-        CHECK(toStr(PrimitiveType::createLongLong(false, false, cld::LanguageOptions::native())) == "long long");
-        CHECK(toStr(PrimitiveType::createUnsignedLongLong(false, false, cld::LanguageOptions::native()))
+        CHECK(toStr(PrimitiveType(PrimitiveType::Void, cld::LanguageOptions::native())) == "void");
+        CHECK(toStr(PrimitiveType(PrimitiveType::Void, cld::LanguageOptions::native(), flag::isConst = true))
+              == "const void");
+        CHECK(toStr(PrimitiveType(PrimitiveType::Void, cld::LanguageOptions::native(), flag::isVolatile = true))
+              == "volatile void");
+        CHECK(toStr(PrimitiveType(PrimitiveType::Void, cld::LanguageOptions::native(), flag::isConst = true,
+                                  flag::isVolatile = true))
+              == "const volatile void");
+        CHECK(toStr(PrimitiveType(PrimitiveType::Char, cld::LanguageOptions::native())) == "char");
+        CHECK(toStr(PrimitiveType(PrimitiveType::SignedChar, cld::LanguageOptions::native())) == "signed char");
+        CHECK(toStr(PrimitiveType(PrimitiveType::UnsignedChar, cld::LanguageOptions::native())) == "unsigned char");
+        CHECK(toStr(PrimitiveType(PrimitiveType::Short, cld::LanguageOptions::native())) == "short");
+        CHECK(toStr(PrimitiveType(PrimitiveType::UnsignedShort, cld::LanguageOptions::native())) == "unsigned short");
+        CHECK(toStr(PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native())) == "int");
+        CHECK(toStr(PrimitiveType(PrimitiveType::UnsignedInt, cld::LanguageOptions::native())) == "unsigned int");
+        CHECK(toStr(PrimitiveType(PrimitiveType::Long, cld::LanguageOptions::native())) == "long");
+        CHECK(toStr(PrimitiveType(PrimitiveType::UnsignedLong, cld::LanguageOptions::native())) == "unsigned long");
+        CHECK(toStr(PrimitiveType(PrimitiveType::LongLong, cld::LanguageOptions::native())) == "long long");
+        CHECK(toStr(PrimitiveType(PrimitiveType::UnsignedLongLong, cld::LanguageOptions::native()))
               == "unsigned long long");
-        CHECK(toStr(PrimitiveType::createFloat(false, false)) == "float");
-        CHECK(toStr(PrimitiveType::createDouble(false, false, cld::LanguageOptions::native())) == "double");
-        CHECK(toStr(PrimitiveType::createUnderlineBool(false, false)) == "_Bool");
-        CHECK(toStr(PrimitiveType::createLongDouble(false, false, cld::LanguageOptions::native())) == "long double");
+        CHECK(toStr(PrimitiveType(PrimitiveType::Float, cld::LanguageOptions::native())) == "float");
+        CHECK(toStr(PrimitiveType(PrimitiveType::Double, cld::LanguageOptions::native())) == "double");
+        CHECK(toStr(PrimitiveType(PrimitiveType::Bool, cld::LanguageOptions::native())) == "_Bool");
+        CHECK(toStr(PrimitiveType(PrimitiveType::LongDouble, cld::LanguageOptions::native())) == "long double");
     }
     SECTION("Pointers")
     {
         {
-            auto shortType = PrimitiveType::createShort(false, false, cld::LanguageOptions::native());
-            auto ptr1 = PointerType(true, false, false, &shortType);
-            auto ptr2 = PointerType(false, false, false, &ptr1);
-            CHECK(toStr(PointerType(false, false, false, &ptr2)) == "short *const **");
+            auto shortType = PrimitiveType(PrimitiveType::Short, cld::LanguageOptions::native());
+            auto ptr1 = PointerType(&shortType, flag::isConst = true);
+            auto ptr2 = PointerType(&ptr1);
+            CHECK(toStr(PointerType(&ptr2)) == "short *const **");
         }
-        auto charType = PrimitiveType::createSignedChar(false, false);
-        auto arrayType = ArrayType(false, false, false, false, &charType, 5);
-        CHECK(toStr(PointerType(false, false, false, &arrayType)) == "signed char(*)[5]");
-        auto signedChar = PrimitiveType::createSignedChar(false, false);
-        auto function = FunctionType(&signedChar, {}, false, false);
-        CHECK(toStr(PointerType(false, false, false, &function)) == "signed char(*)(void)");
+        auto charType = PrimitiveType(PrimitiveType::SignedChar, cld::LanguageOptions::native());
+        auto arrayType = ArrayType(&charType, 5);
+        CHECK(toStr(PointerType(&arrayType)) == "signed char(*)[5]");
+        auto signedChar = PrimitiveType(PrimitiveType::SignedChar, cld::LanguageOptions::native());
+        auto function = FunctionType(&signedChar,{});
+        CHECK(toStr(PointerType(&function)) == "signed char(*)(void)");
     }
     SECTION("Array")
     {
-        auto integer = PrimitiveType::createInt(false, false, cld::LanguageOptions::native());
-        CHECK(toStr(ArrayType(false, false, false, false, &integer, 4)) == "int[4]");
-        CHECK(toStr(ArrayType(false, false, false, true, &integer, 4)) == "int[static 4]");
-        CHECK(toStr(ArrayType(false, false, true, false, &integer, 4)) == "int[restrict 4]");
-        CHECK(toStr(ArrayType(false, true, false, false, &integer, 4)) == "int[volatile 4]");
-        CHECK(toStr(ArrayType(true, false, false, false, &integer, 4)) == "int[const 4]");
-        auto array = ArrayType(false, false, false, false, &integer, 6);
-        CHECK(toStr(ArrayType(false, false, false, false, &array, 4)) == "int[4][6]");
-        auto charType = PrimitiveType::createChar(false, false, cld::LanguageOptions::native());
-        auto function = FunctionType(&integer, {{&charType, ""}}, false, false);
-        auto ptr = PointerType(false, false, false, &function);
-        CHECK(toStr(ArrayType(false, false, false, false, &ptr, 5)) == "int(*[5])(char)");
+        auto integer = PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native());
+        CHECK(toStr(ArrayType(&integer, 4)) == "int[4]");
+        CHECK(toStr(ArrayType(&integer, 4, flag::isStatic = true)) == "int[static 4]");
+        CHECK(toStr(ArrayType(&integer, 4, flag::isRestricted = true)) == "int[restrict 4]");
+        CHECK(toStr(ArrayType(&integer, 4, flag::isVolatile = true)) == "int[volatile 4]");
+        CHECK(toStr(ArrayType(&integer, 4, flag::isConst = true)) == "int[const 4]");
+        auto array = ArrayType(&integer, 6);
+        CHECK(toStr(ArrayType(&array, 4)) == "int[4][6]");
+        auto charType = PrimitiveType(PrimitiveType::Char, cld::LanguageOptions::native());
+        auto function = FunctionType(&integer, {{&charType, ""}});
+        auto ptr = PointerType(&function);
+        CHECK(toStr(ArrayType(&ptr, 5)) == "int(*[5])(char)");
     }
     SECTION("Functions")
     {
-        auto integer = PrimitiveType::createInt(false, false, cld::LanguageOptions::native());
-        CHECK(toStr(FunctionType(&integer, {}, false, false)) == "int(void)");
-        CHECK(toStr(FunctionType(&integer, {}, false, true)) == "int()");
-        CHECK(toStr(FunctionType(&integer, {{&integer, ""}}, true, false)) == "int(int,...)");
-        auto charType = PrimitiveType::createChar(false, false, cld::LanguageOptions::native());
+        auto integer = PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native());
+        CHECK(toStr(FunctionType(&integer,{})) == "int(void)");
+        CHECK(toStr(FunctionType(&integer, {}, flag::isKAndR = true)) == "int()");
+        CHECK(toStr(FunctionType(&integer, {{&integer, ""}}, flag::isVARArg = true)) == "int(int,...)");
+        auto charType = PrimitiveType(PrimitiveType::Char, cld::LanguageOptions::native());
         {
-            auto floating = PrimitiveType::createFloat(false, false);
-            auto function = FunctionType(&integer, {{&floating, ""}}, false, false);
-            auto ptr = PointerType(false, false, false, &function);
-            CHECK(toStr(FunctionType(&ptr, {{&charType, ""}}, false, false)) == "int(*(char))(float)");
+            auto floating = PrimitiveType(PrimitiveType::Float, cld::LanguageOptions::native());
+            auto function = FunctionType(&integer, {{&floating, ""}}, flag::isKAndR = true);
+            auto ptr = PointerType(&function);
+            CHECK(toStr(FunctionType(&ptr, {{&charType, ""}})) == "int(*(char))(float)");
         }
-        auto charStar = PointerType(false, false, false, &charType);
-        auto abstractArray = AbstractArrayType(false, false, false, &charStar);
-        auto pointerType = PointerType(false, false, false, &abstractArray);
-        auto function = FunctionType(&pointerType, {}, false, true);
-        auto functionPtr = PointerType(false, false, false, &function);
-        auto functionPtrPtr = PointerType(false, false, false, &functionPtr);
-        auto array = ArrayType(false, false, false, false, &functionPtrPtr, 8);
-        CHECK(toStr(AbstractArrayType(false, false, false, &array)) == "char *(*(**[][8])())[]");
+        auto charStar = PointerType(&charType);
+        auto abstractArray = AbstractArrayType(&charStar);
+        auto pointerType = PointerType(&abstractArray);
+        auto function = FunctionType(&pointerType, {}, flag::isKAndR = true);
+        auto functionPtr = PointerType(&function);
+        auto functionPtrPtr = PointerType(&functionPtr);
+        auto array = ArrayType(&functionPtrPtr, 8);
+        CHECK(toStr(AbstractArrayType(&array)) == "char *(*(**[][8])())[]");
     }
     SECTION("Typedef")
     {
@@ -1791,15 +1792,15 @@ TEST_CASE("Semantics primary expressions", "[semantics]")
         {
             auto options = cld::LanguageOptions::native();
             auto constant = GENERATE_COPY(values<std::pair<std::string, cld::IntrVarValue<Type>>>({
-                {"5", PrimitiveType::createInt(false, false, options)},
-                {"5u", PrimitiveType::createUnsignedInt(false, false, options)},
-                {"5l", PrimitiveType::createLong(false, false, options)},
-                {"5ul", PrimitiveType::createUnsignedLong(false, false, options)},
-                {"5LL", PrimitiveType::createLongLong(false, false, options)},
-                {"5uLL", PrimitiveType::createUnsignedLongLong(false, false, options)},
-                {"5.0f", PrimitiveType::createFloat(false, false)},
-                {"5.0", PrimitiveType::createDouble(false, false, options)},
-                {"5.0L", PrimitiveType::createLongDouble(false, false, options)},
+                {"5", PrimitiveType(PrimitiveType::Int, options)},
+                {"5u", PrimitiveType(PrimitiveType::UnsignedInt, options)},
+                {"5l", PrimitiveType(PrimitiveType::Long, options)},
+                {"5ul", PrimitiveType(PrimitiveType::UnsignedLong, options)},
+                {"5LL", PrimitiveType(PrimitiveType::LongLong, options)},
+                {"5uLL", PrimitiveType(PrimitiveType::UnsignedLongLong, options)},
+                {"5.0f", PrimitiveType(PrimitiveType::Float, options)},
+                {"5.0", PrimitiveType(PrimitiveType::Double, options)},
+                {"5.0L", PrimitiveType(PrimitiveType::LongDouble, options)},
             }));
             auto& expr = generateExpression("void foo(void) { " + constant.first + ";}");
             CHECK(expr.getType() == *constant.second);
@@ -1809,8 +1810,8 @@ TEST_CASE("Semantics primary expressions", "[semantics]")
         SECTION("String")
         {
             auto& expr = generateExpression("void foo(void) { \"txt\";}");
-            auto charType = PrimitiveType::createChar(false, false, cld::LanguageOptions::native());
-            CHECK(expr.getType() == ArrayType(false, false, false, false, &charType, 4));
+            auto charType = PrimitiveType(PrimitiveType::Char, cld::LanguageOptions::native());
+            CHECK(expr.getType() == ArrayType(&charType, 4));
             CHECK(expr.getValueCategory() == ValueCategory::Rvalue);
             CHECK(expr.is<Constant>());
         }
@@ -1820,8 +1821,8 @@ TEST_CASE("Semantics primary expressions", "[semantics]")
             {
                 auto options = cld::LanguageOptions::fromTriple(x64windowsMsvc);
                 auto& expr = generateExpression("void foo(void) { L\"txt\";}", options);
-                auto wcharT = PrimitiveType::createUnsignedShort(false, false, options);
-                CHECK(expr.getType() == ArrayType(false, false, false, false, &wcharT, 4));
+                auto wcharT = PrimitiveType(PrimitiveType::UnsignedShort, options);
+                CHECK(expr.getType() == ArrayType(&wcharT, 4));
                 CHECK(expr.getValueCategory() == ValueCategory::Rvalue);
                 CHECK(expr.is<Constant>());
             }
@@ -1829,8 +1830,8 @@ TEST_CASE("Semantics primary expressions", "[semantics]")
             {
                 auto options = cld::LanguageOptions::fromTriple(x64linux);
                 auto& expr = generateExpression("void foo(void) { L\"txt\";}", options);
-                auto wcharT = PrimitiveType::createInt(false, false, options);
-                CHECK(expr.getType() == ArrayType(false, false, false, false, &wcharT, 4));
+                auto wcharT = PrimitiveType(PrimitiveType::Int, options);
+                CHECK(expr.getType() == ArrayType(&wcharT, 4));
                 CHECK(expr.getValueCategory() == ValueCategory::Rvalue);
                 CHECK(expr.is<Constant>());
             }
@@ -1839,7 +1840,7 @@ TEST_CASE("Semantics primary expressions", "[semantics]")
     SECTION("Parentheses")
     {
         auto& expr = generateExpression("void foo(void) { (5);}");
-        CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(expr.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
         CHECK(expr.getValueCategory() == ValueCategory::Rvalue);
         CHECK(expr.is<Constant>());
     }
@@ -1848,8 +1849,8 @@ TEST_CASE("Semantics primary expressions", "[semantics]")
         SECTION("Declarations")
         {
             auto& expr = generateExpression("void foo(void) { foo;}");
-            auto voidType = PrimitiveType::createVoid(false, false);
-            CHECK(expr.getType() == FunctionType(&voidType, {}, false, false));
+            auto voidType = PrimitiveType(PrimitiveType::Void, cld::LanguageOptions::native());
+            CHECK(expr.getType() == FunctionType(&voidType,{}));
             CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
             REQUIRE(expr.is<DeclarationRead>());
             CHECK(expr.as<DeclarationRead>().getDeclRead().is<FunctionDefinition>());
@@ -1857,7 +1858,7 @@ TEST_CASE("Semantics primary expressions", "[semantics]")
         SECTION("Enum constants")
         {
             auto& expr = generateExpression("enum A { VALUE = 7};void foo(void) { VALUE;}");
-            CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
             CHECK(expr.getValueCategory() == ValueCategory::Rvalue);
             REQUIRE(expr.is<Constant>());
         }
@@ -1874,15 +1875,14 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
             auto& expr = generateExpression("void foo(int *i) {\n"
                                             "    i[5];\n"
                                             "}");
-            CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
             CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
             REQUIRE(expr.is<SubscriptOperator>());
-            auto integer = PrimitiveType::createInt(false, false, cld::LanguageOptions::native());
-            CHECK(expr.as<SubscriptOperator>().getLeftExpression().getType()
-                  == PointerType(false, false, false, &integer));
+            auto integer = PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native());
+            CHECK(expr.as<SubscriptOperator>().getLeftExpression().getType() == PointerType(&integer));
             CHECK(expr.as<SubscriptOperator>().getLeftExpression().getValueCategory() == ValueCategory::Rvalue);
             CHECK(expr.as<SubscriptOperator>().getRightExpression().getType()
-                  == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+                  == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
             CHECK(expr.as<SubscriptOperator>().getRightExpression().getValueCategory() == ValueCategory::Rvalue);
         }
         SECTION("CV qualified")
@@ -1891,7 +1891,8 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
                                             "   const int i[5];\n"
                                             "   i[3];\n"
                                             "}");
-            CHECK(expr.getType() == PrimitiveType::createInt(true, false, cld::LanguageOptions::native()));
+            CHECK(expr.getType()
+                  == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native(), flag::isConst = true));
             CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
         }
         SEMA_PRODUCES("int foo(void) {\n"
@@ -1940,7 +1941,7 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
                                             "int foo(struct A i) {\n"
                                             " i.i;\n"
                                             "}");
-            CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
             CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
             REQUIRE(expr.is<MemberAccess>());
             CHECK(expr.as<MemberAccess>().getRecordExpression().getValueCategory() == ValueCategory::Lvalue);
@@ -1956,7 +1957,7 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
                                             "int foo(union A i) {\n"
                                             " i.i;\n"
                                             "}");
-            CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
             CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
             REQUIRE(expr.is<MemberAccess>());
             CHECK(expr.as<MemberAccess>().getRecordExpression().getValueCategory() == ValueCategory::Lvalue);
@@ -1969,7 +1970,7 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
                                             " i.i;\n"
                                             "}");
 
-            CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
             CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
             REQUIRE(expr.is<MemberAccess>());
             CHECK(expr.as<MemberAccess>().getRecordExpression().getValueCategory() == ValueCategory::Lvalue);
@@ -1982,7 +1983,7 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
                                             " i.i;\n"
                                             "}");
 
-            CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
             CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
             REQUIRE(expr.is<MemberAccess>());
             CHECK(expr.as<MemberAccess>().getRecordExpression().getValueCategory() == ValueCategory::Lvalue);
@@ -2044,7 +2045,7 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
                                             " i->i;\n"
                                             "}");
 
-            CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
             CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
             REQUIRE(expr.is<MemberAccess>());
             auto& mem = expr.as<MemberAccess>();
@@ -2062,7 +2063,7 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
                                             " i->i;\n"
                                             "}");
 
-            CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
             CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
             REQUIRE(expr.is<MemberAccess>());
             auto& mem = expr.as<MemberAccess>();
@@ -2076,7 +2077,7 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
                                             " i->i;\n"
                                             "}");
 
-            CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
             CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
             REQUIRE(expr.is<MemberAccess>());
             auto& mem = expr.as<MemberAccess>();
@@ -2090,7 +2091,7 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
                                             " i->i;\n"
                                             "}");
 
-            CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
             CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
             REQUIRE(expr.is<MemberAccess>());
             auto& mem = expr.as<MemberAccess>();
@@ -2148,7 +2149,7 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
             auto& expr = generateExpression("int foo(volatile int i) {\n"
                                             " i++;\n"
                                             "}");
-            CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
             CHECK(expr.getValueCategory() == ValueCategory::Rvalue);
             REQUIRE(expr.is<UnaryOperator>());
             auto& unary = expr.as<UnaryOperator>();
@@ -2159,7 +2160,7 @@ TEST_CASE("Semantics postfix expressions", "[semantics]")
             auto& expr = generateExpression("int foo(volatile int i) {\n"
                                             " i--;\n"
                                             "}");
-            CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
             CHECK(expr.getValueCategory() == ValueCategory::Rvalue);
             REQUIRE(expr.is<UnaryOperator>());
             auto& unary = expr.as<UnaryOperator>();
@@ -2227,7 +2228,7 @@ TEST_CASE("Semantics unary expressions", "[semantics]")
             auto& expr = generateExpression("int foo(volatile int i) {\n"
                                             " ++i;\n"
                                             "}");
-            CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
             CHECK(expr.getValueCategory() == ValueCategory::Rvalue);
             REQUIRE(expr.is<UnaryOperator>());
             auto& unary = expr.as<UnaryOperator>();
@@ -2238,7 +2239,7 @@ TEST_CASE("Semantics unary expressions", "[semantics]")
             auto& expr = generateExpression("int foo(volatile int i) {\n"
                                             " --i;\n"
                                             "}");
-            CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(expr.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
             CHECK(expr.getValueCategory() == ValueCategory::Rvalue);
             REQUIRE(expr.is<UnaryOperator>());
             auto& unary = expr.as<UnaryOperator>();
@@ -2297,14 +2298,14 @@ TEST_CASE("Semantics unary expressions", "[semantics]")
     }
     SECTION("Address of")
     {
-        auto integer = PrimitiveType::createInt(false, false, cld::LanguageOptions::native());
+        auto integer = PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native());
         SECTION("Following dereference")
         {
             auto& exp = generateExpression("void foo(int *i) {\n"
                                            " &*i;\n"
                                            "}");
             CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-            CHECK(exp.getType() == PointerType(false, false, false, &integer));
+            CHECK(exp.getType() == PointerType(&integer));
         }
         SECTION("Following subscript")
         {
@@ -2312,7 +2313,7 @@ TEST_CASE("Semantics unary expressions", "[semantics]")
                                            " &i[0];\n"
                                            "}");
             CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-            CHECK(exp.getType() == PointerType(false, false, false, &integer));
+            CHECK(exp.getType() == PointerType(&integer));
         }
         SEMA_PRODUCES("void foo(register int i) {\n"
                       " &i;\n"
@@ -2333,7 +2334,7 @@ TEST_CASE("Semantics unary expressions", "[semantics]")
                                        "*i;\n"
                                        "}");
         CHECK(exp.getValueCategory() == ValueCategory::Lvalue);
-        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
         REQUIRE(exp.is<UnaryOperator>());
         CHECK(exp.as<UnaryOperator>().getKind() == UnaryOperator::Dereference);
         SEMA_PRODUCES("void foo(int i) {\n"
@@ -2349,7 +2350,7 @@ TEST_CASE("Semantics unary expressions", "[semantics]")
                                            "-i;\n"
                                            "}");
             CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-            CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(exp.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
             REQUIRE(exp.is<UnaryOperator>());
             CHECK(exp.as<UnaryOperator>().getKind() == UnaryOperator::Minus);
         }
@@ -2359,7 +2360,7 @@ TEST_CASE("Semantics unary expressions", "[semantics]")
                                            "+i;\n"
                                            "}");
             CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-            CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(exp.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
             REQUIRE(exp.is<UnaryOperator>());
             CHECK(exp.as<UnaryOperator>().getKind() == UnaryOperator::Plus);
         }
@@ -2382,7 +2383,7 @@ TEST_CASE("Semantics unary expressions", "[semantics]")
                                        "~i;\n"
                                        "}");
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
         REQUIRE(exp.is<UnaryOperator>());
         CHECK(exp.as<UnaryOperator>().getKind() == UnaryOperator::BitwiseNegate);
         SEMA_PRODUCES("void foo(float i) {\n"
@@ -2402,7 +2403,7 @@ TEST_CASE("Semantics unary expressions", "[semantics]")
                                            "!i;\n"
                                            "}");
             CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-            CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(exp.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
             REQUIRE(exp.is<UnaryOperator>());
             CHECK(exp.as<UnaryOperator>().getKind() == UnaryOperator::BooleanNegate);
         }
@@ -2412,7 +2413,7 @@ TEST_CASE("Semantics unary expressions", "[semantics]")
                                            "!i;\n"
                                            "}");
             CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-            CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(exp.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
             REQUIRE(exp.is<UnaryOperator>());
             CHECK(exp.as<UnaryOperator>().getKind() == UnaryOperator::BooleanNegate);
         }
@@ -2431,7 +2432,7 @@ TEST_CASE("Semantics unary expressions", "[semantics]")
                                        "sizeof(int);\n"
                                        "}");
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-        CHECK(exp.getType() == PrimitiveType::createSizeT(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getType() == PrimitiveType(cld::LanguageOptions::native().sizeTType, cld::LanguageOptions::native()));
         REQUIRE(exp.is<SizeofOperator>());
         SEMA_PRODUCES("void foo(struct r* i) {\n"
                       " sizeof *i;\n"
@@ -2464,8 +2465,8 @@ TEST_CASE("Semantics cast expression", "[semantics]")
                                        "(const int* const)i;\n"
                                        "}");
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-        auto integer = PrimitiveType::createInt(true, false, cld::LanguageOptions::native());
-        CHECK(exp.getType() == PointerType(false, false, false, &integer));
+        auto integer = PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native(), flag::isConst = true);
+        CHECK(exp.getType() == PointerType(&integer));
         CHECK(exp.is<Cast>());
     }
     SEMA_PRODUCES("void foo(int* i) {\n"
@@ -2490,7 +2491,7 @@ TEST_CASE("Semantics term expression", "[semantics]")
                                        "5 * 5;\n"
                                        "}");
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
         REQUIRE(exp.is<BinaryOperator>());
         auto& binOp = exp.as<BinaryOperator>();
         CHECK(binOp.getKind() == BinaryOperator::Multiply);
@@ -2521,7 +2522,7 @@ TEST_CASE("Semantics term expression", "[semantics]")
                                        "5 / 5;\n"
                                        "}");
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
         REQUIRE(exp.is<BinaryOperator>());
         auto& binOp = exp.as<BinaryOperator>();
         CHECK(binOp.getKind() == BinaryOperator::Divide);
@@ -2554,7 +2555,7 @@ TEST_CASE("Semantics term expression", "[semantics]")
                                            "5 % 5;\n"
                                            "}");
             CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-            CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(exp.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
             REQUIRE(exp.is<BinaryOperator>());
             auto& binOp = exp.as<BinaryOperator>();
             CHECK(binOp.getKind() == BinaryOperator::Modulo);
@@ -2567,7 +2568,7 @@ TEST_CASE("Semantics term expression", "[semantics]")
                                            "}",
                                            option);
             CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-            CHECK(exp.getType() == PrimitiveType::createUnsignedInt(false, false, option));
+            CHECK(exp.getType() == PrimitiveType(PrimitiveType::UnsignedInt, option));
             REQUIRE(exp.is<BinaryOperator>());
             auto& binOp = exp.as<BinaryOperator>();
             CHECK(binOp.getKind() == BinaryOperator::Modulo);
@@ -2606,21 +2607,21 @@ TEST_CASE("Semantics additive expression", "[semantics]")
                                            "5 + 5;\n"
                                            "}");
             CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-            CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(exp.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
             REQUIRE(exp.is<BinaryOperator>());
             auto& binOp = exp.as<BinaryOperator>();
             CHECK(binOp.getKind() == BinaryOperator::Addition);
         }
         SECTION("Pointer")
         {
-            auto integer = PrimitiveType::createInt(false, false, cld::LanguageOptions::native());
+            auto integer = PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native());
             SECTION("Pointer left")
             {
                 auto& exp = generateExpression("void foo(int* i) {\n"
                                                "i + 5;\n"
                                                "}");
                 CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-                CHECK(exp.getType() == PointerType(false, false, false, &integer));
+                CHECK(exp.getType() == PointerType(&integer));
                 REQUIRE(exp.is<BinaryOperator>());
                 auto& binOp = exp.as<BinaryOperator>();
                 CHECK(binOp.getKind() == BinaryOperator::Addition);
@@ -2631,7 +2632,7 @@ TEST_CASE("Semantics additive expression", "[semantics]")
                                                "5 + i;\n"
                                                "}");
                 CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-                CHECK(exp.getType() == PointerType(false, false, false, &integer));
+                CHECK(exp.getType() == PointerType(&integer));
                 REQUIRE(exp.is<BinaryOperator>());
                 auto& binOp = exp.as<BinaryOperator>();
                 CHECK(binOp.getKind() == BinaryOperator::Addition);
@@ -2670,7 +2671,7 @@ TEST_CASE("Semantics additive expression", "[semantics]")
                                            "5 - 5;\n"
                                            "}");
             CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-            CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+            CHECK(exp.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
             REQUIRE(exp.is<BinaryOperator>());
             auto& binOp = exp.as<BinaryOperator>();
             CHECK(binOp.getKind() == BinaryOperator::Subtraction);
@@ -2682,9 +2683,9 @@ TEST_CASE("Semantics additive expression", "[semantics]")
                 auto& exp = generateExpression("void foo(int* i) {\n"
                                                "i - 5;\n"
                                                "}");
-                auto integer = PrimitiveType::createInt(false, false, cld::LanguageOptions::native());
+                auto integer = PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native());
                 CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-                CHECK(exp.getType() == PointerType(false, false, false, &integer));
+                CHECK(exp.getType() == PointerType(&integer));
                 REQUIRE(exp.is<BinaryOperator>());
                 auto& binOp = exp.as<BinaryOperator>();
                 CHECK(binOp.getKind() == BinaryOperator::Subtraction);
@@ -2695,7 +2696,8 @@ TEST_CASE("Semantics additive expression", "[semantics]")
                                                "i - i;\n"
                                                "}");
                 CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
-                CHECK(exp.getType() == PrimitiveType::createPtrdiffT(false, false, cld::LanguageOptions::native()));
+                CHECK(exp.getType()
+                      == PrimitiveType(cld::LanguageOptions::native().ptrdiffType, cld::LanguageOptions::native()));
                 REQUIRE(exp.is<BinaryOperator>());
                 auto& binOp = exp.as<BinaryOperator>();
                 CHECK(binOp.getKind() == BinaryOperator::Subtraction);
@@ -2749,7 +2751,7 @@ TEST_CASE("Semantics shift expression", "[semantics]")
         auto& exp = generateExpression("void foo(void) {\n"
                                        " 5uLL << 1;\n"
                                        "}");
-        CHECK(exp.getType() == PrimitiveType::createUnsignedLongLong(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getType() == PrimitiveType(PrimitiveType::UnsignedLongLong, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
         REQUIRE(exp.is<BinaryOperator>());
         CHECK(exp.as<BinaryOperator>().getKind() == BinaryOperator::LeftShift);
@@ -2767,7 +2769,7 @@ TEST_CASE("Semantics shift expression", "[semantics]")
         auto& exp = generateExpression("void foo(void) {\n"
                                        " 5uLL >> 1;\n"
                                        "}");
-        CHECK(exp.getType() == PrimitiveType::createUnsignedLongLong(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getType() == PrimitiveType(PrimitiveType::UnsignedLongLong, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
         REQUIRE(exp.is<BinaryOperator>());
         CHECK(exp.as<BinaryOperator>().getKind() == BinaryOperator::RightShift);
@@ -2789,7 +2791,7 @@ TEST_CASE("Semantics relational expression", "[semantics]")
         auto& exp = generateExpression("void foo(void) {\n"
                                        " 5 < 3;\n"
                                        "}");
-        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
         REQUIRE(exp.is<BinaryOperator>());
         CHECK(exp.as<BinaryOperator>().getKind() == BinaryOperator::LessThan);
@@ -2827,7 +2829,7 @@ TEST_CASE("Semantics relational expression", "[semantics]")
         auto& exp = generateExpression("void foo(void) {\n"
                                        " 5 > 3;\n"
                                        "}");
-        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
         REQUIRE(exp.is<BinaryOperator>());
         CHECK(exp.as<BinaryOperator>().getKind() == BinaryOperator::GreaterThan);
@@ -2865,7 +2867,7 @@ TEST_CASE("Semantics relational expression", "[semantics]")
         auto& exp = generateExpression("void foo(void) {\n"
                                        " 5 <= 3;\n"
                                        "}");
-        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
         REQUIRE(exp.is<BinaryOperator>());
         CHECK(exp.as<BinaryOperator>().getKind() == BinaryOperator::LessOrEqual);
@@ -2903,7 +2905,7 @@ TEST_CASE("Semantics relational expression", "[semantics]")
         auto& exp = generateExpression("void foo(void) {\n"
                                        " 5 >= 3;\n"
                                        "}");
-        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
         REQUIRE(exp.is<BinaryOperator>());
         CHECK(exp.as<BinaryOperator>().getKind() == BinaryOperator::GreaterOrEqual);
@@ -2945,7 +2947,7 @@ TEST_CASE("Semantics equal expressions", "[semantics]")
         auto& exp = generateExpression("void foo(void) {\n"
                                        " 5 == 3;\n"
                                        "}");
-        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
         REQUIRE(exp.is<BinaryOperator>());
         CHECK(exp.as<BinaryOperator>().getKind() == BinaryOperator::Equal);
@@ -2999,7 +3001,7 @@ TEST_CASE("Semantics equal expressions", "[semantics]")
         auto& exp = generateExpression("void foo(void) {\n"
                                        " 5 != 3;\n"
                                        "}");
-        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
         REQUIRE(exp.is<BinaryOperator>());
         CHECK(exp.as<BinaryOperator>().getKind() == BinaryOperator::NotEqual);
@@ -3057,7 +3059,7 @@ TEST_CASE("Semantics bit operators", "[semantics]")
         auto& exp = generateExpression("void foo(void) {\n"
                                        " 5 & 1uLL;\n"
                                        "}");
-        CHECK(exp.getType() == PrimitiveType::createUnsignedLongLong(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getType() == PrimitiveType(PrimitiveType::UnsignedLongLong, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
         REQUIRE(exp.is<BinaryOperator>());
         CHECK(exp.as<BinaryOperator>().getKind() == BinaryOperator::BitAnd);
@@ -3075,7 +3077,7 @@ TEST_CASE("Semantics bit operators", "[semantics]")
         auto& exp = generateExpression("void foo(void) {\n"
                                        " 5 | 1uLL;\n"
                                        "}");
-        CHECK(exp.getType() == PrimitiveType::createUnsignedLongLong(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getType() == PrimitiveType(PrimitiveType::UnsignedLongLong, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
         REQUIRE(exp.is<BinaryOperator>());
         CHECK(exp.as<BinaryOperator>().getKind() == BinaryOperator::BitOr);
@@ -3093,7 +3095,7 @@ TEST_CASE("Semantics bit operators", "[semantics]")
         auto& exp = generateExpression("void foo(void) {\n"
                                        " 5 ^ 1uLL;\n"
                                        "}");
-        CHECK(exp.getType() == PrimitiveType::createUnsignedLongLong(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getType() == PrimitiveType(PrimitiveType::UnsignedLongLong, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
         REQUIRE(exp.is<BinaryOperator>());
         CHECK(exp.as<BinaryOperator>().getKind() == BinaryOperator::BitXor);
@@ -3115,7 +3117,7 @@ TEST_CASE("Semantics logic operators", "[semantics]")
         auto& exp = generateExpression("void foo(void) {\n"
                                        " 5 && 1uLL;\n"
                                        "}");
-        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
         REQUIRE(exp.is<BinaryOperator>());
         CHECK(exp.as<BinaryOperator>().getKind() == BinaryOperator::LogicAnd);
@@ -3137,7 +3139,7 @@ TEST_CASE("Semantics logic operators", "[semantics]")
         auto& exp = generateExpression("void foo(void) {\n"
                                        " 5 || 1uLL;\n"
                                        "}");
-        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
         REQUIRE(exp.is<BinaryOperator>());
         CHECK(exp.as<BinaryOperator>().getKind() == BinaryOperator::LogicOr);
@@ -3163,14 +3165,14 @@ TEST_CASE("Semantics conditional expression", "[semantics]")
         auto& exp = generateExpression("void foo(void) {\n"
                                        "1 ? 5.0 : 3uLL;\n"
                                        "}");
-        CHECK(exp.getType() == PrimitiveType::createDouble(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getType() == PrimitiveType(PrimitiveType::Double, cld::LanguageOptions::native()));
     }
     SECTION("Void")
     {
         auto& exp = generateExpression("void foo(void) {\n"
                                        "1 ? *(void const*)5 : *(void*)3uLL;\n"
                                        "}");
-        CHECK(exp.getType() == PrimitiveType::createVoid(false, false));
+        CHECK(exp.getType() == PrimitiveType(PrimitiveType::Void, cld::LanguageOptions::native()));
     }
     SECTION("Pointer")
     {
@@ -3179,27 +3181,28 @@ TEST_CASE("Semantics conditional expression", "[semantics]")
             auto& exp = generateExpression("void foo(void) {\n"
                                            "1 ? (void const*)5 : (float*)3uLL;\n"
                                            "}");
-            auto voidType = PrimitiveType::createVoid(true, false);
-            CHECK(exp.getType() == PointerType(false, false, false, &voidType));
+            auto voidType = PrimitiveType(PrimitiveType::Void, cld::LanguageOptions::native(), flag::isConst = true);
+            CHECK(exp.getType() == PointerType(&voidType));
         }
         SECTION("Merging void")
         {
             auto& exp = generateExpression("void foo(void) {\n"
                                            "1 ? (void const*)5 : (void volatile*)3uLL;\n"
                                            "}");
-            auto voidType = PrimitiveType::createVoid(true, true);
-            CHECK(exp.getType() == PointerType(false, false, false, &voidType));
+            auto voidType = PrimitiveType(PrimitiveType::Void, cld::LanguageOptions::native(), flag::isConst = true,
+                                          flag::isVolatile = true);
+            CHECK(exp.getType() == PointerType(&voidType));
         }
         SECTION("Composite type")
         {
             auto& exp = generateExpression("void foo(void (*f)(float[]),void (*r)(float[5])) {\n"
                                            "1 ? f : r;\n"
                                            "}");
-            auto floating = PrimitiveType::createFloat(false, false);
-            auto array = ArrayType(false, false, false, false, &floating, 5);
-            auto voidType = PrimitiveType::createVoid(false, false);
-            auto function = FunctionType(&voidType, {{&array, ""}}, false, false);
-            CHECK(exp.getType() == PointerType(false, false, false, &function));
+            auto floating = PrimitiveType(PrimitiveType::Float, cld::LanguageOptions::native());
+            auto array = ArrayType(&floating, 5);
+            auto voidType = PrimitiveType(PrimitiveType::Void, cld::LanguageOptions::native());
+            auto function = FunctionType(&voidType, {{&array, ""}});
+            CHECK(exp.getType() == PointerType(&function));
         }
     }
     SEMA_PRODUCES("void foo(struct { int i; } r) {\n"
@@ -3243,7 +3246,7 @@ TEST_CASE("Semantics assignment expression", "[semantics]")
         auto& exp = generateExpression("void foo(volatile int i) {\n"
                                        "i = 5;\n"
                                        "}");
-        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
         REQUIRE(exp.is<Assignment>());
         CHECK(exp.as<Assignment>().getKind() == Assignment::Simple);
@@ -3365,7 +3368,7 @@ TEST_CASE("Semantics assignment expression", "[semantics]")
                                        + operand
                                        + " 5;\n"
                                          "}");
-        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
         REQUIRE(exp.is<Assignment>());
         CHECK(exp.as<Assignment>().getKind() == (operand == "-=" ? Assignment::Minus : Assignment::Plus));
@@ -3423,7 +3426,7 @@ TEST_CASE("Semantics assignment expression", "[semantics]")
                                        + operand
                                        + " 5;\n"
                                          "}");
-        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
         REQUIRE(exp.is<Assignment>());
         CHECK(exp.as<Assignment>().getKind() == (operand == "*=" ? Assignment::Multiply : Assignment::Divide));
@@ -3472,7 +3475,7 @@ TEST_CASE("Semantics assignment expression", "[semantics]")
                                        + operand
                                        + " 5;\n"
                                          "}");
-        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
         REQUIRE(exp.is<Assignment>());
         CHECK(exp.as<Assignment>().getKind() ==
@@ -3548,7 +3551,7 @@ TEST_CASE("Semantics comma expression", "[semantics]")
     auto& exp = generateExpression("void foo(void) {\n"
                                    "5.0,3;\n"
                                    "}");
-    CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+    CHECK(exp.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
     CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
     CHECK(exp.is<CommaExpression>());
     SEMA_PRODUCES("void foo(int i) {\n"
@@ -3566,7 +3569,7 @@ TEST_CASE("Semantics function call expression", "[semantics]")
                                        "void foo(unsigned short i) {\n"
                                        "bar(5.0f,i);\n"
                                        "}");
-        CHECK(exp.getType() == PrimitiveType::createDouble(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getType() == PrimitiveType(PrimitiveType::Double, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
         REQUIRE(exp.is<CallExpression>());
         auto& call = exp.as<CallExpression>();
@@ -3574,11 +3577,11 @@ TEST_CASE("Semantics function call expression", "[semantics]")
         REQUIRE(call.getArgumentExpressions()[0]->is<Conversion>());
         CHECK(call.getArgumentExpressions()[0]->as<Conversion>().getKind() == Conversion::DefaultArgumentPromotion);
         CHECK(call.getArgumentExpressions()[0]->getType()
-              == PrimitiveType::createDouble(false, false, cld::LanguageOptions::native()));
+              == PrimitiveType(PrimitiveType::Double, cld::LanguageOptions::native()));
         REQUIRE(call.getArgumentExpressions()[1]->is<Conversion>());
         CHECK(call.getArgumentExpressions()[1]->as<Conversion>().getKind() == Conversion::IntegerPromotion);
         CHECK(call.getArgumentExpressions()[1]->getType()
-              == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+              == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
     }
     SECTION("Prototyped")
     {
@@ -3587,14 +3590,15 @@ TEST_CASE("Semantics function call expression", "[semantics]")
                                        "void foo(unsigned short i) {\n"
                                        "bar(5.0f,i);\n"
                                        "}");
-        CHECK(exp.getType() == PrimitiveType::createDouble(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getType() == PrimitiveType(PrimitiveType::Double, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Rvalue);
         REQUIRE(exp.is<CallExpression>());
         auto& call = exp.as<CallExpression>();
         REQUIRE(call.getArgumentExpressions().size() == 2);
-        CHECK(call.getArgumentExpressions()[0]->getType() == PrimitiveType::createFloat(false, false));
+        CHECK(call.getArgumentExpressions()[0]->getType()
+              == PrimitiveType(PrimitiveType::Float, cld::LanguageOptions::native()));
         CHECK(call.getArgumentExpressions()[1]->getType()
-              == PrimitiveType::createUnsignedShort(false, false, cld::LanguageOptions::native()));
+              == PrimitiveType(PrimitiveType::UnsignedShort, cld::LanguageOptions::native()));
     }
     SEMA_PRODUCES("void foo(int i) {\n"
                   " i();\n"
@@ -3738,8 +3742,8 @@ TEST_CASE("Semantics simple initializer", "[semantics]")
             REQUIRE_THAT(errors, ProducesNoErrors());
             REQUIRE(translationUnit->getGlobals().size() == 1);
             auto& global = translationUnit->getGlobals()[0];
-            REQUIRE(global->is<cld::Semantics::VariableDeclaration>());
-            auto& declaration = global->as<cld::Semantics::VariableDeclaration>();
+            REQUIRE(global->is<VariableDeclaration>());
+            auto& declaration = global->as<VariableDeclaration>();
             REQUIRE(declaration.getType().is<ArrayType>());
             CHECK(declaration.getType().as<ArrayType>().getSize() == 7);
         }
@@ -3752,8 +3756,8 @@ TEST_CASE("Semantics simple initializer", "[semantics]")
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
                 auto& global = translationUnit->getGlobals()[0];
-                REQUIRE(global->is<cld::Semantics::VariableDeclaration>());
-                auto& declaration = global->as<cld::Semantics::VariableDeclaration>();
+                REQUIRE(global->is<VariableDeclaration>());
+                auto& declaration = global->as<VariableDeclaration>();
                 REQUIRE(declaration.getType().is<ArrayType>());
                 CHECK(declaration.getType().as<ArrayType>().getSize() == 7);
             }
@@ -3763,8 +3767,8 @@ TEST_CASE("Semantics simple initializer", "[semantics]")
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
                 auto& global = translationUnit->getGlobals()[0];
-                REQUIRE(global->is<cld::Semantics::VariableDeclaration>());
-                auto& declaration = global->as<cld::Semantics::VariableDeclaration>();
+                REQUIRE(global->is<VariableDeclaration>());
+                auto& declaration = global->as<VariableDeclaration>();
                 REQUIRE(declaration.getType().is<ArrayType>());
                 CHECK(declaration.getType().as<ArrayType>().getSize() == 7);
             }
@@ -3828,8 +3832,8 @@ TEST_CASE("Semantics initializer list", "[semantics]")
                                                            "Point point = {5.0,3.0};");
         REQUIRE(translationUnit->getGlobals().size() == 1);
         auto& global = translationUnit->getGlobals()[0];
-        REQUIRE(global->is<cld::Semantics::VariableDeclaration>());
-        auto* decl = &global->as<cld::Semantics::VariableDeclaration>();
+        REQUIRE(global->is<VariableDeclaration>());
+        auto* decl = &global->as<VariableDeclaration>();
         REQUIRE(decl->getInitializer());
         REQUIRE(std::holds_alternative<InitializerList>(*decl->getInitializer()));
         SEMA_PRODUCES("typedef struct Point {\n"
@@ -3960,8 +3964,8 @@ TEST_CASE("Semantics initializer list", "[semantics]")
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
                 auto& global = translationUnit->getGlobals()[0];
-                REQUIRE(global->is<cld::Semantics::VariableDeclaration>());
-                auto& declaration = global->as<cld::Semantics::VariableDeclaration>();
+                REQUIRE(global->is<VariableDeclaration>());
+                auto& declaration = global->as<VariableDeclaration>();
                 REQUIRE(declaration.getType().is<ArrayType>());
                 CHECK(declaration.getType().as<ArrayType>().getSize() == 3);
             }
@@ -3975,8 +3979,8 @@ TEST_CASE("Semantics initializer list", "[semantics]")
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
                 auto& global = translationUnit->getGlobals()[0];
-                REQUIRE(global->is<cld::Semantics::VariableDeclaration>());
-                auto& declaration = global->as<cld::Semantics::VariableDeclaration>();
+                REQUIRE(global->is<VariableDeclaration>());
+                auto& declaration = global->as<VariableDeclaration>();
                 REQUIRE(declaration.getType().is<ArrayType>());
                 CHECK(declaration.getType().as<ArrayType>().getSize() == 11);
                 REQUIRE(declaration.getInitializer());
@@ -3999,8 +4003,8 @@ TEST_CASE("Semantics initializer list", "[semantics]")
                 REQUIRE_THAT(errors, ProducesNoErrors());
                 REQUIRE(translationUnit->getGlobals().size() == 1);
                 auto& global = translationUnit->getGlobals()[0];
-                REQUIRE(global->is<cld::Semantics::VariableDeclaration>());
-                auto& declaration = global->as<cld::Semantics::VariableDeclaration>();
+                REQUIRE(global->is<VariableDeclaration>());
+                auto& declaration = global->as<VariableDeclaration>();
                 REQUIRE(declaration.getType().is<ArrayType>());
                 CHECK(declaration.getType().as<ArrayType>().getSize() == 4);
             }
@@ -4713,12 +4717,11 @@ TEST_CASE("Semantics flexible array member", "[semantics]")
         REQUIRE_FALSE(errors);
         auto tree = cld::Parser::buildTree(ctokens, &llvm::errs(), &errors);
         REQUIRE_FALSE(errors);
-        auto program = cld::Semantics::analyse(tree, std::move(ctokens), &llvm::errs(), &errors);
+        auto program = analyse(tree, std::move(ctokens), &llvm::errs(), &errors);
         REQUIRE_FALSE(errors);
-        auto* structInfo =
-            program.lookupType<cld::Semantics::StructInfo>("A", cld::Semantics::ProgramInterface::GLOBAL_SCOPE);
+        auto* structInfo = program.lookupType<StructInfo>("A", ProgramInterface::GLOBAL_SCOPE);
         REQUIRE(structInfo);
-        auto* structDef = std::get_if<cld::Semantics::StructDefinition>(&structInfo->type);
+        auto* structDef = std::get_if<StructDefinition>(&structInfo->type);
         REQUIRE(structDef);
         REQUIRE(structDef->getFields().size() == 2);
         REQUIRE(structDef->getFieldLayout().size() == 2);
@@ -4845,7 +4848,7 @@ TEST_CASE("Semantics __sync_*", "[semantics]")
                                     "int i = 5;\n"
                                     "__sync_fetch_and_add(&i,3);\n"
                                     "}");
-    CHECK(expr.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+    CHECK(expr.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
     SEMA_PRODUCES("void function(void) {\n"
                   "int i = 5;\n"
                   "int f = __sync_fetch_and_add(&i,3);\n"
@@ -4976,7 +4979,7 @@ TEST_CASE("Semantics vectors", "[semantics]")
                                        "i[0] = 1;\n"
                                        "i[2];"
                                        "}");
-        CHECK(exp.getType() == PrimitiveType::createInt(false, false, cld::LanguageOptions::native()));
+        CHECK(exp.getType() == PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native()));
         CHECK(exp.getValueCategory() == ValueCategory::Lvalue);
         CHECK(exp.is<SubscriptOperator>());
         SEMA_PRODUCES("void foo(void) {\n"

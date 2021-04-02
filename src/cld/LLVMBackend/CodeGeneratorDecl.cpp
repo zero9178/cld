@@ -821,7 +821,8 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDefinition& func
         }
         else if (functionDefinition.getNameToken()->getText() == "main"
                  && ft.getReturnType()
-                        == Semantics::PrimitiveType::createInt(false, false, m_programInterface.getLanguageOptions()))
+                        == Semantics::PrimitiveType(Semantics::PrimitiveType::Int,
+                                                    m_programInterface.getLanguageOptions()))
         {
             m_builder.CreateRet(m_builder.getIntN(m_programInterface.getLanguageOptions().sizeOfInt * 8, 0));
         }

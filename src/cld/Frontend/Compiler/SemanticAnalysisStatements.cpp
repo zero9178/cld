@@ -367,7 +367,7 @@ std::unique_ptr<cld::Semantics::CaseStatement>
     {
         return {};
     }
-    constant = constant->castTo(switchStmt.getExpression().getType(), this, m_sourceInterface.getLanguageOptions());
+    constant = constant->castTo(switchStmt.getExpression().getType(), this, getLanguageOptions());
     auto caseStmt = std::make_unique<CaseStatement>(m_currentScope, node.getCaseToken(),
                                                     cld::get<llvm::APSInt>(constant->getValue()), node.getColonToken(),
                                                     nullptr, switchStmt);

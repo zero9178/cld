@@ -255,7 +255,7 @@ constexpr auto createBuiltin(cld::Semantics::BuiltinFunction::Kind kind)
             auto result = m_usedBuiltins                                                                              \
                               .insert({value##Builtin.name,                                                           \
                                        {FunctionType(typeAlloc(*typeEnumToType(value##Builtin.returnType)),           \
-                                                     std::move(parameters), value##Builtin.vararg, false),            \
+                                                     std::move(parameters), flag::isVARArg = value##Builtin.vararg),  \
                                         ::cld::Semantics::BuiltinFunction::Kind::value}})                             \
                               .first;                                                                                 \
             auto iter = m_scopes[0]                                                                                   \
@@ -273,47 +273,40 @@ const cld::Semantics::ProgramInterface::DeclarationInScope::Variant* CLD_NULLABL
 {
     auto typeEnumToType = [&](Types types) -> IntrVarValue<Type>
     {
+        const auto& options = getLanguageOptions();
         switch (types)
         {
-            case Types::Void: return PrimitiveType::createVoid(false, false);
-            case Types::Int: return PrimitiveType::createInt(false, false, m_sourceInterface.getLanguageOptions());
-            case Types::UnsignedInt:
-                return PrimitiveType::createUnsignedInt(false, false, m_sourceInterface.getLanguageOptions());
-            case Types::Long: return PrimitiveType::createLong(false, false, m_sourceInterface.getLanguageOptions());
-            case Types::LongLong:
-                return PrimitiveType::createLongLong(false, false, m_sourceInterface.getLanguageOptions());
-            case Types::Float: return PrimitiveType::createFloat(false, false);
-            case Types::Double:
-                return PrimitiveType::createDouble(false, false, m_sourceInterface.getLanguageOptions());
-            case Types::LongDouble:
-                return PrimitiveType::createLongDouble(false, false, m_sourceInterface.getLanguageOptions());
+            case Types::Void: return PrimitiveType(PrimitiveType::Void, options);
+            case Types::Int: return PrimitiveType(PrimitiveType::Int, options);
+            case Types::UnsignedInt: return PrimitiveType(PrimitiveType::UnsignedInt, options);
+            case Types::Long: return PrimitiveType(PrimitiveType::Long, options);
+            case Types::LongLong: return PrimitiveType(PrimitiveType::LongLong, options);
+            case Types::Float: return PrimitiveType(PrimitiveType::Float, options);
+            case Types::Double: return PrimitiveType(PrimitiveType::Double, options);
+            case Types::LongDouble: return PrimitiveType(PrimitiveType::LongDouble, options);
             case Types::VAList: return getTypedef("__builtin_va_list")->type;
-            case Types::VoidStar:
-                return PointerType(false, false, false, typeAlloc(PrimitiveType::createVoid(false, false)));
+            case Types::VoidStar: return PointerType(typeAlloc<PrimitiveType>(PrimitiveType::Void, options));
             case Types::ConstVoidStar:
-                return PointerType(false, false, false, typeAlloc(PrimitiveType::createVoid(true, false)));
+                return PointerType(typeAlloc<PrimitiveType>(PrimitiveType::Void, options, flag::isConst = true));
             case Types::Placeholder: return ErrorType();
-            case Types::PlaceholderPointer: return PointerType(false, false, false, typeAlloc<ErrorType>());
-            case Types::Bool: return PrimitiveType::createUnderlineBool(false, false);
+            case Types::PlaceholderPointer: return PointerType(typeAlloc<ErrorType>());
+            case Types::Bool: return PrimitiveType(PrimitiveType::Bool, options);
             case Types::ConstCharStar:
-                return PointerType(
-                    false, false, false,
-                    typeAlloc(PrimitiveType::createChar(true, false, m_sourceInterface.getLanguageOptions())));
+                return PointerType(typeAlloc<PrimitiveType>(PrimitiveType::Char, options, flag::isConst = true));
         }
         CLD_UNREACHABLE;
     };
 
 #define HANDLE_BUILTIN(a, b) DEF_BUILTIN(b)
-#define HANDLE_X86(signature, name, feature)                                                                   \
-    if (m_sourceInterface.getLanguageOptions().targetFeatures->hasFeature(TargetFeatures::IsX86))              \
-    {                                                                                                          \
-        std::initializer_list<TargetFeatures::Features> featuresRequired = feature;                            \
-        if (std::any_of(featuresRequired.begin(), featuresRequired.end(),                                      \
-                        [&](auto value)                                                                        \
-                        { return m_sourceInterface.getLanguageOptions().targetFeatures->hasFeature(value); })) \
-        {                                                                                                      \
-            DEF_BUILTIN(name);                                                                                 \
-        }                                                                                                      \
+#define HANDLE_X86(signature, name, feature)                                                                 \
+    if (getLanguageOptions().targetFeatures->hasFeature(TargetFeatures::IsX86))                              \
+    {                                                                                                        \
+        std::initializer_list<TargetFeatures::Features> featuresRequired = feature;                          \
+        if (std::any_of(featuresRequired.begin(), featuresRequired.end(),                                    \
+                        [&](auto value) { return getLanguageOptions().targetFeatures->hasFeature(value); })) \
+        {                                                                                                    \
+            DEF_BUILTIN(name);                                                                               \
+        }                                                                                                    \
     }
 
 #include "Builtins.def"
@@ -325,31 +318,28 @@ const cld::Semantics::ProgramInterface::DeclarationInScope::Variant* CLD_NULLABL
 
 void cld::Semantics::SemanticAnalysis::createBuiltinTypes()
 {
-    switch (m_sourceInterface.getLanguageOptions().vaListKind)
+    const auto& options = getLanguageOptions();
+    switch (options.vaListKind)
     {
         case LanguageOptions::BuiltInVaList::CharPtr:
         {
-            auto type =
-                PointerType(false, false, false,
-                            typeAlloc(PrimitiveType::createChar(false, false, m_sourceInterface.getLanguageOptions())));
+            auto type = PointerType(typeAlloc<PrimitiveType>(PrimitiveType::Char, options));
             insertTypedef({"__builtin_va_list", std::move(type), GLOBAL_SCOPE, false, false, nullptr});
             break;
         }
         case LanguageOptions::BuiltInVaList::VoidPtr:
         {
-            auto type = PointerType(false, false, false, typeAlloc(PrimitiveType::createVoid(false, false)));
+            auto type = PointerType(typeAlloc<PrimitiveType>(PrimitiveType::Void, options));
             insertTypedef({"__builtin_va_list", std::move(type), GLOBAL_SCOPE, false, false, nullptr});
             break;
         }
         case LanguageOptions::BuiltInVaList::x86_64ABI:
         {
             FieldMap fields;
-            auto unsignedInt =
-                typeAlloc(PrimitiveType::createUnsignedInt(false, false, m_sourceInterface.getLanguageOptions()));
+            auto unsignedInt = typeAlloc<PrimitiveType>(PrimitiveType::UnsignedInt, options);
             fields.insert({"gp_offset", {unsignedInt, "gp_offset", nullptr, {0}, {}, {}}});
             fields.insert({"fp_offset", {unsignedInt, "fp_offset", nullptr, {1}, {}, {}}});
-            auto voidStar =
-                typeAlloc<PointerType>(false, false, false, typeAlloc(PrimitiveType::createVoid(false, false)));
+            auto voidStar = typeAlloc<PointerType>(typeAlloc<PrimitiveType>(PrimitiveType::Void, options));
             fields.insert({"overflow_arg_area", {voidStar, "overflow_arg_area", nullptr, {2}, {}, {}}});
             fields.insert({"reg_save_area", {voidStar, "reg_save_area", nullptr, {3}, {}, {}}});
             auto fieldLayout = std::vector<FieldInLayout>{
@@ -360,19 +350,19 @@ void cld::Semantics::SemanticAnalysis::createBuiltinTypes()
                                            StructDefinition("__va_list_tag", std::move(fields), std::move(fieldLayout),
                                                             std::move(memLayout), 24, 8),
                                            0, nullptr, "__va_list_tag"});
-            IntrVarValue<Type> elementType = StructType(false, false, m_structDefinitions.back());
+            IntrVarValue<Type> elementType = StructType(m_structDefinitions.back());
             getCurrentScope().types.emplace("__va_list_tag", TagTypeInScope{nullptr, &m_structDefinitions.back()});
-            elementType = ArrayType(false, false, false, false, typeAlloc(std::move(*elementType)), 1);
+            elementType = ArrayType(typeAlloc(std::move(*elementType)), 1);
             insertTypedef({"__builtin_va_list", std::move(elementType), GLOBAL_SCOPE, false, false, nullptr});
             break;
         }
         default: CLD_UNREACHABLE;
     }
-    if (m_sourceInterface.getLanguageOptions().int128Enabled)
+    if (options.int128Enabled)
     {
-        auto type = PrimitiveType::createInt128(false, false);
+        auto type = PrimitiveType(PrimitiveType::Int128, options);
         insertTypedef({"__builtin_va_list", std::move(type), GLOBAL_SCOPE, false, false, nullptr});
-        type = PrimitiveType::createUnsignedInt128(false, false);
+        type = PrimitiveType(PrimitiveType::UnsignedInt128, options);
         insertTypedef({"__builtin_va_list", std::move(type), GLOBAL_SCOPE, false, false, nullptr});
     }
 }

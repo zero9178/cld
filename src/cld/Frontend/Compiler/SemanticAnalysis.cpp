@@ -266,7 +266,7 @@ std::vector<cld::IntrVarPtr<cld::Semantics::Useable>>
             *loc, m_sourceInterface, *loc));
         return {};
     }
-    if (loc->getText() == "main" && isInline && !m_sourceInterface.getLanguageOptions().freeStanding)
+    if (loc->getText() == "main" && isInline && !getLanguageOptions().freeStanding)
     {
         log(Errors::Semantics::INLINE_MAIN_IS_NOT_ALLOWED_IN_A_HOSTED_ENVIRONMENT.args(*loc, m_sourceInterface, *loc));
     }
@@ -326,15 +326,13 @@ std::vector<cld::IntrVarPtr<cld::Semantics::Useable>>
         }
     }
 
-    auto funcType =
-        ArrayType(false, false, false, false, typeAlloc(PrimitiveType::createChar(true, false, getLanguageOptions())),
-                  loc->getText().size() + 1);
+    auto funcType = ArrayType(typeAlloc<PrimitiveType>(PrimitiveType::Char, getLanguageOptions(), flag::isConst = true),
+                              loc->getText().size() + 1);
     auto funcName = std::make_unique<VariableDeclaration>(
         std::move(funcType), Linkage::Internal, Lifetime::Static, loc, VariableDeclaration::Definition,
-        std::make_unique<Constant>(ArrayType(false, false, false, false,
-                                             typeAlloc(PrimitiveType::createChar(false, false, getLanguageOptions())),
-                                             loc->getText().size() + 1),
-                                   cld::to_string(loc->getText()), loc, loc + 1));
+        std::make_unique<Constant>(
+            ArrayType(typeAlloc<PrimitiveType>(PrimitiveType::Char, getLanguageOptions()), loc->getText().size() + 1),
+            cld::to_string(loc->getText()), loc, loc + 1));
     getCurrentScope().declarations.insert({"__func__", DeclarationInScope{nullptr, funcName.get()}});
     // GCC Extensions
     getCurrentScope().declarations.insert({"__FUNCTION__", DeclarationInScope{nullptr, funcName.get()}});
@@ -699,10 +697,9 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                 std::size_t size = 0;
                 auto expr = visit(*iter.optionalInitializer, declaration->getType(),
                                   declaration->getLifetime() == Lifetime::Static, &size);
-                if (auto* abstractArray = declaration->getType().tryAs<AbstractArrayType>())
+                if (auto* abstractArray = prevType->tryAs<AbstractArrayType>())
                 {
-                    prevType.emplace<ArrayType>(prevType->isConst(), prevType->isVolatile(),
-                                                abstractArray->isRestricted(), false, &abstractArray->getType(), size);
+                    prevType.emplace<ArrayType>(&abstractArray->getType(), size, flag::useFlags = prevType->getFlags());
                 }
                 *declaration = VariableDeclaration(std::move(prevType), linkage, lifetime, loc, kind, std::move(expr));
                 m_inStaticInitializer = false;
@@ -780,7 +777,7 @@ std::unique_ptr<cld::Semantics::FunctionDeclaration> cld::Semantics::SemanticAna
     // C99 6.7.4§4:
     // In a hosted environment, the inline function specifier shall not appear in a declaration
     // of main
-    if (loc->getText() == "main" && isInline && !m_sourceInterface.getLanguageOptions().freeStanding)
+    if (loc->getText() == "main" && isInline && !getLanguageOptions().freeStanding)
     {
         log(Errors::Semantics::INLINE_MAIN_IS_NOT_ALLOWED_IN_A_HOSTED_ENVIRONMENT.args(*loc, m_sourceInterface, *loc));
     }
@@ -1187,8 +1184,7 @@ cld::IntrVarValue<cld::Semantics::Type>
     {
         if (prim->getKind() == PrimitiveType::Float)
         {
-            return PrimitiveType::createDouble(type->isConst(), type->isVolatile(),
-                                               m_sourceInterface.getLanguageOptions());
+            return PrimitiveType(PrimitiveType::Double, getLanguageOptions(), flag::useFlags = type->getFlags());
         }
         return type;
     }
@@ -1214,9 +1210,9 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::intege
     {
         return lvalueConversion(std::move(type));
     }
-    if (prim->getBitCount() < m_sourceInterface.getLanguageOptions().sizeOfInt * 8)
+    if (prim->getBitCount() < getLanguageOptions().sizeOfInt * 8)
     {
-        return PrimitiveType::createInt(type->isConst(), type->isVolatile(), m_sourceInterface.getLanguageOptions());
+        return PrimitiveType(PrimitiveType::Int, getLanguageOptions(), flag::useFlags = type->getFlags());
     }
     return lvalueConversion(std::move(type));
 }
@@ -1247,29 +1243,26 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::compos
         };
         if (auto* array = lhs.tryAs<ArrayType>())
         {
-            return ArrayType(lhs.isConst(), lhs.isVolatile(), array->isRestricted(), array->isStatic(),
-                             typeAlloc(*compositeType(array->getType(), getElementType(rhs))), array->getSize());
+            return ArrayType(typeAlloc(*compositeType(array->getType(), getElementType(rhs))), array->getSize(),
+                             flag::useFlags = lhs.getFlags());
         }
         if (auto* array = rhs.tryAs<ArrayType>())
         {
-            return ArrayType(rhs.isConst(), rhs.isVolatile(), array->isRestricted(), array->isStatic(),
-                             typeAlloc(*compositeType(array->getType(), getElementType(lhs))), array->getSize());
+            return ArrayType(typeAlloc(*compositeType(array->getType(), getElementType(lhs))), array->getSize(),
+                             flag::useFlags = rhs.getFlags());
         }
         if (auto* valArray = lhs.tryAs<ValArrayType>())
         {
-            return ValArrayType(lhs.isConst(), lhs.isVolatile(), valArray->isRestricted(), valArray->isStatic(),
-                                typeAlloc(*compositeType(valArray->getType(), getElementType(rhs))),
-                                valArray->getExpression());
+            return ValArrayType(typeAlloc(*compositeType(valArray->getType(), getElementType(rhs))),
+                                valArray->getExpression(), flag::useFlags = lhs.getFlags());
         }
         if (auto* valArray = rhs.tryAs<ValArrayType>())
         {
-            return ValArrayType(rhs.isConst(), rhs.isVolatile(), valArray->isRestricted(), valArray->isStatic(),
-                                typeAlloc(*compositeType(valArray->getType(), getElementType(lhs))),
-                                valArray->getExpression());
+            return ValArrayType(typeAlloc(*compositeType(valArray->getType(), getElementType(lhs))),
+                                valArray->getExpression(), flag::useFlags = rhs.getFlags());
         }
-        auto& abstractArray = lhs.is<AbstractArrayType>() ? lhs : rhs;
-        return AbstractArrayType(rhs.isConst(), rhs.isVolatile(), abstractArray.as<AbstractArrayType>().isRestricted(),
-                                 typeAlloc(*compositeType(getElementType(lhs), getElementType(rhs))));
+        return AbstractArrayType(typeAlloc(*compositeType(getElementType(lhs), getElementType(rhs))),
+                                 flag::useFlags = rhs.getFlags() | lhs.getFlags());
     }
     if (lhs.is<FunctionType>())
     {
@@ -1295,12 +1288,12 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::compos
                  rhsFtype.getParameters()[i].name});
         }
         return FunctionType(typeAlloc(*compositeType(lhsFtype.getReturnType(), rhsFtype.getReturnType())),
-                            std::move(parameters), rhsFtype.isLastVararg(), false);
+                            std::move(parameters), flag::isVARArg = rhsFtype.isLastVararg());
     }
     if (lhs.is<PointerType>())
     {
-        return PointerType(rhs.isConst(), rhs.isVolatile(), rhs.as<PointerType>().isRestricted(),
-                           typeAlloc(*compositeType(getPointerElementType(lhs), getPointerElementType(rhs))));
+        return PointerType(typeAlloc(*compositeType(getPointerElementType(lhs), getPointerElementType(rhs))),
+                           flag::useFlags = rhs.getFlags() | lhs.getFlags());
     }
     return *typeAlloc(rhs);
 }
@@ -1453,7 +1446,7 @@ cld::Semantics::ConstValue
             {
                 return {};
             }
-            return exp.castTo(conversion.getType(), this, m_sourceInterface.getLanguageOptions());
+            return exp.castTo(conversion.getType(), this, getLanguageOptions());
         },
         [&](const BinaryOperator& binaryOperator) -> ConstValue {
             auto lhs = evaluate(binaryOperator.getLeftExpression(), mode, logger);
@@ -1488,8 +1481,7 @@ cld::Semantics::ConstValue
                                             rExpr, m_sourceInterface, rExpr));
                                 }
                             }
-                            return {llvm::APSInt(llvm::APInt(m_sourceInterface.getLanguageOptions().sizeOfInt * 8, 0),
-                                                 false)};
+                            return {llvm::APSInt(llvm::APInt(getLanguageOptions().sizeOfInt * 8, 0), false)};
                         }
 
                         auto rhs = evaluate(binaryOperator.getRightExpression(), mode, logger);
@@ -1497,9 +1489,8 @@ cld::Semantics::ConstValue
                         {
                             return {};
                         }
-                        return {llvm::APSInt(
-                            llvm::APInt(m_sourceInterface.getLanguageOptions().sizeOfInt * 8, static_cast<bool>(rhs)),
-                            false)};
+                        return {llvm::APSInt(llvm::APInt(getLanguageOptions().sizeOfInt * 8, static_cast<bool>(rhs)),
+                                             false)};
                     }
                     case BinaryOperator::LogicOr:
                     {
@@ -1519,8 +1510,7 @@ cld::Semantics::ConstValue
                                             rExpr, m_sourceInterface, rExpr));
                                 }
                             }
-                            return {llvm::APSInt(llvm::APInt(m_sourceInterface.getLanguageOptions().sizeOfInt * 8, 1),
-                                                 false)};
+                            return {llvm::APSInt(llvm::APInt(getLanguageOptions().sizeOfInt * 8, 1), false)};
                         }
 
                         auto rhs = evaluate(binaryOperator.getRightExpression(), mode, logger);
@@ -1528,9 +1518,8 @@ cld::Semantics::ConstValue
                         {
                             return {};
                         }
-                        return {llvm::APSInt(
-                            llvm::APInt(m_sourceInterface.getLanguageOptions().sizeOfInt * 8, static_cast<bool>(rhs)),
-                            false)};
+                        return {llvm::APSInt(llvm::APInt(getLanguageOptions().sizeOfInt * 8, static_cast<bool>(rhs)),
+                                             false)};
                     }
                 }
             }
@@ -1546,7 +1535,7 @@ cld::Semantics::ConstValue
                 case BinaryOperator::Addition:
                 {
                     ConstValue::Issue issue = ConstValue::NoIssue;
-                    auto result = lhs.plus(rhs, m_sourceInterface.getLanguageOptions(), &issue);
+                    auto result = lhs.plus(rhs, getLanguageOptions(), &issue);
                     if (issue == ConstValue::NotRepresentable)
                     {
                         logger(Warnings::Semantics::VALUE_OF_N_IS_TO_LARGE_FOR_INTEGER_TYPE_N.args(
@@ -1558,7 +1547,7 @@ cld::Semantics::ConstValue
                 case BinaryOperator::Subtraction:
                 {
                     ConstValue::Issue issue = ConstValue::NoIssue;
-                    auto result = lhs.minus(rhs, m_sourceInterface.getLanguageOptions(), &issue);
+                    auto result = lhs.minus(rhs, getLanguageOptions(), &issue);
                     if (issue == ConstValue::NotRepresentable)
                     {
                         logger(Warnings::Semantics::VALUE_OF_N_IS_TO_LARGE_FOR_INTEGER_TYPE_N.args(
@@ -1570,7 +1559,7 @@ cld::Semantics::ConstValue
                 case BinaryOperator::Multiply:
                 {
                     ConstValue::Issue issue = ConstValue::NoIssue;
-                    auto result = lhs.multiply(rhs, m_sourceInterface.getLanguageOptions(), &issue);
+                    auto result = lhs.multiply(rhs, getLanguageOptions(), &issue);
                     if (issue == ConstValue::NotRepresentable)
                     {
                         logger(Warnings::Semantics::VALUE_OF_N_IS_TO_LARGE_FOR_INTEGER_TYPE_N.args(
@@ -1582,7 +1571,7 @@ cld::Semantics::ConstValue
                 case BinaryOperator::Divide:
                 {
                     ConstValue::Issue issue = ConstValue::NoIssue;
-                    auto result = lhs.divide(rhs, m_sourceInterface.getLanguageOptions(), &issue);
+                    auto result = lhs.divide(rhs, getLanguageOptions(), &issue);
                     if (issue == ConstValue::NotRepresentable)
                     {
                         // TODO:
@@ -1595,11 +1584,11 @@ cld::Semantics::ConstValue
                     }
                     return result;
                 }
-                case BinaryOperator::Modulo: return lhs.modulo(rhs, m_sourceInterface.getLanguageOptions());
+                case BinaryOperator::Modulo: return lhs.modulo(rhs, getLanguageOptions());
                 case BinaryOperator::LeftShift:
                 {
                     ConstValue::Issue issue = ConstValue::NoIssue;
-                    auto result = lhs.shiftLeft(rhs, m_sourceInterface.getLanguageOptions(), &issue);
+                    auto result = lhs.shiftLeft(rhs, getLanguageOptions(), &issue);
                     if (issue == ConstValue::NotRepresentable)
                     {
                         logger(Warnings::Semantics::VALUE_OF_N_IS_TO_LARGE_FOR_INTEGER_TYPE_N.args(
@@ -1611,23 +1600,22 @@ cld::Semantics::ConstValue
                 case BinaryOperator::RightShift:
                 {
                     ConstValue::Issue issue = ConstValue::NoIssue;
-                    auto result = lhs.shiftRight(rhs, m_sourceInterface.getLanguageOptions(), &issue);
+                    auto result = lhs.shiftRight(rhs, getLanguageOptions(), &issue);
                     if (issue == ConstValue::NotRepresentable)
                     {
                         // TODO:
                     }
                     return result;
                 }
-                case BinaryOperator::LessThan: return lhs.lessThan(rhs, m_sourceInterface.getLanguageOptions());
-                case BinaryOperator::GreaterThan: return lhs.greaterThan(rhs, m_sourceInterface.getLanguageOptions());
-                case BinaryOperator::LessOrEqual: return lhs.lessOrEqual(rhs, m_sourceInterface.getLanguageOptions());
-                case BinaryOperator::GreaterOrEqual:
-                    return lhs.greaterOrEqual(rhs, m_sourceInterface.getLanguageOptions());
-                case BinaryOperator::Equal: return lhs.equal(rhs, m_sourceInterface.getLanguageOptions());
-                case BinaryOperator::NotEqual: return lhs.notEqual(rhs, m_sourceInterface.getLanguageOptions());
-                case BinaryOperator::BitOr: return lhs.bitOr(rhs, m_sourceInterface.getLanguageOptions());
-                case BinaryOperator::BitAnd: return lhs.bitAnd(rhs, m_sourceInterface.getLanguageOptions());
-                case BinaryOperator::BitXor: return lhs.bitXor(rhs, m_sourceInterface.getLanguageOptions());
+                case BinaryOperator::LessThan: return lhs.lessThan(rhs, getLanguageOptions());
+                case BinaryOperator::GreaterThan: return lhs.greaterThan(rhs, getLanguageOptions());
+                case BinaryOperator::LessOrEqual: return lhs.lessOrEqual(rhs, getLanguageOptions());
+                case BinaryOperator::GreaterOrEqual: return lhs.greaterOrEqual(rhs, getLanguageOptions());
+                case BinaryOperator::Equal: return lhs.equal(rhs, getLanguageOptions());
+                case BinaryOperator::NotEqual: return lhs.notEqual(rhs, getLanguageOptions());
+                case BinaryOperator::BitOr: return lhs.bitOr(rhs, getLanguageOptions());
+                case BinaryOperator::BitAnd: return lhs.bitAnd(rhs, getLanguageOptions());
+                case BinaryOperator::BitXor: return lhs.bitXor(rhs, getLanguageOptions());
             }
             CLD_UNREACHABLE;
         },
@@ -1650,7 +1638,7 @@ cld::Semantics::ConstValue
             }
             ConstValue::Issue issue;
             auto original = evaluate(cast.getExpression(), mode, logger);
-            auto ret = original.castTo(expression.getType(), this, m_sourceInterface.getLanguageOptions(), &issue);
+            auto ret = original.castTo(expression.getType(), this, getLanguageOptions(), &issue);
             if (issue == ConstValue::NotRepresentable)
             {
                 logger(Warnings::Semantics::VALUE_OF_N_IS_TO_LARGE_FOR_INTEGER_TYPE_N.args(
@@ -1678,7 +1666,7 @@ cld::Semantics::ConstValue
                     {
                         return {};
                     }
-                    return lhs.plus(rhs, m_sourceInterface.getLanguageOptions());
+                    return lhs.plus(rhs, getLanguageOptions());
                 }
             }
             auto op = evaluate(unaryOperator.getOperand(), mode, logger);
@@ -1704,16 +1692,16 @@ cld::Semantics::ConstValue
                         *unaryOperator.getOperatorToken(), m_sourceInterface, *unaryOperator.getOperatorToken()));
                     return {};
                 case UnaryOperator::Plus: return op;
-                case UnaryOperator::Minus: return op.negate(m_sourceInterface.getLanguageOptions());
-                case UnaryOperator::BooleanNegate: return op.logicalNegate(m_sourceInterface.getLanguageOptions());
-                case UnaryOperator::BitwiseNegate: return op.bitwiseNegate(m_sourceInterface.getLanguageOptions());
+                case UnaryOperator::Minus: return op.negate(getLanguageOptions());
+                case UnaryOperator::BooleanNegate: return op.logicalNegate(getLanguageOptions());
+                case UnaryOperator::BitwiseNegate: return op.bitwiseNegate(getLanguageOptions());
             }
             CLD_UNREACHABLE;
         },
         [&](const SizeofOperator& sizeofOperator) -> ConstValue {
             if (sizeofOperator.getSize())
             {
-                auto type = PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions());
+                auto type = PrimitiveType(getLanguageOptions().sizeTType, getLanguageOptions());
                 return {llvm::APSInt(llvm::APInt(type.as<PrimitiveType>().getBitCount(), *sizeofOperator.getSize()))};
             }
             logger(Errors::Semantics::SIZEOF_VAL_MODIFIED_TYPE_CANNOT_BE_DETERMINED_IN_CONSTANT_EXPRESSION.args(
@@ -1748,7 +1736,7 @@ cld::Semantics::ConstValue
                 {
                     return {};
                 }
-                return result.castTo(expression.getType(), this, m_sourceInterface.getLanguageOptions());
+                return result.castTo(expression.getType(), this, getLanguageOptions());
             }
 
             auto result = evaluate(conditional.getFalseExpression(), mode, logger);
@@ -1756,7 +1744,7 @@ cld::Semantics::ConstValue
             {
                 return {};
             }
-            return result.castTo(expression.getType(), this, m_sourceInterface.getLanguageOptions());
+            return result.castTo(expression.getType(), this, getLanguageOptions());
         },
         [&](const Assignment& assignment) -> ConstValue {
             logger(Errors::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
@@ -1778,7 +1766,7 @@ cld::Semantics::ConstValue
             return {};
         },
         [&](const BuiltinOffsetOf& builtinOffsetOf) -> ConstValue {
-            auto type = PrimitiveType::createSizeT(false, false, m_sourceInterface.getLanguageOptions());
+            auto type = PrimitiveType(getLanguageOptions().sizeTType, getLanguageOptions());
             return {llvm::APSInt(llvm::APInt(type.as<PrimitiveType>().getBitCount(), builtinOffsetOf.getOffset()))};
         });
 }
@@ -1792,7 +1780,7 @@ cld::ValueReset<bool> cld::Semantics::SemanticAnalysis::enableExtensions(bool ex
 
 bool cld::Semantics::SemanticAnalysis::extensionsEnabled(const cld::Lexer::CToken* token)
 {
-    return m_extensionsEnabled || m_sourceInterface.getLanguageOptions().extension == LanguageOptions::Extension::GNU
+    return m_extensionsEnabled || getLanguageOptions().extension == LanguageOptions::Extension::GNU
            || (token && m_sourceInterface.getFiles()[token->getFileId()].systemHeader);
 }
 

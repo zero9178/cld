@@ -101,18 +101,18 @@ protected:
     std::deque<TypedefInfo> m_typedefDefinitions;
     std::unordered_map<std::string_view, BuiltinFunction> m_usedBuiltins;
 
-    cld::not_null<Type> typeAlloc(const Type& value)
+    [[nodiscard]] cld::not_null<Type> typeAlloc(const Type& value)
     {
         return m_typeAlloc.alloc(value);
     }
 
-    cld::not_null<Type> typeAlloc(Type&& value)
+    [[nodiscard]] cld::not_null<Type> typeAlloc(Type&& value)
     {
         return m_typeAlloc.alloc(std::move(value));
     }
 
     template <class U, class... Args>
-    cld::not_null<U> typeAlloc(Args&&... args)
+    [[nodiscard]] cld::not_null<U> typeAlloc(Args&&... args)
     {
         return m_typeAlloc.alloc<U>(std::forward<Args>(args)...);
     }
