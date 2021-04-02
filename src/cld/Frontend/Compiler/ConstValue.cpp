@@ -188,9 +188,11 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::castTo(const cld::Semanti
                     apsInt.setIsSigned(primitiveType.isSigned());
                     return {apsInt};
                 },
-                [&](const PointerType& pointerType) -> ConstValue {
+                [&](const PointerType& pointerType) -> ConstValue
+                {
                     CLD_ASSERT(program);
-                    if (isCompleteType(pointerType.getElementType()) && !type.is<FunctionType>())
+                    if (isCompleteType(pointerType.getElementType())
+                        && !pointerType.getElementType().is<FunctionType>())
                     {
                         return {VoidStar{integer.getZExtValue(),
                                          static_cast<std::uint32_t>(pointerType.getElementType().getSizeOf(*program))}};
