@@ -22,13 +22,15 @@ class IntrVarAllocator
 
 namespace detail::IntrVarAllocator
 {
+constexpr std::size_t SLAB_MAX_SIZE = 4096;
+
 template <std::size_t allocSize, std::size_t align, std::size_t count, bool withMetadata>
 struct Slab;
 
 template <std::size_t allocSize, std::size_t align, std::size_t count>
 struct Slab<allocSize, align, count, false>
 {
-    static constexpr std::size_t size = 4096 / allocSize * allocSize;
+    static constexpr std::size_t size = SLAB_MAX_SIZE / allocSize * allocSize;
     alignas(align) std::byte storage[size]{};
 
     Slab()
@@ -68,7 +70,7 @@ constexpr std::size_t log2n(std::size_t n)
 template <std::size_t allocSize, std::size_t align, std::size_t count>
 struct Slab<allocSize, align, count, true>
 {
-    static constexpr std::size_t size = 4096 / allocSize * allocSize;
+    static constexpr std::size_t size = SLAB_MAX_SIZE / allocSize * allocSize;
     alignas(align) std::byte storage[size]{};
     struct
     {
@@ -82,23 +84,40 @@ struct Slab<allocSize, align, count, true>
     }
 };
 
-template <class Base>
+template <class T>
 class Deleter
 {
-    ::cld::IntrVarAllocator<Base>* m_alloc;
+    void* m_allocator = nullptr;
+    void (*m_delete)(void*, T*) = nullptr;
 
 public:
     Deleter() = default;
 
-    Deleter(::cld::IntrVarAllocator<Base>* mAlloc) : m_alloc(mAlloc) {}
+    template <class Base>
+    Deleter(::cld::IntrVarAllocator<Base>* allocator)
+        : m_allocator(allocator), m_delete(+[](void* allocator, T* pointer) {
+              reinterpret_cast<::cld::IntrVarAllocator<Base>*>(allocator)->destroy(pointer);
+          })
+    {
+    }
 
-    void operator()(Base* pointer) const noexcept;
+    template <class U, std::enable_if_t<std::is_base_of_v<T, U>>* = nullptr>
+    Deleter(Deleter<U>&& rhs) noexcept : m_allocator(rhs.m_allocator), m_delete(rhs.m_delete)
+    {
+    }
+
+    void operator()(T* pointer) const noexcept
+    {
+        CLD_ASSERT(m_delete);
+        CLD_ASSERT(m_allocator);
+        m_delete(m_allocator, pointer);
+    }
 };
 
 } // namespace detail::IntrVarAllocator
 
-template <class Base, class PreciseClass = Base>
-using IVAUniquePtr = std::unique_ptr<PreciseClass, detail::IntrVarAllocator::Deleter<Base>>;
+template <class T>
+using IVAUniquePtr = std::unique_ptr<T, detail::IntrVarAllocator::Deleter<T>>;
 
 template <class Base, class... Subclasses>
 class IntrVarAllocator<Base, AbstractIntrusiveVariant<Subclasses...>>
@@ -242,12 +261,15 @@ public:
                                      { return std::end(slab->storage) < value; });
         CLD_ASSERT(slab != m_slabs.end());
         CLD_ASSERT((*slab)->storage <= pointerIntoObject && pointerIntoObject < std::end((*slab)->storage));
-        auto& metadata = (*slab)->metadata[(pointerIntoObject - (*slab)->storage) / allocSize];
-        if (metadata.destroyed)
+        if constexpr (needsDestructor)
         {
-            return;
+            auto& metadata = (*slab)->metadata[(pointerIntoObject - (*slab)->storage) / allocSize];
+            if (metadata.destroyed)
+            {
+                return;
+            }
+            metadata.destroyed = true;
         }
-        metadata.destroyed = true;
         auto index = casted->index();
         constexpr std::array<void (*)(Base*), sizeof...(Subclasses)> destructors = {
             +[](Base* base) { std::destroy_at(static_cast<Subclasses*>(base)); }...};
@@ -315,21 +337,10 @@ public:
     }
 
     template <class U, class... Args>
-    [[nodiscard]] IVAUniquePtr<Base, U> allocUnique(Args&&... args)
+    [[nodiscard]] IVAUniquePtr<U> allocUnique(Args&&... args)
     {
-        return IVAUniquePtr<Base, U>{alloc<U>(std::forward<Args>(args)...),
-                                     detail::IntrVarAllocator::Deleter<Base>{this}};
+        return IVAUniquePtr<U>{alloc<U>(std::forward<Args>(args)...), this};
     }
 };
-
-namespace detail::IntrVarAllocator
-{
-template <class Base>
-void Deleter<Base>::operator()(Base* pointer) const noexcept
-{
-    CLD_ASSERT(m_alloc);
-    m_alloc->destroy(pointer);
-}
-} // namespace detail::IntrVarAllocator
 
 } // namespace cld
