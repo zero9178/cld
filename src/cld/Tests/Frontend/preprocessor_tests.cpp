@@ -1188,6 +1188,17 @@ TEST_CASE("PP includes", "[PP]")
         options.systemDirectories = {cwd.string()};
         PP_OUTPUTS_WITH_OPTIONS("#include <A.h>\n", !ProducesWarning(N_REDEFINED, "'MACRO'"), options);
     }
+    SECTION("Non existent directory")
+    {
+        auto cwd = cld::fs::current_path();
+        auto file1 = createInclude("Quoted/A.h", "#define MACRO 1\n");
+        cld::PP::Options options;
+        options.systemDirectories.push_back((cwd / "DirectoryThatHopefullyReallyDoesntExit/ThatdBeAwkward").string());
+        options.includeDirectories.push_back((cwd / "Quoted").string());
+        PP_OUTPUTS_WITH_OPTIONS("#define MACRO 1\n"
+                                "#include <A.h>\n",
+                                ProducesWarning(N_REDEFINED, "'MACRO'"), options);
+    }
     SECTION("File not found")
     {
         PP_OUTPUTS_WITH("#include \"hello\"\n", ProducesError(FILE_NOT_FOUND, "hello"));

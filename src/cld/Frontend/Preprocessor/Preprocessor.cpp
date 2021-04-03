@@ -1400,9 +1400,12 @@ public:
             {
                 auto dir = cld::fs::u8path(m_files[m_currentFile].path);
                 dir.remove_filename();
-                auto thisDir = std::find_if(candidates.begin(), candidates.end(), [&](const std::string& value) {
-                    return cld::fs::equivalent(cld::fs::u8path(value), dir);
-                });
+                auto thisDir = std::find_if(candidates.begin(), candidates.end(),
+                                            [&](const std::string& value)
+                                            {
+                                                std::error_code ec;
+                                                return cld::fs::equivalent(cld::fs::u8path(value), dir, ec);
+                                            });
                 if (thisDir != candidates.end())
                 {
                     candidates.erase(candidates.begin(), thisDir + 1);
@@ -1413,20 +1416,24 @@ public:
                 auto filename = cld::fs::u8path(*iter);
                 filename /= cld::fs::u8path(path);
                 result.open(filename, std::ios_base::in | std::ios_base::binary | std::ios_base::ate);
-                if (result.is_open())
+                if (!result.is_open())
                 {
-                    resultPath = std::move(filename);
-                    systemHeader = std::any_of(
-                        m_ppOptions.systemDirectories.begin(), m_ppOptions.systemDirectories.end(),
-                        [iter](std::string_view path) { return cld::fs::equivalent(cld::fs::u8path(path), *iter); });
-                    if (!systemHeader && isQuoted && m_files[m_currentFile].systemHeader)
-                    {
-                        auto dir = cld::fs::u8path(m_files[m_currentFile].path);
-                        dir.remove_filename();
-                        systemHeader = *iter == dir.u8string();
-                    }
-                    break;
+                    continue;
                 }
+                resultPath = std::move(filename);
+                systemHeader = std::any_of(m_ppOptions.systemDirectories.begin(), m_ppOptions.systemDirectories.end(),
+                                           [iter](std::string_view path1)
+                                           {
+                                               std::error_code ec1;
+                                               return cld::fs::equivalent(cld::fs::u8path(path1), *iter, ec1);
+                                           });
+                if (!systemHeader && isQuoted && m_files[m_currentFile].systemHeader)
+                {
+                    auto dir1 = cld::fs::u8path(m_files[m_currentFile].path);
+                    dir1.remove_filename();
+                    systemHeader = *iter == dir1.u8string();
+                }
+                break;
             }
         }
         if (!result.is_open())
