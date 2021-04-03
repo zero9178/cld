@@ -19,7 +19,7 @@ static std::pair<const TranslationUnit * CLD_NON_NULL, std::string>
     llvm::raw_string_ostream ss(storage);
     cld::PPSourceObject tokens;
     bool errors = false;
-    tokens = cld::Lexer::tokenize(cld::to_string(source), options, &ss, &errors);
+    tokens = cld::Lexer::tokenize(cld::to_string(source), &options, &ss, &errors);
     UNSCOPED_INFO(storage);
     REQUIRE_FALSE(errors);
     tokens = cld::PP::preprocess(std::move(tokens), {}, &ss, &errors);
@@ -48,7 +48,8 @@ static Program generateProgram(std::string_view source, cld::Triple triple = cld
     llvm::raw_string_ostream ss(storage);
     cld::PPSourceObject tokens;
     bool errors = false;
-    tokens = cld::Lexer::tokenize(cld::to_string(source), cld::LanguageOptions::fromTriple(triple), &ss, &errors);
+    auto options = cld::LanguageOptions::fromTriple(triple);
+    tokens = cld::Lexer::tokenize(cld::to_string(source), &options, &ss, &errors);
     UNSCOPED_INFO(storage);
     REQUIRE_FALSE(errors);
     tokens = cld::PP::preprocess(std::move(tokens), {}, &ss, &errors);
@@ -4710,8 +4711,8 @@ TEST_CASE("Semantics flexible array member", "[semantics]")
                                   "    int f[];\n"
                                   "};";
         bool errors = false;
-        auto tokens = cld::Lexer::tokenize(cld::to_string(source), cld::LanguageOptions::fromTriple(x64windowsMsvc),
-                                           &llvm::errs(), &errors);
+        auto options = cld::LanguageOptions::fromTriple(x64windowsMsvc);
+        auto tokens = cld::Lexer::tokenize(cld::to_string(source), &options, &llvm::errs(), &errors);
         REQUIRE_FALSE(errors);
         auto ctokens = cld::Lexer::toCTokens(tokens, &llvm::errs(), &errors);
         REQUIRE_FALSE(errors);

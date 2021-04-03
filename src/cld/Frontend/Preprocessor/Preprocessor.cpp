@@ -265,7 +265,7 @@ class Preprocessor final : private cld::PPSourceInterface
                 text += '\"';
                 bool errorsOccurred = false;
                 auto scratchPadPP =
-                    cld::Lexer::tokenize(std::move(text), m_languageOptions, m_reporter, &errorsOccurred, "<Strings>");
+                    cld::Lexer::tokenize(std::move(text), &m_languageOptions, m_reporter, &errorsOccurred, "<Strings>");
                 CLD_ASSERT(!errorsOccurred);
                 CLD_ASSERT(scratchPadPP.getFiles().size() == 1);
                 CLD_ASSERT(scratchPadPP.data().size() == 1);
@@ -456,7 +456,7 @@ class Preprocessor final : private cld::PPSourceInterface
             }
             bool errors = false;
             auto scratchPadPP =
-                cld::Lexer::tokenize(std::move(text), m_languageOptions, &llvm::nulls(), &errors, "<Pastings>");
+                cld::Lexer::tokenize(std::move(text), &m_languageOptions, &llvm::nulls(), &errors, "<Pastings>");
             CLD_ASSERT(scratchPadPP.getFiles().size() == 1);
             if (errors || scratchPadPP.data().size() != 1)
             {
@@ -560,7 +560,7 @@ class Preprocessor final : private cld::PPSourceInterface
                     source = "#define __LINE__ " + std::to_string(printedLine) + "\n";
                 }
                 bool errorsOccurred = false;
-                auto scratchPadPP = cld::Lexer::tokenize(std::move(source), m_languageOptions, m_reporter,
+                auto scratchPadPP = cld::Lexer::tokenize(std::move(source), &m_languageOptions, m_reporter,
                                                          &errorsOccurred, "<Scratch Pad>");
                 CLD_ASSERT(!errorsOccurred);
                 include(std::move(scratchPadPP));
@@ -1071,7 +1071,7 @@ public:
         }
 
         bool errorsOccurred = false;
-        auto scratchPadPP = cld::Lexer::tokenize(std::move(scratchPadSource), languageOptions, report, &errorsOccurred,
+        auto scratchPadPP = cld::Lexer::tokenize(std::move(scratchPadSource), &languageOptions, report, &errorsOccurred,
                                                  "<Scratch Pad>");
         if (!errorsOccurred)
         {
@@ -1461,7 +1461,7 @@ public:
 
         bool errors = false;
         auto newFile =
-            cld::Lexer::tokenize(std::move(text), m_languageOptions, m_reporter, &errors, resultPath.u8string());
+            cld::Lexer::tokenize(std::move(text), &m_languageOptions, m_reporter, &errors, resultPath.u8string());
         if (errors)
         {
             m_errorsOccurred = true;
@@ -1695,13 +1695,13 @@ public:
 cld::PPSourceObject cld::PP::preprocess(cld::PPSourceObject&& sourceObject, const Options& options,
                                         llvm::raw_ostream* reporter, bool* errorsOccurred) noexcept
 {
-    auto languageOptions = sourceObject.getLanguageOptions();
+    auto& languageOptions = sourceObject.getLanguageOptions();
     Preprocessor preprocessor(reporter, options, languageOptions);
     preprocessor.include(std::move(sourceObject));
     if (errorsOccurred)
     {
         *errorsOccurred = preprocessor.errorsOccurred();
     }
-    return PPSourceObject(std::move(preprocessor.getResult()), std::move(preprocessor.getFiles()), languageOptions,
+    return PPSourceObject(std::move(preprocessor.getResult()), std::move(preprocessor.getFiles()), &languageOptions,
                           std::move(preprocessor.getSubstitutions()), {std::move(preprocessor.getIntervalMaps())});
 }

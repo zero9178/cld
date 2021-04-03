@@ -1617,7 +1617,7 @@ struct [[maybe_unused]] FirstArgOfMethod<R (*)(U, Args...) noexcept>
 };
 } // namespace
 
-cld::PPSourceObject cld::Lexer::tokenize(std::string source, LanguageOptions languageOptions,
+cld::PPSourceObject cld::Lexer::tokenize(std::string source, not_null<const LanguageOptions> languageOptions,
                                          llvm::raw_ostream* reporter, bool* errorsOccured, std::string_view sourcePath)
 {
     if (errorsOccured)
@@ -1736,7 +1736,7 @@ cld::PPSourceObject cld::Lexer::tokenize(std::string source, LanguageOptions lan
     charactersSpace.shrink_to_fit();
 
     Context context(source, characterToSourceSpace, charactersSpace, offset, starts, reporter, sourcePath,
-                    languageOptions);
+                    *languageOptions);
     const auto* end = charactersSpace.data() + charactersSpace.size();
     for (const auto* iter = charactersSpace.data(); iter != end;)
     {

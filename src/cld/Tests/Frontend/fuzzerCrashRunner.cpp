@@ -45,11 +45,11 @@ int main(int argc, char** argv)
 
     llvm::Timer timer(mode, "Time it took for the " + mode + " to finish");
     llvm::TimeRegion region(timer);
+    cld::LanguageOptions options = cld::LanguageOptions::native();
     if (mode == "lexer")
     {
         bool errors = false;
-        auto tokens =
-            cld::Lexer::tokenize(std::move(input), cld::LanguageOptions::native(), &llvm::nulls(), &errors, filename);
+        auto tokens = cld::Lexer::tokenize(std::move(input), &options, &llvm::nulls(), &errors, filename);
         if (errors)
         {
             return 0;
@@ -59,8 +59,7 @@ int main(int argc, char** argv)
     else if (mode == "parser")
     {
         bool errors = false;
-        auto tokens =
-            cld::Lexer::tokenize(std::move(input), cld::LanguageOptions::native(), &llvm::nulls(), &errors, filename);
+        auto tokens = cld::Lexer::tokenize(std::move(input), &options, &llvm::nulls(), &errors, filename);
         if (errors || tokens.data().empty())
         {
             return 0;
@@ -78,13 +77,12 @@ int main(int argc, char** argv)
     }
     else if (mode == "pplexer")
     {
-        cld::Lexer::tokenize(input, cld::LanguageOptions::native(), &llvm::nulls(), nullptr, filename);
+        cld::Lexer::tokenize(input, &options, &llvm::nulls(), nullptr, filename);
     }
     else if (mode == "ppparser")
     {
         bool errors;
-        auto tokens =
-            cld::Lexer::tokenize(std::move(input), cld::LanguageOptions::native(), &llvm::nulls(), &errors, filename);
+        auto tokens = cld::Lexer::tokenize(std::move(input), &options, &llvm::nulls(), &errors, filename);
         if (errors || tokens.data().empty())
         {
             return 0;
@@ -94,8 +92,7 @@ int main(int argc, char** argv)
     else if (mode == "sema")
     {
         bool errors = false;
-        auto pptokens =
-            cld::Lexer::tokenize(std::move(input), cld::LanguageOptions::native(), &llvm::errs(), &errors, filename);
+        auto pptokens = cld::Lexer::tokenize(std::move(input), &options, &llvm::errs(), &errors, filename);
         if (errors)
         {
             return 0;
@@ -126,10 +123,9 @@ int main(int argc, char** argv)
     }
     else if (mode == "csmith")
     {
-        auto options = cld::LanguageOptions::native();
         options.enabledWarnings.erase("macro-redefined");
         bool errors = false;
-        auto pptokens = cld::Lexer::tokenize(std::move(input), options, &llvm::errs(), &errors, filename);
+        auto pptokens = cld::Lexer::tokenize(std::move(input), &options, &llvm::errs(), &errors, filename);
         if (errors)
         {
             return -1;

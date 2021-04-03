@@ -52,21 +52,36 @@ template <class T>
 class SourceObjectStorage;
 
 template <>
-class SourceObjectStorage<Lexer::CToken>
+class SourceObjectStorage<Lexer::CToken> : public SourceInterface
 {
-};
-
-template <>
-class SourceObjectStorage<Lexer::PPToken> : public virtual PPSourceInterface
-{
-    std::vector<Lexer::IntervalMap> m_intervalMap;
+    LanguageOptions m_languageOptions = LanguageOptions::native();
 
 public:
     SourceObjectStorage() = default;
 
-    SourceObjectStorage(std::vector<Lexer::IntervalMap> intervalMap) : m_intervalMap(std::move(intervalMap)) {}
+    SourceObjectStorage(LanguageOptions&& languageOptions) : m_languageOptions(std::move(languageOptions)) {}
 
-    llvm::ArrayRef<Lexer::IntervalMap> getIntervalMaps() const noexcept
+    [[nodiscard]] const LanguageOptions& getLanguageOptions() const noexcept override
+    {
+        return m_languageOptions;
+    }
+};
+
+template <>
+class SourceObjectStorage<Lexer::PPToken> : public PPSourceInterface
+{
+    std::vector<Lexer::IntervalMap> m_intervalMap;
+    const LanguageOptions* m_languageOptions;
+
+public:
+    SourceObjectStorage() = default;
+
+    SourceObjectStorage(std::vector<Lexer::IntervalMap> intervalMap, not_null<const LanguageOptions> languageOptions)
+        : m_intervalMap(std::move(intervalMap)), m_languageOptions(languageOptions)
+    {
+    }
+
+    llvm::ArrayRef<Lexer::IntervalMap> getIntervalMaps() const noexcept override
     {
         return m_intervalMap;
     }
@@ -75,15 +90,20 @@ public:
     {
         return m_intervalMap;
     }
+
+    [[nodiscard]] const LanguageOptions& getLanguageOptions() const noexcept override
+    {
+        CLD_ASSERT(m_languageOptions);
+        return *m_languageOptions;
+    }
 };
 } // namespace detail
 
 template <class T>
-class SourceObject final : virtual public SourceInterface, public detail::SourceObjectStorage<T>
+class SourceObject final : public detail::SourceObjectStorage<T>
 {
     std::vector<T> m_tokens;
     std::vector<Source::File> m_files;
-    LanguageOptions m_languageOptions = LanguageOptions::native(LanguageOptions::C99);
     std::vector<Source::PPRecord> m_substitutions;
 
 public:
@@ -92,20 +112,20 @@ public:
     template <class U = T, std::enable_if_t<!std::is_same_v<Lexer::PPToken, U>>* = nullptr>
     SourceObject(std::vector<T> tokens, std::vector<Source::File> files, LanguageOptions languageOptions,
                  std::vector<Source::PPRecord> substitutions)
-        : m_tokens(std::move(tokens)),
+        : detail::SourceObjectStorage<T>(std::move(languageOptions)),
+          m_tokens(std::move(tokens)),
           m_files(std::move(files)),
-          m_languageOptions(std::move(languageOptions)),
           m_substitutions(std::move(substitutions))
     {
     }
 
     template <class U = T, std::enable_if_t<std::is_same_v<Lexer::PPToken, U>>* = nullptr>
-    SourceObject(std::vector<T> tokens, std::vector<Source::File> files, LanguageOptions languageOptions,
-                 std::vector<Source::PPRecord> substitutions, std::vector<Lexer::IntervalMap> intervalMaps)
-        : detail::SourceObjectStorage<T>(std::move(intervalMaps)),
+    SourceObject(std::vector<T> tokens, std::vector<Source::File> files,
+                 not_null<const LanguageOptions> languageOptions, std::vector<Source::PPRecord> substitutions,
+                 std::vector<Lexer::IntervalMap> intervalMaps)
+        : detail::SourceObjectStorage<T>(std::move(intervalMaps), languageOptions),
           m_tokens(std::move(tokens)),
           m_files(std::move(files)),
-          m_languageOptions(std::move(languageOptions)),
           m_substitutions(std::move(substitutions))
     {
     }
@@ -154,11 +174,6 @@ public:
     [[nodiscard]] std::vector<T>& data() noexcept
     {
         return m_tokens;
-    }
-
-    [[nodiscard]] const LanguageOptions& getLanguageOptions() const noexcept override
-    {
-        return m_languageOptions;
     }
 
     [[nodiscard]] llvm::ArrayRef<Source::PPRecord> getSubstitutions() const noexcept override

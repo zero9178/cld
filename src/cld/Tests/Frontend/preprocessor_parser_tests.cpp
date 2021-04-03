@@ -11,28 +11,32 @@ namespace
 cld::PPSourceObject sourceObject;
 } // namespace
 
-#define treeProduces(source, matches)                                                     \
-    []() mutable {                                                                        \
-        std::string string;                                                               \
-        llvm::raw_string_ostream ss(string);                                              \
-        sourceObject = cld::Lexer::tokenize(source, cld::LanguageOptions::native(), &ss); \
-        ss.flush();                                                                       \
-        REQUIRE(string.empty());                                                          \
-        auto file = cld::PP::buildTree(sourceObject, &ss);                                \
-        CHECK_THAT(string, matches);                                                      \
-        cld::PP::buildTree(sourceObject);                                                 \
-        if (!string.empty())                                                              \
-        {                                                                                 \
-            llvm::errs() << '\n';                                                         \
-        }                                                                                 \
-        return file;                                                                      \
+#define treeProduces(source, matches)                               \
+    []() mutable                                                    \
+    {                                                               \
+        std::string string;                                         \
+        llvm::raw_string_ostream ss(string);                        \
+        auto options = cld::LanguageOptions::native();              \
+        sourceObject = cld::Lexer::tokenize(source, &options, &ss); \
+        ss.flush();                                                 \
+        REQUIRE(string.empty());                                    \
+        auto file = cld::PP::buildTree(sourceObject, &ss);          \
+        CHECK_THAT(string, matches);                                \
+        cld::PP::buildTree(sourceObject);                           \
+        if (!string.empty())                                        \
+        {                                                           \
+            llvm::errs() << '\n';                                   \
+        }                                                           \
+        return file;                                                \
     }()
 
 #define functionProduces(parser, source, offset, matches)                                           \
-    []() mutable {                                                                                  \
+    []() mutable                                                                                    \
+    {                                                                                               \
         std::string string;                                                                         \
         llvm::raw_string_ostream ss(string);                                                        \
-        sourceObject = cld::Lexer::tokenize(source, cld::LanguageOptions::native(), &ss);           \
+        auto options = cld::LanguageOptions::native();                                              \
+        sourceObject = cld::Lexer::tokenize(source, &options, &ss);                                 \
         ss.flush();                                                                                 \
         REQUIRE(string.empty());                                                                    \
         cld::PP::Context context(sourceObject, &ss);                                                \
@@ -303,7 +307,8 @@ void parse(std::string source)
     std::string string;
     llvm::raw_string_ostream ss(string);
     cld::PPSourceObject tokens;
-    tokens = cld::Lexer::tokenize(std::move(source), cld::LanguageOptions::native(), &ss);
+    auto options = cld::LanguageOptions::native();
+    tokens = cld::Lexer::tokenize(std::move(source), &options, &ss);
     ss.flush();
     if (!string.empty() || tokens.data().empty())
     {

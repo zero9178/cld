@@ -13,37 +13,39 @@
 
 #include <regex>
 
-#define generateProgram(str)                                                                                     \
-    [](std::string source) {                                                                                     \
-        bool errors = false;                                                                                     \
-        auto pptokens = cld::Lexer::tokenize(                                                                    \
-            std::move(source), cld::LanguageOptions::fromTriple(cld::Triple::native()), &llvm::errs(), &errors); \
-        REQUIRE_FALSE(errors);                                                                                   \
-        pptokens = cld::PP::preprocess(std::move(pptokens), {}, &llvm::errs(), &errors);                         \
-        REQUIRE_FALSE(errors);                                                                                   \
-        auto ctokens = cld::Lexer::toCTokens(pptokens, &llvm::errs(), &errors);                                  \
-        REQUIRE_FALSE(errors);                                                                                   \
-        auto tree = cld::Parser::buildTree(ctokens, &llvm::errs(), &errors);                                     \
-        REQUIRE_FALSE(errors);                                                                                   \
-        auto program = cld::Semantics::analyse(tree, std::move(ctokens), &llvm::errs(), &errors);                \
-        REQUIRE_FALSE(errors);                                                                                   \
-        return program;                                                                                          \
+#define generateProgram(str)                                                                       \
+    [](std::string source)                                                                         \
+    {                                                                                              \
+        bool errors = false;                                                                       \
+        auto options = cld::LanguageOptions::fromTriple(cld::Triple::native());                    \
+        auto pptokens = cld::Lexer::tokenize(std::move(source), &options, &llvm::errs(), &errors); \
+        REQUIRE_FALSE(errors);                                                                     \
+        pptokens = cld::PP::preprocess(std::move(pptokens), {}, &llvm::errs(), &errors);           \
+        REQUIRE_FALSE(errors);                                                                     \
+        auto ctokens = cld::Lexer::toCTokens(pptokens, &llvm::errs(), &errors);                    \
+        REQUIRE_FALSE(errors);                                                                     \
+        auto tree = cld::Parser::buildTree(ctokens, &llvm::errs(), &errors);                       \
+        REQUIRE_FALSE(errors);                                                                     \
+        auto program = cld::Semantics::analyse(tree, std::move(ctokens), &llvm::errs(), &errors);  \
+        REQUIRE_FALSE(errors);                                                                     \
+        return program;                                                                            \
     }(str)
 
-#define generateProgramWithOptions(str, opt)                                                      \
-    [](std::string source, const cld::LanguageOptions& options) {                                 \
-        bool errors = false;                                                                      \
-        auto pptokens = cld::Lexer::tokenize(std::move(source), options, &llvm::errs(), &errors); \
-        REQUIRE_FALSE(errors);                                                                    \
-        pptokens = cld::PP::preprocess(std::move(pptokens), {}, &llvm::errs(), &errors);          \
-        REQUIRE_FALSE(errors);                                                                    \
-        auto ctokens = cld::Lexer::toCTokens(pptokens, &llvm::errs(), &errors);                   \
-        REQUIRE_FALSE(errors);                                                                    \
-        auto tree = cld::Parser::buildTree(ctokens, &llvm::errs(), &errors);                      \
-        REQUIRE_FALSE(errors);                                                                    \
-        auto program = cld::Semantics::analyse(tree, std::move(ctokens), &llvm::errs(), &errors); \
-        REQUIRE_FALSE(errors);                                                                    \
-        return program;                                                                           \
+#define generateProgramWithOptions(str, opt)                                                       \
+    [](std::string source, const cld::LanguageOptions& options)                                    \
+    {                                                                                              \
+        bool errors = false;                                                                       \
+        auto pptokens = cld::Lexer::tokenize(std::move(source), &options, &llvm::errs(), &errors); \
+        REQUIRE_FALSE(errors);                                                                     \
+        pptokens = cld::PP::preprocess(std::move(pptokens), {}, &llvm::errs(), &errors);           \
+        REQUIRE_FALSE(errors);                                                                     \
+        auto ctokens = cld::Lexer::toCTokens(pptokens, &llvm::errs(), &errors);                    \
+        REQUIRE_FALSE(errors);                                                                     \
+        auto tree = cld::Parser::buildTree(ctokens, &llvm::errs(), &errors);                       \
+        REQUIRE_FALSE(errors);                                                                     \
+        auto program = cld::Semantics::analyse(tree, std::move(ctokens), &llvm::errs(), &errors);  \
+        REQUIRE_FALSE(errors);                                                                     \
+        return program;                                                                            \
     }(str, cld::LanguageOptions::fromTriple(opt))
 
 namespace cld::Tests

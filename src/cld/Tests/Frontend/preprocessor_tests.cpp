@@ -10,31 +10,35 @@
 
 #include "TestConfig.hpp"
 
-#define preprocessResult(source)                                                                       \
-    [](const std::string& str) {                                                                       \
-        std::string storage;                                                                           \
-        llvm::raw_string_ostream ss(storage);                                                          \
-        bool errorsOccurred = false;                                                                   \
-        auto tokens = cld::Lexer::tokenize(str, cld::LanguageOptions::native(), &ss, &errorsOccurred); \
-        UNSCOPED_INFO(ss.str());                                                                       \
-        REQUIRE_FALSE(errorsOccurred);                                                                 \
-        auto result = cld::PP::preprocess(std::move(tokens), {}, &ss, &errorsOccurred);                \
-        UNSCOPED_INFO(ss.str());                                                                       \
-        REQUIRE_FALSE(errorsOccurred);                                                                 \
-        return result;                                                                                 \
+#define preprocessResult(source)                                                        \
+    [](const std::string& str)                                                          \
+    {                                                                                   \
+        std::string storage;                                                            \
+        llvm::raw_string_ostream ss(storage);                                           \
+        bool errorsOccurred = false;                                                    \
+        auto options = cld::LanguageOptions::native();                                  \
+        auto tokens = cld::Lexer::tokenize(str, &options, &ss, &errorsOccurred);        \
+        UNSCOPED_INFO(ss.str());                                                        \
+        REQUIRE_FALSE(errorsOccurred);                                                  \
+        auto result = cld::PP::preprocess(std::move(tokens), {}, &ss, &errorsOccurred); \
+        UNSCOPED_INFO(ss.str());                                                        \
+        REQUIRE_FALSE(errorsOccurred);                                                  \
+        return result;                                                                  \
     }(source)
 
-#define preprocessResultWith(source, option)                                          \
-    [](const std::string& str, cld::PP::Options options) {                            \
-        std::string storage;                                                          \
-        llvm::raw_string_ostream ss(storage);                                         \
-        auto tokens = cld::Lexer::tokenize(str, cld::LanguageOptions::native(), &ss); \
-        UNSCOPED_INFO(ss.str());                                                      \
-        REQUIRE_THAT(ss.str(), ProducesNoErrors());                                   \
-        auto result = cld::PP::preprocess(std::move(tokens), options, &ss);           \
-        UNSCOPED_INFO(ss.str());                                                      \
-        REQUIRE_THAT(ss.str(), ProducesNoErrors());                                   \
-        return result;                                                                \
+#define preprocessResultWith(source, option)                                \
+    [](const std::string& str, cld::PP::Options options)                    \
+    {                                                                       \
+        std::string storage;                                                \
+        llvm::raw_string_ostream ss(storage);                               \
+        auto l = cld::LanguageOptions::native();                            \
+        auto tokens = cld::Lexer::tokenize(str, &l, &ss);                   \
+        UNSCOPED_INFO(ss.str());                                            \
+        REQUIRE_THAT(ss.str(), ProducesNoErrors());                         \
+        auto result = cld::PP::preprocess(std::move(tokens), options, &ss); \
+        UNSCOPED_INFO(ss.str());                                            \
+        REQUIRE_THAT(ss.str(), ProducesNoErrors());                         \
+        return result;                                                      \
     }(source, option)
 
 #define preprocessReconstructsTo(source, resultSource)                                                  \
@@ -42,7 +46,8 @@
     {                                                                                                   \
         std::string storage;                                                                            \
         llvm::raw_string_ostream ss(storage);                                                           \
-        auto tokens = cld::Lexer::tokenize(source, cld::LanguageOptions::native(), &ss);                \
+        auto options = cld::LanguageOptions::native();                                                  \
+        auto tokens = cld::Lexer::tokenize(source, &options, &ss);                                      \
         UNSCOPED_INFO(ss.str());                                                                        \
         REQUIRE(ss.str().empty());                                                                      \
         auto ret = cld::PP::preprocess(std::move(tokens), {}, &ss);                                     \
@@ -52,38 +57,40 @@
         CHECK_THAT(str, ProducesLines(resultSource));                                                   \
     } while (0)
 
-#define PP_OUTPUTS_WITH(input, match)                                                   \
-    do                                                                                  \
-    {                                                                                   \
-        std::string s;                                                                  \
-        llvm::raw_string_ostream ss(s);                                                 \
-        auto tokens = cld::Lexer::tokenize(input, cld::LanguageOptions::native(), &ss); \
-        UNSCOPED_INFO(ss.str());                                                        \
-        REQUIRE(ss.str().empty());                                                      \
-        cld::PP::preprocess(std::move(tokens), {}, &ss);                                \
-        CHECK_THAT(s, match);                                                           \
-        if (!s.empty())                                                                 \
-        {                                                                               \
-            tokens = cld::Lexer::tokenize(input, cld::LanguageOptions::native(), &ss);  \
-            cld::PP::preprocess(std::move(tokens));                                     \
-        }                                                                               \
+#define PP_OUTPUTS_WITH(input, match)                             \
+    do                                                            \
+    {                                                             \
+        std::string s;                                            \
+        llvm::raw_string_ostream ss(s);                           \
+        auto options = cld::LanguageOptions::native();            \
+        auto tokens = cld::Lexer::tokenize(input, &options, &ss); \
+        UNSCOPED_INFO(ss.str());                                  \
+        REQUIRE(ss.str().empty());                                \
+        cld::PP::preprocess(std::move(tokens), {}, &ss);          \
+        CHECK_THAT(s, match);                                     \
+        if (!s.empty())                                           \
+        {                                                         \
+            tokens = cld::Lexer::tokenize(input, &options, &ss);  \
+            cld::PP::preprocess(std::move(tokens));               \
+        }                                                         \
     } while (0)
 
-#define PP_OUTPUTS_WITH_OPTIONS(input, match, options)                                  \
-    do                                                                                  \
-    {                                                                                   \
-        std::string s;                                                                  \
-        llvm::raw_string_ostream ss(s);                                                 \
-        auto tokens = cld::Lexer::tokenize(input, cld::LanguageOptions::native(), &ss); \
-        UNSCOPED_INFO(ss.str());                                                        \
-        REQUIRE(ss.str().empty());                                                      \
-        cld::PP::preprocess(std::move(tokens), options, &ss);                           \
-        CHECK_THAT(s, match);                                                           \
-        if (!s.empty())                                                                 \
-        {                                                                               \
-            tokens = cld::Lexer::tokenize(input, cld::LanguageOptions::native(), &ss);  \
-            cld::PP::preprocess(std::move(tokens), options);                            \
-        }                                                                               \
+#define PP_OUTPUTS_WITH_OPTIONS(input, match, options)        \
+    do                                                        \
+    {                                                         \
+        std::string s;                                        \
+        llvm::raw_string_ostream ss(s);                       \
+        auto l = cld::LanguageOptions::native();              \
+        auto tokens = cld::Lexer::tokenize(input, &l, &ss);   \
+        UNSCOPED_INFO(ss.str());                              \
+        REQUIRE(ss.str().empty());                            \
+        cld::PP::preprocess(std::move(tokens), options, &ss); \
+        CHECK_THAT(s, match);                                 \
+        if (!s.empty())                                       \
+        {                                                     \
+            tokens = cld::Lexer::tokenize(input, &l, &ss);    \
+            cld::PP::preprocess(std::move(tokens), options);  \
+        }                                                     \
     } while (0)
 
 namespace cld::Tests
@@ -99,17 +106,19 @@ public:
     bool match(const cld::PPSourceObject& arg) const override
     {
         bool errors = false;
-        auto ret = cld::Lexer::tokenize(m_source, cld::LanguageOptions::native(), nullptr, &errors);
+        auto options = cld::LanguageOptions::native();
+        auto ret = cld::Lexer::tokenize(m_source, &options, nullptr, &errors);
         REQUIRE_FALSE(errors);
         std::vector<cld::Lexer::PPToken> retWithoutNewline;
         std::vector<cld::Lexer::PPToken> argWithoutNewline;
-        auto newLineFilter = [](const cld::Lexer::PPToken& token) {
-            return token.getTokenType() == cld::Lexer::TokenType::Newline;
-        };
+        auto newLineFilter = [](const cld::Lexer::PPToken& token)
+        { return token.getTokenType() == cld::Lexer::TokenType::Newline; };
         std::remove_copy_if(ret.data().begin(), ret.data().end(), std::back_inserter(retWithoutNewline), newLineFilter);
         std::remove_copy_if(arg.data().begin(), arg.data().end(), std::back_inserter(argWithoutNewline), newLineFilter);
         return std::equal(retWithoutNewline.begin(), retWithoutNewline.end(), argWithoutNewline.begin(),
-                          argWithoutNewline.end(), [&](const cld::Lexer::PPToken& lhs, const cld::Lexer::PPToken& rhs) {
+                          argWithoutNewline.end(),
+                          [&](const cld::Lexer::PPToken& lhs, const cld::Lexer::PPToken& rhs)
+                          {
                               return std::tuple(cld::Lexer::normalizeSpelling(lhs.getRepresentation(ret)),
                                                 lhs.getTokenType(), lhs.getValue())
                                      == std::tuple(cld::Lexer::normalizeSpelling(rhs.getRepresentation(arg)),

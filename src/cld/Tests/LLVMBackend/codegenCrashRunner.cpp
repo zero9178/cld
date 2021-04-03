@@ -46,7 +46,7 @@ int main(int, char** argv)
 
     auto options = cld::LanguageOptions::native();
     bool errors = false;
-    auto pptokens = cld::Lexer::tokenize(std::move(input), options, &llvm::errs(), &errors, filename);
+    auto pptokens = cld::Lexer::tokenize(std::move(input), &options, &llvm::errs(), &errors, filename);
     if (errors)
     {
         return 1;

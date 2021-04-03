@@ -6,23 +6,24 @@
 
 #include "TestConfig.hpp"
 
-#define treeProduces(source, matches)                                               \
-    do                                                                              \
-    {                                                                               \
-        std::string string;                                                         \
-        llvm::raw_string_ostream ss(string);                                        \
-        cld::PPSourceObject tokens;                                                 \
-        tokens = cld::Lexer::tokenize(source, cld::LanguageOptions::native(), &ss); \
-        REQUIRE(string.empty());                                                    \
-        auto ctokens = cld::Lexer::toCTokens(tokens, &ss);                          \
-        REQUIRE(string.empty());                                                    \
-        auto tree = cld::Parser::buildTree(ctokens, &ss);                           \
-        CHECK_THAT(string, matches);                                                \
-        cld::Parser::buildTree(ctokens);                                            \
-        if (!string.empty())                                                        \
-        {                                                                           \
-            llvm::errs() << '\n';                                                   \
-        }                                                                           \
+#define treeProduces(source, matches)                         \
+    do                                                        \
+    {                                                         \
+        std::string string;                                   \
+        llvm::raw_string_ostream ss(string);                  \
+        cld::PPSourceObject tokens;                           \
+        auto options = cld::LanguageOptions::native();        \
+        tokens = cld::Lexer::tokenize(source, &options, &ss); \
+        REQUIRE(string.empty());                              \
+        auto ctokens = cld::Lexer::toCTokens(tokens, &ss);    \
+        REQUIRE(string.empty());                              \
+        auto tree = cld::Parser::buildTree(ctokens, &ss);     \
+        CHECK_THAT(string, matches);                          \
+        cld::Parser::buildTree(ctokens);                      \
+        if (!string.empty())                                  \
+        {                                                     \
+            llvm::errs() << '\n';                             \
+        }                                                     \
     } while (0)
 
 #define functionProduces(parser, source, matches)                                               \
@@ -31,7 +32,8 @@
         std::string string;                                                                     \
         llvm::raw_string_ostream ss(string);                                                    \
         cld::PPSourceObject tokens;                                                             \
-        tokens = cld::Lexer::tokenize(source, cld::LanguageOptions::native(), &ss);             \
+        auto options = cld::LanguageOptions::native();                                          \
+        tokens = cld::Lexer::tokenize(source, &options, &ss);                                   \
         REQUIRE(string.empty());                                                                \
         auto ctokens = cld::Lexer::toCTokens(tokens, &ss);                                      \
         REQUIRE(string.empty());                                                                \
@@ -898,7 +900,8 @@ void parse(const std::string& source)
     std::string storage;
     llvm::raw_string_ostream ss(storage);
     bool errorsOccured = false;
-    auto tokens = cld::Lexer::tokenize(std::move(source), cld::LanguageOptions::native(), &ss, &errorsOccured);
+    auto options = cld::LanguageOptions::native();
+    auto tokens = cld::Lexer::tokenize(std::move(source), &options, &ss, &errorsOccured);
     if (!ss.str().empty() || tokens.data().empty() || errorsOccured)
     {
         return;

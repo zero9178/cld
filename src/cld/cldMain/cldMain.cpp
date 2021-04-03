@@ -541,7 +541,7 @@ std::optional<cld::fs::path> compileCFile(Action action, cld::fs::path cSourceFi
     }
 
     bool errors = false;
-    auto pptokens = cld::Lexer::tokenize(std::move(input), languageOptions, reporter, &errors, cSourceFile.u8string());
+    auto pptokens = cld::Lexer::tokenize(std::move(input), &languageOptions, reporter, &errors, cSourceFile.u8string());
     if (errors)
     {
         return {};

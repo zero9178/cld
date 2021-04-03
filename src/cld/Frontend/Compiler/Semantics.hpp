@@ -1,5 +1,4 @@
-#pragma clang diagnostic push
-#pragma ide diagnostic ignored "HidingNonVirtualFunction"
+
 #pragma once
 
 #include <cld/Support/AbstractIntrusiveVariant.hpp>
@@ -2946,5 +2945,3 @@ inline cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::removeQualifiers(
     }
     return type;
 }
-
-#pragma clang diagnostic pop

@@ -14,32 +14,34 @@ using namespace cld::Errors::Lexer;
 using namespace cld::Warnings::Lexer;
 using namespace Catch::Matchers;
 
-#define LEXER_OUTPUTS_WITH(input, match)                                                \
-    do                                                                                  \
-    {                                                                                   \
-        std::string s;                                                                  \
-        llvm::raw_string_ostream ss(s);                                                 \
-        auto tokens = cld::Lexer::tokenize(input, cld::LanguageOptions::native(), &ss); \
-        cld::Lexer::toCTokens(tokens, &ss);                                             \
-        CHECK_THAT(s, match);                                                           \
-        if (!s.empty())                                                                 \
-        {                                                                               \
-            tokens = cld::Lexer::tokenize(input);                                       \
-            cld::Lexer::toCTokens(tokens);                                              \
-        }                                                                               \
+#define LEXER_OUTPUTS_WITH(input, match)                          \
+    do                                                            \
+    {                                                             \
+        std::string s;                                            \
+        llvm::raw_string_ostream ss(s);                           \
+        auto options = cld::LanguageOptions::native();            \
+        auto tokens = cld::Lexer::tokenize(input, &options, &ss); \
+        cld::Lexer::toCTokens(tokens, &ss);                       \
+        CHECK_THAT(s, match);                                     \
+        if (!s.empty())                                           \
+        {                                                         \
+            tokens = cld::Lexer::tokenize(input, &options);       \
+            cld::Lexer::toCTokens(tokens);                        \
+        }                                                         \
     } while (0)
 
-#define PP_LEXER_OUTPUTS_WITH(input, match)                               \
-    do                                                                    \
-    {                                                                     \
-        std::string s;                                                    \
-        llvm::raw_string_ostream ss(s);                                   \
-        cld::Lexer::tokenize(input, cld::LanguageOptions::native(), &ss); \
-        CHECK_THAT(s, match);                                             \
-        if (!s.empty())                                                   \
-        {                                                                 \
-            cld::Lexer::tokenize(input, cld::LanguageOptions::native());  \
-        }                                                                 \
+#define PP_LEXER_OUTPUTS_WITH(input, match)            \
+    do                                                 \
+    {                                                  \
+        std::string s;                                 \
+        llvm::raw_string_ostream ss(s);                \
+        auto options = cld::LanguageOptions::native(); \
+        cld::Lexer::tokenize(input, &options, &ss);    \
+        CHECK_THAT(s, match);                          \
+        if (!s.empty())                                \
+        {                                              \
+            cld::Lexer::tokenize(input, &options);     \
+        }                                              \
     } while (0)
 
 namespace
@@ -47,13 +49,12 @@ namespace
 // MSVC has a bug where it attempts to use the deleted copy constructor here. As a workaround we return straight
 // away and instead use a constructor to check for the errors
 
-[[nodiscard]] cld::CSourceObject lexes(std::string code,
-                                       const cld::LanguageOptions& options = cld::LanguageOptions::native())
+cld::CSourceObject lexes(std::string code, const cld::LanguageOptions& options = cld::LanguageOptions::native())
 {
     std::string buffer;
     llvm::raw_string_ostream ss(buffer);
     bool errors;
-    auto result = cld::Lexer::tokenize(std::move(code), options, &ss, &errors);
+    auto result = cld::Lexer::tokenize(std::move(code), &options, &ss, &errors);
     UNSCOPED_INFO(buffer);
     REQUIRE_FALSE(errors);
     auto tokens = cld::Lexer::toCTokens(std::move(result), &ss, &errors);
@@ -62,18 +63,17 @@ namespace
     return tokens;
 }
 
-[[nodiscard]] cld::CSourceObject lexes(std::string code, cld::Triple triple)
+cld::CSourceObject lexes(std::string code, cld::Triple triple)
 {
     return lexes(std::move(code), cld::LanguageOptions::fromTriple(triple));
 }
 
-[[nodiscard]] cld::PPSourceObject pplexes(std::string code,
-                                          const cld::LanguageOptions& options = cld::LanguageOptions::native())
+cld::PPSourceObject pplexes(std::string code, const cld::LanguageOptions& options = cld::LanguageOptions::native())
 {
     std::string buffer;
     llvm::raw_string_ostream ss(buffer);
     bool errors;
-    auto tokens = cld::Lexer::tokenize(std::move(code), options, &ss, &errors);
+    auto tokens = cld::Lexer::tokenize(std::move(code), &options, &ss, &errors);
     UNSCOPED_INFO(buffer);
     REQUIRE_FALSE(errors);
     return tokens;
@@ -233,7 +233,8 @@ TEST_CASE("Lexing backslashes", "[lexer]")
             }
             std::string buffer;
             llvm::raw_string_ostream ss(buffer);
-            auto tokens = cld::Lexer::tokenize("\x01\\u\\\n00B5", cld::LanguageOptions::native(), &ss);
+            cld::LanguageOptions options = cld::LanguageOptions::native();
+            auto tokens = cld::Lexer::tokenize("\x01\\u\\\n00B5", &options, &ss);
             result = cld::Lexer::toCTokens(tokens, &ss);
             CHECK_THAT(buffer, ProducesError(NON_PRINTABLE_CHARACTER_N, "\\U00000001"));
             REQUIRE(result.data().size() == 1);
@@ -303,8 +304,9 @@ TEST_CASE("Lexing backslashes", "[lexer]")
     }
     SECTION("Fuzzer discoveries")
     {
-        cld::Lexer::tokenize("\\-");
-        cld::Lexer::tokenize("&\\\x1d.");
+        cld::LanguageOptions options = cld::LanguageOptions::native();
+        cld::Lexer::tokenize("\\-", &options);
+        cld::Lexer::tokenize("&\\\x1d.", &options);
         auto result = lexes("N\\\n;");
         REQUIRE(result.data().size() == 2);
         CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Identifier);
@@ -372,7 +374,8 @@ TEST_CASE("Lexing trigraphs", "[lexer]")
                 }
                 std::string buffer;
                 llvm::raw_string_ostream ss(buffer);
-                auto tokens = cld::Lexer::tokenize("\x01?\?/u?\?/\n00B5", cld::LanguageOptions::native(), &ss);
+                cld::LanguageOptions options = cld::LanguageOptions::native();
+                auto tokens = cld::Lexer::tokenize("\x01?\?/u?\?/\n00B5", &options, &ss);
                 result = cld::Lexer::toCTokens(tokens, &ss);
                 CHECK_THAT(buffer, (ProducesError(NON_PRINTABLE_CHARACTER_N, "\\U00000001")));
                 REQUIRE(result.data().size() == 1);
@@ -448,8 +451,9 @@ TEST_CASE("Lexing trigraphs", "[lexer]")
         }
         SECTION("Fuzzer discoveries")
         {
-            cld::Lexer::tokenize("?\?/-");
-            cld::Lexer::tokenize("&?\?/\x1d.");
+            cld::LanguageOptions options = cld::LanguageOptions::native();
+            cld::Lexer::tokenize("?\?/-", &options);
+            cld::Lexer::tokenize("&?\?/\x1d.", &options);
             auto result = lexes("N?\?/\n;");
             REQUIRE(result.data().size() == 2);
             CHECK(result.data()[0].getTokenType() == cld::Lexer::TokenType::Identifier);
@@ -1418,7 +1422,8 @@ TEST_CASE("Lexing universal character as suffix", "[lexer]")
     {
         std::string buffer;
         llvm::raw_string_ostream ss(buffer);
-        auto tokens = cld::Lexer::tokenize("\\u\\u00B5", cld::LanguageOptions::native(), &ss);
+        cld::LanguageOptions options = cld::LanguageOptions::native();
+        auto tokens = cld::Lexer::tokenize("\\u\\u00B5", &options, &ss);
         auto result = cld::Lexer::toCTokens(tokens, &ss);
         CHECK_THAT(buffer, ProducesError(STRAY_N_IN_PROGRAM, "'\\'"));
         REQUIRE(result.data().size() == 1);
@@ -1796,57 +1801,75 @@ TEST_CASE("Lexing invalid characters", "[lexer]")
     LEXER_OUTPUTS_WITH("\xaez\xd2\x89", ProducesError(INVALID_UTF8_SEQUENCE) && ProducesError(UNEXPECTED_CHARACTER));
 }
 
+namespace
+{
+void noCrash(std::string code, const cld::LanguageOptions& options = cld::LanguageOptions::native())
+{
+    std::string buffer;
+    llvm::raw_string_ostream ss(buffer);
+    bool errors;
+    auto result = cld::Lexer::tokenize(std::move(code), &options, &ss, &errors);
+    if (errors)
+    {
+        return;
+    }
+    cld::Lexer::toCTokens(std::move(result), &ss, &errors);
+}
+
+void ppnoCrash(std::string code, const cld::LanguageOptions& options = cld::LanguageOptions::native())
+{
+    std::string buffer;
+    llvm::raw_string_ostream ss(buffer);
+    bool errors;
+    cld::Lexer::tokenize(std::move(code), &options, &ss, &errors);
+}
+} // namespace
+
 TEST_CASE("Lexing fuzzer discoveries", "[lexer]")
 {
-    cld::Lexer::tokenize(
+    ppnoCrash(
         "[N___Bo\"d__\\\\\": 2A\"\"\\x4\"\"\\xdddd___Bo\"d__\\\\\": 2A\"\"\\x4\"\"\\xdddd98f\"  ? \"d_98f\"  ? \"d__0");
-    cld::Lexer::tokenize("=7L`]+0xL`]+0xpp\n");
-    cld::Lexer::tokenize("\\\n"
-                         "\\\n");
-    cld::Lexer::tokenize(
+    ppnoCrash("=7L`]+0xL`]+0xpp\n");
+    ppnoCrash("\\\n"
+              "\\\n");
+    ppnoCrash(
         "=,,=,#+\x0b\x0b\x0b+\\\\666\x0b\x0b%eL\"N*\x09'     n\\\x0aVX      @'Qy;cas\\U990990959999095*i'cL\"[ xb 0\\xb  !'\\x/'");
-    cld::Lexer::tokenize("case&>?>>'1\\x06fffffffffffffffffffffff     '");
-    cld::Lexer::tokenize("x\\0x:\\");
-    cld::Lexer::tokenize("CX\\\x0a)\\\x0a\\\x0a)\\\x0a-\x0aL\\u\\\x0a\\=");
-    cld::Lexer::tokenize("#define   ue(efi,n\\");
-    cld::Lexer::tokenize("#if\n"
-                         "i3#if\n"
-                         "  if\n"
-                         "\n"
-                         "#if\n"
-                         "#if\n"
-                         "\n"
-                         "se\n"
-                         "#else\n"
-                         "#if\n"
-                         "#else\n"
-                         "            ef)\n"
-                         "  8\\uEEEEEEEEEEEEEEEEEEEEEse\n"
-                         "#");
-    cld::Lexer::tokenize("/:**:*/\\\\\\\\\\\\\\\\\\\\\\\x0a\x0a\x1c\\\\%%)>%%%//m]m]m]0\xf5z\x00z");
-    cld::Lexer::tokenize(toS({
+    ppnoCrash("case&>?>>'1\\x06fffffffffffffffffffffff     '");
+    ppnoCrash("x\\0x:\\");
+    ppnoCrash("CX\\\x0a)\\\x0a\\\x0a)\\\x0a-\x0aL\\u\\\x0a\\=");
+    ppnoCrash("#define   ue(efi,n\\");
+    ppnoCrash("#if\n"
+              "i3#if\n"
+              "  if\n"
+              "\n"
+              "#if\n"
+              "#if\n"
+              "\n"
+              "se\n"
+              "#else\n"
+              "#if\n"
+              "#else\n"
+              "            ef)\n"
+              "  8\\uEEEEEEEEEEEEEEEEEEEEEse\n"
+              "#");
+    ppnoCrash("/:**:*/\\\\\\\\\\\\\\\\\\\\\\\x0a\x0a\x1c\\\\%%)>%%%//m]m]m]0\xf5z\x00z");
+    ppnoCrash(toS({
         0x2b, 0x0,  0x0,  0x0,  0x0,  0x0,  0x0,  0x0,  0x56, 0x6e, 0x5b, 0x2e, 0x0,  0x0,  0x2e, 0x27, 0x2e, 0x0,
         0x0,  0x2e, 0x5d, 0x5d, 0x5d, 0x5d, 0x66, 0xa,  0x2e, 0x5d, 0x5d, 0x5d, 0x5d, 0x98, 0x5d, 0x5d, 0x5d, 0x5d,
         0x5d, 0x5d, 0x2a, 0x2b, 0x25, 0x2a, 0x2a, 0x2b, 0x25, 0x25, 0x2a, 0x2a, 0xa,  0x25, 0x2a, 0x59, 0x1b, 0x37,
         0x37, 0x37, 0x5d, 0x5d, 0x2a, 0x59, 0x5d, 0x5d, 0x5d, 0x5d, 0x5d, 0x5d, 0x5d, 0x5d, 0x5d, 0x5d, 0x5d, 0x2a,
         0x2b, 0x25, 0x2a, 0x6e, 0x3a, 0x3b, 0x5d, 0x5d, 0x2a, 0x2b, 0x25, 0x0,  0x0,  0x34,
     }));
-    cld::Lexer::tokenize(
+    ppnoCrash(
         ",&(((((((((((XW_(z((((((((((((((((((\\((((((/AA 910U(4U0U(((                                                                                                      (\n"
         "((((((((    (((((\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B\u000B(((((((((  0U ,       '  /,&/1 (bK  9099.4) A.>0  (******791 4 $ 6 : 449999041)\n"
         "!V1 (b'(6,6:&/h N)K51(* 44***7. 6 :)  a**((   U0AA\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\" \"\"1\"\"\"\"\"\"\"\"\"A\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"5\"\"\"\"U\"\"\"\"\"\"\"\"\"\"\"\"\"\";Y);XW 0U U ");
-    cld::Lexer::tokenize("har_^c\"6?c0. 0r_^\x0a\x0ar!!0z?!? u\x0a   ");
-    cld::Lexer::tokenize("h\"&u20U^58v\\u .L<bF\".A !< G\x0a"
-                         "30bG\x0a0G\x0a:::!\x0a<0");
-    {
-        auto tokens = cld::Lexer::tokenize("0eɣ?ifd");
-        cld::Lexer::toCTokens(tokens);
-    }
-    {
-        auto tokens = cld::Lexer::tokenize("'<<�\uFEFF=='");
-        cld::Lexer::toCTokens(tokens);
-    }
+    ppnoCrash("har_^c\"6?c0. 0r_^\x0a\x0ar!!0z?!? u\x0a   ");
+    ppnoCrash("h\"&u20U^58v\\u .L<bF\".A !< G\x0a"
+              "30bG\x0a0G\x0a:::!\x0a<0");
+    noCrash("0eɣ?ifd");
+    noCrash("'<<�\uFEFF=='");
 }
 
-#undef LEXRE_OUTPUTS_WITH
+#undef LEXER_OUTPUTS_WITH
 #undef PP_LEXER_OUTPUTS_WITH
