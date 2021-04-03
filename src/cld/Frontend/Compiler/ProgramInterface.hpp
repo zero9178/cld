@@ -57,6 +57,7 @@ struct TypedefInfo
     std::size_t scope;
     bool isConst : 1;
     bool isVolatile : 1;
+    bool isRestricted : 1;
     const Lexer::CToken* CLD_NULLABLE identifierToken; // nullptr if builtin
 };
 

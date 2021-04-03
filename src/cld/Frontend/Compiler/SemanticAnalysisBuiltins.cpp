@@ -324,13 +324,13 @@ void cld::Semantics::SemanticAnalysis::createBuiltinTypes()
         case LanguageOptions::BuiltInVaList::CharPtr:
         {
             auto type = PointerType(typeAlloc<PrimitiveType>(PrimitiveType::Char, options));
-            insertTypedef({"__builtin_va_list", std::move(type), GLOBAL_SCOPE, false, false, nullptr});
+            insertTypedef({"__builtin_va_list", std::move(type), GLOBAL_SCOPE, false, false, false, nullptr});
             break;
         }
         case LanguageOptions::BuiltInVaList::VoidPtr:
         {
             auto type = PointerType(typeAlloc<PrimitiveType>(PrimitiveType::Void, options));
-            insertTypedef({"__builtin_va_list", std::move(type), GLOBAL_SCOPE, false, false, nullptr});
+            insertTypedef({"__builtin_va_list", std::move(type), GLOBAL_SCOPE, false, false, false, nullptr});
             break;
         }
         case LanguageOptions::BuiltInVaList::x86_64ABI:
@@ -353,7 +353,7 @@ void cld::Semantics::SemanticAnalysis::createBuiltinTypes()
             IntrVarValue elementType = StructType(m_structDefinitions.back());
             getCurrentScope().types.emplace("__va_list_tag", TagTypeInScope{nullptr, &m_structDefinitions.back()});
             elementType = ArrayType(typeAlloc(std::move(*elementType)), 1);
-            insertTypedef({"__builtin_va_list", std::move(elementType), GLOBAL_SCOPE, false, false, nullptr});
+            insertTypedef({"__builtin_va_list", std::move(elementType), GLOBAL_SCOPE, false, false, false, nullptr});
             break;
         }
         default: CLD_UNREACHABLE;
@@ -361,8 +361,8 @@ void cld::Semantics::SemanticAnalysis::createBuiltinTypes()
     if (options.int128Enabled)
     {
         auto type = PrimitiveType(PrimitiveType::Int128, options);
-        insertTypedef({"__builtin_va_list", std::move(type), GLOBAL_SCOPE, false, false, nullptr});
+        insertTypedef({"__builtin_va_list", std::move(type), GLOBAL_SCOPE, false, false, false, nullptr});
         type = PrimitiveType(PrimitiveType::UnsignedInt128, options);
-        insertTypedef({"__builtin_va_list", std::move(type), GLOBAL_SCOPE, false, false, nullptr});
+        insertTypedef({"__builtin_va_list", std::move(type), GLOBAL_SCOPE, false, false, false, nullptr});
     }
 }

@@ -550,8 +550,9 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
             reportNotApplicableAttributes(thisAttributes);
             auto isConst = result->isConst();
             auto isVolatile = result->isVolatile();
+            auto isRestricted = result->isRestricted();
             auto [prev, noRedefinition] =
-                insertTypedef({loc->getText(), result, m_currentScope, isConst, isVolatile, loc});
+                insertTypedef({loc->getText(), result, m_currentScope, isConst, isVolatile, isRestricted, loc});
             if (!noRedefinition
                 && (!std::holds_alternative<TypedefInfo*>(prev->second.declared)
                     || !typesAreCompatible(result, cld::get<TypedefInfo*>(prev->second.declared)->type)))

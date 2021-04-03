@@ -198,6 +198,7 @@ void cld::Semantics::Type::setConst(bool isConst)
 {
     if (isConst)
     {
+        CLD_ASSERT(!is<FunctionType>());
         m_flags = static_cast<TypeFlags>(m_flags | Const);
     }
     else
@@ -214,6 +215,7 @@ void cld::Semantics::Type::setVolatile(bool isVolatile)
 {
     if (isVolatile)
     {
+        CLD_ASSERT(!is<FunctionType>());
         m_flags = static_cast<TypeFlags>(m_flags | Volatile);
     }
     else
@@ -221,6 +223,24 @@ void cld::Semantics::Type::setVolatile(bool isVolatile)
         m_flags = static_cast<TypeFlags>(m_flags & ~Volatile);
     }
     if (m_info && m_info->isVolatile && !isVolatile)
+    {
+        m_info = nullptr;
+    }
+}
+
+void cld::Semantics::Type::setRestricted(bool isRestricted)
+{
+    if (isRestricted)
+    {
+        CLD_ASSERT(is<ArrayType>() || is<AbstractArrayType>() || is<ValArrayType>() || is<PointerType>()
+                   || is<ErrorType>());
+        m_flags = static_cast<TypeFlags>(m_flags | Restricted);
+    }
+    else
+    {
+        m_flags = static_cast<TypeFlags>(m_flags & ~Restricted);
+    }
+    if (m_info && m_info->isRestricted && !isRestricted)
     {
         m_info = nullptr;
     }
@@ -435,6 +455,10 @@ std::string typeToString(const cld::Semantics::Type& arg, bool respectTypedefs)
     {
         if (auto* info = maybeCurr->getTypedefInfo(); info && respectTypedefs)
         {
+            if (maybeCurr->isRestricted() && !info->isRestricted)
+            {
+                qualifiersAndSpecifiers += "restrict ";
+            }
             if (maybeCurr->isConst() && !info->isConst)
             {
                 qualifiersAndSpecifiers += "const ";

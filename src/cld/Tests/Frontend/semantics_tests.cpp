@@ -1774,6 +1774,34 @@ TEST_CASE("Semantics type printing", "[semantics]")
             auto& var = translationUnit->getGlobals()[0]->as<VariableDeclaration>();
             CHECK(toStr(var.getType()) == "volatile INTEGER");
         }
+        SECTION("restrict typedef")
+        {
+            {
+                auto [translationUnit, errors] = generateSemantics("typedef int* restrict INTEGER;\n"
+                                                                   "INTEGER i;\n");
+                REQUIRE_THAT(errors, ProducesNoErrors());
+                REQUIRE(translationUnit->getGlobals().size() == 1);
+                auto& var = translationUnit->getGlobals()[0]->as<VariableDeclaration>();
+                CHECK(toStr(var.getType()) == "INTEGER");
+            }
+            {
+                auto [translationUnit, errors] = generateSemantics("typedef int* restrict INTEGER;\n"
+                                                                   "restrict INTEGER i;\n");
+                REQUIRE_THAT(errors, ProducesNoErrors());
+                REQUIRE(translationUnit->getGlobals().size() == 1);
+                auto& var = translationUnit->getGlobals()[0]->as<VariableDeclaration>();
+                CHECK(toStr(var.getType()) == "INTEGER");
+            }
+        }
+        SECTION("restrict variable")
+        {
+            auto [translationUnit, errors] = generateSemantics("typedef int* INTEGER;\n"
+                                                               "restrict INTEGER i;\n");
+            REQUIRE_THAT(errors, ProducesNoErrors());
+            REQUIRE(translationUnit->getGlobals().size() == 1);
+            auto& var = translationUnit->getGlobals()[0]->as<VariableDeclaration>();
+            CHECK(toStr(var.getType()) == "restrict INTEGER");
+        }
         SECTION("Loosing cv qualifiers")
         {
             auto& expr = generateExpression("typedef const int INTEGER;\n"

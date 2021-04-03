@@ -90,6 +90,11 @@ public:
         return m_flags & Volatile;
     }
 
+    [[nodiscard]] bool isRestricted() const
+    {
+        return m_flags & Restricted;
+    }
+
     [[nodiscard]] TypeFlags getFlags() const
     {
         return m_flags;
@@ -98,6 +103,8 @@ public:
     void setConst(bool isConst);
 
     void setVolatile(bool isVolatile);
+
+    void setRestricted(bool isRestricted);
 
     [[nodiscard]] std::string_view getTypedefName() const;
 
@@ -349,11 +356,6 @@ public:
         return m_size;
     }
 
-    [[nodiscard]] bool isRestricted() const
-    {
-        return m_flags & Restricted;
-    }
-
     [[nodiscard]] bool isStatic() const
     {
         return m_flags & Static;
@@ -386,11 +388,6 @@ public:
     [[nodiscard]] const Type& getType() const
     {
         return *m_type;
-    }
-
-    [[nodiscard]] bool isRestricted() const
-    {
-        return m_flags & Restricted;
     }
 
     [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface&) const
@@ -426,11 +423,6 @@ public:
     [[nodiscard]] const Type& getType() const
     {
         return *m_type;
-    }
-
-    [[nodiscard]] bool isRestricted() const
-    {
-        return m_flags & Restricted;
     }
 
     [[nodiscard]] bool isStatic() const
@@ -671,11 +663,6 @@ public:
     [[nodiscard]] const Type& getElementType() const
     {
         return *m_elementType;
-    }
-
-    [[nodiscard]] bool isRestricted() const
-    {
-        return m_flags & Restricted;
     }
 
     [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface& program) const;
@@ -2932,16 +2919,13 @@ inline bool cld::Semantics::isFunctionType(const Type& type)
 
 inline cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::removeQualifiers(const Type& type)
 {
-    if (type.isConst() || type.isVolatile() || (isPointer(type) && type.as<PointerType>().isRestricted()))
+    if (type.isConst() || type.isVolatile() || type.isRestricted())
     {
-        if (!isPointer(type) || !type.as<PointerType>().isRestricted())
-        {
-            IntrVarValue<Type> copy = type;
-            copy->setConst(false);
-            copy->setVolatile(false);
-            return copy;
-        }
-        return PointerType(&getPointerElementType(type));
+        IntrVarValue copy = type;
+        copy->setConst(false);
+        copy->setVolatile(false);
+        copy->setRestricted(false);
+        return copy;
     }
     return type;
 }

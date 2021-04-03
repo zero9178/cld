@@ -194,6 +194,7 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::qualif
 {
     bool isConst = false;
     bool isVolatile = false;
+    const Syntax::TypeQualifier* restrictQual = nullptr;
     std::vector<const Syntax::TypeSpecifier*> typeSpecs;
     std::vector<GNUAttribute> attributes;
     for (auto& iter : directAbstractDeclaratorParentheses)
@@ -208,10 +209,7 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::qualif
             {
                 case Syntax::TypeQualifier::Const: isConst = true; break;
                 case Syntax::TypeQualifier::Volatile: isVolatile = true; break;
-                case Syntax::TypeQualifier::Restrict:
-                    log(Errors::Semantics::RESTRICT_CAN_ONLY_BE_APPLIED_TO_POINTERS.args(**typeQual, m_sourceInterface,
-                                                                                         **typeQual));
-                    break;
+                case Syntax::TypeQualifier::Restrict: restrictQual = *typeQual; break;
             }
         }
         else if (auto* gnuAttributes = std::get_if<const Syntax::GNUAttributes*>(&iter))
@@ -237,6 +235,18 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::qualif
     {
         (void)applyAttributes(std::pair{&result, diag::getPointRange(directAbstractDeclaratorParentheses)},
                               std::move(attributes));
+    }
+    if (restrictQual)
+    {
+        if (!result->is<PointerType>())
+        {
+            log(Errors::Semantics::RESTRICT_CAN_ONLY_BE_APPLIED_TO_POINTERS.args(*restrictQual, m_sourceInterface,
+                                                                                 *restrictQual));
+        }
+        else
+        {
+            result->setRestricted(true);
+        }
     }
     return result;
 }
