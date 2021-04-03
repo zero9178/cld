@@ -169,7 +169,7 @@ class IntrVarAllocator<Base, AbstractIntrusiveVariant<Subclasses...>>
     void destroyAt(index_type index, std::byte* memory)
     {
         constexpr std::array<void (*)(std::byte*), sizeof...(Subclasses)> destructors = {
-            +[](std::byte* memory) { std::destroy_at(reinterpret_cast<Subclasses*>(memory)); }...};
+            +[](std::byte* memory) { std::destroy_at(std::launder(reinterpret_cast<Subclasses*>(memory))); }...};
         destructors[index](memory);
     }
 

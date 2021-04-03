@@ -482,7 +482,7 @@ class SmallFunction<Ret(Params...), size>
     template <class F>
     static Ret call(std::byte* storage, Params... args)
     {
-        return (*reinterpret_cast<F*>(storage))(std::forward<Params>(args)...);
+        return (*std::launder(reinterpret_cast<F*>(storage)))(std::forward<Params>(args)...);
     }
 
 public:

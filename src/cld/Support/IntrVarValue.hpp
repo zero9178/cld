@@ -24,14 +24,16 @@ protected:
     [[nodiscard]] Base& get()
     {
         constexpr std::array<Base& (*)(std::byte*), sizeof...(SubClasses)> converters = {
-            +[](std::byte* ptr) -> Base& { return *reinterpret_cast<SubClasses*>(ptr); }...};
+            +[](std::byte* ptr) -> Base& { return *std::launder(reinterpret_cast<SubClasses*>(ptr)); }...};
         return converters[m_index](m_storage);
     }
 
     [[nodiscard]] const Base& get() const
     {
         constexpr std::array<const Base& (*)(const std::byte*), sizeof...(SubClasses)> converters = {
-            +[](const std::byte* ptr) -> const Base& { return *reinterpret_cast<const SubClasses*>(ptr); }...};
+            +[](const std::byte* ptr) -> const Base& {
+                return *std::launder(reinterpret_cast<const SubClasses*>(ptr));
+            }...};
         return converters[m_index](m_storage);
     }
 };
