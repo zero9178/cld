@@ -87,30 +87,25 @@ struct Slab<allocSize, align, count, true>
 template <class T>
 class Deleter
 {
-    void* m_allocator = nullptr;
-    void (*m_delete)(void*, T*) = nullptr;
+    ::cld::IntrVarAllocator<typename T::base_type>* m_allocator;
+
+    template <class U>
+    friend class Deleter;
 
 public:
     Deleter() = default;
 
-    template <class Base>
-    Deleter(::cld::IntrVarAllocator<Base>* allocator)
-        : m_allocator(allocator), m_delete(+[](void* allocator, T* pointer) {
-              reinterpret_cast<::cld::IntrVarAllocator<Base>*>(allocator)->destroy(pointer);
-          })
-    {
-    }
+    Deleter(::cld::IntrVarAllocator<typename T::base_type>* allocator) : m_allocator(allocator) {}
 
-    template <class U, std::enable_if_t<std::is_base_of_v<T, U>>* = nullptr>
-    Deleter(Deleter<U>&& rhs) noexcept : m_allocator(rhs.m_allocator), m_delete(rhs.m_delete)
+    template <class U, std::enable_if_t<std::is_same_v<typename T::base_type, typename U::base_type>>* = nullptr>
+    Deleter(Deleter<U>&& rhs) noexcept : m_allocator(rhs.m_allocator)
     {
     }
 
     void operator()(T* pointer) const noexcept
     {
-        CLD_ASSERT(m_delete);
         CLD_ASSERT(m_allocator);
-        m_delete(m_allocator, pointer);
+        m_allocator->destroy(pointer);
     }
 };
 
@@ -120,7 +115,7 @@ template <class T>
 using IVAUniquePtr = std::unique_ptr<T, detail::IntrVarAllocator::Deleter<T>>;
 
 template <class Base, class... Subclasses>
-class IntrVarAllocator<Base, AbstractIntrusiveVariant<Subclasses...>>
+class IntrVarAllocator<Base, AbstractIntrusiveVariant<Base, Subclasses...>>
 {
     constexpr static std::size_t largestAlign = std::max({alignof(Subclasses)...});
     constexpr static std::size_t largestSize = std::max({sizeof(Subclasses)...});

@@ -1177,7 +1177,7 @@ std::unique_ptr<cld::Semantics::CallExpression>
     function = std::make_unique<Conversion>(PointerType(&type), Conversion::LValue, std::move(function));
     auto& ft = getPointerElementType(function->getType()).as<FunctionType>();
 
-    IntrVarValue<Type> placeholder = ErrorType{};
+    IntrVarValue placeholder = ErrorType{};
     std::vector<IntrVarPtr<ExpressionBase>> arguments;
     if (checkFunctionCount(*function, ft, node))
     {
@@ -2255,7 +2255,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     }
     for (auto& [kind, token, rhs] : node.getOptionalShiftExpressions())
     {
-        IntrVarValue<Type> resultType = PrimitiveType(PrimitiveType::Int, getLanguageOptions());
+        IntrVarValue resultType = PrimitiveType(PrimitiveType::Int, getLanguageOptions());
         auto rhsValue = visit(rhs);
         if ((isArithmetic(value->getType()) && isArithmetic(rhsValue->getType())) || isVector(value->getType())
             || isVector(rhsValue->getType()))
@@ -2353,7 +2353,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     }
     for (auto& [kind, token, rhs] : node.getOptionalRelationalExpressions())
     {
-        IntrVarValue<Type> resultType = PrimitiveType(PrimitiveType::Int, getLanguageOptions());
+        IntrVarValue resultType = PrimitiveType(PrimitiveType::Int, getLanguageOptions());
         auto rhsValue = visit(rhs);
         if ((isArithmetic(value->getType()) && isArithmetic(rhsValue->getType())) || isVector(value->getType())
             || isVector(rhsValue->getType()))
@@ -2614,7 +2614,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         third = lvalueConversion(std::move(third));
     }
 
-    IntrVarValue<Type> resultType = ErrorType{};
+    IntrVarValue resultType = ErrorType{};
     if (isArithmetic(second->getType()) && !isVector(third->getType()))
     {
         if (isPointer(third->getType()) && isInteger(second->getType()))
@@ -2689,7 +2689,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             }
             else
             {
-                IntrVarValue<Type> composite = compositeType(secondWithoutQualifier, thirdWithoutQualifier);
+                IntrVarValue composite = compositeType(secondWithoutQualifier, thirdWithoutQualifier);
                 composite->setConst(secondElementType.isConst() || thirdElementType.isConst());
                 composite->setVolatile(secondElementType.isVolatile() || thirdElementType.isVolatile());
                 resultType.emplace<PointerType>(typeAlloc(std::move(*composite)));
@@ -2765,7 +2765,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         IntrVarValue copy = type;
         return std::make_unique<Conversion>(std::move(copy), Conversion::LValue, std::move(expression));
     }
-    IntrVarValue<Type> newType = type;
+    IntrVarValue newType = type;
     newType->setConst(false);
     newType->setVolatile(false);
     if (auto* pointer = newType->tryAs<PointerType>())
@@ -3054,7 +3054,7 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(
     }
     auto& lhsPrim = getLhsType(lhs).as<PrimitiveType>();
     auto& rhsPrim = rhs->getType().as<PrimitiveType>();
-    IntrVarValue<Type> type = ErrorType{};
+    IntrVarValue type = ErrorType{};
     if (lhsPrim.isFloatingPoint() || rhsPrim.isFloatingPoint())
     {
         auto [floating, biggest] = std::max(std::pair(lhsPrim.isFloatingPoint(), lhsPrim.getKind()),

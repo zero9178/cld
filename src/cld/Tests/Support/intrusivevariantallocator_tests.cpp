@@ -7,7 +7,7 @@
 
 namespace
 {
-class Base : public cld::AbstractIntrusiveVariant<class Derived1, class DestrSideEffect, class Tree>
+class Base : public cld::AbstractIntrusiveVariant<Base, class Derived1, class DestrSideEffect, class Tree>
 {
 protected:
     template <class T>
@@ -352,7 +352,7 @@ TEST_CASE("IntrusiveVariantAllocator non trivial", "[IVA]")
 
 namespace
 {
-class Base2 : public cld::AbstractIntrusiveVariant<class Derived2>
+class Base2 : public cld::AbstractIntrusiveVariant<Base2, class Derived2>
 {
 protected:
     template <class T>

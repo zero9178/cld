@@ -44,7 +44,7 @@ class EnumDefinition;
 
 class ProgramInterface;
 
-class Type : public AbstractIntrusiveVariant<class PrimitiveType, class ArrayType, class AbstractArrayType,
+class Type : public AbstractIntrusiveVariant<Type, class PrimitiveType, class ArrayType, class AbstractArrayType,
                                              class ValArrayType, class FunctionType, class StructType, class UnionType,
                                              class EnumType, class PointerType, class VectorType, class ErrorType>,
              public AttributeHolder<TypeAttribute>
@@ -742,11 +742,11 @@ enum class ValueCategory : std::uint8_t
 };
 
 class ExpressionBase
-    : public AbstractIntrusiveVariant<class Constant, class DeclarationRead, class Conversion, class MemberAccess,
-                                      class BinaryOperator, class Cast, class UnaryOperator, class SizeofOperator,
-                                      class SubscriptOperator, class Conditional, class Assignment,
-                                      class CommaExpression, class CallExpression, class CompoundLiteral,
-                                      class BuiltinVAArg, class BuiltinOffsetOf, class ErrorExpression>
+    : public AbstractIntrusiveVariant<
+          ExpressionBase, class Constant, class DeclarationRead, class Conversion, class MemberAccess,
+          class BinaryOperator, class Cast, class UnaryOperator, class SizeofOperator, class SubscriptOperator,
+          class Conditional, class Assignment, class CommaExpression, class CallExpression, class CompoundLiteral,
+          class BuiltinVAArg, class BuiltinOffsetOf, class ErrorExpression>
 {
     IntrVarValue<Type> m_type;
     ValueCategory m_valueCategory;
@@ -1613,10 +1613,11 @@ class GotoStatement;
 
 class GNUASMStatement;
 
-class Statement : public AbstractIntrusiveVariant<ForStatement, ReturnStatement, ExpressionStatement, IfStatement,
-                                                  CompoundStatement, HeadWhileStatement, FootWhileStatement,
-                                                  BreakStatement, ContinueStatement, SwitchStatement, DefaultStatement,
-                                                  CaseStatement, GotoStatement, LabelStatement, GNUASMStatement>
+class Statement
+    : public AbstractIntrusiveVariant<Statement, ForStatement, ReturnStatement, ExpressionStatement, IfStatement,
+                                      CompoundStatement, HeadWhileStatement, FootWhileStatement, BreakStatement,
+                                      ContinueStatement, SwitchStatement, DefaultStatement, CaseStatement,
+                                      GotoStatement, LabelStatement, GNUASMStatement>
 {
     std::size_t m_scope;
 
@@ -1754,8 +1755,8 @@ public:
     }
 };
 
-class Useable
-    : public AbstractIntrusiveVariant<VariableDeclaration, FunctionDefinition, BuiltinFunction, FunctionDeclaration>
+class Useable : public AbstractIntrusiveVariant<Useable, class VariableDeclaration, class FunctionDefinition,
+                                                class BuiltinFunction, class FunctionDeclaration>
 {
     std::uint64_t m_uses{};
 

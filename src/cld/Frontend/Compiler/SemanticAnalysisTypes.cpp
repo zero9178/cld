@@ -739,7 +739,7 @@ cld::IntrVarValue<cld::Semantics::Type>
         }
         if ((isConst && !typeDef->isConst) || (isVolatile && !typeDef->isVolatile))
         {
-            IntrVarValue<Type> copy = typeDef->type;
+            IntrVarValue copy = typeDef->type;
             copy->setConst(isConst || copy->isConst());
             copy->setVolatile(isVolatile || copy->isVolatile());
             return copy;

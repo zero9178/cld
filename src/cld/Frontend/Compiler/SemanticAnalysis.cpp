@@ -693,7 +693,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
             else
             {
                 m_inStaticInitializer = lifetime == Lifetime::Static;
-                IntrVarValue<Type> prevType = declaration->getType();
+                IntrVarValue prevType = declaration->getType();
                 std::size_t size = 0;
                 auto expr = visit(*iter.optionalInitializer, declaration->getType(),
                                   declaration->getLifetime() == Lifetime::Static, &size);

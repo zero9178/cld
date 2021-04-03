@@ -350,7 +350,7 @@ void cld::Semantics::SemanticAnalysis::createBuiltinTypes()
                                            StructDefinition("__va_list_tag", std::move(fields), std::move(fieldLayout),
                                                             std::move(memLayout), 24, 8),
                                            0, nullptr, "__va_list_tag"});
-            IntrVarValue<Type> elementType = StructType(m_structDefinitions.back());
+            IntrVarValue elementType = StructType(m_structDefinitions.back());
             getCurrentScope().types.emplace("__va_list_tag", TagTypeInScope{nullptr, &m_structDefinitions.back()});
             elementType = ArrayType(typeAlloc(std::move(*elementType)), 1);
             insertTypedef({"__builtin_va_list", std::move(elementType), GLOBAL_SCOPE, false, false, nullptr});

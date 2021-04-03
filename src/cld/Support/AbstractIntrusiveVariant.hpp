@@ -29,7 +29,7 @@ template <class T, std::size_t i, class First, class... Rest>
 
 } // namespace detail
 
-template <class... Args>
+template <class Base, class... Args>
 class AbstractIntrusiveVariant
 {
     cld::suitableUInt<sizeof...(Args) - 1> m_index;
@@ -50,6 +50,7 @@ public:
     }
 
     using index_type = decltype(m_index);
+    using base_type = Base;
 
     [[nodiscard]] constexpr index_type index() const noexcept
     {
@@ -149,8 +150,8 @@ public:
 
 namespace detail::AbstractIntrusiveVariant
 {
-template <class... Args>
-auto deduceArgs(::cld::AbstractIntrusiveVariant<Args...>*) -> ::cld::AbstractIntrusiveVariant<Args...>;
+template <class Base, class... Args>
+auto deduceArgs(::cld::AbstractIntrusiveVariant<Base, Args...>*) -> ::cld::AbstractIntrusiveVariant<Base, Args...>;
 } // namespace detail::AbstractIntrusiveVariant
 
 template <class T, class U = decltype(detail::AbstractIntrusiveVariant::deduceArgs(std::declval<T*>()))>
@@ -159,8 +160,8 @@ class IntrusiveVariantDeleter
     static_assert(always_false<T>, "Can't delete pointer that isn't a subclass of AbstractIntrusiveVariant");
 };
 
-template <class Base, class... SubClasses>
-class IntrusiveVariantDeleter<Base, AbstractIntrusiveVariant<SubClasses...>>
+template <class Base, class Top, class... SubClasses>
+class IntrusiveVariantDeleter<Base, AbstractIntrusiveVariant<Top, SubClasses...>>
 {
 public:
     IntrusiveVariantDeleter() = default;

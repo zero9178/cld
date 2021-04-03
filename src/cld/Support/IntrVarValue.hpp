@@ -393,19 +393,27 @@ class IntrVarValue
 public:
     // DEDUCTION ONLY
 
-    IntrVarValue(const T&)
+    template <class V>
+    IntrVarValue(const V&)
     {
         CLD_UNREACHABLE;
     }
 
-    IntrVarValue(T&&) noexcept
+    template <class V>
+    IntrVarValue(V&&) noexcept
     {
         CLD_UNREACHABLE;
     }
 };
 
+template <class V>
+IntrVarValue(const V&) -> IntrVarValue<typename V::base_type>;
+
+template <class V>
+IntrVarValue(V&&) -> IntrVarValue<typename V::base_type>;
+
 template <class Base, class... SubClasses>
-class IntrVarValue<Base, AbstractIntrusiveVariant<SubClasses...>>
+class IntrVarValue<Base, AbstractIntrusiveVariant<Base, SubClasses...>>
     : public detail::IntrusiveVariantStorage::IntrusiveVariantStorageMoveAss<
           Base, std::max({detail::IntrusiveVariantStorage::moveAss<SubClasses>()...}), SubClasses...>
 {
@@ -434,7 +442,8 @@ public:
         this->m_index = object->index();
     }
 
-    template <class U = Base, std::enable_if_t<(std::is_copy_constructible_v<SubClasses> && ...)>* = nullptr>
+    template <class U = Base,
+              std::enable_if_t<std::conjunction_v<std::is_copy_constructible<SubClasses>...>>* = nullptr>
     IntrVarValue(const Base& value) noexcept((std::is_nothrow_copy_constructible_v<SubClasses> && ...))
     {
         this->m_index = value.index();
@@ -444,7 +453,8 @@ public:
         copyConstructors[this->m_index](this->m_storage, value);
     }
 
-    template <class U = Base, std::enable_if_t<(std::is_move_constructible_v<SubClasses> && ...)>* = nullptr>
+    template <class U = Base,
+              std::enable_if_t<std::conjunction_v<std::is_move_constructible<SubClasses>...>>* = nullptr>
     IntrVarValue(Base&& value) noexcept((std::is_nothrow_move_constructible_v<SubClasses> && ...))
     {
         this->m_index = value.index();
