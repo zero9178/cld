@@ -149,19 +149,27 @@ void cld::Semantics::SemanticAnalysis::applyVectorSizeAttribute(AffectsTypeVaria
             *attribute.name, m_sourceInterface, *attribute.name, 1, argCount));
         return;
     }
+    std::shared_ptr<ExpressionBase> expression;
     if (attribute.firstParamName)
     {
-        log(Errors::Semantics::EXPECTED_INTEGER_CONSTANT_EXPRESSION_AS_ARGUMENT_TO_VECTOR_SIZE.args(
-            *attribute.firstParamName, m_sourceInterface, *attribute.firstParamName));
-        return;
+        expression = visit(Syntax::PrimaryExpressionIdentifier(attribute.firstParamName, attribute.firstParamName + 1,
+                                                               attribute.firstParamName));
     }
-    if (!isInteger(attribute.paramExpressions[0]->getType()))
+    else
+    {
+        expression = attribute.paramExpressions[0];
+    }
+    if (!expression->getType().isUndefined() && !isInteger(expression->getType()))
     {
         log(Errors::Semantics::EXPECTED_INTEGER_CONSTANT_EXPRESSION_AS_ARGUMENT_TO_VECTOR_SIZE.args(
-            *attribute.paramExpressions[0], m_sourceInterface, *attribute.paramExpressions[0]));
+            *expression, m_sourceInterface, *expression));
         return;
     }
-    auto result = evaluateConstantExpression(*attribute.paramExpressions[0]);
+    if (expression->getType().isUndefined())
+    {
+        return;
+    }
+    auto result = evaluateConstantExpression(*expression);
     if (!result)
     {
         std::for_each(result.error().begin(), result.error().end(), cld::bind_front(&SemanticAnalysis::log, this));
@@ -169,8 +177,8 @@ void cld::Semantics::SemanticAnalysis::applyVectorSizeAttribute(AffectsTypeVaria
     }
     if (result->getInteger() < 0)
     {
-        log(Errors::Semantics::ARGUMENT_TO_VECTOR_SIZE_MUST_BE_A_POSITIVE_NUMBER.args(
-            *attribute.paramExpressions[0], m_sourceInterface, *attribute.paramExpressions[0], *result));
+        log(Errors::Semantics::ARGUMENT_TO_VECTOR_SIZE_MUST_BE_A_POSITIVE_NUMBER.args(*expression, m_sourceInterface,
+                                                                                      *expression, *result));
         return;
     }
     const Type& baseType = cld::match(
@@ -217,7 +225,7 @@ void cld::Semantics::SemanticAnalysis::applyVectorSizeAttribute(AffectsTypeVaria
     if (mod.getInteger() != 0)
     {
         log(Errors::Semantics::ARGUMENT_OF_VECTOR_SIZE_MUST_BE_A_MULTIPLE_OF_THE_SIZE_OF_THE_BASE_TYPE.args(
-            *attribute.paramExpressions[0], m_sourceInterface, *attribute.paramExpressions[0],
+            *expression, m_sourceInterface, *expression,
             result->toString() + " % sizeof(" + diag::StringConverter<Type>::inArg(baseType, &m_sourceInterface)
                 + ") /*" + std::to_string(size) + "*/ = " + mod.toString()));
         return;
@@ -226,7 +234,7 @@ void cld::Semantics::SemanticAnalysis::applyVectorSizeAttribute(AffectsTypeVaria
     if (!multiple.getInteger().isPowerOf2())
     {
         log(Errors::Semantics::ARGUMENT_OF_VECTOR_SIZE_SHOULD_BE_A_POWER_OF_2_MULTIPLE_OF_THE_SIZE_OF_THE_BASE_TYPE
-                .args(*attribute.paramExpressions[0], m_sourceInterface, *attribute.paramExpressions[0],
+                .args(*expression, m_sourceInterface, *expression,
                       result->toString() + " / sizeof("
                           + diag::StringConverter<Type>::inArg(baseType, &m_sourceInterface) + ") /*"
                           + std::to_string(size) + "*/ = " + multiple.toString()));

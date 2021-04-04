@@ -4983,8 +4983,7 @@ TEST_CASE("Semantics __attribute__((vector_size(x)))", "[semantics]")
                   ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_N_GOT_N, "'vector_size'", 1, 0));
     SEMA_PRODUCES("typedef int i __attribute__((vector_size(3,5)));",
                   ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_N_GOT_N, "'vector_size'", 1, 2));
-    SEMA_PRODUCES("typedef int i __attribute__((vector_size(x)));",
-                  ProducesError(EXPECTED_INTEGER_CONSTANT_EXPRESSION_AS_ARGUMENT_TO_VECTOR_SIZE));
+    SEMA_PRODUCES("typedef int i __attribute__((vector_size(x)));", ProducesError(UNDECLARED_IDENTIFIER_N, "'x'"));
     SEMA_PRODUCES("typedef int i __attribute__((vector_size(3.5)));",
                   ProducesError(EXPECTED_INTEGER_CONSTANT_EXPRESSION_AS_ARGUMENT_TO_VECTOR_SIZE));
     SEMA_PRODUCES("typedef int i __attribute__((vector_size(-3)));",
@@ -4997,6 +4996,14 @@ TEST_CASE("Semantics __attribute__((vector_size(x)))", "[semantics]")
                   ProducesError(ARGUMENT_OF_VECTOR_SIZE_MUST_BE_A_MULTIPLE_OF_THE_SIZE_OF_THE_BASE_TYPE));
     SEMA_PRODUCES("typedef int i __attribute__((vector_size(20)));",
                   ProducesError(ARGUMENT_OF_VECTOR_SIZE_SHOULD_BE_A_POWER_OF_2_MULTIPLE_OF_THE_SIZE_OF_THE_BASE_TYPE));
+    SEMA_PRODUCES("typedef int i __attribute__((vector_size(8)));", ProducesNoErrors());
+    SEMA_PRODUCES("enum\n"
+                  "{\n"
+                  " Thing = 8,\n"
+                  "};\n"
+                  "\n"
+                  "typedef int i __attribute__((vector_size(Thing)));",
+                  ProducesNoErrors());
 }
 
 TEST_CASE("Semantics vectors", "[semantics]")
