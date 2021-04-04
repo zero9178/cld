@@ -963,6 +963,16 @@ CREATE_ERROR(ARGUMENT_OF_VECTOR_SIZE_MUST_BE_A_MULTIPLE_OF_THE_SIZE_OF_THE_BASE_
 CREATE_ERROR(ARGUMENT_OF_VECTOR_SIZE_SHOULD_BE_A_POWER_OF_2_MULTIPLE_OF_THE_SIZE_OF_THE_BASE_TYPE,
              "Argument of 'vector_size' must be a power of 2 multiple of the size of the base type", Annotate<0, 1>);
 
+// __attribute__((aligned(n)))
+
+CREATE_ERROR(EXPECTED_INTEGER_CONSTANT_EXPRESSION_AS_ARGUMENT_TO_ALIGNED,
+             "Expected integer constant expression as argument to 'aligned'", Underline<0>);
+
+CREATE_ERROR(ARGUMENT_TO_ALIGNED_MUST_BE_A_POSITIVE_NUMBER, "Argument to 'aligned' must be a positive number",
+             Annotate<0, 1>);
+
+CREATE_ERROR(ARGUMENT_TO_ALIGNED_MUST_BE_A_POWER_OF_2, "Argument to 'aligned' must be a power of 2", Annotate<0, 1>);
+
 } // namespace Semantics
 
 namespace Lexer

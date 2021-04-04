@@ -6,9 +6,9 @@ namespace cld::Semantics
 {
 class Useable;
 
-struct AlignmentAttribute
+struct AlignedAttribute
 {
-    std::optional<std::size_t> optionalAlignment;
+    std::uint64_t alignment;
 };
 
 struct DeprecatedAttribute
@@ -25,16 +25,33 @@ struct UsedAttribute
 {
 };
 
-using FunctionAttribute = std::variant<AlignmentAttribute, DeprecatedAttribute, UsedAttribute>;
+using FunctionAttribute = std::variant<AlignedAttribute, DeprecatedAttribute, UsedAttribute>;
 
-using TypeAttribute = std::variant<AlignmentAttribute, DeprecatedAttribute>;
+using TypeAttribute = std::variant<AlignedAttribute, DeprecatedAttribute>;
 
-using VariableAttribute = std::variant<AlignmentAttribute, DeprecatedAttribute, CleanupAttribute, UsedAttribute>;
+using VariableAttribute = std::variant<AlignedAttribute, DeprecatedAttribute, CleanupAttribute, UsedAttribute>;
 
 template <class T>
 class AttributeHolder
 {
     std::vector<T> m_attributes;
+
+    template <class U, std::size_t i = 0, class First, class... Args>
+    constexpr static std::size_t indexFromType(const std::variant<First, Args...>*)
+    {
+        if constexpr (std::is_same_v<U, First>)
+        {
+            return i;
+        }
+        else if constexpr (sizeof...(Args) > 0)
+        {
+            return indexFromType<U, i + 1>((std::variant<Args...>*)nullptr);
+        }
+        else
+        {
+            CLD_UNREACHABLE;
+        }
+    }
 
 public:
     [[nodiscard]] const std::vector<T>& getAttributes() const&
@@ -48,38 +65,50 @@ public:
     }
 
     template <class U>
-    const U& getAttribute() const
+    [[nodiscard]] const U& getAttribute() const
     {
-        auto result = std::find_if(m_attributes.begin(), m_attributes.end(),
-                                   [](auto&& value) { return std::holds_alternative<U>(value); });
-        CLD_ASSERT(result != m_attributes.end());
+        constexpr std::size_t index = indexFromType<U>((T*)nullptr);
+        auto result = std::lower_bound(m_attributes.begin(), m_attributes.end(), index,
+                                       [](const T& value, std::size_t index) { return value.index() < index; });
+        CLD_ASSERT(result != m_attributes.end() && result->index() == index);
         return cld::get<U>(*result);
     }
 
     template <class U>
-    const U* getAttributeIf() const
+    [[nodiscard]] const U* getAttributeIf() const
     {
-        auto result = std::find_if(m_attributes.begin(), m_attributes.end(),
-                                   [](auto&& value) { return std::holds_alternative<U>(value); });
-        if (result == m_attributes.end())
+        constexpr std::size_t index = indexFromType<U>((T*)nullptr);
+        auto result = std::lower_bound(m_attributes.begin(), m_attributes.end(), index,
+                                       [](const T& value, std::size_t index) { return value.index() < index; });
+        if (result != m_attributes.end() && result->index() == index)
         {
-            return nullptr;
+            return &cld::get<U>(*result);
         }
-        return &cld::get<U>(*result);
+        return nullptr;
     }
 
     template <class U>
-    bool hasAttribute() const
+    [[nodiscard]] U* getAttributeIf()
     {
-        return std::find_if(m_attributes.begin(), m_attributes.end(),
-                            [](auto&& value) { return std::holds_alternative<U>(value); })
-               != m_attributes.end();
+        return const_cast<U*>(static_cast<const AttributeHolder<T>*>(this)->getAttributeIf<U>());
+    }
+
+    template <class U>
+    [[nodiscard]] bool hasAttribute() const
+    {
+        return getAttributeIf<U>();
     }
 
     T& addAttribute(T&& attribute)
     {
-        m_attributes.push_back(std::move(attribute));
-        return m_attributes.back();
+        auto result = std::lower_bound(m_attributes.begin(), m_attributes.end(), attribute.index(),
+                                       [](const T& value, std::size_t index) { return value.index() < index; });
+        if (result != m_attributes.end() && result->index() == attribute.index())
+        {
+            return *result = std::move(attribute);
+        }
+        auto iter = m_attributes.insert(result, std::move(attribute));
+        return *iter;
     }
 
     template <class U>
@@ -94,7 +123,7 @@ public:
                 static_assert(std::is_move_constructible_v<W>);
                 if constexpr (std::is_constructible_v<T, W&&>)
                 {
-                    m_attributes.emplace_back(std::move(value));
+                    addAttribute(std::move(value));
                 }
             });
         }
@@ -112,7 +141,7 @@ public:
                 static_assert(std::is_copy_constructible_v<W>);
                 if constexpr (std::is_constructible_v<T, W>)
                 {
-                    m_attributes.emplace_back(value);
+                    addAttribute(std::move(value));
                 }
             });
         }

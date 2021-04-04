@@ -368,14 +368,20 @@ cld::Lexer::CTokenIterator cld::Semantics::declaratorToLoc(const cld::Syntax::De
         });
 }
 
-std::uint64_t cld::Semantics::StructType::getSizeOf(const ProgramInterface&) const
+std::uint64_t cld::Semantics::StructType::getSizeOf(const ProgramInterface& interface) const
 {
-    return cld::get<StructDefinition>(getInfo().type).getSizeOf();
+    auto size = cld::get<StructDefinition>(getInfo().type).getSizeOf();
+    return cld::roundUpTo(size, getAlignOf(interface));
 }
 
 std::uint64_t cld::Semantics::StructType::getAlignOf(const ProgramInterface&) const
 {
-    return cld::get<StructDefinition>(getInfo().type).getAlignOf();
+    auto align = cld::get<StructDefinition>(getInfo().type).getAlignOf();
+    if (auto* alignment = getInfo().getAttributeIf<AlignedAttribute>())
+    {
+        return std::max(alignment->alignment, align);
+    }
+    return align;
 }
 
 std::string_view cld::Semantics::StructType::getStructName() const
@@ -388,14 +394,20 @@ bool cld::Semantics::StructType::isAnonymous() const
     return m_info->name.empty();
 }
 
-std::uint64_t cld::Semantics::UnionType::getSizeOf(const ProgramInterface&) const
+std::uint64_t cld::Semantics::UnionType::getSizeOf(const ProgramInterface& interface) const
 {
-    return cld::get<UnionDefinition>(getInfo().type).getAlignOf();
+    auto size = cld::get<UnionDefinition>(getInfo().type).getSizeOf();
+    return cld::roundUpTo(size, getAlignOf(interface));
 }
 
 std::uint64_t cld::Semantics::UnionType::getAlignOf(const ProgramInterface&) const
 {
-    return cld::get<UnionDefinition>(getInfo().type).getAlignOf();
+    auto align = cld::get<UnionDefinition>(getInfo().type).getAlignOf();
+    if (auto* alignment = getInfo().getAttributeIf<AlignedAttribute>())
+    {
+        return std::max(alignment->alignment, align);
+    }
+    return align;
 }
 
 std::string_view cld::Semantics::UnionType::getUnionName() const

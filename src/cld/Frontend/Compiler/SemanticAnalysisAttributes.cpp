@@ -64,7 +64,7 @@ std::vector<cld::Semantics::SemanticAnalysis::GNUAttribute>
             result.emplace(name, function);
             result.emplace("__" + name + "__", function);
         };
-        unixSpelling("align", cld::bind_front(lambda, &SemanticAnalysis::applyAlignAttribute));
+        unixSpelling("aligned", cld::bind_front(lambda, &SemanticAnalysis::applyAlignedAttribute));
         unixSpelling("used", cld::bind_front(lambda, &SemanticAnalysis::applyUsedAttribute));
         unixSpelling("vector_size", cld::bind_front(lambda, &SemanticAnalysis::applyVectorSizeAttribute));
         return result;
@@ -79,11 +79,9 @@ std::vector<cld::Semantics::SemanticAnalysis::GNUAttribute>
             if (!applied)
             {
                 cld::match(
-                    applicant, [&](VariableDeclaration*) { iter.attempts |= GNUAttribute::Variable; },
-                    [&](FunctionDeclaration*) { iter.attempts |= GNUAttribute::Function; },
-                    [&](FunctionDefinition*) { iter.attempts |= GNUAttribute::Function; },
-                    [&](const std::pair<IntrVarValue<Type>*, diag::PointRange>&)
-                    { iter.attempts |= GNUAttribute::Type; });
+                    applicant, [&](AffectsVariable) { iter.attempts |= GNUAttribute::Variable; },
+                    [&](AffectsFunctions) { iter.attempts |= GNUAttribute::Function; },
+                    [&](AffectsTagType) { iter.attempts |= GNUAttribute::Type; });
                 results.push_back(std::move(iter));
             }
         }
@@ -137,7 +135,72 @@ void cld::Semantics::SemanticAnalysis::reportNotApplicableAttributes(const std::
     }
 }
 
-void cld::Semantics::SemanticAnalysis::applyAlignAttribute(AffectsAll applicant, const GNUAttribute& attribute) {}
+void cld::Semantics::SemanticAnalysis::applyAlignedAttribute(AffectsTagVariableFunction applicant,
+                                                             const GNUAttribute& attribute)
+{
+    auto argCount = (attribute.firstParamName ? 1 : 0) + attribute.paramExpressions.size();
+    if (argCount > 1)
+    {
+        log(Errors::Semantics::INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_N_GOT_N.args(
+            *attribute.name, m_sourceInterface, *attribute.name, 1, argCount));
+        return;
+    }
+    std::shared_ptr<ExpressionBase> expression;
+    if (attribute.firstParamName)
+    {
+        expression = visit(Syntax::PrimaryExpressionIdentifier(attribute.firstParamName, attribute.firstParamName + 1,
+                                                               attribute.firstParamName));
+    }
+    else if (!attribute.paramExpressions.empty())
+    {
+        expression = attribute.paramExpressions[0];
+    }
+    std::size_t alignment = getLanguageOptions().alignOfLongDouble;
+    if (expression)
+    {
+        if (!expression->getType().isUndefined() && !isInteger(expression->getType()))
+        {
+            log(Errors::Semantics::EXPECTED_INTEGER_CONSTANT_EXPRESSION_AS_ARGUMENT_TO_ALIGNED.args(
+                *expression, m_sourceInterface, *expression));
+            return;
+        }
+        if (expression->getType().isUndefined())
+        {
+            return;
+        }
+        auto result = evaluateConstantExpression(*expression);
+        if (!result)
+        {
+            std::for_each(result.error().begin(), result.error().end(), cld::bind_front(&SemanticAnalysis::log, this));
+            return;
+        }
+        if (result->getInteger() < 0)
+        {
+            log(Errors::Semantics::ARGUMENT_TO_ALIGNED_MUST_BE_A_POSITIVE_NUMBER.args(*expression, m_sourceInterface,
+                                                                                      *expression, *result));
+            return;
+        }
+        if (!result->getInteger().isPowerOf2())
+        {
+            log(Errors::Semantics::ARGUMENT_TO_ALIGNED_MUST_BE_A_POWER_OF_2.args(*expression, m_sourceInterface,
+                                                                                 *expression, *result));
+            return;
+        }
+        alignment = result->getInteger().getZExtValue();
+    }
+    cld::match(applicant,
+               [&](auto holder)
+               {
+                   if (auto* existent = holder->template getAttributeIf<AlignedAttribute>())
+                   {
+                       *existent = AlignedAttribute{std::max(alignment, existent->alignment)};
+                   }
+                   else
+                   {
+                       holder->addAttribute(AlignedAttribute{alignment});
+                   }
+               });
+}
 
 void cld::Semantics::SemanticAnalysis::applyVectorSizeAttribute(AffectsTypeVariable applicant,
                                                                 const GNUAttribute& attribute)
@@ -183,7 +246,7 @@ void cld::Semantics::SemanticAnalysis::applyVectorSizeAttribute(AffectsTypeVaria
     }
     const Type& baseType = cld::match(
         applicant,
-        [](VariableDeclaration* variableDeclaration) -> const Type& { return variableDeclaration->getType(); },
+        [](not_null<VariableDeclaration> variableDeclaration) -> const Type& { return variableDeclaration->getType(); },
         [](auto pair) -> const Type& { return *pair.first; });
     if (!isArithmetic(baseType) || isEnum(baseType))
     {
@@ -299,5 +362,5 @@ void cld::Semantics::SemanticAnalysis::applyUsedAttribute(AffectsVariableFunctio
     {
         return;
     }
-    cld::match(applicant, [](auto* holder) { holder->addAttribute(UsedAttribute{}); });
+    cld::match(applicant, [](auto holder) { holder->addAttribute(UsedAttribute{}); });
 }

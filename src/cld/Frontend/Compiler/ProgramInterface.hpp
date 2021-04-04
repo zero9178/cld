@@ -24,34 +24,52 @@ struct UnionDecl
 {
 };
 
-struct StructInfo
+struct StructInfo : public AttributeHolder<TypeAttribute>
 {
     std::size_t id;
     std::variant<StructDefinition, StructDecl> type;
     std::size_t scope;
     const Lexer::CToken* structToken;
     std::string_view name;
+
+    StructInfo(std::size_t id, std::variant<StructDefinition, StructDecl> type, std::size_t scope,
+               const Lexer::CToken* structToken, std::string_view name = "")
+        : id(id), type(std::move(type)), scope(scope), structToken(structToken), name(name)
+    {
+    }
 };
 
-struct UnionInfo
+struct UnionInfo : public AttributeHolder<TypeAttribute>
 {
     std::size_t id;
     std::variant<UnionDefinition, UnionDecl> type;
     std::size_t scope;
     const Lexer::CToken* unionToken;
     std::string_view name;
+
+    UnionInfo(std::size_t id, std::variant<UnionDefinition, UnionDecl> type, std::size_t scope,
+              const Lexer::CToken* unionToken, std::string_view name = "")
+        : id(id), type(std::move(type)), scope(scope), unionToken(unionToken), name(name)
+    {
+    }
 };
 
-struct EnumInfo
+struct EnumInfo : public AttributeHolder<TypeAttribute>
 {
     std::size_t id;
     EnumDefinition type;
     std::size_t scope;
     const Lexer::CToken* enumToken;
     std::string_view name;
+
+    EnumInfo(std::size_t id, EnumDefinition type, std::size_t scope, const Lexer::CToken* enumToken,
+             std::string_view name = "")
+        : id(id), type(std::move(type)), scope(scope), enumToken(enumToken), name(name)
+    {
+    }
 };
 
-struct TypedefInfo
+struct TypedefInfo : public AttributeHolder<TypeAttribute>
 {
     std::string_view name;
     IntrVarValue<Type> type;
@@ -60,6 +78,18 @@ struct TypedefInfo
     bool isVolatile : 1;
     bool isRestricted : 1;
     const Lexer::CToken* CLD_NULLABLE identifierToken; // nullptr if builtin
+
+    TypedefInfo(std::string_view name, IntrVarValue<Type> type, std::size_t scope,
+                const Lexer::CToken* identifierToken = nullptr)
+        : name(name),
+          type(std::move(type)),
+          scope(scope),
+          isConst(this->type->isConst()),
+          isVolatile(this->type->isVolatile()),
+          isRestricted(this->type->isRestricted()),
+          identifierToken(identifierToken)
+    {
+    }
 };
 
 class ProgramInterface

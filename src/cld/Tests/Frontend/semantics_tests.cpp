@@ -5409,3 +5409,108 @@ TEST_CASE("Semantics vectors", "[semantics]")
                       ProducesError(NO_MORE_SUB_OBJECTS_TO_INITIALIZE));
     }
 }
+
+TEST_CASE("Semantics __attribute__((aligned))", "[semantics]")
+{
+    SEMA_PRODUCES("struct __attribute__ ((aligned)) S { short f[3]; };", ProducesNoErrors());
+    SEMA_PRODUCES("struct __attribute__ ((aligned(8))) S { short f[3]; };", ProducesNoErrors());
+    SEMA_PRODUCES("struct __attribute__ ((aligned(8,3))) S { short f[3]; };",
+                  ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_N_GOT_N, "'aligned'", 1, 2));
+    SEMA_PRODUCES("struct __attribute__ ((aligned(3.0))) S { short f[3]; };",
+                  ProducesError(EXPECTED_INTEGER_CONSTANT_EXPRESSION_AS_ARGUMENT_TO_ALIGNED));
+    SEMA_PRODUCES("struct __attribute__ ((aligned(-1))) S { short f[3]; };",
+                  ProducesError(ARGUMENT_TO_ALIGNED_MUST_BE_A_POSITIVE_NUMBER));
+    SEMA_PRODUCES("struct __attribute__ ((aligned(3))) S { short f[3]; };",
+                  ProducesError(ARGUMENT_TO_ALIGNED_MUST_BE_A_POWER_OF_2));
+    SECTION("struct")
+    {
+        SECTION("Simple")
+        {
+            auto program = generateProgram("struct __attribute__((aligned(8))) S {\n"
+                                           "short f[3];\n"
+                                           "};\n");
+            auto* structInfo = program.lookupType<StructInfo>("S", ProgramInterface::GLOBAL_SCOPE);
+            REQUIRE(structInfo);
+            auto* attribute = structInfo->getAttributeIf<AlignedAttribute>();
+            REQUIRE(attribute);
+            CHECK(attribute->alignment == 8);
+            CHECK(StructType(*structInfo).getSizeOf(program) == 8);
+            CHECK(StructType(*structInfo).getAlignOf(program) == 8);
+        }
+        SECTION("Can't reduce align")
+        {
+            auto program = generateProgram("struct __attribute__((aligned(1))) S {\n"
+                                           "short f[3];\n"
+                                           "};\n");
+            auto* structInfo = program.lookupType<StructInfo>("S", ProgramInterface::GLOBAL_SCOPE);
+            REQUIRE(structInfo);
+            auto* attribute = structInfo->getAttributeIf<AlignedAttribute>();
+            REQUIRE(attribute);
+            CHECK(attribute->alignment == 1);
+            CHECK(StructType(*structInfo).getSizeOf(program) == 6);
+            CHECK(StructType(*structInfo).getAlignOf(program) == 2);
+        }
+        SECTION("Largest alignment attribute is chosen")
+        {
+            auto program = generateProgram("struct __attribute__((aligned(4))) S;\n"
+                                           "\n"
+                                           "struct __attribute__((aligned(2))) S {\n"
+                                           "short f[3];\n"
+                                           "};\n");
+            auto* structInfo = program.lookupType<StructInfo>("S", ProgramInterface::GLOBAL_SCOPE);
+            REQUIRE(structInfo);
+            auto* attribute = structInfo->getAttributeIf<AlignedAttribute>();
+            REQUIRE(attribute);
+            CHECK(attribute->alignment == 4);
+            CHECK(StructType(*structInfo).getSizeOf(program) == 8);
+            CHECK(StructType(*structInfo).getAlignOf(program) == 4);
+        }
+    }
+    SECTION("union")
+    {
+        SECTION("Simple")
+        {
+            auto program = generateProgram("union __attribute__((aligned(8))) S {\n"
+                                           "short f[3];\n"
+                                           "char c;\n"
+                                           "};\n");
+            auto* unionInfo = program.lookupType<UnionInfo>("S", ProgramInterface::GLOBAL_SCOPE);
+            REQUIRE(unionInfo);
+            auto* attribute = unionInfo->getAttributeIf<AlignedAttribute>();
+            REQUIRE(attribute);
+            CHECK(attribute->alignment == 8);
+            CHECK(UnionType(*unionInfo).getSizeOf(program) == 8);
+            CHECK(UnionType(*unionInfo).getAlignOf(program) == 8);
+        }
+        SECTION("Can't reduce align")
+        {
+            auto program = generateProgram("union __attribute__((aligned(1))) S {\n"
+                                           "short f[3];\n"
+                                           "char c;\n"
+                                           "};\n");
+            auto* unionInfo = program.lookupType<UnionInfo>("S", ProgramInterface::GLOBAL_SCOPE);
+            REQUIRE(unionInfo);
+            auto* attribute = unionInfo->getAttributeIf<AlignedAttribute>();
+            REQUIRE(attribute);
+            CHECK(attribute->alignment == 1);
+            CHECK(UnionType(*unionInfo).getSizeOf(program) == 6);
+            CHECK(UnionType(*unionInfo).getAlignOf(program) == 2);
+        }
+        SECTION("Largest alignment attribute is chosen")
+        {
+            auto program = generateProgram("union __attribute__((aligned(4))) S;\n"
+                                           "\n"
+                                           "union __attribute__((aligned(2))) S {\n"
+                                           "short f[3];\n"
+                                           "char c;\n"
+                                           "};\n");
+            auto* unionInfo = program.lookupType<UnionInfo>("S", ProgramInterface::GLOBAL_SCOPE);
+            REQUIRE(unionInfo);
+            auto* attribute = unionInfo->getAttributeIf<AlignedAttribute>();
+            REQUIRE(attribute);
+            CHECK(attribute->alignment == 4);
+            CHECK(UnionType(*unionInfo).getSizeOf(program) == 8);
+            CHECK(UnionType(*unionInfo).getAlignOf(program) == 4);
+        }
+    }
+}

@@ -45,8 +45,7 @@ class ProgramInterface;
 
 class Type : public AbstractIntrusiveVariant<Type, class PrimitiveType, class ArrayType, class AbstractArrayType,
                                              class ValArrayType, class FunctionType, class StructType, class UnionType,
-                                             class EnumType, class PointerType, class VectorType, class ErrorType>,
-             public AttributeHolder<TypeAttribute>
+                                             class EnumType, class PointerType, class VectorType, class ErrorType>
 {
 public:
     enum TypeFlags : std::uint8_t

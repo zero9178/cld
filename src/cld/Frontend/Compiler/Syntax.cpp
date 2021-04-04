@@ -825,17 +825,17 @@ const std::vector<cld::Syntax::Declaration::InitDeclarator>& cld::Syntax::Declar
 
 cld::Syntax::StructOrUnionSpecifier::StructOrUnionSpecifier(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                                             bool isUnion,
-                                                            std::optional<GNUAttributes>&& optionalBeforeAttribute,
+                                                            std::optional<GNUAttributes>&& optionalBeforeAttributes,
                                                             const Lexer::CToken* identifierLoc,
                                                             std::vector<StructDeclaration>&& structDeclarations,
-                                                            std::optional<GNUAttributes>&& optionalAfterAttribute,
+                                                            std::optional<GNUAttributes>&& optionalAfterAttributes,
                                                             bool extensionsEnabled)
     : Node(begin, end),
       m_isUnion(isUnion),
-      m_optionalBeforeAttribute(std::move(optionalBeforeAttribute)),
+      m_optionalBeforeAttributes(std::move(optionalBeforeAttributes)),
       m_identifierLoc(std::move(identifierLoc)),
       m_structDeclarations(std::move(structDeclarations)),
-      m_optionalAfterAttribute(std::move(optionalAfterAttribute)),
+      m_optionalAfterAttributes(std::move(optionalAfterAttributes)),
       m_extensionEnabled(extensionsEnabled)
 {
 }
@@ -859,6 +859,17 @@ const std::vector<cld::Syntax::StructOrUnionSpecifier::StructDeclaration>&
 bool cld::Syntax::StructOrUnionSpecifier::extensionsEnabled() const
 {
     return m_extensionEnabled;
+}
+
+const std::optional<cld::Syntax::GNUAttributes>&
+    cld::Syntax::StructOrUnionSpecifier::getOptionalBeforeAttributes() const
+{
+    return m_optionalBeforeAttributes;
+}
+
+const std::optional<cld::Syntax::GNUAttributes>& cld::Syntax::StructOrUnionSpecifier::getOptionalAfterAttributes() const
+{
+    return m_optionalAfterAttributes;
 }
 
 cld::Syntax::ParameterList::ParameterList(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,

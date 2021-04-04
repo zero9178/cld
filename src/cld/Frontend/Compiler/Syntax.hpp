@@ -1896,7 +1896,7 @@ public:
 class StructOrUnionSpecifier final : public Node
 {
     bool m_isUnion;
-    std::optional<GNUAttributes> m_optionalBeforeAttribute;
+    std::optional<GNUAttributes> m_optionalBeforeAttributes;
     const Lexer::CToken* m_identifierLoc;
 
 public:
@@ -1926,7 +1926,7 @@ public:
 
 private:
     std::vector<StructDeclaration> m_structDeclarations;
-    std::optional<GNUAttributes> m_optionalAfterAttribute;
+    std::optional<GNUAttributes> m_optionalAfterAttributes;
     bool m_extensionEnabled;
 
 public:
@@ -1937,9 +1937,13 @@ public:
 
     [[nodiscard]] bool isUnion() const;
 
+    const std::optional<GNUAttributes>& getOptionalBeforeAttributes() const;
+
     [[nodiscard]] const Lexer::CToken* getIdentifierLoc() const;
 
     [[nodiscard]] const std::vector<StructDeclaration>& getStructDeclarations() const;
+
+    const std::optional<GNUAttributes>& getOptionalAfterAttributes() const;
 
     [[nodiscard]] bool extensionsEnabled() const;
 };

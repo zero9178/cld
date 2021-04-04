@@ -547,12 +547,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                 continue;
             }
             thisAttributes = applyAttributes(std::pair{&result, diag::getPointRange(*loc)}, std::move(thisAttributes));
-            reportNotApplicableAttributes(thisAttributes);
-            auto isConst = result->isConst();
-            auto isVolatile = result->isVolatile();
-            auto isRestricted = result->isRestricted();
-            auto [prev, noRedefinition] =
-                insertTypedef({loc->getText(), result, m_currentScope, isConst, isVolatile, isRestricted, loc});
+            auto [prev, noRedefinition] = insertTypedef({loc->getText(), result, m_currentScope, loc});
             if (!noRedefinition
                 && (!std::holds_alternative<TypedefInfo*>(prev->second.declared)
                     || !typesAreCompatible(result, cld::get<TypedefInfo*>(prev->second.declared)->type)))
@@ -561,6 +556,12 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                 log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
                                                          *prev->second.identifier));
             }
+            else
+            {
+                thisAttributes =
+                    applyAttributes(cld::get<TypedefInfo*>(prev->second.declared), std::move(thisAttributes));
+            }
+            reportNotApplicableAttributes(thisAttributes);
             for (auto& type : RecursiveVisitor(result, TYPE_NEXT_FN))
             {
                 if (auto* valArrayType = type.tryAs<ValArrayType>())

@@ -881,6 +881,11 @@ cld::IntrVarValue<cld::Semantics::Type>
     cld::Semantics::SemanticAnalysis::structOrUnionSpecifierToType(bool isConst, bool isVolatile,
                                                                    const Syntax::StructOrUnionSpecifier& structOrUnion)
 {
+    std::vector<SemanticAnalysis::GNUAttribute> pureTypeAttributes;
+    if (structOrUnion.getOptionalBeforeAttributes())
+    {
+        pureTypeAttributes = visit(*structOrUnion.getOptionalBeforeAttributes());
+    }
     if (structOrUnion.getStructDeclarations().empty())
     {
         CLD_ASSERT(structOrUnion.getIdentifierLoc());
@@ -889,6 +894,8 @@ cld::IntrVarValue<cld::Semantics::Type>
         {
             if (auto* unionInfo = lookupType<UnionInfo>(name))
             {
+                pureTypeAttributes = applyAttributes(unionInfo, std::move(pureTypeAttributes));
+                reportNotApplicableAttributes(pureTypeAttributes);
                 return UnionType(*unionInfo, flag::isConst = isConst, flag::isVolatile = isVolatile);
             }
             m_unionDefinitions.push_back(
@@ -905,11 +912,15 @@ cld::IntrVarValue<cld::Semantics::Type>
                                                              *prev->second.identifier));
                 }
             }
+            pureTypeAttributes = applyAttributes(&m_unionDefinitions.back(), std::move(pureTypeAttributes));
+            reportNotApplicableAttributes(pureTypeAttributes);
             return UnionType(m_unionDefinitions.back(), flag::isConst = isConst, flag::isVolatile = isVolatile);
         }
 
         if (auto* structInfo = lookupType<StructInfo>(name))
         {
+            pureTypeAttributes = applyAttributes(structInfo, std::move(pureTypeAttributes));
+            reportNotApplicableAttributes(pureTypeAttributes);
             return StructType(*structInfo, flag::isConst = isConst, flag::isVolatile = isVolatile);
         }
         m_structDefinitions.push_back(
@@ -926,7 +937,15 @@ cld::IntrVarValue<cld::Semantics::Type>
                                                          *prev->second.identifier));
             }
         }
+        pureTypeAttributes = applyAttributes(&m_structDefinitions.back(), std::move(pureTypeAttributes));
+        reportNotApplicableAttributes(pureTypeAttributes);
         return StructType(m_structDefinitions.back(), flag::isConst = isConst, flag::isVolatile = isVolatile);
+    }
+    if (structOrUnion.getOptionalAfterAttributes())
+    {
+        auto result = visit(*structOrUnion.getOptionalAfterAttributes());
+        pureTypeAttributes.insert(pureTypeAttributes.end(), std::move_iterator(result.begin()),
+                                  std::move_iterator(result.end()));
     }
 
     std::variant<std::monostate, UnionInfo * CLD_NON_NULL, StructInfo * CLD_NON_NULL> structOrUnionInfo;
@@ -1398,6 +1417,13 @@ cld::IntrVarValue<cld::Semantics::Type>
     {
         return ErrorType{};
     }
+    cld::match(
+        structOrUnionInfo, [](std::monostate) { CLD_UNREACHABLE; },
+        [&](auto* info)
+        {
+            pureTypeAttributes = applyAttributes(info, std::move(pureTypeAttributes));
+            reportNotApplicableAttributes(pureTypeAttributes);
+        });
 
     std::string_view name = structOrUnion.getIdentifierLoc() ? structOrUnion.getIdentifierLoc()->getText() : "";
     if (structOrUnion.isUnion())

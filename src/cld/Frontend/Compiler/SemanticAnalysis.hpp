@@ -392,6 +392,16 @@ private:
                                  const Syntax::StorageClassSpecifier* storageClassSpecifier, bool isInline,
                                  std::vector<GNUAttribute>&& attributes);
 
+    template <class... Args>
+    static auto variantToTuple(const std::variant<Args...>&) -> std::tuple<Args...>;
+
+    template <class... Args>
+    static auto tupleToVariant(const std::tuple<Args...>&) -> std::variant<Args...>;
+
+    template <class... Variants>
+    static auto variantTypeUnion(Variants&&... variants)
+        -> decltype(tupleToVariant(std::tuple_cat(variantToTuple(std::forward<Variants>(variants))...)));
+
 public:
     explicit SemanticAnalysis(const SourceInterface& sourceInterface, llvm::raw_ostream* reporter = &llvm::errs(),
                               bool* errors = nullptr, std::function<bool(std::string_view)> definedCallback = {})
@@ -528,19 +538,36 @@ public:
 
     [[nodiscard]] std::vector<GNUAttribute> visit(const Syntax::GNUAttributes& node);
 
-    using AffectsFunctions = std::variant<FunctionDeclaration * CLD_NON_NULL, FunctionDefinition * CLD_NON_NULL>;
-    using AffectsAll =
-        std::variant<std::pair<IntrVarValue<Type> * CLD_NON_NULL, diag::PointRange>, FunctionDeclaration * CLD_NON_NULL,
-                     FunctionDefinition * CLD_NON_NULL, VariableDeclaration * CLD_NON_NULL>;
-    using AffectsTypeVariable = std::variant<VariableDeclaration * CLD_NON_NULL,
-                                             std::pair<IntrVarValue<Type> * CLD_NON_NULL, diag::PointRange>>;
-    using AffectsVariableFunction = std::variant<VariableDeclaration * CLD_NON_NULL, FunctionDeclaration * CLD_NON_NULL,
-                                                 FunctionDefinition * CLD_NON_NULL>;
+    using AffectsFunctions = std::variant<not_null<FunctionDeclaration>, not_null<FunctionDefinition>>;
+
+    using AffectsType = std::variant<std::pair<not_null<IntrVarValue<Type>>, diag::PointRange>>;
+
+    using AffectsTag =
+        std::variant<not_null<StructInfo>, not_null<UnionInfo>, not_null<EnumInfo>, not_null<TypedefInfo>>;
+
+    using AffectsTagType = decltype(variantTypeUnion(std::declval<AffectsType>(), std::declval<AffectsTag>()));
+
+    using AffectsVariable = std::variant<not_null<VariableDeclaration>>;
+
+    using AffectsTypeVariable =
+        decltype(variantTypeUnion(std::declval<AffectsType>(), std::declval<AffectsVariable>()));
+
+    using AffectsTagTypeVariable =
+        decltype(variantTypeUnion(std::declval<AffectsType>(), std::declval<AffectsVariable>()));
+
+    using AffectsVariableFunction =
+        decltype(variantTypeUnion(std::declval<AffectsFunctions>(), std::declval<AffectsVariable>()));
+
+    using AffectsTagVariableFunction = decltype(variantTypeUnion(
+        std::declval<AffectsFunctions>(), std::declval<AffectsVariable>(), std::declval<AffectsTag>()));
+
+    using AffectsAll = decltype(variantTypeUnion(std::declval<AffectsFunctions>(), std::declval<AffectsVariable>(),
+                                                 std::declval<AffectsType>(), std::declval<AffectsTag>()));
 
     [[nodiscard]] std::vector<GNUAttribute> applyAttributes(AffectsAll applicant,
                                                             std::vector<GNUAttribute>&& attributes);
 
-    void applyAlignAttribute(AffectsAll applicant, const GNUAttribute& attribute);
+    void applyAlignedAttribute(AffectsTagVariableFunction applicant, const GNUAttribute& attribute);
 
     void applyVectorSizeAttribute(AffectsTypeVariable applicant, const GNUAttribute& attribute);
 
