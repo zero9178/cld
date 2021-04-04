@@ -6258,3 +6258,39 @@ TEST_CASE("LLVM codegen vectors", "[LLVM]")
         CHECK(array[3] == 0xAAAA);
     }
 }
+
+TEST_CASE("LLVM codegen __attribute__((aligned))", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    llvm::Module module("", context);
+    SECTION("Typedef")
+    {
+        SECTION("Global")
+        {
+            auto program = generateProgramWithOptions("typedef int INTEGER __attribute__((aligned(8)));\n"
+                                                      "\n"
+                                                      "INTEGER i;",
+                                                      x64linux);
+            cld::CGLLVM::generateLLVM(module, program, cld::Triple::native());
+            CAPTURE(module);
+            REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
+            auto* global = module.getGlobalVariable("i");
+            REQUIRE(global);
+            CHECK(global->getAlign() == 8);
+        }
+        SECTION("Local")
+        {
+            auto program = generateProgramWithOptions("typedef int INTEGER __attribute__((aligned(8)));\n"
+                                                      "\n"
+                                                      "int foo(void) {\n"
+                                                      "INTEGER i = 5;\n"
+                                                      "return i;\n"
+                                                      "}",
+                                                      x64linux);
+            cld::CGLLVM::generateLLVM(module, program, cld::Triple::native());
+            CAPTURE(module);
+            REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
+            CHECK_THAT(module, ContainsIR("alloca i32, align 8"));
+        }
+    }
+}

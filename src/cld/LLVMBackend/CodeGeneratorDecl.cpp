@@ -593,7 +593,8 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::VariableDe
                 if (m_triple.getArchitecture() == cld::Architecture::x86_64 && Semantics::isArray(declType)
                     && !Semantics::isAbstractArray(declType) && declType.getSizeOf(m_programInterface) >= 16)
                 {
-                    global->setAlignment(llvm::Align(16));
+                    global->setAlignment(
+                        llvm::Align(std::max<std::size_t>(16, declType.getAlignOf(m_programInterface))));
                 }
                 else
                 {
