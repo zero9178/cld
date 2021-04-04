@@ -720,7 +720,6 @@ class Context : private cld::SourceInterface
     std::vector<std::uint64_t> m_lineStarts;
     const IntervalMap& m_characterToSourceSpace;
     bool m_errorsOccurred = false;
-    std::optional<std::uint64_t> m_lastBlockCommentEndPos;
     cld::Source::File m_fakeFile;
     const cld::LanguageOptions& m_languageOptions;
 
@@ -779,6 +778,7 @@ class Context : private cld::SourceInterface
 
 public:
     std::uint64_t tokenStartOffset;
+    bool leadingWhitespace = false;
 
     Context(std::string_view sourceSpace, const IntervalMap& characterToSourceSpace, std::string_view characterSpace,
             std::uint64_t& offset, std::vector<std::uint64_t> lineStarts, llvm::raw_ostream* reporter,
@@ -857,31 +857,12 @@ public:
 
     void push(std::uint64_t start, std::uint64_t end, TokenType tokenType, std::string value = {})
     {
-        bool leadingWhitespace = m_lastBlockCommentEndPos == start;
-        if (!leadingWhitespace)
-        {
-            // Find the first byte of a UTF-8 Sequence
-            auto iter = findUTF8StartByte(std::make_reverse_iterator(m_characterSpace.begin() + start),
-                                          m_characterSpace.rend());
-            if (iter != m_characterSpace.rend())
-            {
-                std::uint32_t codePoint;
-                auto* sourceStart = m_characterSpace.data() + (iter.base() - m_characterSpace.begin() - 1);
-                auto result =
-                    llvm::convertUTF8Sequence(reinterpret_cast<const llvm::UTF8**>(&sourceStart),
-                                              reinterpret_cast<const llvm::UTF8*>(m_characterSpace.data() + start),
-                                              &codePoint, llvm::strictConversion);
-                if (result == llvm::conversionOK)
-                {
-                    leadingWhitespace = codePoint != '\n' && cld::isWhitespace(codePoint);
-                }
-            }
-        }
         auto sourceStart = map(m_characterToSourceSpace, start).first;
         auto sourceEnd = map(m_characterToSourceSpace, end - 1).second;
         auto& newToken = m_result.emplace_back(tokenType, sourceStart, sourceEnd - sourceStart, start, end - start, 0,
                                                0, std::move(value));
         newToken.setLeadingWhitespace(leadingWhitespace);
+        leadingWhitespace = false;
     }
 
     void push(TokenType tokenType, std::string value = {})
@@ -907,11 +888,6 @@ public:
     bool errorsOccurred() const
     {
         return m_errorsOccurred;
-    }
-
-    void setLastBlockCommentEndPos(std::uint64_t lastBlockCommentEndPos)
-    {
-        m_lastBlockCommentEndPos = lastBlockCommentEndPos;
     }
 };
 
@@ -1138,6 +1114,7 @@ StateMachine Start::advance(std::uint32_t c, Context& context)
             }
             if (cld::isWhitespace(c))
             {
+                context.leadingWhitespace = true;
                 return *this;
             }
             if (!llvm::sys::unicode::isPrintable(c))
@@ -1582,7 +1559,7 @@ StateMachine BlockComment::advance(char c, Context& context) noexcept
 {
     if (lastChar && *lastChar == '*' && c == '/')
     {
-        context.setLastBlockCommentEndPos(context.getOffset());
+        context.leadingWhitespace = true;
         return Start{};
     }
     lastChar = c;
