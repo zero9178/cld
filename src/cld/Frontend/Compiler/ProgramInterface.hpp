@@ -11,6 +11,7 @@
 #include <tsl/ordered_map.h>
 
 #include "ConstValue.hpp"
+#include "SemanticUtil.hpp"
 #include "Semantics.hpp"
 
 namespace cld::Semantics
@@ -118,6 +119,19 @@ protected:
         return m_typeAlloc.alloc<U>(std::forward<Args>(args)...);
     }
 
+    auto scopeIterator(std::size_t scope) const
+    {
+        return RecursiveVisitor(m_scopes[scope],
+                                [this](const Scope& scope) -> const Scope*
+                                {
+                                    if (scope.previousScope == END_OF_SCOPES)
+                                    {
+                                        return nullptr;
+                                    }
+                                    return &m_scopes[scope.previousScope];
+                                });
+    }
+
 public:
     ProgramInterface() = default;
 
@@ -137,26 +151,30 @@ public:
 #endif
         = default;
 
-
     [[nodiscard]] virtual const LanguageOptions& getLanguageOptions() const = 0;
 
     template <class T>
     [[nodiscard]] const T* CLD_NULLABLE lookupType(std::string_view name, std::size_t scope) const
     {
-        auto curr = scope;
-        while (curr != END_OF_SCOPES)
+        for (auto& iter : scopeIterator(scope))
         {
-            auto result = m_scopes[curr].types.find(name);
-            if (result != m_scopes[curr].types.end())
+            auto result = iter.types.find(name);
+            if (result == iter.types.end())
             {
-                if (auto* ptr = std::get_if<T*>(&result->second.tagType))
-                {
-                    return *ptr;
-                }
+                continue;
             }
-            curr = m_scopes[curr].previousScope;
+            if (auto* ptr = std::get_if<T*>(&result->second.tagType))
+            {
+                return *ptr;
+            }
         }
         return nullptr;
+    }
+
+    template <class T>
+    [[nodiscard]] T* CLD_NULLABLE lookupType(std::string_view name, std::size_t scope)
+    {
+        return const_cast<T*>(static_cast<const ProgramInterface*>(this)->lookupType<T>(name, scope));
     }
 
     const std::vector<Scope>& getScopes() const

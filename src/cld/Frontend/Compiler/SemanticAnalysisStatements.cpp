@@ -400,13 +400,11 @@ void cld::Semantics::SemanticAnalysis::resolveGotos()
 
         // The current scope always needs to be checked as different declarations might be visible at the point of both
         // the label and the goto even if they're in the same scope
+        auto scopeIter = scopeIterator(m_currentScope);
         std::unordered_set<std::size_t> scopes;
-        auto curr = m_scopes[m_currentScope].previousScope;
-        while (curr != static_cast<std::size_t>(-1))
-        {
-            scopes.insert(curr);
-            curr = m_scopes[curr].previousScope;
-        }
+        std::transform(scopeIter.begin(), scopeIter.end(), std::inserter(scopes, scopes.begin()),
+                       [](const Scope& scope) { return scope.previousScope; });
+        scopes.erase(END_OF_SCOPES);
 
         bool illegalJump = false;
         bool isTypedef = false;

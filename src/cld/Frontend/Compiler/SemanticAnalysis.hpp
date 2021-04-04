@@ -279,6 +279,12 @@ private:
                         cld::function_ref<void(const Message&)> logger) const;
 
     template <class T>
+    [[nodiscard]] T* CLD_NULLABLE lookupType(std::string_view name)
+    {
+        return ProgramInterface::lookupType<T>(name, m_currentScope);
+    }
+
+    template <class T>
     [[nodiscard]] const T* CLD_NULLABLE lookupType(std::string_view name) const
     {
         return ProgramInterface::lookupType<T>(name, m_currentScope);

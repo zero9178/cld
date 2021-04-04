@@ -922,49 +922,44 @@ cld::IntrVarPtr<cld::Semantics::Statement> cld::Semantics::SemanticAnalysis::vis
 
 bool cld::Semantics::SemanticAnalysis::isTypedef(std::string_view name) const
 {
-    auto curr = m_currentScope;
-    while (curr != static_cast<std::size_t>(-1))
-    {
-        auto result = m_scopes[curr].declarations.find(name);
-        if (result != m_scopes[curr].declarations.end()
-            && std::holds_alternative<TypedefInfo*>(result->second.declared))
-        {
-            return true;
-        }
-        curr = m_scopes[curr].previousScope;
-    }
-
-    return false;
+    auto range = scopeIterator(m_currentScope);
+    return std::any_of(range.begin(), range.end(),
+                       [name](const Scope& scope)
+                       {
+                           auto result = scope.declarations.find(name);
+                           if (result != scope.declarations.end()
+                               && std::holds_alternative<TypedefInfo*>(result->second.declared))
+                           {
+                               return true;
+                           }
+                           return false;
+                       });
 }
 
 bool cld::Semantics::SemanticAnalysis::isTypedefInScope(std::string_view name) const
 {
-    auto curr = m_currentScope;
-    while (curr != static_cast<std::size_t>(-1))
+    for (auto& scope : scopeIterator(m_currentScope))
     {
-        auto result = m_scopes[curr].declarations.find(name);
-        if (result != m_scopes[curr].declarations.end())
+        auto result = scope.declarations.find(name);
+        if (result != scope.declarations.end())
         {
             return std::holds_alternative<TypedefInfo*>(result->second.declared);
         }
-        curr = m_scopes[curr].previousScope;
+        return false;
     }
-
     return false;
 }
 
 const cld::Semantics::SemanticAnalysis::DeclarationInScope::Variant*
     cld::Semantics::SemanticAnalysis::lookupDecl(std::string_view name, std::int64_t scope)
 {
-    auto curr = scope;
-    while (curr >= 0)
+    for (auto& iter : scopeIterator(scope))
     {
-        auto result = m_scopes[curr].declarations.find(name);
-        if (result != m_scopes[curr].declarations.end())
+        auto result = iter.declarations.find(name);
+        if (result != iter.declarations.end())
         {
             return &result->second.declared;
         }
-        curr = m_scopes[curr].previousScope;
     }
     return getBuiltinFuncDecl(name);
 }
