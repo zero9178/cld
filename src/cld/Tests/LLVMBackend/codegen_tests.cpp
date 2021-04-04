@@ -6293,4 +6293,59 @@ TEST_CASE("LLVM codegen __attribute__((aligned))", "[LLVM]")
             CHECK_THAT(module, ContainsIR("alloca i32, align 8"));
         }
     }
+    SECTION("Variable")
+    {
+        SECTION("Global")
+        {
+            auto program = generateProgramWithOptions("int __attribute__((aligned(8))) i;", x64linux);
+            cld::CGLLVM::generateLLVM(module, program, cld::Triple::native());
+            CAPTURE(module);
+            REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
+            auto* global = module.getGlobalVariable("i");
+            REQUIRE(global);
+            CHECK(global->getAlign() == 8);
+        }
+        SECTION("Local")
+        {
+            auto program = generateProgramWithOptions("int foo(void) {\n"
+                                                      "int __attribute__((aligned(8))) i = 5;\n"
+                                                      "return i;\n"
+                                                      "}",
+                                                      x64linux);
+            cld::CGLLVM::generateLLVM(module, program, cld::Triple::native());
+            CAPTURE(module);
+            REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
+            CHECK_THAT(module, ContainsIR("alloca i32, align 8"));
+        }
+        SECTION("Variable attribute overwrites type attribute")
+        {
+            SECTION("Global")
+            {
+                auto program = generateProgramWithOptions("typedef int INTEGER __attribute__((aligned(8)));\n"
+                                                          "\n"
+                                                          "INTEGER __attribute__((aligned(1))) i;",
+                                                          x64linux);
+                cld::CGLLVM::generateLLVM(module, program, cld::Triple::native());
+                CAPTURE(module);
+                REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
+                auto* global = module.getGlobalVariable("i");
+                REQUIRE(global);
+                CHECK(global->getAlign() == 1);
+            }
+            SECTION("Local")
+            {
+                auto program = generateProgramWithOptions("typedef int INTEGER __attribute__((aligned(8)));\n"
+                                                          "\n"
+                                                          "int foo(void) {\n"
+                                                          "INTEGER __attribute__((aligned(1))) i = 5;\n"
+                                                          "return i;\n"
+                                                          "}",
+                                                          x64linux);
+                cld::CGLLVM::generateLLVM(module, program, cld::Triple::native());
+                CAPTURE(module);
+                REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
+                CHECK_THAT(module, ContainsIR("alloca i32, align 1"));
+            }
+        }
+    }
 }

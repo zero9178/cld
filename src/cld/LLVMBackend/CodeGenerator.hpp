@@ -208,7 +208,7 @@ public:
 
     Value createPointerCast(Value ptr, llvm::Type* pointerType);
 
-    Value createBitCast(Value ptr, llvm::Type* pointerType, bool checked = true);
+    Value createBitCast(Value ptr, llvm::Type* pointerType);
 
     Value createSafeBitCast(Value ptr, llvm::Type* pointerType);
 

@@ -98,7 +98,7 @@ void cld::CGLLVM::WinX64ABI::generateFunctionEntry(
                                                             paramDecl->getNameToken()->getText());
                 var->setAlignment(llvm::Align(paramDecl->getType().getAlignOf(codeGenerator.getProgramInterface())));
                 codeGenerator.addLValue(*paramDecl, var);
-                auto cast = codeGenerator.createBitCast(var, operand->getType()->getPointerTo(0), false);
+                auto cast = codeGenerator.createBitCast(var, operand->getType()->getPointerTo(0));
                 codeGenerator.createStore(operand, cast, paramDecl->getType().isVolatile());
                 break;
             }
@@ -185,7 +185,7 @@ cld::CGLLVM::Value cld::CGLLVM::WinX64ABI::generateFunctionCall(CodeGenerator& c
                 auto* load = llvm::cast<llvm::LoadInst>(arguments[i]);
                 auto integer =
                     codeGenerator.createBitCast(codeGenerator.valueOf(load->getPointerOperand(), load->getAlign()),
-                                                llvmFunctionType->getParamType(llvmFnI + i)->getPointerTo(0), false);
+                                                llvmFunctionType->getParamType(llvmFnI + i)->getPointerTo(0));
                 arguments[i] = codeGenerator.createLoad(integer, load->isVolatile());
                 load->eraseFromParent();
                 break;

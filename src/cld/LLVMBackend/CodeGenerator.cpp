@@ -406,13 +406,8 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::createPointerCast(Value ptr, llvm
     return valueOf(m_builder.CreateBitCast(ptr, pointerType));
 }
 
-cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::createBitCast(Value ptr, llvm::Type* pointerType, bool checked)
+cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::createBitCast(Value ptr, llvm::Type* pointerType)
 {
-    CLD_ASSERT(
-        !checked
-        || (ptr.alignment && pointerType->isPointerTy()
-            && (pointerType->getPointerElementType()->isFunctionTy()
-                || *ptr.alignment >= m_module.getDataLayout().getABITypeAlign(pointerType->getPointerElementType()))));
     return valueOf(m_builder.CreateBitCast(ptr, pointerType), ptr.alignment);
 }
 

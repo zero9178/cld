@@ -590,16 +590,17 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::VariableDe
                 constant, llvm::StringRef{declaration.getNameToken()->getText()});
             if (Semantics::isCompleteType(declType) || Semantics::isAbstractArray(declType))
             {
+                std::uint64_t alignment = declType.getAlignOf(m_programInterface);
                 if (m_triple.getArchitecture() == cld::Architecture::x86_64 && Semantics::isArray(declType)
                     && !Semantics::isAbstractArray(declType) && declType.getSizeOf(m_programInterface) >= 16)
                 {
-                    global->setAlignment(
-                        llvm::Align(std::max<std::size_t>(16, declType.getAlignOf(m_programInterface))));
+                    alignment = std::max<std::uint64_t>(16, alignment);
                 }
-                else
+                if (auto* aligned = declaration.getAttributeIf<Semantics::AlignedAttribute>())
                 {
-                    global->setAlignment(llvm::Align(declType.getAlignOf(m_programInterface)));
+                    alignment = aligned->alignment;
                 }
+                global->setAlignment(llvm::Align(alignment));
             }
             if (!m_options.reloc)
             {
@@ -671,15 +672,17 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::VariableDe
     else
     {
         var = createAllocaAtTop(type, declaration.getNameToken()->getText());
+        std::uint64_t alignment = declaration.getType().getAlignOf(m_programInterface);
         if (m_triple.getArchitecture() == cld::Architecture::x86_64 && Semantics::isArray(declaration.getType())
             && declaration.getType().getSizeOf(m_programInterface) >= 16)
         {
-            var->setAlignment(llvm::Align(16));
+            alignment = std::max<std::uint64_t>(alignment, 16);
         }
-        else
+        if (auto* aligned = declaration.getAttributeIf<Semantics::AlignedAttribute>())
         {
-            var->setAlignment(llvm::Align(declaration.getType().getAlignOf(m_programInterface)));
+            alignment = aligned->alignment;
         }
+        var->setAlignment(llvm::Align(alignment));
         if (m_options.debugEmission > cld::CGLLVM::DebugEmission::Line)
         {
             auto* local = m_debugInfo->createAutoVariable(

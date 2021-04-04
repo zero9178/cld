@@ -360,7 +360,7 @@ void cld::CGLLVM::X64ABI::generateFunctionEntry(
                     elements.push_back(llvmFunctionType->getParamType(i + 1));
                 }
                 auto structType = codeGenerator.createBitCast(
-                    var, llvm::StructType::get(llvmFunctionType->getContext(), elements)->getPointerTo(0), false);
+                    var, llvm::StructType::get(llvmFunctionType->getContext(), elements)->getPointerTo(0));
                 auto firstElement = codeGenerator.createInBoundsGEP(
                     structType, {codeGenerator.getBuilder().getInt32(0), codeGenerator.getBuilder().getInt32(0)});
                 codeGenerator.createStore(llvmFunction->getArg(i), firstElement, paramDecl->getType().isVolatile());
@@ -522,8 +522,8 @@ cld::CGLLVM::Value cld::CGLLVM::X64ABI::generateVAArg(CodeGenerator& codeGenerat
         auto* allocaInst = codeGenerator.createAllocaAtTop(destType, "va_arg.temp");
         allocaInst->setAlignment(llvm::Align(type.getAlignOf(codeGenerator.getProgramInterface())));
         builder.CreateLifetimeStart(allocaInst, builder.getInt64(sizeOf));
-        auto dest = codeGenerator.createBitCast(
-            allocaInst, llvm::PointerType::getUnqual(llvm::StructType::get(first, second)), false);
+        auto dest =
+            codeGenerator.createBitCast(allocaInst, llvm::PointerType::getUnqual(llvm::StructType::get(first, second)));
 
         auto regAreaOfFirst = codeGenerator.createGEP(regArea, first->isFPOrFPVectorTy() ? fpCount : gpCount);
         regAreaOfFirst.alignment = llvm::Align(first->isFPOrFPVectorTy() ? 16 : 8);
