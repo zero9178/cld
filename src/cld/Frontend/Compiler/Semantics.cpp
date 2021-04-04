@@ -103,49 +103,15 @@ cld::Semantics::PrimitiveType::PrimitiveType(PrimitiveType::Kind kind, const cld
     }
 }
 
-bool cld::Semantics::ArrayType::operator==(const cld::Semantics::ArrayType& rhs) const
-{
-    if (!equals(rhs))
-    {
-        return false;
-    }
-    return std::tie(m_size, *m_type) == std::tie(rhs.m_size, *rhs.m_type);
-}
-
-bool cld::Semantics::ArrayType::operator!=(const cld::Semantics::ArrayType& rhs) const
-{
-    return !(rhs == *this);
-}
-
-std::uint64_t cld::Semantics::ArrayType::getSizeOf(const ProgramInterface& program) const
-{
-    return m_type->getSizeOf(program) * m_size;
-}
-
-std::uint64_t cld::Semantics::ArrayType::getAlignOf(const ProgramInterface& program) const
-{
-    return m_type->getAlignOf(program);
-}
-
-std::uint64_t cld::Semantics::AbstractArrayType::getAlignOf(const ProgramInterface& program) const
-{
-    return m_type->getAlignOf(program);
-}
-
-std::uint64_t cld::Semantics::ValArrayType::getAlignOf(const ProgramInterface& program) const
-{
-    return m_type->getAlignOf(program);
-}
-
 bool cld::Semantics::Type::operator==(const cld::Semantics::Type& rhs) const
 {
-    if (index() != rhs.index())
+    if (index() != rhs.index() || m_flags != rhs.m_flags)
     {
         return false;
     }
     return match([&](auto&& value) -> bool {
         using T = std::decay_t<decltype(value)>;
-            return value == rhs.template as<T>();
+            return value.equalsImpl(rhs.template as<T>());
         });
 }
 
@@ -163,13 +129,20 @@ std::uint64_t cld::Semantics::Type::getSizeOf(const ProgramInterface& program) c
         }
         else
         {
-            return value.getSizeOf(program);
+            return value.getSizeOfImpl(program);
         }
     });
 }
 
 std::uint64_t cld::Semantics::Type::getAlignOf(const ProgramInterface& program) const
 {
+    if (m_info)
+    {
+        if (auto* align = m_info->getAttributeIf<AlignedAttribute>())
+        {
+            return align->alignment;
+        }
+    }
     return match(
         [&](auto&& value) -> std::size_t
         {
@@ -179,14 +152,9 @@ std::uint64_t cld::Semantics::Type::getAlignOf(const ProgramInterface& program) 
             }
             else
             {
-                return value.getAlignOf(program);
+                return value.getAlignOfImpl(program);
             }
         });
-}
-
-bool cld::Semantics::Type::equals(const cld::Semantics::Type& rhs) const
-{
-    return m_flags == rhs.m_flags;
 }
 
 std::string_view cld::Semantics::Type::getTypedefName() const
@@ -246,37 +214,27 @@ void cld::Semantics::Type::setRestricted(bool isRestricted)
     }
 }
 
-bool cld::Semantics::PointerType::operator==(const cld::Semantics::PointerType& rhs) const
-{
-    if (!equals(rhs))
-    {
-        return false;
-    }
-    return *m_elementType == *rhs.m_elementType;
-}
-
-bool cld::Semantics::PointerType::operator!=(const cld::Semantics::PointerType& rhs) const
-{
-    return !(rhs == *this);
-}
-
-std::uint64_t cld::Semantics::PointerType::getSizeOf(const ProgramInterface& program) const
+std::uint64_t cld::Semantics::PointerType::getSizeOfImpl(const ProgramInterface& program) const
 {
     return program.getLanguageOptions().sizeOfVoidStar;
 }
 
-std::uint64_t cld::Semantics::PointerType::getAlignOf(const ProgramInterface& program) const
+std::uint64_t cld::Semantics::PointerType::getAlignOfImpl(const ProgramInterface& program) const
 {
     return program.getLanguageOptions().sizeOfVoidStar;
 }
 
-std::uint64_t cld::Semantics::EnumType::getSizeOf(const ProgramInterface& program) const
+std::uint64_t cld::Semantics::EnumType::getSizeOfImpl(const ProgramInterface& program) const
 {
     return getInfo().type.getType().getSizeOf(program);
 }
 
-std::uint64_t cld::Semantics::EnumType::getAlignOf(const ProgramInterface& program) const
+std::uint64_t cld::Semantics::EnumType::getAlignOfImpl(const ProgramInterface& program) const
 {
+    if (auto* alignment = getInfo().getAttributeIf<AlignedAttribute>())
+    {
+        return alignment->alignment;
+    }
     return getInfo().type.getType().getAlignOf(program);
 }
 
@@ -288,67 +246,6 @@ std::string_view cld::Semantics::EnumType::getEnumName() const
 bool cld::Semantics::EnumType::isAnonymous() const
 {
     return m_info->name.empty();
-}
-
-bool cld::Semantics::PrimitiveType::operator==(const cld::Semantics::PrimitiveType& rhs) const
-{
-    if (!equals(rhs))
-    {
-        return false;
-    }
-    return m_kind == rhs.m_kind;
-}
-
-bool cld::Semantics::PrimitiveType::operator!=(const cld::Semantics::PrimitiveType& rhs) const
-{
-    return !(rhs == *this);
-}
-
-bool cld::Semantics::ValArrayType::operator==(const cld::Semantics::ValArrayType& rhs) const
-{
-    if (!equals(rhs))
-    {
-        return false;
-    }
-    return std::tie(m_expression, *m_type) == std::tie(rhs.m_expression, *rhs.m_type);
-}
-
-bool cld::Semantics::ValArrayType::operator!=(const cld::Semantics::ValArrayType& rhs) const
-{
-    return !(rhs == *this);
-}
-
-bool cld::Semantics::FunctionType::operator==(const cld::Semantics::FunctionType& rhs) const
-{
-    if (!equals(rhs))
-    {
-        return false;
-    }
-    if (*m_returnType != *rhs.m_returnType)
-    {
-        return false;
-    }
-    return std::equal(m_parameters.begin(), m_parameters.end(), rhs.m_parameters.begin(), rhs.m_parameters.end(),
-                      [](const auto& lhs, const auto& rhs) { return *lhs.type == *rhs.type; });
-}
-
-bool cld::Semantics::FunctionType::operator!=(const cld::Semantics::FunctionType& rhs) const
-{
-    return !(rhs == *this);
-}
-
-bool cld::Semantics::AbstractArrayType::operator==(const cld::Semantics::AbstractArrayType& rhs) const
-{
-    if (!equals(rhs))
-    {
-        return false;
-    }
-    return *m_type == *rhs.m_type;
-}
-
-bool cld::Semantics::AbstractArrayType::operator!=(const cld::Semantics::AbstractArrayType& rhs) const
-{
-    return !(rhs == *this);
 }
 
 cld::Lexer::CTokenIterator cld::Semantics::declaratorToLoc(const cld::Syntax::Declarator& declarator)
@@ -368,13 +265,13 @@ cld::Lexer::CTokenIterator cld::Semantics::declaratorToLoc(const cld::Syntax::De
         });
 }
 
-std::uint64_t cld::Semantics::StructType::getSizeOf(const ProgramInterface& interface) const
+std::uint64_t cld::Semantics::StructType::getSizeOfImpl(const ProgramInterface& interface) const
 {
     auto size = cld::get<StructDefinition>(getInfo().type).getSizeOf();
     return cld::roundUpTo(size, getAlignOf(interface));
 }
 
-std::uint64_t cld::Semantics::StructType::getAlignOf(const ProgramInterface&) const
+std::uint64_t cld::Semantics::StructType::getAlignOfImpl(const ProgramInterface&) const
 {
     auto align = cld::get<StructDefinition>(getInfo().type).getAlignOf();
     if (auto* alignment = getInfo().getAttributeIf<AlignedAttribute>())
@@ -394,13 +291,13 @@ bool cld::Semantics::StructType::isAnonymous() const
     return m_info->name.empty();
 }
 
-std::uint64_t cld::Semantics::UnionType::getSizeOf(const ProgramInterface& interface) const
+std::uint64_t cld::Semantics::UnionType::getSizeOfImpl(const ProgramInterface& interface) const
 {
     auto size = cld::get<UnionDefinition>(getInfo().type).getSizeOf();
     return cld::roundUpTo(size, getAlignOf(interface));
 }
 
-std::uint64_t cld::Semantics::UnionType::getAlignOf(const ProgramInterface&) const
+std::uint64_t cld::Semantics::UnionType::getAlignOfImpl(const ProgramInterface&) const
 {
     auto align = cld::get<UnionDefinition>(getInfo().type).getAlignOf();
     if (auto* alignment = getInfo().getAttributeIf<AlignedAttribute>())
@@ -969,30 +866,6 @@ cld::Lexer::CTokenIterator cld::Semantics::ExpressionBase::end() const
 cld::Semantics::ErrorExpression::ErrorExpression(IntrVarValue<Type> type, const cld::Syntax::Node& node)
     : ErrorExpression(std::move(type), node.begin(), node.end())
 {
-}
-
-bool cld::Semantics::VectorType::operator==(const cld::Semantics::VectorType& rhs) const
-{
-    if (!equals(rhs))
-    {
-        return false;
-    }
-    return std::tie(m_size, *m_elementType) == std::tie(rhs.m_size, *rhs.m_elementType);
-}
-
-bool cld::Semantics::VectorType::operator!=(const cld::Semantics::VectorType& rhs) const
-{
-    return !(*this == rhs);
-}
-
-std::uint64_t cld::Semantics::VectorType::getSizeOf(const cld::Semantics::ProgramInterface& program) const
-{
-    return m_elementType->getSizeOf(program) * m_size;
-}
-
-std::uint64_t cld::Semantics::VectorType::getAlignOf(const cld::Semantics::ProgramInterface& program) const
-{
-    return getSizeOf(program);
 }
 
 bool cld::Semantics::isCompleteType(const Type& type)

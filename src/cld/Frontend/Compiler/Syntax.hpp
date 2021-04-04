@@ -1982,9 +1982,13 @@ public:
                     std::optional<GNUAttributes>&& beforeAttributes, const Lexer::CToken* name,
                     std::vector<EnumValue>&& values, std::optional<GNUAttributes>&& afterAttributes);
 
+    [[nodiscard]] const std::optional<GNUAttributes>& getBeforeAttributes() const;
+
     [[nodiscard]] const Lexer::CToken* getName() const;
 
     [[nodiscard]] const std::vector<EnumValue>& getValues() const;
+
+    [[nodiscard]] const std::optional<GNUAttributes>& getAfterAttributes() const;
 };
 
 /**

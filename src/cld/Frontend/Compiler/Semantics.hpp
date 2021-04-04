@@ -76,8 +76,6 @@ protected:
     Type(Type&&) noexcept = default;
     Type& operator=(Type&&) noexcept = default;
 
-    bool equals(const Type& rhs) const;
-
 public:
     [[nodiscard]] bool isConst() const
     {
@@ -268,6 +266,23 @@ private:
 
     PrimitiveType(LanguageOptions::UnderlyingType underlyingType, const LanguageOptions& options, TypeFlags flags);
 
+    friend class Type;
+
+    [[nodiscard]] std::uint64_t getSizeOfImpl(const ProgramInterface&) const
+    {
+        return getByteCount();
+    }
+
+    [[nodiscard]] std::uint64_t getAlignOfImpl(const ProgramInterface&) const
+    {
+        return m_alignOf;
+    }
+
+    [[nodiscard]] bool equalsImpl(const PrimitiveType& rhs) const
+    {
+        return m_kind == rhs.m_kind;
+    }
+
 public:
     template <class... Flags, std::enable_if_t<detail::areFlags<Flags...>()>* = nullptr>
     PrimitiveType(Kind kind, const LanguageOptions& options, Flags&&... flags)
@@ -304,16 +319,6 @@ public:
         return cld::roundUpTo(m_bitCount, m_alignOf * 8) / 8;
     }
 
-    [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface&) const
-    {
-        return getByteCount();
-    }
-
-    [[nodiscard]] std::uint64_t getAlignOf(const ProgramInterface&) const
-    {
-        return m_alignOf;
-    }
-
     [[nodiscard]] std::uint8_t getBitCount() const
     {
         return m_bitCount;
@@ -323,16 +328,29 @@ public:
     {
         return m_kind;
     }
-
-    [[nodiscard]] bool operator==(const PrimitiveType& rhs) const;
-
-    [[nodiscard]] bool operator!=(const PrimitiveType& rhs) const;
 };
 
 class ArrayType final : public Type
 {
     const Type* m_type;
     std::uint64_t m_size;
+
+    friend class Type;
+
+    [[nodiscard]] std::uint64_t getSizeOfImpl(const ProgramInterface& program) const
+    {
+        return m_type->getSizeOf(program) * m_size;
+    }
+
+    [[nodiscard]] std::uint64_t getAlignOfImpl(const ProgramInterface& program) const
+    {
+        return m_type->getAlignOf(program);
+    }
+
+    [[nodiscard]] bool equalsImpl(const ArrayType& rhs) const
+    {
+        return std::tie(*m_type, m_size) == std::tie(*rhs.m_type, rhs.m_size);
+    }
 
 public:
     template <class... Flags, std::enable_if_t<detail::areFlags<Flags...>()>* = nullptr>
@@ -359,19 +377,28 @@ public:
     {
         return m_flags & Static;
     }
-
-    [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface& program) const;
-
-    [[nodiscard]] std::uint64_t getAlignOf(const ProgramInterface& program) const;
-
-    [[nodiscard]] bool operator==(const ArrayType& rhs) const;
-
-    [[nodiscard]] bool operator!=(const ArrayType& rhs) const;
 };
 
 class AbstractArrayType final : public Type
 {
     const Type* m_type;
+
+    friend class Type;
+
+    std::uint64_t getSizeOfImpl(const ProgramInterface&) const
+    {
+        CLD_UNREACHABLE;
+    }
+
+    [[nodiscard]] std::uint64_t getAlignOfImpl(const ProgramInterface& program) const
+    {
+        return m_type->getAlignOf(program);
+    }
+
+    [[nodiscard]] bool equalsImpl(const AbstractArrayType& rhs) const
+    {
+        return *m_type == *rhs.m_type;
+    }
 
 public:
     template <class... Flags, std::enable_if_t<detail::areFlags<Flags...>()>* = nullptr>
@@ -388,17 +415,6 @@ public:
     {
         return *m_type;
     }
-
-    [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface&) const
-    {
-        CLD_UNREACHABLE;
-    }
-
-    [[nodiscard]] std::uint64_t getAlignOf(const ProgramInterface& program) const;
-
-    [[nodiscard]] bool operator==(const AbstractArrayType& rhs) const;
-
-    [[nodiscard]] bool operator!=(const AbstractArrayType& rhs) const;
 };
 
 class ExpressionBase;
@@ -407,6 +423,23 @@ class ValArrayType final : public Type
 {
     const Type* m_type;
     std::shared_ptr<const ExpressionBase> m_expression;
+
+    friend class Type;
+
+    [[nodiscard]] std::uint64_t getSizeOfImpl(const ProgramInterface&) const
+    {
+        CLD_UNREACHABLE;
+    }
+
+    [[nodiscard]] std::uint64_t getAlignOfImpl(const ProgramInterface& program) const
+    {
+        return m_type->getAlignOf(program);
+    }
+
+    [[nodiscard]] bool equalsImpl(const ValArrayType& rhs) const
+    {
+        return std::tie(*m_type, m_expression) == std::tie(*rhs.m_type, rhs.m_expression);
+    }
 
 public:
     template <class... Flags, std::enable_if_t<detail::areFlags<Flags...>()>* = nullptr>
@@ -434,17 +467,6 @@ public:
     {
         return m_expression;
     }
-
-    [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface&) const
-    {
-        CLD_UNREACHABLE;
-    }
-
-    [[nodiscard]] std::uint64_t getAlignOf(const ProgramInterface& program) const;
-
-    [[nodiscard]] bool operator==(const ValArrayType& rhs) const;
-
-    [[nodiscard]] bool operator!=(const ValArrayType& rhs) const;
 };
 
 class FunctionType final : public Type
@@ -459,6 +481,28 @@ public:
 private:
     const Type* m_returnType;
     std::vector<Parameter> m_parameters;
+
+    friend class Type;
+
+    [[nodiscard]] std::uint64_t getSizeOfImpl(const ProgramInterface&) const
+    {
+        CLD_UNREACHABLE;
+    }
+
+    [[nodiscard]] std::uint64_t getAlignOfImpl(const ProgramInterface&) const
+    {
+        CLD_UNREACHABLE;
+    }
+
+    [[nodiscard]] bool equalsImpl(const FunctionType& rhs) const
+    {
+        if (*m_returnType != *rhs.m_returnType)
+        {
+            return false;
+        }
+        return std::equal(m_parameters.begin(), m_parameters.end(), rhs.m_parameters.begin(), rhs.m_parameters.end(),
+                          [](const auto& lhs, const auto& rhs) { return *lhs.type == *rhs.type; });
+    }
 
 public:
     template <class... Flags, std::enable_if_t<detail::areFlags<Flags...>()>* = nullptr>
@@ -493,25 +537,22 @@ public:
     {
         return m_flags & KAndR;
     }
-
-    [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface&) const
-    {
-        CLD_UNREACHABLE;
-    }
-
-    [[nodiscard]] std::uint64_t getAlignOf(const ProgramInterface&) const
-    {
-        CLD_UNREACHABLE;
-    }
-
-    [[nodiscard]] bool operator==(const FunctionType& rhs) const;
-
-    [[nodiscard]] bool operator!=(const FunctionType& rhs) const;
 };
 
 class StructType final : public Type
 {
     const StructInfo* m_info;
+
+    friend class Type;
+
+    [[nodiscard]] std::uint64_t getSizeOfImpl(const ProgramInterface& program) const;
+
+    [[nodiscard]] std::uint64_t getAlignOfImpl(const ProgramInterface& program) const;
+
+    [[nodiscard]] bool equalsImpl(const StructType& rhs) const
+    {
+        return m_info == rhs.m_info;
+    }
 
 public:
     template <class... Flags, std::enable_if_t<detail::areFlags<Flags...>()>* = nullptr>
@@ -534,29 +575,22 @@ public:
     {
         return *m_info;
     }
-
-    [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface& program) const;
-
-    [[nodiscard]] std::uint64_t getAlignOf(const ProgramInterface& program) const;
-
-    [[nodiscard]] bool operator==(const StructType& rhs) const
-    {
-        if (!equals(rhs))
-        {
-            return false;
-        }
-        return m_info == rhs.m_info;
-    }
-
-    [[nodiscard]] bool operator!=(const StructType& rhs) const
-    {
-        return !(rhs == *this);
-    }
 };
 
 class UnionType final : public Type
 {
     const UnionInfo* m_info;
+
+    friend class Type;
+
+    [[nodiscard]] std::uint64_t getSizeOfImpl(const ProgramInterface& program) const;
+
+    [[nodiscard]] std::uint64_t getAlignOfImpl(const ProgramInterface& program) const;
+
+    [[nodiscard]] bool equalsImpl(const UnionType& rhs) const
+    {
+        return m_info == rhs.m_info;
+    }
 
 public:
     template <class... Flags, std::enable_if_t<detail::areFlags<Flags...>()>* = nullptr>
@@ -579,29 +613,22 @@ public:
     {
         return *m_info;
     }
-
-    [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface& program) const;
-
-    [[nodiscard]] std::uint64_t getAlignOf(const ProgramInterface& program) const;
-
-    [[nodiscard]] bool operator==(const UnionType& rhs) const
-    {
-        if (!equals(rhs))
-        {
-            return false;
-        }
-        return m_info == rhs.m_info;
-    }
-
-    [[nodiscard]] bool operator!=(const UnionType& rhs) const
-    {
-        return !(rhs == *this);
-    }
 };
 
 class EnumType final : public Type
 {
     const EnumInfo* m_info;
+
+    friend class Type;
+
+    [[nodiscard]] std::uint64_t getSizeOfImpl(const ProgramInterface& program) const;
+
+    [[nodiscard]] std::uint64_t getAlignOfImpl(const ProgramInterface& program) const;
+
+    [[nodiscard]] bool equalsImpl(const EnumType& rhs) const
+    {
+        return m_info == rhs.m_info;
+    }
 
 public:
     template <class... Flags, std::enable_if_t<detail::areFlags<Flags...>()>* = nullptr>
@@ -625,28 +652,22 @@ public:
         return *m_info;
     }
 
-    [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface& program) const;
-
-    [[nodiscard]] std::uint64_t getAlignOf(const ProgramInterface& program) const;
-
-    [[nodiscard]] bool operator==(const EnumType& rhs) const
-    {
-        if (!equals(rhs))
-        {
-            return false;
-        }
-        return m_info == rhs.m_info;
-    }
-
-    [[nodiscard]] bool operator!=(const EnumType& rhs) const
-    {
-        return !(rhs == *this);
-    }
 };
 
 class PointerType final : public Type
 {
     const Type* m_elementType;
+
+    friend class Type;
+
+    [[nodiscard]] std::uint64_t getSizeOfImpl(const ProgramInterface& program) const;
+
+    [[nodiscard]] std::uint64_t getAlignOfImpl(const ProgramInterface& program) const;
+
+    [[nodiscard]] bool equalsImpl(const PointerType& rhs) const
+    {
+        return *m_elementType == *rhs.m_elementType;
+    }
 
 public:
     template <class... Flags, std::enable_if_t<detail::areFlags<Flags...>()>* = nullptr>
@@ -663,20 +684,29 @@ public:
     {
         return *m_elementType;
     }
-
-    [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface& program) const;
-
-    [[nodiscard]] std::uint64_t getAlignOf(const ProgramInterface& program) const;
-
-    [[nodiscard]] bool operator==(const PointerType& rhs) const;
-
-    [[nodiscard]] bool operator!=(const PointerType& rhs) const;
 };
 
 class VectorType final : public Type
 {
     const Type* m_elementType;
     std::uint64_t m_size;
+
+    friend class Type;
+
+    [[nodiscard]] std::uint64_t getSizeOfImpl(const ProgramInterface& program) const
+    {
+        return m_elementType->getSizeOf(program) * m_size;
+    }
+
+    [[nodiscard]] std::uint64_t getAlignOfImpl(const ProgramInterface& program) const
+    {
+        return getSizeOf(program);
+    }
+
+    [[nodiscard]] bool equalsImpl(const VectorType& rhs) const
+    {
+        return std::tie(*m_elementType, m_size) == std::tie(*rhs.m_elementType, rhs.m_size);
+    }
 
 public:
     template <class... Flags, std::enable_if_t<detail::areFlags<Flags...>()>* = nullptr>
@@ -701,18 +731,27 @@ public:
     {
         return m_size;
     }
-
-    [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface& program) const;
-
-    [[nodiscard]] std::uint64_t getAlignOf(const ProgramInterface& program) const;
-
-    [[nodiscard]] bool operator==(const VectorType& rhs) const;
-
-    [[nodiscard]] bool operator!=(const VectorType& rhs) const;
 };
 
 class ErrorType : public Type
 {
+    friend class Type;
+
+    std::size_t getSizeOfImpl(const ProgramInterface&) const
+    {
+        CLD_UNREACHABLE;
+    }
+
+    std::size_t getAlignOfImpl(const ProgramInterface&) const
+    {
+        CLD_UNREACHABLE;
+    }
+
+    bool equalsImpl(const ErrorType&) const
+    {
+        return true;
+    }
+
 public:
     template <class... Flags, std::enable_if_t<detail::areFlags<Flags...>()>* = nullptr>
     ErrorType(Flags&&... flags) : Type(std::in_place_type<ErrorType>, (Nothing | ... | flags.result()))

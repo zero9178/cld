@@ -393,14 +393,23 @@ private:
                                  std::vector<GNUAttribute>&& attributes);
 
     template <class... Args>
-    static auto variantToTuple(const std::variant<Args...>&) -> std::tuple<Args...>;
+    static auto variantToTuple(const std::variant<Args...>&) -> std::tuple<Args...>
+    {
+        CLD_UNREACHABLE;
+    }
 
     template <class... Args>
-    static auto tupleToVariant(const std::tuple<Args...>&) -> std::variant<Args...>;
+    static auto tupleToVariant(const std::tuple<Args...>&) -> std::variant<Args...>
+    {
+        CLD_UNREACHABLE;
+    }
 
     template <class... Variants>
     static auto variantTypeUnion(Variants&&... variants)
-        -> decltype(tupleToVariant(std::tuple_cat(variantToTuple(std::forward<Variants>(variants))...)));
+        -> decltype(tupleToVariant(std::tuple_cat(variantToTuple(std::forward<Variants>(variants))...)))
+    {
+        CLD_UNREACHABLE;
+    }
 
 public:
     explicit SemanticAnalysis(const SourceInterface& sourceInterface, llvm::raw_ostream* reporter = &llvm::errs(),

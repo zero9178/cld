@@ -765,6 +765,16 @@ const std::vector<cld::Syntax::EnumDeclaration::EnumValue>& cld::Syntax::EnumDec
     return m_values;
 }
 
+const std::optional<cld::Syntax::GNUAttributes>& cld::Syntax::EnumDeclaration::getBeforeAttributes() const
+{
+    return m_beforeAttributes;
+}
+
+const std::optional<cld::Syntax::GNUAttributes>& cld::Syntax::EnumDeclaration::getAfterAttributes() const
+{
+    return m_afterAttributes;
+}
+
 cld::Syntax::Initializer::Initializer(Lexer::CTokenIterator begin, Lexer::CTokenIterator end,
                                       cld::Syntax::Initializer::variant&& variant)
     : Node(begin, end), m_variant(std::move(variant))

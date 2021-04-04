@@ -1903,9 +1903,9 @@ std::optional<cld::Syntax::EnumSpecifier> cld::Parser::parseEnumSpecifier(Lexer:
             *openPpos, context.getSourceInterface(), std::forward_as_tuple(*openPpos, *(begin - 1))));
     }
     auto afterAttributes = parseGNUAttributes(begin, end, context);
-    return EnumSpecifier(
-        start, begin,
-        EnumDeclaration(start, begin, std::move(afterAttributes), name, std::move(values), std::move(afterAttributes)));
+    return EnumSpecifier(start, begin,
+                         EnumDeclaration(start, begin, std::move(beforeAttributes), name, std::move(values),
+                                         std::move(afterAttributes)));
 }
 
 std::optional<cld::Syntax::CompoundStatement> cld::Parser::parseCompoundStatement(Lexer::CTokenIterator& begin,

@@ -778,7 +778,7 @@ cld::IntrVarValue<cld::Semantics::Type>
     auto& enumDecl = cld::get<std::unique_ptr<Syntax::EnumSpecifier>>(typeSpec[0]->getVariant());
     if (auto* loc = std::get_if<Syntax::EnumSpecifier::EnumTag>(&enumDecl->getVariant()))
     {
-        const auto* lookup = lookupType<EnumInfo>(loc->identifier->getText());
+        auto* lookup = lookupType<EnumInfo>(loc->identifier->getText());
         if (!lookup)
         {
             // C99 6.7.2.3:
@@ -789,9 +789,19 @@ cld::IntrVarValue<cld::Semantics::Type>
                                                                                  *typeSpec[0]));
             return ErrorType{};
         }
+        if (loc->optionalAttributes)
+        {
+            auto result = applyAttributes(lookup, visit(*loc->optionalAttributes));
+            reportNotApplicableAttributes(result);
+        }
         return EnumType(*lookup, flag::isConst = isConst, flag::isVolatile = isVolatile);
     }
     auto& enumDef = cld::get<Syntax::EnumDeclaration>(enumDecl->getVariant());
+    std::vector<SemanticAnalysis::GNUAttribute> attributes;
+    if (enumDef.getBeforeAttributes())
+    {
+        attributes = visit(*enumDef.getBeforeAttributes());
+    }
     // TODO: Type depending on values as an extension
     const ConstValue one = {llvm::APSInt(llvm::APInt(getLanguageOptions().sizeOfInt * 8, 1), false)};
     ConstValue nextValue = {llvm::APSInt(getLanguageOptions().sizeOfInt * 8, false)};
@@ -855,11 +865,21 @@ cld::IntrVarValue<cld::Semantics::Type>
             }
         }
     }
+
+    if (enumDef.getAfterAttributes())
+    {
+        auto result = visit(*enumDef.getAfterAttributes());
+        attributes.insert(attributes.end(), std::move_iterator(result.begin()), std::move_iterator(result.end()));
+    }
+
     std::string_view name = enumDef.getName() ? enumDef.getName()->getText() : "";
     m_enumDefinitions.push_back(
         {m_enumDefinitions.size(),
          EnumDefinition(name, PrimitiveType(PrimitiveType::Int, getLanguageOptions()), std::move(values)),
          m_currentScope, enumDef.begin(), name});
+    attributes = applyAttributes(&m_enumDefinitions.back(), std::move(attributes));
+    reportNotApplicableAttributes(attributes);
+
     if (enumDef.getName())
     {
         auto [prev, notRedefined] =

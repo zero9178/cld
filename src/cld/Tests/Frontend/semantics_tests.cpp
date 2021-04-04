@@ -5428,7 +5428,8 @@ TEST_CASE("Semantics __attribute__((aligned))", "[semantics]")
         {
             auto program = generateProgram("struct __attribute__((aligned(8))) S {\n"
                                            "short f[3];\n"
-                                           "};\n");
+                                           "};\n",
+                                           x64linux);
             auto* structInfo = program.lookupType<StructInfo>("S", ProgramInterface::GLOBAL_SCOPE);
             REQUIRE(structInfo);
             auto* attribute = structInfo->getAttributeIf<AlignedAttribute>();
@@ -5441,7 +5442,8 @@ TEST_CASE("Semantics __attribute__((aligned))", "[semantics]")
         {
             auto program = generateProgram("struct __attribute__((aligned(1))) S {\n"
                                            "short f[3];\n"
-                                           "};\n");
+                                           "};\n",
+                                           x64linux);
             auto* structInfo = program.lookupType<StructInfo>("S", ProgramInterface::GLOBAL_SCOPE);
             REQUIRE(structInfo);
             auto* attribute = structInfo->getAttributeIf<AlignedAttribute>();
@@ -5456,7 +5458,8 @@ TEST_CASE("Semantics __attribute__((aligned))", "[semantics]")
                                            "\n"
                                            "struct __attribute__((aligned(2))) S {\n"
                                            "short f[3];\n"
-                                           "};\n");
+                                           "};\n",
+                                           x64linux);
             auto* structInfo = program.lookupType<StructInfo>("S", ProgramInterface::GLOBAL_SCOPE);
             REQUIRE(structInfo);
             auto* attribute = structInfo->getAttributeIf<AlignedAttribute>();
@@ -5473,7 +5476,8 @@ TEST_CASE("Semantics __attribute__((aligned))", "[semantics]")
             auto program = generateProgram("union __attribute__((aligned(8))) S {\n"
                                            "short f[3];\n"
                                            "char c;\n"
-                                           "};\n");
+                                           "};\n",
+                                           x64linux);
             auto* unionInfo = program.lookupType<UnionInfo>("S", ProgramInterface::GLOBAL_SCOPE);
             REQUIRE(unionInfo);
             auto* attribute = unionInfo->getAttributeIf<AlignedAttribute>();
@@ -5487,7 +5491,8 @@ TEST_CASE("Semantics __attribute__((aligned))", "[semantics]")
             auto program = generateProgram("union __attribute__((aligned(1))) S {\n"
                                            "short f[3];\n"
                                            "char c;\n"
-                                           "};\n");
+                                           "};\n",
+                                           x64linux);
             auto* unionInfo = program.lookupType<UnionInfo>("S", ProgramInterface::GLOBAL_SCOPE);
             REQUIRE(unionInfo);
             auto* attribute = unionInfo->getAttributeIf<AlignedAttribute>();
@@ -5503,7 +5508,8 @@ TEST_CASE("Semantics __attribute__((aligned))", "[semantics]")
                                            "union __attribute__((aligned(2))) S {\n"
                                            "short f[3];\n"
                                            "char c;\n"
-                                           "};\n");
+                                           "};\n",
+                                           x64linux);
             auto* unionInfo = program.lookupType<UnionInfo>("S", ProgramInterface::GLOBAL_SCOPE);
             REQUIRE(unionInfo);
             auto* attribute = unionInfo->getAttributeIf<AlignedAttribute>();
@@ -5511,6 +5517,72 @@ TEST_CASE("Semantics __attribute__((aligned))", "[semantics]")
             CHECK(attribute->alignment == 4);
             CHECK(UnionType(*unionInfo).getSizeOf(program) == 8);
             CHECK(UnionType(*unionInfo).getAlignOf(program) == 4);
+        }
+    }
+    SECTION("enum")
+    {
+        SECTION("stricter")
+        {
+            auto program = generateProgram("enum __attribute__((aligned(8))) Thing {\n"
+                                           "f,\n"
+                                           "c\n"
+                                           "};\n",
+                                           x64linux);
+            auto* enumInfo = program.lookupType<EnumInfo>("Thing", ProgramInterface::GLOBAL_SCOPE);
+            REQUIRE(enumInfo);
+            auto* attribute = enumInfo->getAttributeIf<AlignedAttribute>();
+            REQUIRE(attribute);
+            CHECK(attribute->alignment == 8);
+            CHECK(EnumType(*enumInfo).getSizeOf(program) == 4);
+            CHECK(EnumType(*enumInfo).getAlignOf(program) == 8);
+        }
+        SECTION("lenient")
+        {
+            auto program = generateProgram("enum __attribute__((aligned(1))) Thing {\n"
+                                           "f,\n"
+                                           "c\n"
+                                           "};\n",
+                                           x64linux);
+            auto* enumInfo = program.lookupType<EnumInfo>("Thing", ProgramInterface::GLOBAL_SCOPE);
+            REQUIRE(enumInfo);
+            auto* attribute = enumInfo->getAttributeIf<AlignedAttribute>();
+            REQUIRE(attribute);
+            CHECK(attribute->alignment == 1);
+            CHECK(EnumType(*enumInfo).getSizeOf(program) == 4);
+            CHECK(EnumType(*enumInfo).getAlignOf(program) == 1);
+        }
+    }
+    SECTION("Typedef")
+    {
+        SECTION("stricter")
+        {
+            auto program = generateProgram("struct S {\n"
+                                           "short f[3];\n"
+                                           "};\n"
+                                           "\n"
+                                           "typedef __attribute__((aligned(8))) struct S S;",
+                                           x64linux);
+            auto& decl = program.getScopes()[ProgramInterface::GLOBAL_SCOPE].declarations.at("S");
+            REQUIRE(std::holds_alternative<TypedefInfo*>(decl.declared));
+            auto* attribute = cld::get<TypedefInfo*>(decl.declared)->getAttributeIf<AlignedAttribute>();
+            REQUIRE(attribute);
+            CHECK(attribute->alignment == 8);
+            CHECK(cld::get<TypedefInfo*>(decl.declared)->type->getAlignOf(program) == 8);
+        }
+        SECTION("lenient")
+        {
+            auto program = generateProgram("struct S {\n"
+                                           "short f[3];\n"
+                                           "};\n"
+                                           "\n"
+                                           "typedef __attribute__((aligned(1))) struct S S;",
+                                           x64linux);
+            auto& decl = program.getScopes()[ProgramInterface::GLOBAL_SCOPE].declarations.at("S");
+            REQUIRE(std::holds_alternative<TypedefInfo*>(decl.declared));
+            auto* attribute = cld::get<TypedefInfo*>(decl.declared)->getAttributeIf<AlignedAttribute>();
+            REQUIRE(attribute);
+            CHECK(attribute->alignment == 1);
+            CHECK(cld::get<TypedefInfo*>(decl.declared)->type->getAlignOf(program) == 1);
         }
     }
 }
