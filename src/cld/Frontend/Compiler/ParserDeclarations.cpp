@@ -192,37 +192,34 @@ std::optional<cld::Syntax::Declaration> finishDeclaration(
             const auto* loc = Semantics::declaratorToLoc(*declarator);
             context.addToScope(loc->getText(), {start, begin, loc});
         }
+        auto simpleASM = parseGNUSimpleASM(begin, end, context);
+        auto attributes = parseGNUAttributes(begin, end, context);
         if (begin == end || begin->getTokenType() != Lexer::TokenType::Assignment)
         {
-            auto simpleASM = parseGNUSimpleASM(begin, end, context);
-            auto attributes = parseGNUAttributes(begin, end, context);
             if (declarator)
             {
                 initDeclarators.push_back({std::make_unique<Declarator>(std::move(*declarator)), nullptr,
                                            std::move(simpleASM), std::move(attributes),
                                            std::move(optionalBeforeAttribute)});
             }
+            continue;
         }
-        else
+
+        begin++;
+        auto initializer = parseInitializer(
+            begin, end,
+            context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::SemiColon, Lexer::TokenType::Comma)));
+        if (declarator && initializer)
         {
-            begin++;
-            auto initializer = parseInitializer(begin, end,
-                                                context.withRecoveryTokens(Context::fromTokenTypes(
-                                                    Lexer::TokenType::SemiColon, Lexer::TokenType::Comma)));
-            auto simpleASM = parseGNUSimpleASM(begin, end, context);
-            auto attributes = parseGNUAttributes(begin, end, context);
-            if (declarator && initializer)
-            {
-                initDeclarators.push_back({std::make_unique<Declarator>(std::move(*declarator)),
-                                           std::make_unique<Initializer>(std::move(*initializer)), std::move(simpleASM),
-                                           std::move(attributes), std::move(optionalBeforeAttribute)});
-            }
-            else if (declarator)
-            {
-                initDeclarators.push_back({std::make_unique<Declarator>(std::move(*declarator)), nullptr,
-                                           std::move(simpleASM), std::move(attributes),
-                                           std::move(optionalBeforeAttribute)});
-            }
+            initDeclarators.push_back({std::make_unique<Declarator>(std::move(*declarator)),
+                                       std::make_unique<Initializer>(std::move(*initializer)), std::move(simpleASM),
+                                       std::move(attributes), std::move(optionalBeforeAttribute)});
+        }
+        else if (declarator)
+        {
+            initDeclarators.push_back({std::make_unique<Declarator>(std::move(*declarator)), nullptr,
+                                       std::move(simpleASM), std::move(attributes),
+                                       std::move(optionalBeforeAttribute)});
         }
     } while (true);
 

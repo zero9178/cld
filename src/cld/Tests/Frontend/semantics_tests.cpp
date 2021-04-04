@@ -5585,4 +5585,27 @@ TEST_CASE("Semantics __attribute__((aligned))", "[semantics]")
             CHECK(cld::get<TypedefInfo*>(decl.declared)->type->getAlignOf(program) == 1);
         }
     }
+    SECTION("Global variable")
+    {
+        auto program = generateProgram("int i __attribute__((aligned(8))) = 5;", x64linux);
+        auto& decl = program.getScopes()[ProgramInterface::GLOBAL_SCOPE].declarations.at("i");
+        REQUIRE(std::holds_alternative<VariableDeclaration*>(decl.declared));
+        auto* attribute = cld::get<VariableDeclaration*>(decl.declared)->getAttributeIf<AlignedAttribute>();
+        REQUIRE(attribute);
+        CHECK(attribute->alignment == 8);
+    }
+    SECTION("Local variable")
+    {
+        auto& expr = generateExpression("void foo(void) {\n"
+                                        "    int i __attribute__((aligned(8))) = 5;\n"
+                                        "    i;\n"
+                                        "}",
+                                        cld::LanguageOptions::fromTriple(x64linux));
+        REQUIRE(expr.is<DeclarationRead>());
+        auto& decl = expr.as<DeclarationRead>().getDeclRead();
+        REQUIRE(decl.is<VariableDeclaration>());
+        auto* attribute = decl.as<VariableDeclaration>().getAttributeIf<AlignedAttribute>();
+        REQUIRE(attribute);
+        CHECK(attribute->alignment == 8);
+    }
 }

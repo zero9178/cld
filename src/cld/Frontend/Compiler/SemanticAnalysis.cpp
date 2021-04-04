@@ -664,6 +664,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                                                              *prev->second.identifier));
                     linkage = Linkage::Internal;
                 }
+                // TODO: Merge attributes or something
                 *declaration = VariableDeclaration(std::move(composite), linkage, lifetime, loc,
                                                    std::max(prevDecl->getKind(), kind));
                 prev.value().declared = declaration.get();
@@ -703,7 +704,10 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                 {
                     prevType.emplace<ArrayType>(&abstractArray->getType(), size, flag::useFlags = prevType->getFlags());
                 }
+                auto temp = std::move(*declaration).getAttributes();
                 *declaration = VariableDeclaration(std::move(prevType), linkage, lifetime, loc, kind, std::move(expr));
+                std::for_each(std::move_iterator(temp.begin()), std::move_iterator(temp.end()),
+                              cld::bind_front(&VariableDeclaration::addAttribute, declaration.get()));
                 m_inStaticInitializer = false;
             }
         }
