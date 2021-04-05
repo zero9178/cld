@@ -5608,4 +5608,19 @@ TEST_CASE("Semantics __attribute__((aligned))", "[semantics]")
         REQUIRE(attribute);
         CHECK(attribute->alignment == 8);
     }
+    SECTION("Function")
+    {
+        auto program = generateProgram("__attribute__((aligned(8))) void foo(void) {\n"
+                                       "    int i = 5;\n"
+                                       "    i;\n"
+                                       "}",
+                                       x64linux);
+        auto& globals = program.getTranslationUnit().getGlobals();
+        REQUIRE(globals.size() == 1);
+        auto& func = globals[0];
+        REQUIRE(func->is<FunctionDefinition>());
+        auto* attribute = func->as<FunctionDefinition>().getAttributeIf<AlignedAttribute>();
+        REQUIRE(attribute);
+        CHECK(attribute->alignment == 8);
+    }
 }

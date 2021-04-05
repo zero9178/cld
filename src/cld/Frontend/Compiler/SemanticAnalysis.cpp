@@ -291,7 +291,6 @@ std::vector<cld::IntrVarPtr<cld::Semantics::Useable>>
                         std::move(ft), loc, std::move(parameterDeclarations), linkage, inlineKind,
                         CompoundStatement(m_currentScope, loc, {}, loc)))
                     ->as<FunctionDefinition>();
-    attributes = applyAttributes(&ptr, std::move(attributes));
     // We are currently in block scope. Functions are always at file scope though so we can't use getCurrentScope
     auto [prev, notRedefinition] = m_scopes[0].declarations.insert({loc->getText(), DeclarationInScope{loc, &ptr}});
     if (!notRedefinition)
@@ -321,10 +320,13 @@ std::vector<cld::IntrVarPtr<cld::Semantics::Useable>>
             }
             ptr = FunctionDefinition(ptr.getType(), loc, std::move(ptr).getParameterDeclarations(), linkage, inlineKind,
                                      std::move(ptr).getCompoundStatement());
-            ptr.setUses(cld::get<FunctionDeclaration*>(prev->second.declared)->getUses());
+            ptr.setUses(prevDecl->getUses());
+            ptr.tryAddFromOther(*prevDecl);
             prev.value() = DeclarationInScope{loc, &ptr};
         }
     }
+    attributes = applyAttributes(&ptr, std::move(attributes));
+    reportNotApplicableAttributes(attributes);
 
     auto funcType = ArrayType(typeAlloc<PrimitiveType>(PrimitiveType::Char, getLanguageOptions(), flag::isConst = true),
                               loc->getText().size() + 1);
@@ -605,8 +607,6 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
         }
 
         auto declaration = std::make_unique<VariableDeclaration>(std::move(result), linkage, lifetime, loc, kind);
-        thisAttributes = applyAttributes(declaration.get(), std::move(thisAttributes));
-        reportNotApplicableAttributes(thisAttributes);
         auto [prev, notRedefinition] =
             getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, declaration.get()}});
         if (!notRedefinition)
@@ -664,12 +664,14 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                                                              *prev->second.identifier));
                     linkage = Linkage::Internal;
                 }
-                // TODO: Merge attributes or something
                 *declaration = VariableDeclaration(std::move(composite), linkage, lifetime, loc,
                                                    std::max(prevDecl->getKind(), kind));
+                declaration->tryAddFromOther(*prevDecl);
                 prev.value().declared = declaration.get();
             }
         }
+        thisAttributes = applyAttributes(declaration.get(), std::move(thisAttributes));
+        reportNotApplicableAttributes(thisAttributes);
 
         if (iter.optionalInitializer)
         {
@@ -803,9 +805,6 @@ std::unique_ptr<cld::Semantics::FunctionDeclaration> cld::Semantics::SemanticAna
     }
 
     auto declaration = std::make_unique<FunctionDeclaration>(std::move(type), linkage, loc, inlineKind);
-    attributes = applyAttributes(declaration.get(), std::move(attributes));
-    reportNotApplicableAttributes(attributes);
-
     auto [prev, notRedefinition] =
         getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, declaration.get()}});
     if (!notRedefinition)
@@ -849,6 +848,9 @@ std::unique_ptr<cld::Semantics::FunctionDeclaration> cld::Semantics::SemanticAna
             *declaration = FunctionDeclaration(std::move(composite->as<FunctionType>()), linkage, loc,
                                                std::max(inlineKind, prevDecl.getInlineKind()));
             declaration->setUses(prevDecl.getUses());
+            declaration->tryAddFromOther(prevDecl);
+            attributes = applyAttributes(declaration.get(), std::move(attributes));
+            reportNotApplicableAttributes(attributes);
             prev.value().declared = declaration.get();
             return declaration;
         }
@@ -872,6 +874,8 @@ std::unique_ptr<cld::Semantics::FunctionDeclaration> cld::Semantics::SemanticAna
         }
         return {};
     }
+    attributes = applyAttributes(declaration.get(), std::move(attributes));
+    reportNotApplicableAttributes(attributes);
     return declaration;
 }
 

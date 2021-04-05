@@ -6271,7 +6271,7 @@ TEST_CASE("LLVM codegen __attribute__((aligned))", "[LLVM]")
                                                       "\n"
                                                       "INTEGER i;",
                                                       x64linux);
-            cld::CGLLVM::generateLLVM(module, program, cld::Triple::native());
+            cld::CGLLVM::generateLLVM(module, program, x64linux);
             CAPTURE(module);
             REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
             auto* global = module.getGlobalVariable("i");
@@ -6287,7 +6287,7 @@ TEST_CASE("LLVM codegen __attribute__((aligned))", "[LLVM]")
                                                       "return i;\n"
                                                       "}",
                                                       x64linux);
-            cld::CGLLVM::generateLLVM(module, program, cld::Triple::native());
+            cld::CGLLVM::generateLLVM(module, program, x64linux);
             CAPTURE(module);
             REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
             CHECK_THAT(module, ContainsIR("alloca i32, align 8"));
@@ -6298,7 +6298,7 @@ TEST_CASE("LLVM codegen __attribute__((aligned))", "[LLVM]")
         SECTION("Global")
         {
             auto program = generateProgramWithOptions("int __attribute__((aligned(8))) i;", x64linux);
-            cld::CGLLVM::generateLLVM(module, program, cld::Triple::native());
+            cld::CGLLVM::generateLLVM(module, program, x64linux);
             CAPTURE(module);
             REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
             auto* global = module.getGlobalVariable("i");
@@ -6312,7 +6312,7 @@ TEST_CASE("LLVM codegen __attribute__((aligned))", "[LLVM]")
                                                       "return i;\n"
                                                       "}",
                                                       x64linux);
-            cld::CGLLVM::generateLLVM(module, program, cld::Triple::native());
+            cld::CGLLVM::generateLLVM(module, program, x64linux);
             CAPTURE(module);
             REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
             CHECK_THAT(module, ContainsIR("alloca i32, align 8"));
@@ -6325,7 +6325,7 @@ TEST_CASE("LLVM codegen __attribute__((aligned))", "[LLVM]")
                                                           "\n"
                                                           "INTEGER __attribute__((aligned(1))) i;",
                                                           x64linux);
-                cld::CGLLVM::generateLLVM(module, program, cld::Triple::native());
+                cld::CGLLVM::generateLLVM(module, program, x64linux);
                 CAPTURE(module);
                 REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
                 auto* global = module.getGlobalVariable("i");
@@ -6341,11 +6341,38 @@ TEST_CASE("LLVM codegen __attribute__((aligned))", "[LLVM]")
                                                           "return i;\n"
                                                           "}",
                                                           x64linux);
-                cld::CGLLVM::generateLLVM(module, program, cld::Triple::native());
+                cld::CGLLVM::generateLLVM(module, program, x64linux);
                 CAPTURE(module);
                 REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
                 CHECK_THAT(module, ContainsIR("alloca i32, align 1"));
             }
+        }
+    }
+    SECTION("Function")
+    {
+        SECTION("Simple")
+        {
+            auto program =
+                generateProgramWithOptions("int __attribute__((aligned(8))) foo(void) { return 5; }", x64linux);
+            cld::CGLLVM::generateLLVM(module, program, x64linux);
+            CAPTURE(module);
+            REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
+            auto* global = module.getFunction("foo");
+            REQUIRE(global);
+            CHECK(global->getAlign() == 8);
+        }
+        SECTION("Largest alignment")
+        {
+            auto program = generateProgramWithOptions("int __attribute__((aligned(8))) foo(void);\n"
+                                                      "\n"
+                                                      "int __attribute__((aligned(2))) foo(void) { return 5; }",
+                                                      x64linux);
+            cld::CGLLVM::generateLLVM(module, program, x64linux);
+            CAPTURE(module);
+            REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
+            auto* global = module.getFunction("foo");
+            REQUIRE(global);
+            CHECK(global->getAlign() == 8);
         }
     }
 }

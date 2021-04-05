@@ -516,6 +516,10 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDe
     auto* ft = llvm::cast<llvm::FunctionType>(visit(declaration.getType()));
     function =
         llvm::Function::Create(ft, linkageType, -1, llvm::StringRef{declaration.getNameToken()->getText()}, &m_module);
+    if (auto* aligned = declaration.getAttributeIf<Semantics::AlignedAttribute>())
+    {
+        function->setAlignment(llvm::Align(aligned->alignment));
+    }
     auto attributes = function->getAttributes();
     attributes = m_abi->generateFunctionAttributes(
         std::move(attributes), ft, declaration.getType().as<Semantics::FunctionType>(), m_programInterface);
@@ -733,6 +737,17 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDefinition& func
         auto* ft = llvm::cast<llvm::FunctionType>(visit(functionDefinition.getType()));
         function = llvm::Function::Create(ft, linkageType, -1,
                                           llvm::StringRef{functionDefinition.getNameToken()->getText()}, &m_module);
+    }
+    if (auto* aligned = functionDefinition.getAttributeIf<Semantics::AlignedAttribute>())
+    {
+        if (auto existingAlign = function->getAlign())
+        {
+            function->setAlignment(llvm::Align(std::max<std::uint64_t>(existingAlign->value(), aligned->alignment)));
+        }
+        else
+        {
+            function->setAlignment(llvm::Align(aligned->alignment));
+        }
     }
     m_lvalues.emplace(&functionDefinition, valueOf(function));
     auto& ft = functionDefinition.getType().as<Semantics::FunctionType>();
