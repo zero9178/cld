@@ -67,6 +67,7 @@ std::vector<cld::Semantics::SemanticAnalysis::GNUAttribute>
         unixSpelling("aligned", cld::bind_front(lambda, &SemanticAnalysis::applyAlignedAttribute));
         unixSpelling("used", cld::bind_front(lambda, &SemanticAnalysis::applyUsedAttribute));
         unixSpelling("vector_size", cld::bind_front(lambda, &SemanticAnalysis::applyVectorSizeAttribute));
+        unixSpelling("noinline", cld::bind_front(lambda, &SemanticAnalysis::applyNoinlineAttribute));
         return result;
     }();
     std::vector<GNUAttribute> results;
@@ -80,7 +81,7 @@ std::vector<cld::Semantics::SemanticAnalysis::GNUAttribute>
             {
                 cld::match(
                     applicant, [&](AffectsVariable) { iter.attempts |= GNUAttribute::Variable; },
-                    [&](AffectsFunctions) { iter.attempts |= GNUAttribute::Function; },
+                    [&](AffectsFunction) { iter.attempts |= GNUAttribute::Function; },
                     [&](AffectsTagType) { iter.attempts |= GNUAttribute::Type; });
                 results.push_back(std::move(iter));
             }
@@ -363,4 +364,15 @@ void cld::Semantics::SemanticAnalysis::applyUsedAttribute(AffectsVariableFunctio
         return;
     }
     cld::match(applicant, [](auto holder) { holder->addAttribute(UsedAttribute{}); });
+}
+
+void cld::Semantics::SemanticAnalysis::applyNoinlineAttribute(AffectsFunction applicant, const GNUAttribute& attribute)
+{
+    if (attribute.firstParamName || !attribute.paramExpressions.empty())
+    {
+        log(Errors::Semantics::INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N.args(
+            *attribute.name, m_sourceInterface, *attribute.name,
+            (attribute.firstParamName ? 1 : 0) + attribute.paramExpressions.size()));
+    }
+    cld::match(applicant, [](auto holder) { holder->addAttribute(NoinlineAttribute{}); });
 }

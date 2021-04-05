@@ -5624,3 +5624,19 @@ TEST_CASE("Semantics __attribute__((aligned))", "[semantics]")
         CHECK(attribute->alignment == 8);
     }
 }
+
+TEST_CASE("Semantics __attribute__((noinline))", "[semantics]")
+{
+    SEMA_PRODUCES("int __attribute__ ((noinline(8))) foo(void);",
+                  ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N, "'noinline'", 1));
+    auto program = generateProgram("__attribute__((noinline)) void foo(void) {\n"
+                                   "    int i = 5;\n"
+                                   "    i;\n"
+                                   "}",
+                                   x64linux);
+    auto& globals = program.getTranslationUnit().getGlobals();
+    REQUIRE(globals.size() == 1);
+    auto& func = globals[0];
+    REQUIRE(func->is<FunctionDefinition>());
+    CHECK(func->as<FunctionDefinition>().hasAttribute<NoinlineAttribute>());
+}

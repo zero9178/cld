@@ -547,7 +547,7 @@ public:
 
     [[nodiscard]] std::vector<GNUAttribute> visit(const Syntax::GNUAttributes& node);
 
-    using AffectsFunctions = std::variant<not_null<FunctionDeclaration>, not_null<FunctionDefinition>>;
+    using AffectsFunction = std::variant<not_null<FunctionDeclaration>, not_null<FunctionDefinition>>;
 
     using AffectsType = std::variant<std::pair<not_null<IntrVarValue<Type>>, diag::PointRange>>;
 
@@ -565,12 +565,12 @@ public:
         decltype(variantTypeUnion(std::declval<AffectsType>(), std::declval<AffectsVariable>()));
 
     using AffectsVariableFunction =
-        decltype(variantTypeUnion(std::declval<AffectsFunctions>(), std::declval<AffectsVariable>()));
+        decltype(variantTypeUnion(std::declval<AffectsFunction>(), std::declval<AffectsVariable>()));
 
     using AffectsTagVariableFunction = decltype(variantTypeUnion(
-        std::declval<AffectsFunctions>(), std::declval<AffectsVariable>(), std::declval<AffectsTag>()));
+        std::declval<AffectsFunction>(), std::declval<AffectsVariable>(), std::declval<AffectsTag>()));
 
-    using AffectsAll = decltype(variantTypeUnion(std::declval<AffectsFunctions>(), std::declval<AffectsVariable>(),
+    using AffectsAll = decltype(variantTypeUnion(std::declval<AffectsFunction>(), std::declval<AffectsVariable>(),
                                                  std::declval<AffectsType>(), std::declval<AffectsTag>()));
 
     [[nodiscard]] std::vector<GNUAttribute> applyAttributes(AffectsAll applicant,
@@ -581,6 +581,8 @@ public:
     void applyVectorSizeAttribute(AffectsTypeVariable applicant, const GNUAttribute& attribute);
 
     void applyUsedAttribute(AffectsVariableFunction declaration, const GNUAttribute& attribute);
+
+    void applyNoinlineAttribute(AffectsFunction declaration, const GNUAttribute& attribute);
 };
 
 } // namespace cld::Semantics

@@ -940,6 +940,9 @@ CREATE_ERROR(CONTINUE_MUST_BE_WITHIN_A_LOOP_STATEMENT, "Continue must be within 
 CREATE_ERROR(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_N_GOT_N,
              "Invalid number of arguments for attribute %0. Expected %1 got %2", Underline<0>);
 
+CREATE_ERROR(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N,
+             "Invalid number of arguments for attribute %0. Expected none got %1", Underline<0>);
+
 // __attribute__((vector_size(n)))
 
 CREATE_ERROR(EXPECTED_INTEGER_CONSTANT_EXPRESSION_AS_ARGUMENT_TO_VECTOR_SIZE,

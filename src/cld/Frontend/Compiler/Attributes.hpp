@@ -25,7 +25,11 @@ struct UsedAttribute
 {
 };
 
-using FunctionAttribute = std::variant<AlignedAttribute, DeprecatedAttribute, UsedAttribute>;
+struct NoinlineAttribute
+{
+};
+
+using FunctionAttribute = std::variant<AlignedAttribute, DeprecatedAttribute, UsedAttribute, NoinlineAttribute>;
 
 using TypeAttribute = std::variant<AlignedAttribute, DeprecatedAttribute>;
 
