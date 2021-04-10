@@ -37,8 +37,12 @@ struct GnuInlineAttribute
 {
 };
 
+struct ArtificialAttribute
+{
+};
+
 using FunctionAttribute = std::variant<AlignedAttribute, DeprecatedAttribute, UsedAttribute, NoinlineAttribute,
-                                       AlwaysInlineAttribute, GnuInlineAttribute>;
+                                       AlwaysInlineAttribute, GnuInlineAttribute, ArtificialAttribute>;
 
 using TypeAttribute = std::variant<AlignedAttribute, DeprecatedAttribute>;
 

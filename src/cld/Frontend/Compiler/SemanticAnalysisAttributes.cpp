@@ -70,6 +70,7 @@ std::vector<cld::Semantics::SemanticAnalysis::GNUAttribute>
         unixSpelling("noinline", cld::bind_front(lambda, &SemanticAnalysis::applyNoinlineAttribute));
         unixSpelling("always_inline", cld::bind_front(lambda, &SemanticAnalysis::applyAlwaysInlineAttribute));
         unixSpelling("gnu_inline", cld::bind_front(lambda, &SemanticAnalysis::applyGnuInlineAttribute));
+        unixSpelling("artificial", cld::bind_front(lambda, &SemanticAnalysis::applyArtificialAttribute));
         return result;
     }();
     std::vector<GNUAttribute> results;
@@ -423,4 +424,16 @@ void cld::Semantics::SemanticAnalysis::applyGnuInlineAttribute(AffectsFunction a
                 *attribute.name, m_sourceInterface, *holder->getNameToken(), *attribute.name));
         });
     cld::match(applicant, [](auto holder) { holder->addAttribute(GnuInlineAttribute{}); });
+}
+
+void cld::Semantics::SemanticAnalysis::applyArtificialAttribute(AffectsFunction applicant,
+                                                                const GNUAttribute& attribute)
+{
+    if (attribute.firstParamName || !attribute.paramExpressions.empty())
+    {
+        log(Errors::Semantics::INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N.args(
+            *attribute.name, m_sourceInterface, *attribute.name,
+            (attribute.firstParamName ? 1 : 0) + attribute.paramExpressions.size()));
+    }
+    cld::match(applicant, [](auto holder) { holder->addAttribute(ArtificialAttribute{}); });
 }

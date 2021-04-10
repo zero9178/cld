@@ -802,12 +802,16 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDefinition& func
         {
             spFlags |= llvm::DISubprogram::SPFlagMainSubprogram;
         }
+        auto diFlags = ft.isKandR() ? llvm::DINode::FlagZero : llvm::DINode::FlagPrototyped;
+        if (functionDefinition.hasAttribute<Semantics::ArtificialAttribute>())
+        {
+            diFlags |= llvm::DINode::FlagArtificial;
+        }
         auto* subProgram = m_debugInfo->createFunction(
             getFile(functionDefinition.getNameToken()), functionDefinition.getNameToken()->getText(),
             functionDefinition.getNameToken()->getText(), getFile(functionDefinition.getNameToken()),
             getLine(functionDefinition.getNameToken()), subRoutineType,
-            getLine(functionDefinition.getCompoundStatement().getOpenBrace()),
-            ft.isKandR() ? llvm::DINode::FlagZero : llvm::DINode::FlagPrototyped, spFlags);
+            getLine(functionDefinition.getCompoundStatement().getOpenBrace()), diFlags, spFlags);
         m_currentFunction->setSubprogram(subProgram);
         subProgramReset.emplace(m_currentDebugScope, m_currentDebugScope);
         m_scopeIdToScope[functionDefinition.getCompoundStatement().getScope()] = m_currentDebugScope = subProgram;
