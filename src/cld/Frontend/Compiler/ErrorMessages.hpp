@@ -976,12 +976,6 @@ CREATE_ERROR(ARGUMENT_TO_ALIGNED_MUST_BE_A_POSITIVE_NUMBER, "Argument to 'aligne
 
 CREATE_ERROR(ARGUMENT_TO_ALIGNED_MUST_BE_A_POWER_OF_2, "Argument to 'aligned' must be a power of 2", Annotate<0, 1>);
 
-// __attribute__((gnu_inline))
-
-CREATE_ERROR(GNU_INLINE_CAN_NOT_BE_APPLIED_TO_FUNCTION_N_BECAUSE_IT_IS_NOT_DECLARED_INLINE,
-             "'gnu_inline' can not be applied to function %0 because it is not declared 'inline'", Underline<0>,
-             PointAt<1>);
-
 } // namespace Semantics
 
 namespace Lexer
@@ -1202,6 +1196,12 @@ CREATE_WARNING(ATTRIBUTE_USED_ONLY_APPLIES_TO_FUNCTIONS_WITH_INTERNAL_LINKAGE, "
 
 CREATE_WARNING(ATTRIBUTE_USED_ONLY_APPLIES_TO_GLOBAL_VARIABLES_WITH_INTERNAL_LINKAGE, "ignored-attributes",
                "Attribute 'used' only applies to global variables with internal linkage", Underline<0>, Underline<1>);
+
+// __attribute__((gnu_inline))
+
+CREATE_WARNING(GNU_INLINE_CAN_NOT_BE_APPLIED_TO_FUNCTION_N_BECAUSE_IT_IS_NOT_DECLARED_INLINE, "ignored-attributes",
+               "'gnu_inline' can not be applied to function %0 because it is not declared 'inline'", Underline<0>,
+               PointAt<1>);
 
 } // namespace Semantics
 namespace Lexer

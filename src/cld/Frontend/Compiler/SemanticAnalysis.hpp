@@ -574,8 +574,16 @@ public:
     using AffectsAll = decltype(variantTypeUnion(std::declval<AffectsFunction>(), std::declval<AffectsVariable>(),
                                                  std::declval<AffectsType>(), std::declval<AffectsTag>()));
 
+    struct FunctionContext
+    {
+        bool hasInlineSpecifier;
+    };
+
+    using CallingContext = std::variant<std::monostate, FunctionContext>;
+
     [[nodiscard]] std::vector<GNUAttribute> applyAttributes(AffectsAll applicant,
-                                                            std::vector<GNUAttribute>&& attributes);
+                                                            std::vector<GNUAttribute>&& attributes,
+                                                            const CallingContext& context = {});
 
     void applyAlignedAttribute(AffectsTagVariableFunction applicant, const GNUAttribute& attribute);
 
@@ -587,7 +595,8 @@ public:
 
     void applyAlwaysInlineAttribute(AffectsFunction declaration, const GNUAttribute& attribute);
 
-    void applyGnuInlineAttribute(AffectsFunction declaration, const GNUAttribute& attribute);
+    void applyGnuInlineAttribute(AffectsFunction declaration, const GNUAttribute& attribute,
+                                 const CallingContext& context);
 
     void applyArtificialAttribute(AffectsFunction declaration, const GNUAttribute& attribute);
 };

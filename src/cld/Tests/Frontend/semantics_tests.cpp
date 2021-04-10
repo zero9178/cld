@@ -5671,7 +5671,14 @@ TEST_CASE("Semantics __attribute__((gnu_inline))", "[semantics]")
                   ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N, "'gnu_inline'", 1));
     SEMA_PRODUCES(
         "int __attribute__ ((gnu_inline)) foo(void);",
-        ProducesError(GNU_INLINE_CAN_NOT_BE_APPLIED_TO_FUNCTION_N_BECAUSE_IT_IS_NOT_DECLARED_INLINE, "'foo'"));
+        ProducesWarning(GNU_INLINE_CAN_NOT_BE_APPLIED_TO_FUNCTION_N_BECAUSE_IT_IS_NOT_DECLARED_INLINE, "'foo'"));
+    SEMA_PRODUCES("int foo(void);\n"
+                  "\n"
+                  "__attribute__((gnu_inline)) inline int foo(void) {\n"
+                  "return 5;\n"
+                  "}",
+                  ProducesNoWarnings());
+
     auto program = generateProgram("__attribute__((gnu_inline)) inline void foo(void) {\n"
                                    "    int i = 5;\n"
                                    "    i;\n"

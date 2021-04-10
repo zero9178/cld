@@ -325,7 +325,7 @@ std::vector<cld::IntrVarPtr<cld::Semantics::Useable>>
             prev.value() = DeclarationInScope{loc, &ptr};
         }
     }
-    attributes = applyAttributes(&ptr, std::move(attributes));
+    attributes = applyAttributes(&ptr, std::move(attributes), FunctionContext{isInline});
     reportNotApplicableAttributes(attributes);
 
     auto funcType = ArrayType(typeAlloc<PrimitiveType>(PrimitiveType::Char, getLanguageOptions(), flag::isConst = true),
@@ -874,7 +874,7 @@ std::unique_ptr<cld::Semantics::FunctionDeclaration> cld::Semantics::SemanticAna
         }
         return {};
     }
-    attributes = applyAttributes(declaration.get(), std::move(attributes));
+    attributes = applyAttributes(declaration.get(), std::move(attributes), FunctionContext{isInline});
     reportNotApplicableAttributes(attributes);
     return declaration;
 }

@@ -38,7 +38,8 @@ template <class Applicant>
 bool tryMatch(cld::Semantics::SemanticAnalysis& analysis, cld::Semantics::SemanticAnalysis::AffectsAll applicant,
               void (cld::Semantics::SemanticAnalysis::*method)(Applicant,
                                                                const cld::Semantics::SemanticAnalysis::GNUAttribute&),
-              const cld::Semantics::SemanticAnalysis::GNUAttribute& attribute)
+              const cld::Semantics::SemanticAnalysis::GNUAttribute& attribute,
+              const cld::Semantics::SemanticAnalysis::CallingContext&)
 {
     auto castedApplicant = tryConvertApplicant<std::decay_t<Applicant>>(applicant);
     if (!castedApplicant)
@@ -49,18 +50,40 @@ bool tryMatch(cld::Semantics::SemanticAnalysis& analysis, cld::Semantics::Semant
     (analysis.*method)(result, attribute);
     return true;
 }
+
+template <class Applicant>
+bool tryMatch(
+    cld::Semantics::SemanticAnalysis& analysis, cld::Semantics::SemanticAnalysis::AffectsAll applicant,
+    void (cld::Semantics::SemanticAnalysis::*method)(Applicant, const cld::Semantics::SemanticAnalysis::GNUAttribute&,
+                                                     const cld::Semantics::SemanticAnalysis::CallingContext& context),
+    const cld::Semantics::SemanticAnalysis::GNUAttribute& attribute,
+    const cld::Semantics::SemanticAnalysis::CallingContext& context)
+{
+    auto castedApplicant = tryConvertApplicant<std::decay_t<Applicant>>(applicant);
+    if (!castedApplicant)
+    {
+        return false;
+    }
+    auto result = *castedApplicant;
+    (analysis.*method)(result, attribute, context);
+    return true;
+}
 } // namespace
 
 std::vector<cld::Semantics::SemanticAnalysis::GNUAttribute>
-    cld::Semantics::SemanticAnalysis::applyAttributes(AffectsAll applicant, std::vector<GNUAttribute>&& attributes)
+    cld::Semantics::SemanticAnalysis::applyAttributes(AffectsAll applicant, std::vector<GNUAttribute>&& attributes,
+                                                      const CallingContext& context)
 {
-    using UnorderedMap =
-        std::unordered_map<std::string, std::function<bool(const GNUAttribute&, SemanticAnalysis&, AffectsAll)>>;
-    static UnorderedMap handlers = [&] {
+    using UnorderedMap = std::unordered_map<
+        std::string, std::function<bool(const GNUAttribute&, SemanticAnalysis&, AffectsAll, const CallingContext&)>>;
+    static UnorderedMap handlers = [&]
+    {
         UnorderedMap result;
         auto lambda = [](auto memberFunction, const GNUAttribute& iter, SemanticAnalysis& analysis,
-                         AffectsAll applicant) -> bool { return tryMatch(analysis, applicant, memberFunction, iter); };
-        auto unixSpelling = [&](std::string name, auto function) {
+                         AffectsAll applicant, const CallingContext& context) -> bool
+        { return tryMatch(analysis, applicant, memberFunction, iter, context); };
+        auto unixSpelling = [&](std::string name, auto function)
+        {
             result.emplace(name, function);
             result.emplace("__" + name + "__", function);
         };
@@ -79,7 +102,7 @@ std::vector<cld::Semantics::SemanticAnalysis::GNUAttribute>
         auto name = Lexer::normalizeSpelling(iter.name->getRepresentation(m_sourceInterface));
         if (auto result = handlers.find(name); result != handlers.end())
         {
-            auto applied = (result->second)(iter, *this, applicant);
+            auto applied = (result->second)(iter, *this, applicant, context);
             if (!applied)
             {
                 cld::match(
@@ -404,7 +427,8 @@ void cld::Semantics::SemanticAnalysis::applyAlwaysInlineAttribute(AffectsFunctio
     cld::match(applicant, [](auto holder) { holder->addAttribute(AlwaysInlineAttribute{}); });
 }
 
-void cld::Semantics::SemanticAnalysis::applyGnuInlineAttribute(AffectsFunction applicant, const GNUAttribute& attribute)
+void cld::Semantics::SemanticAnalysis::applyGnuInlineAttribute(AffectsFunction applicant, const GNUAttribute& attribute,
+                                                               const CallingContext& context)
 {
     if (attribute.firstParamName || !attribute.paramExpressions.empty())
     {
@@ -416,11 +440,11 @@ void cld::Semantics::SemanticAnalysis::applyGnuInlineAttribute(AffectsFunction a
         applicant,
         [&](auto holder)
         {
-            if (holder->isInline())
+            if (auto* funCon = std::get_if<FunctionContext>(&context); funCon && funCon->hasInlineSpecifier)
             {
                 return;
             }
-            log(Errors::Semantics::GNU_INLINE_CAN_NOT_BE_APPLIED_TO_FUNCTION_N_BECAUSE_IT_IS_NOT_DECLARED_INLINE.args(
+            log(Warnings::Semantics::GNU_INLINE_CAN_NOT_BE_APPLIED_TO_FUNCTION_N_BECAUSE_IT_IS_NOT_DECLARED_INLINE.args(
                 *attribute.name, m_sourceInterface, *holder->getNameToken(), *attribute.name));
         });
     cld::match(applicant, [](auto holder) { holder->addAttribute(GnuInlineAttribute{}); });
