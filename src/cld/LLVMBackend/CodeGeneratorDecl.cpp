@@ -516,10 +516,6 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDe
     auto* ft = llvm::cast<llvm::FunctionType>(visit(declaration.getType()));
     function =
         llvm::Function::Create(ft, linkageType, -1, llvm::StringRef{declaration.getNameToken()->getText()}, &m_module);
-    if (auto* aligned = declaration.getAttributeIf<Semantics::AlignedAttribute>())
-    {
-        function->setAlignment(llvm::Align(aligned->alignment));
-    }
     auto attributes = function->getAttributes();
     attributes = m_abi->generateFunctionAttributes(
         std::move(attributes), ft, declaration.getType().as<Semantics::FunctionType>(), m_programInterface);
