@@ -8,6 +8,7 @@
 #include <cld/Support/Text.hpp>
 
 #include <algorithm>
+#include <charconv>
 #include <numeric>
 #include <optional>
 #include <unordered_map>
@@ -891,11 +892,11 @@ public:
     }
 };
 
-std::uint32_t hexToValue(const std::string& value)
+std::uint32_t hexToValue(std::string_view value)
 {
-    char* end = const_cast<char*>(value.data() + value.size());
-    auto result = std::strtoul(value.data(), &end, 16);
-    CLD_ASSERT(*end == '\0');
+    std::uint32_t result;
+    auto errors = std::from_chars(value.data(), value.data() + value.size(), result, 16);
+    CLD_ASSERT(errors.ec == std::errc{});
     return result;
 }
 
@@ -911,7 +912,7 @@ std::optional<std::uint32_t> universalCharacterToValue(std::string_view value, s
                                                        T& context)
 {
     CLD_ASSERT(value.size() == 4 || value.size() == 8);
-    auto result = hexToValue(std::string(value.begin(), value.end()));
+    auto result = hexToValue(value);
     if (result < 0xA0)
     {
         if (result != '$' && result != '@' && result != '`')
@@ -1989,11 +1990,11 @@ std::optional<std::uint32_t> escapeCharToValue(char escape, std::uint64_t backsl
     }
 }
 
-std::uint32_t octalToValue(const std::string& value)
+std::uint32_t octalToValue(std::string_view value)
 {
-    char* end = const_cast<char*>(value.data() + value.size());
-    auto result = std::strtoul(value.data(), &end, 8);
-    CLD_ASSERT(*end == '\0');
+    std::uint32_t result;
+    auto errors = std::from_chars(value.data(), value.data() + value.size(), result, 8);
+    CLD_ASSERT(errors.ec == std::errc{});
     return result;
 }
 

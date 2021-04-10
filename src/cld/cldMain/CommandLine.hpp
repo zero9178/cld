@@ -8,6 +8,7 @@
 #include <cld/Support/Text.hpp>
 #include <cld/Support/Util.hpp>
 
+#include <charconv>
 #include <optional>
 #include <string_view>
 #include <tuple>
@@ -755,10 +756,9 @@ public:
         {
             if constexpr (std::is_signed_v<ArgType>)
             {
-                auto nts = std::string(text.begin(), text.end());
-                char* end = nullptr;
-                auto integer = std::strtoll(nts.data(), &end, 10);
-                if (end != nts.data() + nts.size() || errno == ERANGE)
+                std::int64_t integer;
+                auto [end, errc] = std::from_chars(text.data(), text.data() + text.size(), integer);
+                if (end != text.data() + text.size() || errc == std::errc::result_out_of_range)
                 {
                     return buildFailedInteger();
                 }
@@ -766,10 +766,9 @@ public:
             }
             else
             {
-                auto nts = std::string(text.begin(), text.end());
-                char* end = nullptr;
-                auto integer = std::strtoull(nts.data(), &end, 10);
-                if (end != nts.data() + nts.size() || errno == ERANGE)
+                std::uint64_t integer;
+                auto [end, errc] = std::from_chars(text.data(), text.data() + text.size(), integer);
+                if (end != text.data() + text.size() || errc == std::errc::result_out_of_range)
                 {
                     return buildFailedInteger();
                 }
