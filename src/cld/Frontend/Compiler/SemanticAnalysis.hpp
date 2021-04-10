@@ -586,6 +586,8 @@ public:
     void applyNoinlineAttribute(AffectsFunction declaration, const GNUAttribute& attribute);
 
     void applyAlwaysInlineAttribute(AffectsFunction declaration, const GNUAttribute& attribute);
+
+    void applyGnuInlineAttribute(AffectsFunction declaration, const GNUAttribute& attribute);
 };
 
 } // namespace cld::Semantics

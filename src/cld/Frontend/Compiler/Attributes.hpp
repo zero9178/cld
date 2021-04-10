@@ -33,8 +33,12 @@ struct AlwaysInlineAttribute
 {
 };
 
-using FunctionAttribute =
-    std::variant<AlignedAttribute, DeprecatedAttribute, UsedAttribute, NoinlineAttribute, AlwaysInlineAttribute>;
+struct GnuInlineAttribute
+{
+};
+
+using FunctionAttribute = std::variant<AlignedAttribute, DeprecatedAttribute, UsedAttribute, NoinlineAttribute,
+                                       AlwaysInlineAttribute, GnuInlineAttribute>;
 
 using TypeAttribute = std::variant<AlignedAttribute, DeprecatedAttribute>;
 

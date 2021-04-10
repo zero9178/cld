@@ -5664,3 +5664,22 @@ TEST_CASE("Semantics __attribute__((always_inline))", "[semantics]")
     REQUIRE(func->is<FunctionDefinition>());
     CHECK(func->as<FunctionDefinition>().hasAttribute<AlwaysInlineAttribute>());
 }
+
+TEST_CASE("Semantics __attribute__((gnu_inline))", "[semantics]")
+{
+    SEMA_PRODUCES("int __attribute__ ((gnu_inline(8))) foo(void);",
+                  ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N, "'gnu_inline'", 1));
+    SEMA_PRODUCES(
+        "int __attribute__ ((gnu_inline)) foo(void);",
+        ProducesError(GNU_INLINE_CAN_NOT_BE_APPLIED_TO_FUNCTION_N_BECAUSE_IT_IS_NOT_DECLARED_INLINE, "'foo'"));
+    auto program = generateProgram("__attribute__((gnu_inline)) inline void foo(void) {\n"
+                                   "    int i = 5;\n"
+                                   "    i;\n"
+                                   "}",
+                                   x64linux);
+    auto& globals = program.getTranslationUnit().getGlobals();
+    REQUIRE(globals.size() == 1);
+    auto& func = globals[0];
+    REQUIRE(func->is<FunctionDefinition>());
+    CHECK(func->as<FunctionDefinition>().hasAttribute<GnuInlineAttribute>());
+}
