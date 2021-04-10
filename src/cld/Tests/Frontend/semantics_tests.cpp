@@ -5623,6 +5623,14 @@ TEST_CASE("Semantics __attribute__((aligned))", "[semantics]")
         REQUIRE(attribute);
         CHECK(attribute->alignment == 8);
     }
+    SECTION("Type")
+    {
+        SEMA_PRODUCES("long foo(void) {\n"
+                      "    int i = 5;\n"
+                      "    return (__attribute__((aligned(8))) long)i;\n"
+                      "}",
+                      ProducesWarning(ATTRIBUTE_N_IGNORED_WHILE_PARSING_TYPE, "'aligned'"));
+    }
 }
 
 TEST_CASE("Semantics __attribute__((noinline))", "[semantics]")

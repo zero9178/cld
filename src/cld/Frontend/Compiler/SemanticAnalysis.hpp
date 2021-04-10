@@ -122,8 +122,9 @@ public:
         {
             Nothing = 0,
             Function = 0b1,
-            Type = 0b10,
-            Variable = 0b100,
+            Tag = 0b10,
+            Type = 0b100,
+            Variable = 0b1000,
         };
         std::underlying_type_t<TriedOn> attempts;
         Lexer::CTokenIterator name;

@@ -82,7 +82,8 @@ std::vector<cld::Semantics::SemanticAnalysis::GNUAttribute>
                 cld::match(
                     applicant, [&](AffectsVariable) { iter.attempts |= GNUAttribute::Variable; },
                     [&](AffectsFunction) { iter.attempts |= GNUAttribute::Function; },
-                    [&](AffectsTagType) { iter.attempts |= GNUAttribute::Type; });
+                    [&](AffectsType) { iter.attempts |= GNUAttribute::Type; },
+                    [&](AffectsTag) { iter.attempts |= GNUAttribute::Tag; });
                 results.push_back(std::move(iter));
             }
         }
@@ -103,9 +104,14 @@ void cld::Semantics::SemanticAnalysis::reportNotApplicableAttributes(const std::
             case GNUAttribute::Nothing:
                 log(Warnings::Semantics::UNKNOWN_ATTRIBUTE_N_IGNORED.args(*iter.name, m_sourceInterface, *iter.name));
                 break;
-            case GNUAttribute::Type:
+            case GNUAttribute::Tag:
+            case GNUAttribute::Tag | GNUAttribute::Type:
                 log(Warnings::Semantics::ATTRIBUTE_N_DOES_NOT_APPLY_TO_TYPES.args(*iter.name, m_sourceInterface,
                                                                                   *iter.name));
+                break;
+            case GNUAttribute::Type:
+                log(Warnings::Semantics::ATTRIBUTE_N_IGNORED_WHILE_PARSING_TYPE.args(*iter.name, m_sourceInterface,
+                                                                                     *iter.name));
                 break;
             case GNUAttribute::Variable:
                 log(Warnings::Semantics::ATTRIBUTE_N_DOES_NOT_APPLY_TO_VARIABLES.args(*iter.name, m_sourceInterface,
@@ -116,10 +122,14 @@ void cld::Semantics::SemanticAnalysis::reportNotApplicableAttributes(const std::
                                                                                       *iter.name));
                 break;
             case GNUAttribute::Variable | GNUAttribute::Type:
+            case GNUAttribute::Variable | GNUAttribute::Tag:
+            case GNUAttribute::Variable | GNUAttribute::Tag | GNUAttribute::Type:
                 log(Warnings::Semantics::ATTRIBUTE_N_DOES_NOT_APPLY_TO_TYPES_OR_VARIABLES.args(
                     *iter.name, m_sourceInterface, *iter.name));
                 break;
             case GNUAttribute::Function | GNUAttribute::Type:
+            case GNUAttribute::Function | GNUAttribute::Tag:
+            case GNUAttribute::Function | GNUAttribute::Tag | GNUAttribute::Type:
                 log(Warnings::Semantics::ATTRIBUTE_N_DOES_NOT_APPLY_TO_TYPES_OR_FUNCTIONS.args(
                     *iter.name, m_sourceInterface, *iter.name));
                 break;
@@ -128,10 +138,12 @@ void cld::Semantics::SemanticAnalysis::reportNotApplicableAttributes(const std::
                     *iter.name, m_sourceInterface, *iter.name));
                 break;
             case GNUAttribute::Variable | GNUAttribute::Function | GNUAttribute::Type:
+            case GNUAttribute::Variable | GNUAttribute::Function | GNUAttribute::Tag:
+            case GNUAttribute::Variable | GNUAttribute::Function | GNUAttribute::Type | GNUAttribute::Tag:
                 log(Warnings::Semantics::ATTRIBUTE_N_DOES_NOT_APPLY_TO_TYPES_VARIABLES_OR_FUNCTIONS.args(
                     *iter.name, m_sourceInterface, *iter.name));
                 break;
-            default: break;
+            default: CLD_UNREACHABLE;
         }
     }
 }

@@ -1186,6 +1186,9 @@ CREATE_WARNING(ATTRIBUTE_N_DOES_NOT_APPLY_TO_TYPES_VARIABLES_OR_FUNCTIONS, "igno
 
 CREATE_WARNING(UNKNOWN_ATTRIBUTE_N_IGNORED, "unknown-attributes", "Unknown attribute %0 ignored", Underline<0>);
 
+CREATE_WARNING(ATTRIBUTE_N_IGNORED_WHILE_PARSING_TYPE, "ignored-attributes", "Attribute %0 ignored while parsing type",
+               Underline<0>);
+
 // __attribute__((used))
 
 CREATE_WARNING(ATTRIBUTE_USED_ONLY_APPLIES_TO_FUNCTIONS_WITH_INTERNAL_LINKAGE, "ignored-attributes",
