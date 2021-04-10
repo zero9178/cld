@@ -753,6 +753,10 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDefinition& func
     {
         function->addFnAttr(llvm::Attribute::NoInline);
     }
+    if (functionDefinition.hasAttribute<Semantics::AlwaysInlineAttribute>())
+    {
+        function->addFnAttr(llvm::Attribute::AlwaysInline);
+    }
     m_lvalues.emplace(&functionDefinition, valueOf(function));
     auto& ft = functionDefinition.getType().as<Semantics::FunctionType>();
     auto attributes = function->getAttributes();

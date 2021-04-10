@@ -5648,3 +5648,19 @@ TEST_CASE("Semantics __attribute__((noinline))", "[semantics]")
     REQUIRE(func->is<FunctionDefinition>());
     CHECK(func->as<FunctionDefinition>().hasAttribute<NoinlineAttribute>());
 }
+
+TEST_CASE("Semantics __attribute__((always_inline))", "[semantics]")
+{
+    SEMA_PRODUCES("int __attribute__ ((always_inline(8))) foo(void);",
+                  ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N, "'always_inline'", 1));
+    auto program = generateProgram("__attribute__((always_inline)) void foo(void) {\n"
+                                   "    int i = 5;\n"
+                                   "    i;\n"
+                                   "}",
+                                   x64linux);
+    auto& globals = program.getTranslationUnit().getGlobals();
+    REQUIRE(globals.size() == 1);
+    auto& func = globals[0];
+    REQUIRE(func->is<FunctionDefinition>());
+    CHECK(func->as<FunctionDefinition>().hasAttribute<AlwaysInlineAttribute>());
+}
