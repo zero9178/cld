@@ -759,10 +759,22 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDefinition& func
     attributes =
         m_abi->generateFunctionAttributes(std::move(attributes), function->getFunctionType(), ft, m_programInterface);
     function->setAttributes(std::move(attributes));
-    if (functionDefinition.getInlineKind() == Semantics::InlineKind::InlineDefinition
-        && functionDefinition.getLinkage() == Semantics::Linkage::External)
+    if (functionDefinition.hasAttribute<Semantics::GnuInlineAttribute>())
     {
-        return;
+        // GNU90 semantics
+        if (functionDefinition.getInlineKind() == Semantics::InlineKind::Inline)
+        {
+            return;
+        }
+    }
+    else
+    {
+        // C99 semantics
+        if (functionDefinition.getInlineKind() == Semantics::InlineKind::InlineDefinition
+            && functionDefinition.getLinkage() == Semantics::Linkage::External)
+        {
+            return;
+        }
     }
 
     if (!m_options.reloc)

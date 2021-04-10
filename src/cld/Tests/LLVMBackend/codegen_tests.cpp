@@ -6402,3 +6402,58 @@ TEST_CASE("LLVM codegen __attribute__((always_inline))", "[LLVM]")
     REQUIRE(global);
     CHECK(global->hasFnAttribute(llvm::Attribute::AlwaysInline));
 }
+
+TEST_CASE("LLVM codegen __attribute__((gnu_inline))", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    auto module = std::make_unique<llvm::Module>("", context);
+    SECTION("InlineDefinition")
+    {
+        auto program = generateProgram("__attribute__((gnu_inline)) inline int foo(void) {\n"
+                                       "return 5;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        auto* function = module->getFunction("foo");
+        REQUIRE(function);
+        CHECK_FALSE(function->isDeclaration());
+    }
+    SECTION("InlineDefinition with internal linkage")
+    {
+        auto program = generateProgram("__attribute__((gnu_inline)) inline static int foo(void) {\n"
+                                       "return 5;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program, cld::Triple::native(), emitAllDecls);
+        CAPTURE(*module);
+        auto* function = module->getFunction("foo");
+        REQUIRE(function);
+        CHECK_FALSE(function->isDeclaration());
+    }
+    SECTION("extern inline")
+    {
+        SECTION("extern in definition")
+        {
+            auto program = generateProgram("extern inline __attribute__((gnu_inline)) int foo(void) {\n"
+                                           "return 5;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            auto* function = module->getFunction("foo");
+            REQUIRE(function);
+            CHECK(function->isDeclaration());
+        }
+        SECTION("extern in declaration")
+        {
+            auto program = generateProgram("__attribute__((gnu_inline)) inline int foo(void) {\n"
+                                           "return 5;\n"
+                                           "}\n"
+                                           "\n"
+                                           "extern __attribute__((gnu_inline)) inline int foo(void);\n");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            auto* function = module->getFunction("foo");
+            REQUIRE(function);
+            CHECK_FALSE(function->isDeclaration());
+        }
+    }
+}
