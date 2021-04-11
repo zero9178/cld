@@ -680,7 +680,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
 
         if (iter.optionalInitializer)
         {
-            // C99 6.7.5$5:
+            // C99 6.7.5§5:
             // If the declaration of an identifier has block scope, and the identifier has external or
             // internal linkage, the declaration shall have no initializer for the identifier.
             if (m_currentScope != 0 && linkage != Linkage::None)
