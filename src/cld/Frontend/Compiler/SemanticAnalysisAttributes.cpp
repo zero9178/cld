@@ -35,9 +35,10 @@ std::optional<Applicant> tryConvertApplicant(cld::Semantics::SemanticAnalysis::A
 }
 
 template <class Applicant>
-bool tryMatch(cld::Semantics::SemanticAnalysis& analysis, cld::Semantics::SemanticAnalysis::AffectsAll applicant,
+bool tryMatch(cld::Semantics::SemanticAnalysis& analysis,
               void (cld::Semantics::SemanticAnalysis::*method)(Applicant,
                                                                const cld::Semantics::SemanticAnalysis::GNUAttribute&),
+              cld::Semantics::SemanticAnalysis::AffectsAll applicant,
               const cld::Semantics::SemanticAnalysis::GNUAttribute& attribute,
               const cld::Semantics::SemanticAnalysis::CallingContext&)
 {
@@ -53,9 +54,10 @@ bool tryMatch(cld::Semantics::SemanticAnalysis& analysis, cld::Semantics::Semant
 
 template <class Applicant>
 bool tryMatch(
-    cld::Semantics::SemanticAnalysis& analysis, cld::Semantics::SemanticAnalysis::AffectsAll applicant,
+    cld::Semantics::SemanticAnalysis& analysis,
     void (cld::Semantics::SemanticAnalysis::*method)(Applicant, const cld::Semantics::SemanticAnalysis::GNUAttribute&,
                                                      const cld::Semantics::SemanticAnalysis::CallingContext& context),
+    cld::Semantics::SemanticAnalysis::AffectsAll applicant,
     const cld::Semantics::SemanticAnalysis::GNUAttribute& attribute,
     const cld::Semantics::SemanticAnalysis::CallingContext& context)
 {
@@ -70,52 +72,49 @@ bool tryMatch(
 }
 } // namespace
 
+void cld::Semantics::SemanticAnalysis::createAttributes()
+{
+    auto lambda = [this](auto memberFunction, const GNUAttribute& iter, AffectsAll applicant,
+                         const CallingContext& context) -> bool
+    { return tryMatch(*this, memberFunction, applicant, iter, context); };
+
+    auto unixSpelling = [&](std::string name, auto memberFunction)
+    {
+        m_attributesHandler.emplace(name, cld::bind_front(lambda, memberFunction));
+        m_attributesHandler.emplace("__" + name + "__", cld::bind_front(lambda, memberFunction));
+    };
+    unixSpelling("aligned", &SemanticAnalysis::applyAlignedAttribute);
+    unixSpelling("used", &SemanticAnalysis::applyUsedAttribute);
+    unixSpelling("vector_size", &SemanticAnalysis::applyVectorSizeAttribute);
+    unixSpelling("noinline", &SemanticAnalysis::applyNoinlineAttribute);
+    unixSpelling("always_inline", &SemanticAnalysis::applyAlwaysInlineAttribute);
+    unixSpelling("gnu_inline", &SemanticAnalysis::applyGnuInlineAttribute);
+    unixSpelling("artificial", &SemanticAnalysis::applyArtificialAttribute);
+}
+
 std::vector<cld::Semantics::SemanticAnalysis::GNUAttribute>
     cld::Semantics::SemanticAnalysis::applyAttributes(AffectsAll applicant, std::vector<GNUAttribute>&& attributes,
                                                       const CallingContext& context)
 {
-    using UnorderedMap = std::unordered_map<
-        std::string, std::function<bool(const GNUAttribute&, SemanticAnalysis&, AffectsAll, const CallingContext&)>>;
-    static UnorderedMap handlers = [&]
-    {
-        UnorderedMap result;
-        auto lambda = [](auto memberFunction, const GNUAttribute& iter, SemanticAnalysis& analysis,
-                         AffectsAll applicant, const CallingContext& context) -> bool
-        { return tryMatch(analysis, applicant, memberFunction, iter, context); };
-        auto unixSpelling = [&](std::string name, auto function)
-        {
-            result.emplace(name, function);
-            result.emplace("__" + name + "__", function);
-        };
-        unixSpelling("aligned", cld::bind_front(lambda, &SemanticAnalysis::applyAlignedAttribute));
-        unixSpelling("used", cld::bind_front(lambda, &SemanticAnalysis::applyUsedAttribute));
-        unixSpelling("vector_size", cld::bind_front(lambda, &SemanticAnalysis::applyVectorSizeAttribute));
-        unixSpelling("noinline", cld::bind_front(lambda, &SemanticAnalysis::applyNoinlineAttribute));
-        unixSpelling("always_inline", cld::bind_front(lambda, &SemanticAnalysis::applyAlwaysInlineAttribute));
-        unixSpelling("gnu_inline", cld::bind_front(lambda, &SemanticAnalysis::applyGnuInlineAttribute));
-        unixSpelling("artificial", cld::bind_front(lambda, &SemanticAnalysis::applyArtificialAttribute));
-        return result;
-    }();
     std::vector<GNUAttribute> results;
     for (auto& iter : attributes)
     {
         auto name = Lexer::normalizeSpelling(iter.name->getRepresentation(m_sourceInterface));
-        if (auto result = handlers.find(name); result != handlers.end())
-        {
-            auto applied = (result->second)(iter, *this, applicant, context);
-            if (!applied)
-            {
-                cld::match(
-                    applicant, [&](AffectsVariable) { iter.attempts |= GNUAttribute::Variable; },
-                    [&](AffectsFunction) { iter.attempts |= GNUAttribute::Function; },
-                    [&](AffectsType) { iter.attempts |= GNUAttribute::Type; },
-                    [&](AffectsTag) { iter.attempts |= GNUAttribute::Tag; });
-                results.push_back(std::move(iter));
-            }
-        }
-        else
+        auto result = m_attributesHandler.find(name);
+        if (result == m_attributesHandler.end())
         {
             log(Warnings::Semantics::UNKNOWN_ATTRIBUTE_N_IGNORED.args(*iter.name, m_sourceInterface, *iter.name));
+            continue;
+        }
+        auto applied = (result->second)(iter, applicant, context);
+        if (!applied)
+        {
+            cld::match(
+                applicant, [&](AffectsVariable) { iter.attempts |= GNUAttribute::Variable; },
+                [&](AffectsFunction) { iter.attempts |= GNUAttribute::Function; },
+                [&](AffectsType) { iter.attempts |= GNUAttribute::Type; },
+                [&](AffectsTag) { iter.attempts |= GNUAttribute::Tag; });
+            results.push_back(std::move(iter));
         }
     }
     return results;

@@ -363,6 +363,8 @@ private:
 
     void createBuiltinTypes();
 
+    void createAttributes();
+
     std::pair<tsl::ordered_map<std::string_view, DeclarationInScope>::iterator, bool>
         insertTypedef(TypedefInfo typedefInfo);
 
@@ -421,6 +423,7 @@ public:
           m_definedCallback(std::move(definedCallback))
     {
         createBuiltinTypes();
+        createAttributes();
     }
 
     Expected<ConstValue, std::vector<Message>> evaluateConstantExpression(const ExpressionBase& constantExpression,
@@ -599,6 +602,10 @@ public:
                                  const CallingContext& context);
 
     void applyArtificialAttribute(AffectsFunction declaration, const GNUAttribute& attribute);
+
+private:
+    std::unordered_map<std::string, std::function<bool(const GNUAttribute&, AffectsAll, const CallingContext&)>>
+        m_attributesHandler;
 };
 
 } // namespace cld::Semantics
