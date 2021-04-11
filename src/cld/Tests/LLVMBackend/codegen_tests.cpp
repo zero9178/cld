@@ -6474,3 +6474,22 @@ TEST_CASE("LLVM codegen __attribute__((artificial))", "[LLVM]")
     REQUIRE(sp);
     CHECK(sp->isArtificial());
 }
+
+TEST_CASE("LLVM codegen __attribute__((dllimport))", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    llvm::Module module("", context);
+    SECTION("Function")
+    {
+        auto program = generateProgramWithOptions("int __attribute__((dllimport)) foo(void);\n"
+                                                  "\n"
+                                                  "int main(void) { return foo(); }",
+                                                  x64windowsGnu);
+        cld::CGLLVM::generateLLVM(module, program, x64windowsGnu);
+        CAPTURE(module);
+        REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
+        auto* global = module.getFunction("foo");
+        REQUIRE(global);
+        CHECK(global->hasDLLImportStorageClass());
+    }
+}

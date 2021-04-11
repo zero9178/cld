@@ -520,7 +520,11 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDe
     attributes = m_abi->generateFunctionAttributes(
         std::move(attributes), ft, declaration.getType().as<Semantics::FunctionType>(), m_programInterface);
     function->setAttributes(std::move(attributes));
-    if (!m_options.reloc)
+    if (declaration.hasAttribute<Semantics::DllImportAttribute>())
+    {
+        function->setDLLStorageClass(llvm::GlobalValue::DLLImportStorageClass);
+    }
+    else if (!m_options.reloc)
     {
         function->setDSOLocal(true);
     }
