@@ -318,6 +318,11 @@ std::vector<cld::IntrVarPtr<cld::Semantics::Useable>>
                 log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
                                                          *prev->second.identifier));
             }
+            if (auto attr = prevDecl->removeAttribute<DllImportAttribute>())
+            {
+                log(Warnings::Semantics::ATTRIBUTE_DLLIMPORT_IGNORED_AFTER_DEFINITION_OF_FUNCTION_N.args(
+                    *attr->identifier, m_sourceInterface, *loc, *attr->identifier));
+            }
             ptr = FunctionDefinition(ptr.getType(), loc, std::move(ptr).getParameterDeclarations(), linkage, inlineKind,
                                      std::move(ptr).getCompoundStatement());
             ptr.setUses(prevDecl->getUses());

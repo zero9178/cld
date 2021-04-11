@@ -67,6 +67,7 @@ struct LanguageOptions
     static UnderlyingType underlyingType();
 
     Language language;
+    Triple triple;
     std::uint8_t sizeOfUnderlineBool;
     bool charIsSigned;
     UnderlyingType wcharUnderlyingType;

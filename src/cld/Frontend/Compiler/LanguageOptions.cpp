@@ -30,6 +30,7 @@ cld::LanguageOptions cld::LanguageOptions::native(Language language)
 {
     auto temp = cld::LanguageOptions{
         language,
+        Triple::native(),
         sizeof(bool),
         std::is_signed_v<char>,
         // wchar_t is a builtin type in C++, can't use underlyingType<wchar_t>
@@ -39,7 +40,8 @@ cld::LanguageOptions cld::LanguageOptions::native(Language language)
         sizeof(long),
         alignof(long long),
         alignof(double),
-        []() -> std::uint8_t {
+        []() -> std::uint8_t
+        {
             switch (std::numeric_limits<long double>::digits)
             {
                 case 53: return 64;
@@ -64,13 +66,14 @@ cld::LanguageOptions cld::LanguageOptions::native(Language language)
 #endif
     };
     temp.enabledWarnings = cld::diag::getAllWarnings();
-    temp.targetFeatures = tripleToFeatures(cld::Triple::native());
+    temp.targetFeatures = tripleToFeatures(temp.triple);
     return temp;
 }
 
 cld::LanguageOptions cld::LanguageOptions::fromTriple(Triple triple, Language language)
 {
     LanguageOptions options = native(language);
+    options.triple = triple;
     options.targetFeatures = tripleToFeatures(triple);
     options.enabledWarnings = cld::diag::getAllWarnings();
     options.language = language;

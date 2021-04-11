@@ -603,6 +603,8 @@ public:
 
     void applyArtificialAttribute(AffectsFunction declaration, const GNUAttribute& attribute);
 
+    void applyDllImportAttribute(AffectsVariableFunction declaration, const GNUAttribute& attribute);
+
 private:
     std::unordered_map<std::string, std::function<bool(const GNUAttribute&, AffectsAll, const CallingContext&)>>
         m_attributesHandler;

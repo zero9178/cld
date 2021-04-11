@@ -90,6 +90,10 @@ void cld::Semantics::SemanticAnalysis::createAttributes()
     unixSpelling("always_inline", &SemanticAnalysis::applyAlwaysInlineAttribute);
     unixSpelling("gnu_inline", &SemanticAnalysis::applyGnuInlineAttribute);
     unixSpelling("artificial", &SemanticAnalysis::applyArtificialAttribute);
+    if (getLanguageOptions().triple.getPlatform() == Platform::Windows)
+    {
+        unixSpelling("dllimport", &SemanticAnalysis::applyDllImportAttribute);
+    }
 }
 
 std::vector<cld::Semantics::SemanticAnalysis::GNUAttribute>
@@ -459,4 +463,32 @@ void cld::Semantics::SemanticAnalysis::applyArtificialAttribute(AffectsFunction 
             (attribute.firstParamName ? 1 : 0) + attribute.paramExpressions.size()));
     }
     cld::match(applicant, [](auto holder) { holder->addAttribute(ArtificialAttribute{}); });
+}
+
+void cld::Semantics::SemanticAnalysis::applyDllImportAttribute(AffectsVariableFunction applicant,
+                                                               const GNUAttribute& attribute)
+{
+    if (attribute.firstParamName || !attribute.paramExpressions.empty())
+    {
+        log(Errors::Semantics::INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N.args(
+            *attribute.name, m_sourceInterface, *attribute.name,
+            (attribute.firstParamName ? 1 : 0) + attribute.paramExpressions.size()));
+    }
+    cld::match(
+        applicant, [&](auto holder) { holder->addAttribute(DllImportAttribute{attribute.name}); },
+        [&](not_null<FunctionDeclaration> decl)
+        {
+            if (!decl->isInline())
+            {
+                decl->addAttribute(DllImportAttribute{attribute.name});
+                return;
+            }
+            log(Warnings::Semantics::ATTRIBUTE_DLLIMPORT_IGNORED_ON_INLINE_FUNCTION_N.args(
+                *attribute.name, m_sourceInterface, *decl->getNameToken(), *attribute.name));
+        },
+        [&](not_null<FunctionDefinition> def)
+        {
+            log(Errors::Semantics::DLLIMPORT_CANNOT_BE_APPLIED_TO_DEFINITION_OF_FUNCTION_N.args(
+                *attribute.name, m_sourceInterface, *def->getNameToken(), *attribute.name));
+        });
 }

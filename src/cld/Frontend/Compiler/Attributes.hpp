@@ -2,6 +2,8 @@
 
 #include <variant>
 
+#include "Lexer.hpp"
+
 namespace cld::Semantics
 {
 class Useable;
@@ -41,12 +43,19 @@ struct ArtificialAttribute
 {
 };
 
-using FunctionAttribute = std::variant<AlignedAttribute, DeprecatedAttribute, UsedAttribute, NoinlineAttribute,
-                                       AlwaysInlineAttribute, GnuInlineAttribute, ArtificialAttribute>;
+struct DllImportAttribute
+{
+    Lexer::CTokenIterator identifier;
+};
+
+using FunctionAttribute =
+    std::variant<AlignedAttribute, DeprecatedAttribute, UsedAttribute, NoinlineAttribute, AlwaysInlineAttribute,
+                 GnuInlineAttribute, ArtificialAttribute, DllImportAttribute>;
 
 using TypeAttribute = std::variant<AlignedAttribute, DeprecatedAttribute>;
 
-using VariableAttribute = std::variant<AlignedAttribute, DeprecatedAttribute, CleanupAttribute, UsedAttribute>;
+using VariableAttribute =
+    std::variant<AlignedAttribute, DeprecatedAttribute, CleanupAttribute, UsedAttribute, DllImportAttribute>;
 
 template <class T>
 class AttributeHolder
@@ -114,6 +123,21 @@ public:
     [[nodiscard]] bool hasAttribute() const
     {
         return getAttributeIf<U>();
+    }
+
+    template <class U>
+    std::optional<U> removeAttribute()
+    {
+        constexpr std::size_t index = indexFromType<U>((T*)nullptr);
+        auto result = std::lower_bound(m_attributes.begin(), m_attributes.end(), index,
+                                       [](const T& value, std::size_t index) { return value.index() < index; });
+        if (result != m_attributes.end() && result->index() == index)
+        {
+            auto copy = cld::get<U>(*result);
+            m_attributes.erase(result);
+            return copy;
+        }
+        return {};
     }
 
     T& addAttribute(T&& attribute)
