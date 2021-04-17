@@ -173,6 +173,53 @@ constexpr bool IsTypeCompleteV = false;
 template <typename T>
 constexpr bool IsTypeCompleteV<T, std::void_t<decltype(sizeof(T))>> = true;
 
+namespace detail
+{
+template <class T, class... Args>
+constexpr auto variantTypesContain(std::variant<Args...>)
+    -> std::bool_constant<std::conjunction_v<std::is_same<T, Args>...>>;
+
+template <class T, class... Args>
+constexpr auto addToVariantType(std::variant<Args...>) -> std::variant<Args..., T>;
+
+template <class Variant, class OtherVariant>
+struct VariantUnion;
+
+template <class Variant, class First>
+struct VariantUnion<Variant, std::variant<First>>
+{
+    using type = std::conditional_t<decltype(variantTypesContain<First>(std::declval<Variant>())){}, Variant,
+                                    decltype(addToVariantType<First>(std::declval<Variant>()))>;
+};
+
+template <class Variant, class First, class... Args>
+struct VariantUnion<Variant, std::variant<First, Args...>>
+{
+    using type = std::conditional_t<
+        decltype(variantTypesContain<First>(std::declval<Variant>())){},
+        typename VariantUnion<Variant, std::variant<Args...>>::type,
+        typename VariantUnion<decltype(addToVariantType<First>(std::declval<Variant>())), std::variant<Args...>>::type>;
+};
+
+template <class Variant>
+struct Fold
+{
+    template <class OtherVariant>
+    auto operator+(Fold<OtherVariant>) -> Fold<typename VariantUnion<Variant, OtherVariant>::type>
+    {
+        CLD_UNREACHABLE;
+    }
+
+    using type = Variant;
+};
+
+template <class... Variants>
+constexpr auto variantTypeUnion(Variants...) -> typename decltype((std::declval<Fold<Variants>>() + ...))::type;
+} // namespace detail
+
+template <class... Variant>
+using VariantUnion = decltype(detail::variantTypeUnion(std::declval<Variant>()...));
+
 // See https://gitlab.inria.fr/gustedt/p99/-/tree/master. Code was copy pasted out of multiple header files without
 // modifications to any macros that start with the P99_ or P00_ prefix. Copyright notice follows:
 

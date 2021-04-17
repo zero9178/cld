@@ -395,25 +395,6 @@ private:
                                  const Syntax::StorageClassSpecifier* storageClassSpecifier, bool isInline,
                                  std::vector<GNUAttribute>&& attributes);
 
-    template <class... Args>
-    static auto variantToTuple(const std::variant<Args...>&) -> std::tuple<Args...>
-    {
-        CLD_UNREACHABLE;
-    }
-
-    template <class... Args>
-    static auto tupleToVariant(const std::tuple<Args...>&) -> std::variant<Args...>
-    {
-        CLD_UNREACHABLE;
-    }
-
-    template <class... Variants>
-    static auto variantTypeUnion(Variants&&... variants)
-        -> decltype(tupleToVariant(std::tuple_cat(variantToTuple(std::forward<Variants>(variants))...)))
-    {
-        CLD_UNREACHABLE;
-    }
-
 public:
     explicit SemanticAnalysis(const SourceInterface& sourceInterface, llvm::raw_ostream* reporter = &llvm::errs(),
                               bool* errors = nullptr, std::function<bool(std::string_view)> definedCallback = {})
@@ -558,24 +539,19 @@ public:
     using AffectsTag =
         std::variant<not_null<StructInfo>, not_null<UnionInfo>, not_null<EnumInfo>, not_null<TypedefInfo>>;
 
-    using AffectsTagType = decltype(variantTypeUnion(std::declval<AffectsType>(), std::declval<AffectsTag>()));
+    using AffectsTagType = VariantUnion<AffectsType, AffectsTag>;
 
     using AffectsVariable = std::variant<not_null<VariableDeclaration>>;
 
-    using AffectsTypeVariable =
-        decltype(variantTypeUnion(std::declval<AffectsType>(), std::declval<AffectsVariable>()));
+    using AffectsTypeVariable = VariantUnion<AffectsType, AffectsVariable>;
 
-    using AffectsTagTypeVariable =
-        decltype(variantTypeUnion(std::declval<AffectsType>(), std::declval<AffectsVariable>()));
+    using AffectsTagTypeVariable = VariantUnion<AffectsTag, AffectsType, AffectsVariable>;
 
-    using AffectsVariableFunction =
-        decltype(variantTypeUnion(std::declval<AffectsFunction>(), std::declval<AffectsVariable>()));
+    using AffectsVariableFunction = VariantUnion<AffectsFunction, AffectsVariable>;
 
-    using AffectsTagVariableFunction = decltype(variantTypeUnion(
-        std::declval<AffectsFunction>(), std::declval<AffectsVariable>(), std::declval<AffectsTag>()));
+    using AffectsTagVariableFunction = VariantUnion<AffectsFunction, AffectsVariable, AffectsTag>;
 
-    using AffectsAll = decltype(variantTypeUnion(std::declval<AffectsFunction>(), std::declval<AffectsVariable>(),
-                                                 std::declval<AffectsType>(), std::declval<AffectsTag>()));
+    using AffectsAll = VariantUnion<AffectsFunction, AffectsVariable, AffectsType, AffectsTag>;
 
     struct FunctionContext
     {
