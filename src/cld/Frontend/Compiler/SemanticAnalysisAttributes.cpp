@@ -475,7 +475,22 @@ void cld::Semantics::SemanticAnalysis::applyDllImportAttribute(AffectsVariableFu
             (attribute.firstParamName ? 1 : 0) + attribute.paramExpressions.size()));
     }
     cld::match(
-        applicant, [&](auto holder) { holder->addAttribute(DllImportAttribute{attribute.name}); },
+        applicant,
+        [&](not_null<VariableDeclaration> var)
+        {
+            if (var->getLinkage() == Linkage::Internal)
+            {
+                log(Errors::Semantics::DLLIMPORT_CANNOT_BE_APPLIED_TO_VARIABLE_N_WITH_INTERNAL_LINKAGE.args(
+                    *attribute.name, m_sourceInterface, *var->getNameToken(), *attribute.name));
+                return;
+            }
+            auto attributes = std::move(*var).getAttributes();
+            *var = VariableDeclaration(var->getType(), Linkage::External, Lifetime::Static, var->getNameToken(),
+                                       var->getKind(), std::move(*var).getInitializer());
+            std::for_each(std::move_iterator(attributes.begin()), std::move_iterator(attributes.end()),
+                          cld::bind_front(&VariableDeclaration::addAttribute, var));
+            var->addAttribute(DllImportAttribute{attribute.name});
+        },
         [&](not_null<FunctionDeclaration> decl)
         {
             if (!decl->isInline())

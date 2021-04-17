@@ -981,6 +981,9 @@ CREATE_ERROR(ARGUMENT_TO_ALIGNED_MUST_BE_A_POWER_OF_2, "Argument to 'aligned' mu
 CREATE_ERROR(DLLIMPORT_CANNOT_BE_APPLIED_TO_DEFINITION_OF_FUNCTION_N,
              "'dllimport' cannot be applied to definition of function %0", Underline<0>, PointAt<1>);
 
+CREATE_ERROR(DLLIMPORT_CANNOT_BE_APPLIED_TO_VARIABLE_N_WITH_INTERNAL_LINKAGE,
+             "'dllimport' cannot be applied to variable %0 with internal linkage", Underline<0>, PointAt<1>);
+
 } // namespace Semantics
 
 namespace Lexer

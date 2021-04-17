@@ -5714,20 +5714,25 @@ TEST_CASE("Semantics __attribute__((dllimport))", "[semantics]")
                        x64windowsGnu);
     SEMA_PRODUCES_WITH("int __attribute__ ((dllimport)) foo(void);",
                        ProducesWarning(UNKNOWN_ATTRIBUTE_N_IGNORED, "'dllimport'"), x64linux);
-    SEMA_PRODUCES_WITH("inline int __attribute__ ((dllimport)) foo(void);",
-                       ProducesWarning(ATTRIBUTE_DLLIMPORT_IGNORED_ON_INLINE_FUNCTION_N, "'foo'"), x64windowsGnu);
-    SEMA_PRODUCES_WITH("int __attribute__ ((dllimport)) foo(void);\n"
-                       "\n"
-                       "int foo(void) { return 5; }\n",
-                       ProducesWarning(ATTRIBUTE_DLLIMPORT_IGNORED_AFTER_DEFINITION_OF_FUNCTION_N, "'foo'"),
-                       x64windowsGnu);
-    SECTION("Simple")
+    SECTION("Function")
     {
+        SEMA_PRODUCES_WITH("inline int __attribute__ ((dllimport)) foo(void);",
+                           ProducesWarning(ATTRIBUTE_DLLIMPORT_IGNORED_ON_INLINE_FUNCTION_N, "'foo'"), x64windowsGnu);
+        SEMA_PRODUCES_WITH("int __attribute__ ((dllimport)) foo(void);\n"
+                           "\n"
+                           "int foo(void) { return 5; }\n",
+                           ProducesWarning(ATTRIBUTE_DLLIMPORT_IGNORED_AFTER_DEFINITION_OF_FUNCTION_N, "'foo'"),
+                           x64windowsGnu);
         auto program = generateProgram("__attribute__((dllimport)) void foo(void);", x64windowsGnu);
         auto& globals = program.getTranslationUnit().getGlobals();
         REQUIRE(globals.size() == 1);
         auto& func = globals[0];
         REQUIRE(func->is<FunctionDeclaration>());
         CHECK(func->as<FunctionDeclaration>().hasAttribute<DllImportAttribute>());
+    }
+    SECTION("Variable")
+    {
+        SEMA_PRODUCES_WITH("static int __attribute__ ((dllimport)) foo;",
+                           ProducesError(DLLIMPORT_CANNOT_BE_APPLIED_TO_VARIABLE_N_WITH_INTERNAL_LINKAGE, "'foo'"), x64windowsGnu);
     }
 }
