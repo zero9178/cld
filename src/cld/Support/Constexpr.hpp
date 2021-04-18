@@ -176,8 +176,7 @@ constexpr bool IsTypeCompleteV<T, std::void_t<decltype(sizeof(T))>> = true;
 namespace detail
 {
 template <class T, class... Args>
-constexpr auto variantTypesContain(std::variant<Args...>)
-    -> std::bool_constant<std::conjunction_v<std::is_same<T, Args>...>>;
+constexpr auto variantTypesContain(std::variant<Args...>) -> std::conjunction<std::is_same<T, Args>...>;
 
 template <class T, class... Args>
 constexpr auto addToVariantType(std::variant<Args...>) -> std::variant<Args..., T>;
@@ -195,10 +194,9 @@ struct VariantUnion<Variant, std::variant<First>>
 template <class Variant, class First, class... Args>
 struct VariantUnion<Variant, std::variant<First, Args...>>
 {
-    using type = std::conditional_t<
-        decltype(variantTypesContain<First>(std::declval<Variant>())){},
-        typename VariantUnion<Variant, std::variant<Args...>>::type,
-        typename VariantUnion<decltype(addToVariantType<First>(std::declval<Variant>())), std::variant<Args...>>::type>;
+    using type = typename std::conditional_t<
+        decltype(variantTypesContain<First>(std::declval<Variant>())){}, VariantUnion<Variant, std::variant<Args...>>,
+        VariantUnion<decltype(addToVariantType<First>(std::declval<Variant>())), std::variant<Args...>>>::type;
 };
 
 template <class Variant>
