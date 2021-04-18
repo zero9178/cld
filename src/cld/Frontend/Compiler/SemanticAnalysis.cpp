@@ -470,6 +470,14 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
             }
         }
         bool errors = false;
+
+        bool isExtern =
+            (storageClassSpecifier && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Extern)
+            || (!isTypedef
+                && std::any_of(thisAttributes.begin(), thisAttributes.end(),
+                               [](const ParsedAttribute<>& attribute)
+                               { return std::holds_alternative<DllImportAttribute>(attribute.attribute); }));
+
         // C99 6.2.2§5:
         // If the declaration of an identifier for an object has file scope and no storage-class specifier,
         // its linkage is external.
@@ -486,8 +494,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
             }
             lifetime = Lifetime::Static;
         }
-        else if (storageClassSpecifier
-                 && storageClassSpecifier->getSpecifier() == Syntax::StorageClassSpecifier::Extern)
+        else if (isExtern)
         {
             linkage = Linkage::External;
             lifetime = Lifetime::Static;
@@ -588,12 +595,11 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
         // C99 6.8.2§1:
         // If the declaration of an identifier for an object has file scope and an initializer, the
         // declaration is an external definition for the identifier.
-        if (m_currentScope == 0 && iter.optionalInitializer
-            && (!storageClassSpecifier || *storageClassSpecifier != Syntax::StorageClassSpecifier::Extern))
+        if (m_currentScope == 0 && iter.optionalInitializer && !isExtern)
         {
             kind = VariableDeclaration::Definition;
         }
-        else if (m_currentScope == 0
+        else if (m_currentScope == 0 && !isExtern
                  && (!storageClassSpecifier || *storageClassSpecifier == Syntax::StorageClassSpecifier::Static))
         {
             // C99 6.9.2§2:
@@ -602,7 +608,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
             // tentative definition
             kind = VariableDeclaration::TentativeDefinition;
         }
-        else if (storageClassSpecifier && *storageClassSpecifier == Syntax::StorageClassSpecifier::Extern)
+        else if (isExtern)
         {
             kind = VariableDeclaration::DeclarationOnly;
         }
@@ -650,8 +656,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                 // external linkage, the linkage of the identifier at the later declaration is the same as the
                 // linkage specified at the prior declaration. If no prior declaration is visible, or if the prior
                 // declaration specifies no linkage, then the identifier has external linkage.
-                if (storageClassSpecifier && *storageClassSpecifier == Syntax::StorageClassSpecifier::Extern
-                    && prevDecl->getLinkage() != Linkage::None)
+                if (isExtern && prevDecl->getLinkage() != Linkage::None)
                 {
                     linkage = prevDecl->getLinkage();
                 }
@@ -669,6 +674,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                                                              *prev->second.identifier));
                     linkage = Linkage::Internal;
                 }
+                // TODO: Check dllimport preconditions again, warn when definition follows
                 *declaration = VariableDeclaration(std::move(composite), linkage, lifetime, loc,
                                                    std::max(prevDecl->getKind(), kind));
                 declaration->tryAddFromOther(*prevDecl);
@@ -680,6 +686,8 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
 
         if (iter.optionalInitializer)
         {
+            // TODO: Error for dllimport
+
             // C99 6.7.5§5:
             // If the declaration of an identifier has block scope, and the identifier has external or
             // internal linkage, the declaration shall have no initializer for the identifier.

@@ -5734,6 +5734,16 @@ TEST_CASE("Semantics __attribute__((dllimport))", "[semantics]")
     SECTION("Variable")
     {
         SEMA_PRODUCES_WITH("static int __attribute__ ((dllimport)) foo;",
-                           ProducesError(DLLIMPORT_CANNOT_BE_APPLIED_TO_VARIABLE_N_WITH_INTERNAL_LINKAGE, "'foo'"), x64windowsGnu);
+                           ProducesError(DLLIMPORT_CANNOT_BE_APPLIED_TO_VARIABLE_N_WITH_INTERNAL_LINKAGE, "'foo'"),
+                           x64windowsGnu);
+        SECTION("dllimport implies extern")
+        {
+            auto program = generateProgram("int i __attribute__((dllimport));", x64windowsGnu);
+            auto& decl = program.getScopes()[ProgramInterface::GLOBAL_SCOPE].declarations.at("i");
+            REQUIRE(std::holds_alternative<VariableDeclaration*>(decl.declared));
+            auto& var = cld::get<VariableDeclaration*>(decl.declared);
+            CHECK(var->getLinkage() == Linkage::External);
+            CHECK(var->hasAttribute<DllImportAttribute>());
+        }
     }
 }
