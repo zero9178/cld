@@ -271,7 +271,7 @@ std::uint64_t cld::Semantics::StructType::getSizeOfImpl(const ProgramInterface& 
     return cld::roundUpTo(size, getAlignOf(interface));
 }
 
-std::uint64_t cld::Semantics::StructType::getAlignOfImpl(const ProgramInterface& interface) const
+std::uint64_t cld::Semantics::StructType::getAlignOfImpl(const ProgramInterface&) const
 {
     auto align = cld::get<StructDefinition>(getInfo().type).getAlignOf();
     if (auto* alignment = getInfo().getAttributeIf<AlignedAttribute>())
@@ -297,7 +297,7 @@ std::uint64_t cld::Semantics::UnionType::getSizeOfImpl(const ProgramInterface& i
     return cld::roundUpTo(size, getAlignOf(interface));
 }
 
-std::uint64_t cld::Semantics::UnionType::getAlignOfImpl(const ProgramInterface& interface) const
+std::uint64_t cld::Semantics::UnionType::getAlignOfImpl(const ProgramInterface&) const
 {
     auto align = cld::get<UnionDefinition>(getInfo().type).getAlignOf();
     if (auto* alignment = getInfo().getAttributeIf<AlignedAttribute>())
