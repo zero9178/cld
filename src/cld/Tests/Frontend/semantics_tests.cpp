@@ -4960,7 +4960,7 @@ TEST_CASE("Semantics __attribute__((used))", "[semantics]")
     SEMA_PRODUCES("static int i __attribute__((used));",
                   ProducesNoErrors() && !ProducesWarning(UNUSED_VARIABLE_N, "'i'"));
     SEMA_PRODUCES("static int i __attribute__((used(name)));",
-                  ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_N_GOT_N, "'used'", "0", "1"));
+                  ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N, "'used'", "1"));
     SEMA_PRODUCES("static int i __attribute__((used()));",
                   ProducesNoErrors() && !ProducesWarning(UNUSED_VARIABLE_N, "'i'"));
     SEMA_PRODUCES("static int foo(void) __attribute__((used));",
@@ -4985,9 +4985,9 @@ TEST_CASE("Semantics __attribute__((vector_size(x)))", "[semantics]")
                   ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_N_GOT_N, "'vector_size'", 1, 2));
     SEMA_PRODUCES("typedef int i __attribute__((vector_size(x)));", ProducesError(UNDECLARED_IDENTIFIER_N, "'x'"));
     SEMA_PRODUCES("typedef int i __attribute__((vector_size(3.5)));",
-                  ProducesError(EXPECTED_INTEGER_CONSTANT_EXPRESSION_AS_ARGUMENT_TO_VECTOR_SIZE));
+                  ProducesError(EXPECTED_INTEGER_CONSTANT_EXPRESSION_AS_ARGUMENT_TO_N, "'vector_size'"));
     SEMA_PRODUCES("typedef int i __attribute__((vector_size(-3)));",
-                  ProducesError(ARGUMENT_TO_VECTOR_SIZE_MUST_BE_A_POSITIVE_NUMBER));
+                  ProducesError(ARGUMENT_TO_N_MUST_BE_A_POSITIVE_NUMBER, "'vector_size'"));
     SEMA_PRODUCES("typedef int* i __attribute__((vector_size(3)));",
                   ProducesError(VECTOR_SIZE_CAN_ONLY_BE_APPLIED_TO_ARITHMETIC_TYPES));
     SEMA_PRODUCES("int* i __attribute__((vector_size(3)));",
@@ -5414,12 +5414,13 @@ TEST_CASE("Semantics __attribute__((aligned))", "[semantics]")
 {
     SEMA_PRODUCES("struct __attribute__ ((aligned)) S { short f[3]; };", ProducesNoErrors());
     SEMA_PRODUCES("struct __attribute__ ((aligned(8))) S { short f[3]; };", ProducesNoErrors());
-    SEMA_PRODUCES("struct __attribute__ ((aligned(8,3))) S { short f[3]; };",
-                  ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_N_GOT_N, "'aligned'", 1, 2));
+    SEMA_PRODUCES(
+        "struct __attribute__ ((aligned(8,3))) S { short f[3]; };",
+        ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_AT_MOST_N_GOT_N, "'aligned'", 1, 2));
     SEMA_PRODUCES("struct __attribute__ ((aligned(3.0))) S { short f[3]; };",
-                  ProducesError(EXPECTED_INTEGER_CONSTANT_EXPRESSION_AS_ARGUMENT_TO_ALIGNED));
+                  ProducesError(EXPECTED_INTEGER_CONSTANT_EXPRESSION_AS_ARGUMENT_TO_N, "'aligned'"));
     SEMA_PRODUCES("struct __attribute__ ((aligned(-1))) S { short f[3]; };",
-                  ProducesError(ARGUMENT_TO_ALIGNED_MUST_BE_A_POSITIVE_NUMBER));
+                  ProducesError(ARGUMENT_TO_N_MUST_BE_A_POSITIVE_NUMBER, "'aligned'"));
     SEMA_PRODUCES("struct __attribute__ ((aligned(3))) S { short f[3]; };",
                   ProducesError(ARGUMENT_TO_ALIGNED_MUST_BE_A_POWER_OF_2));
     SECTION("struct")

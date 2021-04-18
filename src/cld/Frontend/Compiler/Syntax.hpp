@@ -1116,7 +1116,6 @@ public:
     struct GNUAttribute
     {
         Lexer::CTokenIterator nameToken;
-        const Lexer::CToken* optionalFirstIdentifierArgument;
         std::vector<AssignmentExpression> arguments;
     };
 

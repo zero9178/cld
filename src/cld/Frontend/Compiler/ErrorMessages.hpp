@@ -940,16 +940,22 @@ CREATE_ERROR(CONTINUE_MUST_BE_WITHIN_A_LOOP_STATEMENT, "Continue must be within 
 CREATE_ERROR(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_N_GOT_N,
              "Invalid number of arguments for attribute %0. Expected %1 got %2", Underline<0>);
 
+CREATE_ERROR(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_AT_LEAST_N_GOT_N,
+             "Invalid number of arguments for attribute %0. Expected at least %1 got %2", Underline<0>);
+
+CREATE_ERROR(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_AT_MOST_N_GOT_N,
+             "Invalid number of arguments for attribute %0. Expected at most %1 got %2", Underline<0>);
+
 CREATE_ERROR(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N,
              "Invalid number of arguments for attribute %0. Expected none got %1", Underline<0>);
 
+CREATE_ERROR(EXPECTED_INTEGER_CONSTANT_EXPRESSION_AS_ARGUMENT_TO_N,
+             "Expected integer constant expression as argument to %0", Underline<0>, Underline<1>);
+
+CREATE_ERROR(ARGUMENT_TO_N_MUST_BE_A_POSITIVE_NUMBER, "Argument to %0 must be a positive number", Underline<0>,
+             Annotate<1, 2>);
+
 // __attribute__((vector_size(n)))
-
-CREATE_ERROR(EXPECTED_INTEGER_CONSTANT_EXPRESSION_AS_ARGUMENT_TO_VECTOR_SIZE,
-             "Expected integer constant expression as argument to 'vector_size'", Underline<0>);
-
-CREATE_ERROR(ARGUMENT_TO_VECTOR_SIZE_MUST_BE_A_POSITIVE_NUMBER, "Argument to 'vector_size' must be a positive number",
-             Annotate<0, 1>);
 
 CREATE_ERROR(VECTOR_SIZE_CAN_ONLY_BE_APPLIED_TO_VARIABLES_OF_ARITHMETIC_TYPES,
              "'vector_size' can only be applied to variables of arithmetic types", Annotate<0, 1>);
@@ -967,12 +973,6 @@ CREATE_ERROR(ARGUMENT_OF_VECTOR_SIZE_SHOULD_BE_A_POWER_OF_2_MULTIPLE_OF_THE_SIZE
              "Argument of 'vector_size' must be a power of 2 multiple of the size of the base type", Annotate<0, 1>);
 
 // __attribute__((aligned(n)))
-
-CREATE_ERROR(EXPECTED_INTEGER_CONSTANT_EXPRESSION_AS_ARGUMENT_TO_ALIGNED,
-             "Expected integer constant expression as argument to 'aligned'", Underline<0>);
-
-CREATE_ERROR(ARGUMENT_TO_ALIGNED_MUST_BE_A_POSITIVE_NUMBER, "Argument to 'aligned' must be a positive number",
-             Annotate<0, 1>);
 
 CREATE_ERROR(ARGUMENT_TO_ALIGNED_MUST_BE_A_POWER_OF_2, "Argument to 'aligned' must be a power of 2", Annotate<0, 1>);
 
@@ -1217,7 +1217,7 @@ CREATE_WARNING(ATTRIBUTE_DLLIMPORT_IGNORED_ON_INLINE_FUNCTION_N, "ignored-attrib
                "Attribute 'dllimport' ignored on inline function %0", Underline<0>, PointAt<1>);
 
 CREATE_WARNING(ATTRIBUTE_DLLIMPORT_IGNORED_AFTER_DEFINITION_OF_FUNCTION_N, "ignored-attributes",
-               "Attribute 'dllimport' ignored after definition of function %0", Underline<0>, PointAt<1>);
+               "Attribute 'dllimport' ignored after definition of function %0", Underline<0>);
 
 } // namespace Semantics
 namespace Lexer

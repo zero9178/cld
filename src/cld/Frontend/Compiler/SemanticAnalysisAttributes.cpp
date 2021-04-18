@@ -5,6 +5,38 @@
 
 #include "ErrorMessages.hpp"
 
+std::vector<cld::Semantics::ParsedAttribute<>>
+    cld::Semantics::SemanticAnalysis::visit(const Syntax::GNUAttributes& node)
+{
+    std::vector<ParsedAttribute<>> result;
+    for (auto& iter : node.getAttributes())
+    {
+        auto parser =
+            m_attributesParser.find(Lexer::normalizeSpelling(iter.nameToken->getRepresentation(m_sourceInterface)));
+        if (parser == m_attributesParser.end())
+        {
+            log(Warnings::Semantics::UNKNOWN_ATTRIBUTE_N_IGNORED.args(*iter.nameToken, m_sourceInterface,
+                                                                      *iter.nameToken));
+            continue;
+        }
+        auto parsedAttribute = std::invoke(parser->second, this, iter);
+        if (!parsedAttribute)
+        {
+            continue;
+        }
+        std::vector<diag::PointRange> ranges;
+        std::transform(iter.arguments.begin(), iter.arguments.end(), std::back_inserter(ranges),
+                       diag::getPointRange<Syntax::AssignmentExpression>);
+        result.push_back(ParsedAttribute<>{
+            ParsedAttribute<>::Nothing,
+            iter.nameToken,
+            std::move(ranges),
+            std::move(*parsedAttribute),
+        });
+    }
+    return result;
+}
+
 namespace
 {
 template <class Applicant>
@@ -12,17 +44,19 @@ std::optional<Applicant> tryConvertApplicant(cld::Semantics::SemanticAnalysis::A
 {
     if constexpr (cld::IsVariant<Applicant>{})
     {
-        return cld::match(applicant, [](auto&& value) -> std::optional<Applicant> {
-            using T = std::decay_t<decltype(value)>;
-            if constexpr (std::is_constructible_v<Applicant, T>)
-            {
-                return std::optional<Applicant>{std::in_place, value};
-            }
-            else
-            {
-                return {};
-            }
-        });
+        return cld::match(applicant,
+                          [](auto&& value) -> std::optional<Applicant>
+                          {
+                              using T = std::decay_t<decltype(value)>;
+                              if constexpr (std::is_constructible_v<Applicant, T>)
+                              {
+                                  return std::optional<Applicant>{std::in_place, value};
+                              }
+                              else
+                              {
+                                  return {};
+                              }
+                          });
     }
     else
     {
@@ -34,12 +68,12 @@ std::optional<Applicant> tryConvertApplicant(cld::Semantics::SemanticAnalysis::A
     }
 }
 
-template <class Applicant>
+template <class Applicant, class Attribute>
 bool tryMatch(cld::Semantics::SemanticAnalysis& analysis,
               void (cld::Semantics::SemanticAnalysis::*method)(Applicant,
-                                                               const cld::Semantics::SemanticAnalysis::GNUAttribute&),
+                                                               const cld::Semantics::ParsedAttribute<Attribute>&),
               cld::Semantics::SemanticAnalysis::AffectsAll applicant,
-              const cld::Semantics::SemanticAnalysis::GNUAttribute& attribute,
+              const cld::Semantics::ParsedAttribute<Attribute>& attribute,
               const cld::Semantics::SemanticAnalysis::CallingContext&)
 {
     auto castedApplicant = tryConvertApplicant<std::decay_t<Applicant>>(applicant);
@@ -52,13 +86,12 @@ bool tryMatch(cld::Semantics::SemanticAnalysis& analysis,
     return true;
 }
 
-template <class Applicant>
+template <class Applicant, class Attribute>
 bool tryMatch(
     cld::Semantics::SemanticAnalysis& analysis,
-    void (cld::Semantics::SemanticAnalysis::*method)(Applicant, const cld::Semantics::SemanticAnalysis::GNUAttribute&,
+    void (cld::Semantics::SemanticAnalysis::*method)(Applicant, const cld::Semantics::ParsedAttribute<Attribute>&,
                                                      const cld::Semantics::SemanticAnalysis::CallingContext& context),
-    cld::Semantics::SemanticAnalysis::AffectsAll applicant,
-    const cld::Semantics::SemanticAnalysis::GNUAttribute& attribute,
+    cld::Semantics::SemanticAnalysis::AffectsAll applicant, const cld::Semantics::ParsedAttribute<Attribute>& attribute,
     const cld::Semantics::SemanticAnalysis::CallingContext& context)
 {
     auto castedApplicant = tryConvertApplicant<std::decay_t<Applicant>>(applicant);
@@ -70,105 +103,371 @@ bool tryMatch(
     (analysis.*method)(result, attribute, context);
     return true;
 }
-} // namespace
 
-void cld::Semantics::SemanticAnalysis::createAttributes()
+template <class T>
+auto to_tuple(T& object) noexcept
 {
-    auto lambda = [this](auto memberFunction, const GNUAttribute& iter, AffectsAll applicant,
-                         const CallingContext& context) -> bool
-    { return tryMatch(*this, memberFunction, applicant, iter, context); };
-
-    auto unixSpelling = [&](std::string name, auto memberFunction)
+    using type = std::decay_t<T>;
+    if constexpr (type::count == 4)
     {
-        m_attributesHandler.emplace(name, cld::bind_front(lambda, memberFunction));
-        m_attributesHandler.emplace("__" + name + "__", cld::bind_front(lambda, memberFunction));
-    };
-    unixSpelling("aligned", &SemanticAnalysis::applyAlignedAttribute);
-    unixSpelling("used", &SemanticAnalysis::applyUsedAttribute);
-    unixSpelling("vector_size", &SemanticAnalysis::applyVectorSizeAttribute);
-    unixSpelling("noinline", &SemanticAnalysis::applyNoinlineAttribute);
-    unixSpelling("always_inline", &SemanticAnalysis::applyAlwaysInlineAttribute);
-    unixSpelling("gnu_inline", &SemanticAnalysis::applyGnuInlineAttribute);
-    unixSpelling("artificial", &SemanticAnalysis::applyArtificialAttribute);
-    if (getLanguageOptions().triple.getPlatform() == Platform::Windows)
+        auto& [p1, p2, p3, p4] = object;
+        return std::make_tuple(std::ref(p1), std::ref(p2), std::ref(p3), std::ref(p4));
+    }
+    else if constexpr (type::count == 3)
     {
-        unixSpelling("dllimport", &SemanticAnalysis::applyDllImportAttribute);
+        auto& [p1, p2, p3] = object;
+        return std::make_tuple(std::ref(p1), std::ref(p2), std::ref(p3));
+    }
+    else if constexpr (type::count == 2)
+    {
+        auto& [p1, p2] = object;
+        return std::make_tuple(std::ref(p1), std::ref(p2));
+    }
+    else if constexpr (type::count == 1)
+    {
+        auto& [p1] = object;
+        return std::make_tuple(std::ref(p1));
+    }
+    else if constexpr (type::count == 0)
+    {
+        return std::make_tuple();
+    }
+    else
+    {
+        static_assert(cld::always_false<T>, "Too many members in Type T. Case not handled");
     }
 }
 
-std::vector<cld::Semantics::SemanticAnalysis::GNUAttribute>
-    cld::Semantics::SemanticAnalysis::applyAttributes(AffectsAll applicant, std::vector<GNUAttribute>&& attributes,
+template <class... Args>
+auto tupleWithoutRef(std::tuple<Args...>) -> std::tuple<std::decay_t<Args>...>;
+
+template <bool found = false, class First, class... Args>
+constexpr bool checkValidStruct(std::tuple<First, Args...>*)
+{
+    if constexpr (cld::IsOptional<First>{})
+    {
+        if constexpr (sizeof...(Args) == 0)
+        {
+            return true;
+        }
+        else
+        {
+            return checkValidStruct<true>(static_cast<std::tuple<Args...>*>(nullptr));
+        }
+    }
+    else if constexpr (found)
+    {
+        return false;
+    }
+    else if constexpr (sizeof...(Args) > 0)
+    {
+        return checkValidStruct<false>(static_cast<std::tuple<Args...>*>(nullptr));
+    }
+    else
+    {
+        return true;
+    }
+}
+
+template <class T, class Attribute, class = void>
+struct HasOverload : std::false_type
+{
+};
+
+template <class T, class Attribute>
+struct HasOverload<T, Attribute,
+                   std::void_t<decltype(std::declval<cld::Semantics::SemanticAnalysis>().apply(
+                       std::declval<T>(), std::declval<cld::Semantics::ParsedAttribute<Attribute>>()))>>
+    : std::true_type
+{
+};
+
+template <class T, class Attribute, class = void>
+struct HasOverloadWithC : std::false_type
+{
+};
+
+template <class T, class Attribute>
+struct HasOverloadWithC<T, Attribute,
+                        std::void_t<decltype(std::declval<cld::Semantics::SemanticAnalysis>().apply(
+                            std::declval<T>(), std::declval<cld::Semantics::ParsedAttribute<Attribute>>(),
+                            std::declval<cld::Semantics::SemanticAnalysis::CallingContext>()))>> : std::true_type
+{
+};
+
+template <class First, class... Args, class Attribute>
+bool tryAll(cld::Semantics::SemanticAnalysis& analysis, cld::Semantics::SemanticAnalysis::AffectsAll applicant,
+            const cld::Semantics::ParsedAttribute<Attribute>& attribute,
+            const cld::Semantics::SemanticAnalysis::CallingContext& context)
+{
+    if constexpr (HasOverload<First, Attribute>{})
+    {
+        return tryMatch<First, Attribute>(analysis, &cld::Semantics::SemanticAnalysis::apply, applicant, attribute,
+                                          context);
+    }
+    else if constexpr (HasOverloadWithC<First, Attribute>{})
+    {
+        return tryMatch<First, Attribute>(analysis, &cld::Semantics::SemanticAnalysis::apply, applicant, attribute,
+                                          context);
+    }
+    else if constexpr (sizeof...(Args) == 0)
+    {
+        static_assert(cld::always_false<Attribute>, "No overload found for Attribute");
+    }
+    else
+    {
+        return tryAll<Args...>(analysis, applicant, attribute, context);
+    }
+}
+
+} // namespace
+
+bool cld::Semantics::SemanticAnalysis::parseMember(std::uint64_t& unsignedInteger, Lexer::CTokenIterator attributeName,
+                                                   const Syntax::AssignmentExpression* expression)
+{
+    auto expr = visit(*expression);
+    if (!expr->getType().isUndefined() && !isInteger(expr->getType()))
+    {
+        log(Errors::Semantics::EXPECTED_INTEGER_CONSTANT_EXPRESSION_AS_ARGUMENT_TO_N.args(
+            *expression, m_sourceInterface, *attributeName, *expression));
+        return false;
+    }
+    if (expr->getType().isUndefined())
+    {
+        return false;
+    }
+    auto result = evaluateConstantExpression(*expr);
+    if (!result)
+    {
+        std::for_each(result.error().begin(), result.error().end(), cld::bind_front(&SemanticAnalysis::log, this));
+        return false;
+    }
+    if (result->getInteger() < 0)
+    {
+        log(Errors::Semantics::ARGUMENT_TO_N_MUST_BE_A_POSITIVE_NUMBER.args(*expression, m_sourceInterface,
+                                                                            *attributeName, *expression, *result));
+        return false;
+    }
+    unsignedInteger = result->getInteger().getZExtValue();
+    return true;
+}
+
+bool cld::Semantics::SemanticAnalysis::parseMember(Lexer::CTokenIterator& identifier,
+                                                   Lexer::CTokenIterator attributeName,
+                                                   const Syntax::AssignmentExpression* expression)
+{
+    return true;
+}
+
+bool cld::Semantics::SemanticAnalysis::parseMember(const Useable*& useable, Lexer::CTokenIterator attributeName,
+                                                   const Syntax::AssignmentExpression* expression)
+{
+    return true;
+}
+
+bool cld::Semantics::SemanticAnalysis::parseMember(std::string_view& text, Lexer::CTokenIterator attributeName,
+                                                   const Syntax::AssignmentExpression* expression)
+{
+    return true;
+}
+
+template <class T>
+bool cld::Semantics::SemanticAnalysis::parseMember(std::optional<T>& optional, Lexer::CTokenIterator attributeName,
+                                                   const Syntax::AssignmentExpression* expression)
+{
+    if (!expression)
+    {
+        optional = {};
+        return true;
+    }
+    optional.emplace();
+    return parseMember(*optional, attributeName, expression);
+}
+
+template <class T>
+std::optional<cld::Semantics::AllAttributes>
+    cld::Semantics::SemanticAnalysis::parseAttribute(const Syntax::GNUAttributes::GNUAttribute& attribute)
+{
+    T result;
+    auto tuple = to_tuple(result);
+    constexpr std::size_t minExpressions = std::apply(
+        [&](auto&&... refs) -> std::size_t
+        {
+            std::size_t count = 0;
+            (void)(
+                [&](auto&& value) -> bool
+                                         {
+                                             using U = std::decay_t<decltype(*value)>;
+                                             if constexpr (cld::IsOptional<U>{})
+                                             {
+                                                 return true;
+                                             }
+                                             else
+                                             {
+                                                 count++;
+                                                 return false;
+                                             }
+                                         }(static_cast<typename std::decay_t<decltype(refs)>*>(nullptr))
+                                         || ...);
+            return count;
+        },
+        decltype(tupleWithoutRef(std::declval<decltype(tuple)>())){});
+    constexpr std::size_t maxExpressions = std::tuple_size_v<decltype(tuple)>;
+    if constexpr (maxExpressions > 0)
+    {
+        static_assert(
+            checkValidStruct(static_cast<decltype(tupleWithoutRef(std::declval<decltype(tuple)>()))*>(nullptr)),
+            "struct T is malformed. Optionals can only be followed by optionals");
+    }
+
+    if (attribute.arguments.size() < minExpressions)
+    {
+        if constexpr (minExpressions == maxExpressions)
+        {
+            log(Errors::Semantics::INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_N_GOT_N.args(
+                *attribute.nameToken, m_sourceInterface, *attribute.nameToken, minExpressions,
+                attribute.arguments.size()));
+        }
+        else
+        {
+            log(Errors::Semantics::INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_AT_LEAST_N_GOT_N.args(
+                *attribute.nameToken, m_sourceInterface, *attribute.nameToken, minExpressions,
+                attribute.arguments.size()));
+        }
+        return {};
+    }
+    if (attribute.arguments.size() > maxExpressions)
+    {
+        if constexpr (maxExpressions == 0)
+        {
+            log(Errors::Semantics::INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N.args(
+                *attribute.nameToken, m_sourceInterface, *attribute.nameToken, attribute.arguments.size()));
+        }
+        else if constexpr (minExpressions == maxExpressions)
+        {
+            log(Errors::Semantics::INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_N_GOT_N.args(
+                *attribute.nameToken, m_sourceInterface, *attribute.nameToken, minExpressions,
+                attribute.arguments.size()));
+        }
+        else
+        {
+            log(Errors::Semantics::INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_AT_MOST_N_GOT_N.args(
+                *attribute.nameToken, m_sourceInterface, *attribute.nameToken, maxExpressions,
+                attribute.arguments.size()));
+        }
+        return {};
+    }
+
+    auto begin = attribute.arguments.begin();
+    if (!std::apply(
+            [&](auto&... refs) -> bool
+            {
+                return (true & ...
+                        & parseMember(refs, attribute.nameToken,
+                                      begin == attribute.arguments.end() ? nullptr : &*(begin++)));
+            },
+            tuple))
+    {
+        return {};
+    }
+    return result;
+}
+
+void cld::Semantics::SemanticAnalysis::createAttributes()
+{
+    auto gnuSpelling = [&](std::string name, auto parser)
+    {
+        m_attributesParser.emplace(name, parser);
+        m_attributesParser.emplace("__" + name + "__", parser);
+    };
+    gnuSpelling("aligned", &SemanticAnalysis::parseAttribute<AlignedAttribute>);
+    gnuSpelling("vector_size", &SemanticAnalysis::parseAttribute<VectorSizeAttribute>);
+    gnuSpelling("noinline", &SemanticAnalysis::parseAttribute<NoinlineAttribute>);
+    gnuSpelling("used", &SemanticAnalysis::parseAttribute<UsedAttribute>);
+    gnuSpelling("always_inline", &SemanticAnalysis::parseAttribute<AlwaysInlineAttribute>);
+    gnuSpelling("gnu_inline", &SemanticAnalysis::parseAttribute<GnuInlineAttribute>);
+    gnuSpelling("artificial", &SemanticAnalysis::parseAttribute<ArtificialAttribute>);
+    if (getLanguageOptions().triple.getPlatform() == Platform::Windows)
+    {
+        gnuSpelling("dllimport", &SemanticAnalysis::parseAttribute<DllImportAttribute>);
+    }
+}
+
+std::vector<cld::Semantics::ParsedAttribute<>>
+    cld::Semantics::SemanticAnalysis::applyAttributes(AffectsAll applicant, std::vector<ParsedAttribute<>>&& attributes,
                                                       const CallingContext& context)
 {
-    std::vector<GNUAttribute> results;
+    std::vector<ParsedAttribute<>> results;
     for (auto& iter : attributes)
     {
-        auto name = Lexer::normalizeSpelling(iter.name->getRepresentation(m_sourceInterface));
-        auto result = m_attributesHandler.find(name);
-        if (result == m_attributesHandler.end())
-        {
-            log(Warnings::Semantics::UNKNOWN_ATTRIBUTE_N_IGNORED.args(*iter.name, m_sourceInterface, *iter.name));
-            continue;
-        }
-        auto applied = (result->second)(iter, applicant, context);
-        if (!applied)
+        if (!cld::match(iter.attribute,
+                        [&](auto&& attribute)
+                        {
+                            using T = std::decay_t<decltype(attribute)>;
+                            return tryAll<AffectsTag, AffectsType, AffectsFunction, AffectsTagType, AffectsVariable,
+                                          AffectsTypeVariable, AffectsTagTypeVariable, AffectsVariableFunction,
+                                          AffectsTagVariableFunction, AffectsAll>(
+                                *this, applicant, ParsedAttribute<T>{iter.name, iter.expressionRanges, attribute},
+                                context);
+                        }))
         {
             cld::match(
-                applicant, [&](AffectsVariable) { iter.attempts |= GNUAttribute::Variable; },
-                [&](AffectsFunction) { iter.attempts |= GNUAttribute::Function; },
-                [&](AffectsType) { iter.attempts |= GNUAttribute::Type; },
-                [&](AffectsTag) { iter.attempts |= GNUAttribute::Tag; });
+                applicant, [&](AffectsVariable) { iter.attempts |= ParsedAttribute<>::Variable; },
+                [&](AffectsFunction) { iter.attempts |= ParsedAttribute<>::Function; },
+                [&](AffectsType) { iter.attempts |= ParsedAttribute<>::Type; },
+                [&](AffectsTag) { iter.attempts |= ParsedAttribute<>::Tag; });
             results.push_back(std::move(iter));
         }
     }
     return results;
 }
 
-void cld::Semantics::SemanticAnalysis::reportNotApplicableAttributes(const std::vector<GNUAttribute>& attributes)
+void cld::Semantics::SemanticAnalysis::reportNotApplicableAttributes(const std::vector<ParsedAttribute<>>& attributes)
 {
     for (auto& iter : attributes)
     {
         switch (iter.attempts)
         {
-            case GNUAttribute::Nothing:
+            case ParsedAttribute<>::Nothing:
                 log(Warnings::Semantics::UNKNOWN_ATTRIBUTE_N_IGNORED.args(*iter.name, m_sourceInterface, *iter.name));
                 break;
-            case GNUAttribute::Tag:
-            case GNUAttribute::Tag | GNUAttribute::Type:
+            case ParsedAttribute<>::Tag:
+            case ParsedAttribute<>::Tag | ParsedAttribute<>::Type:
                 log(Warnings::Semantics::ATTRIBUTE_N_DOES_NOT_APPLY_TO_TYPES.args(*iter.name, m_sourceInterface,
                                                                                   *iter.name));
                 break;
-            case GNUAttribute::Type:
+            case ParsedAttribute<>::Type:
                 log(Warnings::Semantics::ATTRIBUTE_N_IGNORED_WHILE_PARSING_TYPE.args(*iter.name, m_sourceInterface,
                                                                                      *iter.name));
                 break;
-            case GNUAttribute::Variable:
+            case ParsedAttribute<>::Variable:
                 log(Warnings::Semantics::ATTRIBUTE_N_DOES_NOT_APPLY_TO_VARIABLES.args(*iter.name, m_sourceInterface,
                                                                                       *iter.name));
                 break;
-            case GNUAttribute::Function:
+            case ParsedAttribute<>::Function:
                 log(Warnings::Semantics::ATTRIBUTE_N_DOES_NOT_APPLY_TO_FUNCTIONS.args(*iter.name, m_sourceInterface,
                                                                                       *iter.name));
                 break;
-            case GNUAttribute::Variable | GNUAttribute::Type:
-            case GNUAttribute::Variable | GNUAttribute::Tag:
-            case GNUAttribute::Variable | GNUAttribute::Tag | GNUAttribute::Type:
+            case ParsedAttribute<>::Variable | ParsedAttribute<>::Type:
+            case ParsedAttribute<>::Variable | ParsedAttribute<>::Tag:
+            case ParsedAttribute<>::Variable | ParsedAttribute<>::Tag | ParsedAttribute<>::Type:
                 log(Warnings::Semantics::ATTRIBUTE_N_DOES_NOT_APPLY_TO_TYPES_OR_VARIABLES.args(
                     *iter.name, m_sourceInterface, *iter.name));
                 break;
-            case GNUAttribute::Function | GNUAttribute::Type:
-            case GNUAttribute::Function | GNUAttribute::Tag:
-            case GNUAttribute::Function | GNUAttribute::Tag | GNUAttribute::Type:
+            case ParsedAttribute<>::Function | ParsedAttribute<>::Type:
+            case ParsedAttribute<>::Function | ParsedAttribute<>::Tag:
+            case ParsedAttribute<>::Function | ParsedAttribute<>::Tag | ParsedAttribute<>::Type:
                 log(Warnings::Semantics::ATTRIBUTE_N_DOES_NOT_APPLY_TO_TYPES_OR_FUNCTIONS.args(
                     *iter.name, m_sourceInterface, *iter.name));
                 break;
-            case GNUAttribute::Variable | GNUAttribute::Function:
+            case ParsedAttribute<>::Variable | ParsedAttribute<>::Function:
                 log(Warnings::Semantics::ATTRIBUTE_N_DOES_NOT_APPLY_TO_VARIABLES_OR_FUNCTIONS.args(
                     *iter.name, m_sourceInterface, *iter.name));
                 break;
-            case GNUAttribute::Variable | GNUAttribute::Function | GNUAttribute::Type:
-            case GNUAttribute::Variable | GNUAttribute::Function | GNUAttribute::Tag:
-            case GNUAttribute::Variable | GNUAttribute::Function | GNUAttribute::Type | GNUAttribute::Tag:
+            case ParsedAttribute<>::Variable | ParsedAttribute<>::Function | ParsedAttribute<>::Type:
+            case ParsedAttribute<>::Variable | ParsedAttribute<>::Function | ParsedAttribute<>::Tag:
+            case ParsedAttribute<>::Variable | ParsedAttribute<>::Function | ParsedAttribute<>::Type
+                | ParsedAttribute<>::Tag:
                 log(Warnings::Semantics::ATTRIBUTE_N_DOES_NOT_APPLY_TO_TYPES_VARIABLES_OR_FUNCTIONS.args(
                     *iter.name, m_sourceInterface, *iter.name));
                 break;
@@ -177,115 +476,37 @@ void cld::Semantics::SemanticAnalysis::reportNotApplicableAttributes(const std::
     }
 }
 
-void cld::Semantics::SemanticAnalysis::applyAlignedAttribute(AffectsTagVariableFunction applicant,
-                                                             const GNUAttribute& attribute)
+void cld::Semantics::SemanticAnalysis::apply(AffectsTagVariableFunction applicant,
+                                             const ParsedAttribute<AlignedAttribute>& attribute)
 {
-    auto argCount = (attribute.firstParamName ? 1 : 0) + attribute.paramExpressions.size();
-    if (argCount > 1)
+    if (attribute.attribute.alignment)
     {
-        log(Errors::Semantics::INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_N_GOT_N.args(
-            *attribute.name, m_sourceInterface, *attribute.name, 1, argCount));
-        return;
+        auto value = *attribute.attribute.alignment;
+        if ((value & (value - 1)) != 0)
+        {
+            log(Errors::Semantics::ARGUMENT_TO_ALIGNED_MUST_BE_A_POWER_OF_2.args(
+                attribute.expressionRanges[0], m_sourceInterface, attribute.expressionRanges[0], value));
+            return;
+        }
     }
-    std::shared_ptr<ExpressionBase> expression;
-    if (attribute.firstParamName)
-    {
-        expression = visit(Syntax::PrimaryExpressionIdentifier(attribute.firstParamName, attribute.firstParamName + 1,
-                                                               attribute.firstParamName));
-    }
-    else if (!attribute.paramExpressions.empty())
-    {
-        expression = attribute.paramExpressions[0];
-    }
-    std::size_t alignment = getLanguageOptions().alignOfLongDouble;
-    if (expression)
-    {
-        if (!expression->getType().isUndefined() && !isInteger(expression->getType()))
-        {
-            log(Errors::Semantics::EXPECTED_INTEGER_CONSTANT_EXPRESSION_AS_ARGUMENT_TO_ALIGNED.args(
-                *expression, m_sourceInterface, *expression));
-            return;
-        }
-        if (expression->getType().isUndefined())
-        {
-            return;
-        }
-        auto result = evaluateConstantExpression(*expression);
-        if (!result)
-        {
-            std::for_each(result.error().begin(), result.error().end(), cld::bind_front(&SemanticAnalysis::log, this));
-            return;
-        }
-        if (result->getInteger() < 0)
-        {
-            log(Errors::Semantics::ARGUMENT_TO_ALIGNED_MUST_BE_A_POSITIVE_NUMBER.args(*expression, m_sourceInterface,
-                                                                                      *expression, *result));
-            return;
-        }
-        if (!result->getInteger().isPowerOf2())
-        {
-            log(Errors::Semantics::ARGUMENT_TO_ALIGNED_MUST_BE_A_POWER_OF_2.args(*expression, m_sourceInterface,
-                                                                                 *expression, *result));
-            return;
-        }
-        alignment = result->getInteger().getZExtValue();
-    }
+    auto value = attribute.attribute.alignment.value_or(getLanguageOptions().alignOfLongDouble);
     cld::match(applicant,
                [&](auto holder)
                {
                    if (auto* existent = holder->template getAttributeIf<AlignedAttribute>())
                    {
-                       *existent = AlignedAttribute{std::max(alignment, existent->alignment)};
+                       *existent = AlignedAttribute{std::max(value, *existent->alignment)};
                    }
                    else
                    {
-                       holder->addAttribute(AlignedAttribute{alignment});
+                       holder->addAttribute(AlignedAttribute{value});
                    }
                });
 }
 
-void cld::Semantics::SemanticAnalysis::applyVectorSizeAttribute(AffectsTypeVariable applicant,
-                                                                const GNUAttribute& attribute)
+void cld::Semantics::SemanticAnalysis::apply(AffectsTypeVariable applicant,
+                                             const ParsedAttribute<VectorSizeAttribute>& attribute)
 {
-    auto argCount = (attribute.firstParamName ? 1 : 0) + attribute.paramExpressions.size();
-    if (argCount != 1)
-    {
-        log(Errors::Semantics::INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_N_GOT_N.args(
-            *attribute.name, m_sourceInterface, *attribute.name, 1, argCount));
-        return;
-    }
-    std::shared_ptr<ExpressionBase> expression;
-    if (attribute.firstParamName)
-    {
-        expression = visit(Syntax::PrimaryExpressionIdentifier(attribute.firstParamName, attribute.firstParamName + 1,
-                                                               attribute.firstParamName));
-    }
-    else
-    {
-        expression = attribute.paramExpressions[0];
-    }
-    if (!expression->getType().isUndefined() && !isInteger(expression->getType()))
-    {
-        log(Errors::Semantics::EXPECTED_INTEGER_CONSTANT_EXPRESSION_AS_ARGUMENT_TO_VECTOR_SIZE.args(
-            *expression, m_sourceInterface, *expression));
-        return;
-    }
-    if (expression->getType().isUndefined())
-    {
-        return;
-    }
-    auto result = evaluateConstantExpression(*expression);
-    if (!result)
-    {
-        std::for_each(result.error().begin(), result.error().end(), cld::bind_front(&SemanticAnalysis::log, this));
-        return;
-    }
-    if (result->getInteger() < 0)
-    {
-        log(Errors::Semantics::ARGUMENT_TO_VECTOR_SIZE_MUST_BE_A_POSITIVE_NUMBER.args(*expression, m_sourceInterface,
-                                                                                      *expression, *result));
-        return;
-    }
     const Type& baseType = cld::match(
         applicant,
         [](not_null<VariableDeclaration> variableDeclaration) -> const Type& { return variableDeclaration->getType(); },
@@ -325,37 +546,37 @@ void cld::Semantics::SemanticAnalysis::applyVectorSizeAttribute(AffectsTypeVaria
         return;
     }
     auto size = baseType.getSizeOf(*this);
-    auto sizeConstValue = ConstValue(llvm::APSInt(llvm::APInt(result->getInteger().getBitWidth(), size)));
-    auto mod = result->modulo(sizeConstValue, getLanguageOptions());
-    if (mod.getInteger() != 0)
+    auto mod = attribute.attribute.size % size;
+    if (mod != 0)
     {
         log(Errors::Semantics::ARGUMENT_OF_VECTOR_SIZE_MUST_BE_A_MULTIPLE_OF_THE_SIZE_OF_THE_BASE_TYPE.args(
-            *expression, m_sourceInterface, *expression,
-            result->toString() + " % sizeof(" + diag::StringConverter<Type>::inArg(baseType, &m_sourceInterface)
-                + ") /*" + std::to_string(size) + "*/ = " + mod.toString()));
+            attribute.expressionRanges[0], m_sourceInterface, attribute.expressionRanges[0],
+            cld::to_string(attribute.attribute.size) + " % sizeof("
+                + diag::StringConverter<Type>::inArg(baseType, &m_sourceInterface) + ") /*" + cld::to_string(size)
+                + "*/ = " + cld::to_string(mod)));
         return;
     }
-    auto multiple = result->divide(sizeConstValue, getLanguageOptions());
-    if (!multiple.getInteger().isPowerOf2())
+    auto multiple = attribute.attribute.size / size;
+    if ((multiple & (multiple - 1)) != 0)
     {
         log(Errors::Semantics::ARGUMENT_OF_VECTOR_SIZE_SHOULD_BE_A_POWER_OF_2_MULTIPLE_OF_THE_SIZE_OF_THE_BASE_TYPE
-                .args(*expression, m_sourceInterface, *expression,
-                      result->toString() + " / sizeof("
+                .args(attribute.expressionRanges[0], m_sourceInterface, attribute.expressionRanges[0],
+                      cld::to_string(attribute.attribute.size) + " / sizeof("
                           + diag::StringConverter<Type>::inArg(baseType, &m_sourceInterface) + ") /*"
-                          + std::to_string(size) + "*/ = " + multiple.toString()));
+                          + cld::to_string(size) + "*/ = " + cld::to_string(multiple)));
         return;
     }
     cld::match(
         applicant,
         [&](const std::pair<IntrVarValue<Type>*, diag::PointRange>& pair)
         {
-            pair.first->emplace<VectorType>(typeAlloc(*removeQualifiers(std::move(baseType))),
-                                            multiple.getInteger().getZExtValue(), flag::useFlags = baseType.getFlags());
+            pair.first->emplace<VectorType>(typeAlloc(*removeQualifiers(std::move(baseType))), multiple,
+                                            flag::useFlags = baseType.getFlags());
         },
         [&](VariableDeclaration* variableDeclaration)
         {
-            auto newType = VectorType(typeAlloc(*removeQualifiers(std::move(baseType))),
-                                      multiple.getInteger().getZExtValue(), flag::useFlags = baseType.getFlags());
+            auto newType = VectorType(typeAlloc(*removeQualifiers(std::move(baseType))), multiple,
+                                      flag::useFlags = baseType.getFlags());
             *variableDeclaration =
                 VariableDeclaration(newType, variableDeclaration->getLinkage(), variableDeclaration->getLifetime(),
                                     variableDeclaration->getNameToken(), variableDeclaration->getKind(),
@@ -363,18 +584,13 @@ void cld::Semantics::SemanticAnalysis::applyVectorSizeAttribute(AffectsTypeVaria
         });
 }
 
-void cld::Semantics::SemanticAnalysis::applyUsedAttribute(AffectsVariableFunction applicant,
-                                                          const GNUAttribute& attribute)
+void cld::Semantics::SemanticAnalysis::apply(AffectsVariableFunction applicant,
+                                             const ParsedAttribute<UsedAttribute>& attribute)
 {
-    if (attribute.firstParamName || !attribute.paramExpressions.empty())
-    {
-        log(Errors::Semantics::INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_N_GOT_N.args(
-            *attribute.name, m_sourceInterface, *attribute.name, 0,
-            (attribute.firstParamName ? 1 : 0) + attribute.paramExpressions.size()));
-    }
     if (cld::match(
             applicant,
-            [&](FunctionDefinition* def) {
+            [&](FunctionDefinition* def)
+            {
                 if (def->getLinkage() != Linkage::Internal)
                 {
                     log(Warnings::Semantics::ATTRIBUTE_USED_ONLY_APPLIES_TO_FUNCTIONS_WITH_INTERNAL_LINKAGE.args(
@@ -383,7 +599,8 @@ void cld::Semantics::SemanticAnalysis::applyUsedAttribute(AffectsVariableFunctio
                 }
                 return false;
             },
-            [&](VariableDeclaration* declaration) {
+            [&](VariableDeclaration* declaration)
+            {
                 if (declaration->getLinkage() != Linkage::Internal || m_currentScope != 0)
                 {
                     log(Warnings::Semantics::ATTRIBUTE_USED_ONLY_APPLIES_TO_GLOBAL_VARIABLES_WITH_INTERNAL_LINKAGE.args(
@@ -392,7 +609,8 @@ void cld::Semantics::SemanticAnalysis::applyUsedAttribute(AffectsVariableFunctio
                 }
                 return false;
             },
-            [&](FunctionDeclaration* declaration) {
+            [&](FunctionDeclaration* declaration)
+            {
                 if (declaration->getLinkage() != Linkage::Internal)
                 {
                     log(Warnings::Semantics::ATTRIBUTE_USED_ONLY_APPLIES_TO_FUNCTIONS_WITH_INTERNAL_LINKAGE.args(
@@ -404,41 +622,25 @@ void cld::Semantics::SemanticAnalysis::applyUsedAttribute(AffectsVariableFunctio
     {
         return;
     }
-    cld::match(applicant, [](auto holder) { holder->addAttribute(UsedAttribute{}); });
+    cld::match(applicant, [&](auto holder) { holder->addAttribute(attribute.attribute); });
 }
 
-void cld::Semantics::SemanticAnalysis::applyNoinlineAttribute(AffectsFunction applicant, const GNUAttribute& attribute)
+void cld::Semantics::SemanticAnalysis::apply(AffectsFunction applicant,
+                                             const ParsedAttribute<NoinlineAttribute>& attribute)
 {
-    if (attribute.firstParamName || !attribute.paramExpressions.empty())
-    {
-        log(Errors::Semantics::INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N.args(
-            *attribute.name, m_sourceInterface, *attribute.name,
-            (attribute.firstParamName ? 1 : 0) + attribute.paramExpressions.size()));
-    }
-    cld::match(applicant, [](auto holder) { holder->addAttribute(NoinlineAttribute{}); });
+    cld::match(applicant, [&](auto holder) { holder->addAttribute(attribute.attribute); });
 }
 
-void cld::Semantics::SemanticAnalysis::applyAlwaysInlineAttribute(AffectsFunction applicant,
-                                                                  const GNUAttribute& attribute)
+void cld::Semantics::SemanticAnalysis::apply(AffectsFunction applicant,
+                                             const ParsedAttribute<AlwaysInlineAttribute>& attribute)
 {
-    if (attribute.firstParamName || !attribute.paramExpressions.empty())
-    {
-        log(Errors::Semantics::INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N.args(
-            *attribute.name, m_sourceInterface, *attribute.name,
-            (attribute.firstParamName ? 1 : 0) + attribute.paramExpressions.size()));
-    }
-    cld::match(applicant, [](auto holder) { holder->addAttribute(AlwaysInlineAttribute{}); });
+    cld::match(applicant, [&](auto holder) { holder->addAttribute(attribute.attribute); });
 }
 
-void cld::Semantics::SemanticAnalysis::applyGnuInlineAttribute(AffectsFunction applicant, const GNUAttribute& attribute,
-                                                               const CallingContext& context)
+void cld::Semantics::SemanticAnalysis::apply(AffectsFunction applicant,
+                                             const ParsedAttribute<GnuInlineAttribute>& attribute,
+                                             const CallingContext& context)
 {
-    if (attribute.firstParamName || !attribute.paramExpressions.empty())
-    {
-        log(Errors::Semantics::INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N.args(
-            *attribute.name, m_sourceInterface, *attribute.name,
-            (attribute.firstParamName ? 1 : 0) + attribute.paramExpressions.size()));
-    }
     cld::match(
         applicant,
         [&](auto holder)
@@ -453,27 +655,15 @@ void cld::Semantics::SemanticAnalysis::applyGnuInlineAttribute(AffectsFunction a
     cld::match(applicant, [](auto holder) { holder->addAttribute(GnuInlineAttribute{}); });
 }
 
-void cld::Semantics::SemanticAnalysis::applyArtificialAttribute(AffectsFunction applicant,
-                                                                const GNUAttribute& attribute)
+void cld::Semantics::SemanticAnalysis::apply(AffectsFunction applicant,
+                                             const ParsedAttribute<ArtificialAttribute>& attribute)
 {
-    if (attribute.firstParamName || !attribute.paramExpressions.empty())
-    {
-        log(Errors::Semantics::INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N.args(
-            *attribute.name, m_sourceInterface, *attribute.name,
-            (attribute.firstParamName ? 1 : 0) + attribute.paramExpressions.size()));
-    }
-    cld::match(applicant, [](auto holder) { holder->addAttribute(ArtificialAttribute{}); });
+    cld::match(applicant, [&](auto holder) { holder->addAttribute(attribute.attribute); });
 }
 
-void cld::Semantics::SemanticAnalysis::applyDllImportAttribute(AffectsVariableFunction applicant,
-                                                               const GNUAttribute& attribute)
+void cld::Semantics::SemanticAnalysis::apply(AffectsVariableFunction applicant,
+                                             const ParsedAttribute<DllImportAttribute>& attribute)
 {
-    if (attribute.firstParamName || !attribute.paramExpressions.empty())
-    {
-        log(Errors::Semantics::INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N.args(
-            *attribute.name, m_sourceInterface, *attribute.name,
-            (attribute.firstParamName ? 1 : 0) + attribute.paramExpressions.size()));
-    }
     cld::match(
         applicant,
         [&](not_null<VariableDeclaration> var)
@@ -489,13 +679,13 @@ void cld::Semantics::SemanticAnalysis::applyDllImportAttribute(AffectsVariableFu
                                        var->getKind(), std::move(*var).getInitializer());
             std::for_each(std::move_iterator(attributes.begin()), std::move_iterator(attributes.end()),
                           cld::bind_front(&VariableDeclaration::addAttribute, var));
-            var->addAttribute(DllImportAttribute{attribute.name});
+            var->addAttribute(DllImportAttribute{});
         },
         [&](not_null<FunctionDeclaration> decl)
         {
             if (!decl->isInline())
             {
-                decl->addAttribute(DllImportAttribute{attribute.name});
+                decl->addAttribute(DllImportAttribute{});
                 return;
             }
             log(Warnings::Semantics::ATTRIBUTE_DLLIMPORT_IGNORED_ON_INLINE_FUNCTION_N.args(
@@ -506,4 +696,16 @@ void cld::Semantics::SemanticAnalysis::applyDllImportAttribute(AffectsVariableFu
             log(Errors::Semantics::DLLIMPORT_CANNOT_BE_APPLIED_TO_DEFINITION_OF_FUNCTION_N.args(
                 *attribute.name, m_sourceInterface, *def->getNameToken(), *attribute.name));
         });
+}
+
+void cld::Semantics::SemanticAnalysis::apply(AffectsTagVariableFunction applicant,
+                                             const ParsedAttribute<DeprecatedAttribute>& attribute)
+{
+    cld::match(applicant, [&](auto holder) { holder->addAttribute(attribute.attribute); });
+}
+
+void cld::Semantics::SemanticAnalysis::apply(AffectsVariable applicant,
+                                             const ParsedAttribute<CleanupAttribute>& attribute)
+{
+    cld::match(applicant, [&](auto holder) { holder->addAttribute(attribute.attribute); });
 }

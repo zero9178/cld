@@ -10,42 +10,60 @@ class Useable;
 
 struct AlignedAttribute
 {
-    std::uint64_t alignment;
+    // Except inside of the apply method for AlignedAttribute, it's never an empty optional
+    std::optional<std::uint64_t> alignment;
+
+    constexpr static std::size_t count = 1;
 };
 
 struct DeprecatedAttribute
 {
     std::optional<std::string_view> optionalMessage;
+
+    constexpr static std::size_t count = 1;
 };
 
 struct CleanupAttribute
 {
     const Useable* cleanupFunction;
+
+    constexpr static std::size_t count = 1;
 };
 
 struct UsedAttribute
 {
+    constexpr static std::size_t count = 0;
 };
 
 struct NoinlineAttribute
 {
+    constexpr static std::size_t count = 0;
 };
 
 struct AlwaysInlineAttribute
 {
+    constexpr static std::size_t count = 0;
 };
 
 struct GnuInlineAttribute
 {
+    constexpr static std::size_t count = 0;
 };
 
 struct ArtificialAttribute
 {
+    constexpr static std::size_t count = 0;
 };
 
 struct DllImportAttribute
 {
-    Lexer::CTokenIterator identifier;
+    constexpr static std::size_t count = 0;
+};
+
+struct VectorSizeAttribute
+{
+    std::uint64_t size;
+    constexpr static std::size_t count = 1;
 };
 
 using FunctionAttribute =
@@ -56,6 +74,9 @@ using TypeAttribute = std::variant<AlignedAttribute, DeprecatedAttribute>;
 
 using VariableAttribute =
     std::variant<AlignedAttribute, DeprecatedAttribute, CleanupAttribute, UsedAttribute, DllImportAttribute>;
+
+using AllAttributes =
+    VariantUnion<std::variant<VectorSizeAttribute>, FunctionAttribute, TypeAttribute, VariableAttribute>;
 
 template <class T>
 class AttributeHolder

@@ -602,7 +602,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::VariableDe
                 }
                 if (auto* aligned = declaration.getAttributeIf<Semantics::AlignedAttribute>())
                 {
-                    alignment = aligned->alignment;
+                    alignment = *aligned->alignment;
                 }
                 global->setAlignment(llvm::Align(alignment));
             }
@@ -684,7 +684,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::VariableDe
         }
         if (auto* aligned = declaration.getAttributeIf<Semantics::AlignedAttribute>())
         {
-            alignment = aligned->alignment;
+            alignment = *aligned->alignment;
         }
         var->setAlignment(llvm::Align(alignment));
         if (m_options.debugEmission > cld::CGLLVM::DebugEmission::Line)
@@ -742,11 +742,11 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDefinition& func
     {
         if (auto existingAlign = function->getAlign())
         {
-            function->setAlignment(llvm::Align(std::max<std::uint64_t>(existingAlign->value(), aligned->alignment)));
+            function->setAlignment(llvm::Align(std::max<std::uint64_t>(existingAlign->value(), *aligned->alignment)));
         }
         else
         {
-            function->setAlignment(llvm::Align(aligned->alignment));
+            function->setAlignment(llvm::Align(*aligned->alignment));
         }
     }
     if (functionDefinition.hasAttribute<Semantics::NoinlineAttribute>())

@@ -130,12 +130,12 @@ std::vector<cld::IntrVarPtr<cld::Semantics::Useable>>
     }
     auto scope = pushScope();
     std::vector<std::unique_ptr<VariableDeclaration>> parameterDeclarations;
-    std::vector<GNUAttribute> attributes;
+    std::vector<ParsedAttribute<>> attributes;
     auto type = declaratorsToType(
         node.getDeclarationSpecifiers(), node.getDeclarator(), node.getDeclarations(),
         [&](IntrVarValue<Type> paramType, Lexer::CTokenIterator loc,
             const std::vector<Syntax::DeclarationSpecifier>& declarationSpecifiers,
-            std::vector<GNUAttribute>&& attributes)
+            std::vector<ParsedAttribute<>>&& attributes)
         {
             if (loc->getText() == "__func__")
             {
@@ -321,7 +321,7 @@ std::vector<cld::IntrVarPtr<cld::Semantics::Useable>>
             if (auto attr = prevDecl->removeAttribute<DllImportAttribute>())
             {
                 log(Warnings::Semantics::ATTRIBUTE_DLLIMPORT_IGNORED_AFTER_DEFINITION_OF_FUNCTION_N.args(
-                    *attr->identifier, m_sourceInterface, *loc, *attr->identifier));
+                    *loc, m_sourceInterface, *loc));
             }
             ptr = FunctionDefinition(ptr.getType(), loc, std::move(ptr).getParameterDeclarations(), linkage, inlineKind,
                                      std::move(ptr).getCompoundStatement());
@@ -427,7 +427,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
         return decls;
     }
 
-    std::vector<GNUAttribute> attributes;
+    std::vector<ParsedAttribute<>> attributes;
     auto baseType = qualifiersToType(node.getDeclarationSpecifiers(), &attributes);
     for (auto& iter : node.getInitDeclarators())
     {
@@ -764,7 +764,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
 
 std::unique_ptr<cld::Semantics::FunctionDeclaration> cld::Semantics::SemanticAnalysis::visitFunctionDeclaration(
     Lexer::CTokenIterator loc, FunctionType&& type, const Syntax::StorageClassSpecifier* storageClassSpecifier,
-    bool isInline, std::vector<GNUAttribute>&& attributes)
+    bool isInline, std::vector<ParsedAttribute<>>&& attributes)
 {
     Linkage linkage = Linkage::External;
     // C99 6.7.1§5:
@@ -1821,19 +1821,4 @@ void cld::Semantics::SemanticAnalysis::diagnoseUnusedLocals()
             [](FunctionDefinition*) {}, [](BuiltinFunction*) {}, [](const TypedefInfo*) {},
             [](const std::pair<ConstValue, IntrVarValue<Type>>&) {});
     }
-}
-
-std::vector<cld::Semantics::SemanticAnalysis::GNUAttribute>
-    cld::Semantics::SemanticAnalysis::visit(const Syntax::GNUAttributes& node)
-{
-    std::vector<GNUAttribute> result;
-    for (auto& iter : node.getAttributes())
-    {
-        std::vector<std::shared_ptr<ExpressionBase>> parameters;
-        std::transform(iter.arguments.begin(), iter.arguments.end(), std::back_inserter(parameters),
-                       [this](auto&& expr) -> std::shared_ptr<ExpressionBase> { return visit(expr); });
-        result.push_back(GNUAttribute{GNUAttribute::Nothing, iter.nameToken, iter.optionalFirstIdentifierArgument,
-                                      std::move(parameters)});
-    }
-    return result;
 }

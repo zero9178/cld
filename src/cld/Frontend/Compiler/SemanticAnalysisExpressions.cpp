@@ -1517,7 +1517,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
 cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::PostFixExpressionTypeInitializer& node)
 {
-    std::vector<GNUAttribute> attributes;
+    std::vector<ParsedAttribute<>> attributes;
     auto type = declaratorsToType(node.getTypeName().getSpecifierQualifiers(),
                                   node.getTypeName().getAbstractDeclarator(), &attributes);
     if (type->isUndefined())
@@ -1722,7 +1722,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                                                     std::move(exp));
         },
         [&](const std::unique_ptr<Syntax::TypeName>& typeName) -> IntrVarPtr<ExpressionBase> {
-            std::vector<GNUAttribute> attributes;
+            std::vector<ParsedAttribute<>> attributes;
             auto type =
                 declaratorsToType(typeName->getSpecifierQualifiers(), typeName->getAbstractDeclarator(), &attributes);
             if (type->isUndefined())
@@ -1779,7 +1779,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             return visit(unaryExpression);
         },
         [&](const Syntax::CastExpression::CastVariant& cast) -> IntrVarPtr<ExpressionBase> {
-            std::vector<GNUAttribute> attributes;
+            std::vector<ParsedAttribute<>> attributes;
             auto type = declaratorsToType(cast.typeName.getSpecifierQualifiers(), cast.typeName.getAbstractDeclarator(),
                                           &attributes);
             if (type->isUndefined())

@@ -176,7 +176,7 @@ constexpr bool IsTypeCompleteV<T, std::void_t<decltype(sizeof(T))>> = true;
 namespace detail
 {
 template <class T, class... Args>
-constexpr auto variantTypesContain(std::variant<Args...>) -> std::conjunction<std::is_same<T, Args>...>;
+constexpr auto variantTypesContain(std::variant<Args...>) -> std::disjunction<std::is_same<T, Args>...>;
 
 template <class T, class... Args>
 constexpr auto addToVariantType(std::variant<Args...>) -> std::variant<Args..., T>;

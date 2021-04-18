@@ -2768,20 +2768,26 @@ std::optional<cld::Syntax::GNUAttributes> cld::Parser::parseGNUAttributes(Lexer:
             {
                 if (attributeName)
                 {
-                    attributes.push_back({attributeName, {}, {}});
+                    attributes.push_back({attributeName, {}});
                     continue;
                 }
                 break;
             }
             const auto* openParenthAttrib = begin++;
-            const Lexer::CToken* optionalIdentifier = nullptr;
+            std::vector<Syntax::AssignmentExpression> expressions;
             bool requireExpressions = false;
             if (begin != end && begin->getTokenType() == Lexer::TokenType::Identifier && (begin + 1) != end
                 && ((begin + 1)->getTokenType() == Lexer::TokenType::Comma
                     || (begin + 1)->getTokenType() == Lexer::TokenType::CloseParentheses)
                 && !context.isTypedef(begin->getText()))
             {
-                optionalIdentifier = begin++;
+                auto id = parseAssignmentExpression(begin, end,
+                                                    context.withRecoveryTokens(Context::fromTokenTypes(
+                                                        Lexer::TokenType::Comma, Lexer::TokenType::CloseParentheses)));
+                if (id)
+                {
+                    expressions.push_back(std::move(*id));
+                }
                 if (begin != end && begin->getTokenType() == Lexer::TokenType::Comma)
                 {
                     begin++;
@@ -2794,10 +2800,9 @@ std::optional<cld::Syntax::GNUAttributes> cld::Parser::parseGNUAttributes(Lexer:
                 {
                     begin++;
                 }
-                attributes.push_back({attributeName, optionalIdentifier, {}});
+                attributes.push_back({attributeName, std::move(expressions)});
                 continue;
             }
-            std::vector<Syntax::AssignmentExpression> expressions;
             {
                 auto first =
                     parseAssignmentExpression(begin, end,
@@ -2820,11 +2825,12 @@ std::optional<cld::Syntax::GNUAttributes> cld::Parser::parseGNUAttributes(Lexer:
                     expressions.push_back(std::move(*expression));
                 }
             }
-            expect(Lexer::TokenType::CloseParentheses, begin, end, context, [&] {
-                return Notes::TO_MATCH_N_HERE.args(*openParenthAttrib, context.getSourceInterface(),
-                                                   *openParenthAttrib);
-            });
-            attributes.push_back({attributeName, optionalIdentifier, std::move(expressions)});
+            expect(Lexer::TokenType::CloseParentheses, begin, end, context,
+                   [&] {
+                       return Notes::TO_MATCH_N_HERE.args(*openParenthAttrib, context.getSourceInterface(),
+                                                          *openParenthAttrib);
+                   });
+            attributes.push_back({attributeName, std::move(expressions)});
         }
         if (secondOpenParenth)
         {

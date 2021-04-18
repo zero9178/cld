@@ -8,7 +8,7 @@
 void cld::Semantics::SemanticAnalysis::handleParameterList(
     IntrVarValue<Type>& type, const Syntax::ParameterTypeList* parameterTypeList, const diag::PointRange& returnTypeLoc,
     cld::function_ref<void(const Type&, Lexer::CTokenIterator, const std::vector<Syntax::DeclarationSpecifier>&,
-                           std::vector<GNUAttribute>&&)>
+                           std::vector<ParsedAttribute<>>&&)>
         paramCallback)
 {
     if (isFunctionType(type))
@@ -33,7 +33,7 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
     std::vector<FunctionType::Parameter> parameters;
     for (auto& iter : parameterTypeList->getParameters())
     {
-        std::vector<GNUAttribute> attributes;
+        std::vector<ParsedAttribute<>> attributes;
         for (auto& specs : iter.declarationSpecifiers)
         {
             auto* storageSpec = std::get_if<Syntax::StorageClassSpecifier>(&specs);
@@ -190,13 +190,13 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
 
 cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::qualifiersToTypeImpl(
     const std::vector<DeclarationOrSpecifierQualifier>& directAbstractDeclaratorParentheses,
-    std::vector<GNUAttribute>* attributesOut)
+    std::vector<ParsedAttribute<>>* attributesOut)
 {
     bool isConst = false;
     bool isVolatile = false;
     const Syntax::TypeQualifier* restrictQual = nullptr;
     std::vector<const Syntax::TypeSpecifier*> typeSpecs;
-    std::vector<GNUAttribute> attributes;
+    std::vector<ParsedAttribute<>> attributes;
     for (auto& iter : directAbstractDeclaratorParentheses)
     {
         if (auto* typeSpec = std::get_if<const Syntax::TypeSpecifier*>(&iter))
@@ -255,9 +255,9 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::applyD
     cld::IntrVarValue<Type>&& type, const PossiblyAbstractQualifierRef& declarator,
     const std::vector<Syntax::Declaration>& declarations,
     cld::function_ref<void(const Type&, Lexer::CTokenIterator, const std::vector<Syntax::DeclarationSpecifier>&,
-                           std::vector<GNUAttribute>&&)>
+                           std::vector<ParsedAttribute<>>&&)>
         paramCallback,
-    std::vector<GNUAttribute>* attributesOut)
+    std::vector<ParsedAttribute<>>* attributesOut)
 {
     if (!cld::match(declarator, [](auto&& value) -> bool { return value; }))
     {
@@ -446,7 +446,7 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::applyD
 
                 for (auto& iter : declarations)
                 {
-                    std::vector<GNUAttribute> attributes;
+                    std::vector<ParsedAttribute<>> attributes;
                     for (auto& specs : iter.getDeclarationSpecifiers())
                     {
                         auto* storageSpec = std::get_if<Syntax::StorageClassSpecifier>(&specs);
@@ -797,7 +797,7 @@ cld::IntrVarValue<cld::Semantics::Type>
         return EnumType(*lookup, flag::isConst = isConst, flag::isVolatile = isVolatile);
     }
     auto& enumDef = cld::get<Syntax::EnumDeclaration>(enumDecl->getVariant());
-    std::vector<SemanticAnalysis::GNUAttribute> attributes;
+    std::vector<ParsedAttribute<>> attributes;
     if (enumDef.getBeforeAttributes())
     {
         attributes = visit(*enumDef.getBeforeAttributes());
@@ -901,7 +901,7 @@ cld::IntrVarValue<cld::Semantics::Type>
     cld::Semantics::SemanticAnalysis::structOrUnionSpecifierToType(bool isConst, bool isVolatile,
                                                                    const Syntax::StructOrUnionSpecifier& structOrUnion)
 {
-    std::vector<SemanticAnalysis::GNUAttribute> pureTypeAttributes;
+    std::vector<ParsedAttribute<>> pureTypeAttributes;
     if (structOrUnion.getOptionalBeforeAttributes())
     {
         pureTypeAttributes = visit(*structOrUnion.getOptionalBeforeAttributes());
@@ -1112,7 +1112,7 @@ cld::IntrVarValue<cld::Semantics::Type>
             }
             continue;
         }
-        std::vector<SemanticAnalysis::GNUAttribute> attributes;
+        std::vector<ParsedAttribute<>> attributes;
         auto baseType = qualifiersToType(specifiers, &attributes);
         for (auto iter2 = declarators.begin(); iter2 != declarators.end(); iter2++)
         {

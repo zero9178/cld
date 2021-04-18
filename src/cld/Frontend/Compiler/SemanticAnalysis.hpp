@@ -17,6 +17,31 @@
 
 namespace cld::Semantics
 {
+template <class T = void>
+struct ParsedAttribute
+{
+    Lexer::CTokenIterator name;
+    std::vector<diag::PointRange> expressionRanges;
+    T attribute;
+};
+
+template <>
+struct ParsedAttribute<void>
+{
+    enum TriedOn
+    {
+        Nothing = 0,
+        Function = 0b1,
+        Tag = 0b10,
+        Type = 0b100,
+        Variable = 0b1000,
+    };
+    std::underlying_type_t<TriedOn> attempts;
+    Lexer::CTokenIterator name;
+    std::vector<diag::PointRange> expressionRanges;
+    AllAttributes attribute;
+};
+
 class SemanticAnalysis final : public ProgramInterface
 {
     std::size_t m_currentScope = GLOBAL_SCOPE;
@@ -115,29 +140,11 @@ class SemanticAnalysis final : public ProgramInterface
 
     bool m_inParameter = false;
 
-public:
-    struct GNUAttribute
-    {
-        enum TriedOn
-        {
-            Nothing = 0,
-            Function = 0b1,
-            Tag = 0b10,
-            Type = 0b100,
-            Variable = 0b1000,
-        };
-        std::underlying_type_t<TriedOn> attempts;
-        Lexer::CTokenIterator name;
-        const Lexer::CToken* firstParamName;
-        std::vector<std::shared_ptr<ExpressionBase>> paramExpressions;
-    };
-
-private:
     void handleParameterList(
         IntrVarValue<Type>& type, const Syntax::ParameterTypeList* CLD_NULLABLE parameterTypeList,
         const diag::PointRange& returnTypeLoc,
         cld::function_ref<void(const Type&, Lexer::CTokenIterator, const std::vector<Syntax::DeclarationSpecifier>&,
-                               std::vector<GNUAttribute>&&)>
+                               std::vector<ParsedAttribute<>>&&)>
             paramCallback = {});
 
     void handleArray(IntrVarValue<Type>& type, const std::vector<Syntax::TypeQualifier>& typeQualifiers,
@@ -191,13 +198,13 @@ private:
         IntrVarValue<Type>&& type, const PossiblyAbstractQualifierRef& parameterList,
         const std::vector<Syntax::Declaration>& declarations = {},
         cld::function_ref<void(const Type&, Lexer::CTokenIterator, const std::vector<Syntax::DeclarationSpecifier>&,
-                               std::vector<GNUAttribute>&&)>
+                               std::vector<ParsedAttribute<>>&&)>
             paramCallback = {},
-        std::vector<GNUAttribute>* attributesOut = nullptr);
+        std::vector<ParsedAttribute<>>* attributesOut = nullptr);
 
     IntrVarValue<Type>
         qualifiersToTypeImpl(const std::vector<DeclarationOrSpecifierQualifier>& directAbstractDeclaratorParentheses,
-                             std::vector<GNUAttribute>* attributesOut = nullptr);
+                             std::vector<ParsedAttribute<>>* attributesOut = nullptr);
 
     PrimitiveType
         primitiveTypeSpecifiersToType(bool isConst, bool isVolatile,
@@ -243,7 +250,7 @@ private:
 
     void reportNoMember(const Type& recordType, const Lexer::CToken& identifier);
 
-    void reportNotApplicableAttributes(const std::vector<GNUAttribute>& attributes);
+    void reportNotApplicableAttributes(const std::vector<ParsedAttribute<>>& attributes);
 
     std::optional<std::pair<IntrVarValue<Type>, const Field * CLD_NON_NULL>>
         checkMemberAccess(const Type& recordType, const Syntax::PostFixExpression& postFixExpr,
@@ -294,7 +301,7 @@ private:
     template <class T>
     IntrVarValue<Type> declaratorsToType(const std::vector<T>& declarationOrSpecifierQualifiers,
                                          const Syntax::AbstractDeclarator* declarator = nullptr,
-                                         std::vector<GNUAttribute>* attributes = nullptr)
+                                         std::vector<ParsedAttribute<>>* attributes = nullptr)
     {
         auto type = qualifiersToType(declarationOrSpecifierQualifiers, attributes);
         return applyDeclarator(std::move(type), declarator, attributes);
@@ -305,9 +312,9 @@ private:
         const std::vector<T>& declarationOrSpecifierQualifiers, const Syntax::Declarator& declarator,
         const std::vector<Syntax::Declaration>& declarations = {},
         cld::function_ref<void(const Type&, Lexer::CTokenIterator, const std::vector<Syntax::DeclarationSpecifier>&,
-                               std::vector<GNUAttribute>&&)>
+                               std::vector<ParsedAttribute<>>&&)>
             paramCallback = {},
-        std::vector<GNUAttribute>* attributes = nullptr)
+        std::vector<ParsedAttribute<>>* attributes = nullptr)
     {
         auto type = qualifiersToType(declarationOrSpecifierQualifiers, attributes);
         return applyDeclarator(std::move(type), declarator, declarations, std::move(paramCallback), attributes);
@@ -315,7 +322,7 @@ private:
 
     template <class T>
     IntrVarValue<Type> qualifiersToType(const std::vector<T>& declarationOrSpecifierQualifiers,
-                                        std::vector<GNUAttribute>* attributes)
+                                        std::vector<ParsedAttribute<>>* attributes)
     {
         std::vector<DeclarationOrSpecifierQualifier> temp(declarationOrSpecifierQualifiers.size());
         std::transform(declarationOrSpecifierQualifiers.begin(), declarationOrSpecifierQualifiers.end(), temp.begin(),
@@ -329,7 +336,7 @@ private:
     }
 
     IntrVarValue<Type> applyDeclarator(IntrVarValue<Type> type, const Syntax::AbstractDeclarator* declarator = nullptr,
-                                       std::vector<GNUAttribute>* attributes = nullptr)
+                                       std::vector<ParsedAttribute<>>* attributes = nullptr)
     {
         return applyDeclaratorsImpl(std::move(type), declarator, {}, {}, attributes);
     }
@@ -338,9 +345,9 @@ private:
         IntrVarValue<Type> type, const Syntax::Declarator& declarator,
         const std::vector<Syntax::Declaration>& declarations = {},
         cld::function_ref<void(const Type&, Lexer::CTokenIterator, const std::vector<Syntax::DeclarationSpecifier>&,
-                               std::vector<GNUAttribute>&&)>
+                               std::vector<ParsedAttribute<>>&&)>
             paramCallback = {},
-        std::vector<GNUAttribute>* attributes = nullptr)
+        std::vector<ParsedAttribute<>>* attributes = nullptr)
     {
         return applyDeclaratorsImpl(std::move(type), &declarator, declarations, std::move(paramCallback), attributes);
     }
@@ -393,7 +400,7 @@ private:
     std::unique_ptr<FunctionDeclaration>
         visitFunctionDeclaration(Lexer::CTokenIterator loc, FunctionType&& type,
                                  const Syntax::StorageClassSpecifier* storageClassSpecifier, bool isInline,
-                                 std::vector<GNUAttribute>&& attributes);
+                                 std::vector<ParsedAttribute<>>&& attributes);
 
 public:
     explicit SemanticAnalysis(const SourceInterface& sourceInterface, llvm::raw_ostream* reporter = &llvm::errs(),
@@ -530,7 +537,7 @@ public:
 
     [[nodiscard]] std::unique_ptr<GNUASMStatement> visit(const Syntax::GNUASMStatement& node);
 
-    [[nodiscard]] std::vector<GNUAttribute> visit(const Syntax::GNUAttributes& node);
+    [[nodiscard]] std::vector<ParsedAttribute<>> visit(const Syntax::GNUAttributes& node);
 
     using AffectsFunction = std::variant<not_null<FunctionDeclaration>, not_null<FunctionDefinition>>;
 
@@ -560,30 +567,54 @@ public:
 
     using CallingContext = std::variant<std::monostate, FunctionContext>;
 
-    [[nodiscard]] std::vector<GNUAttribute> applyAttributes(AffectsAll applicant,
-                                                            std::vector<GNUAttribute>&& attributes,
-                                                            const CallingContext& context = {});
+    [[nodiscard]] std::vector<ParsedAttribute<>> applyAttributes(AffectsAll applicant,
+                                                                 std::vector<ParsedAttribute<>>&& attributes,
+                                                                 const CallingContext& context = {});
 
-    void applyAlignedAttribute(AffectsTagVariableFunction applicant, const GNUAttribute& attribute);
+    void apply(AffectsTagVariableFunction applicant, const ParsedAttribute<AlignedAttribute>& attribute);
 
-    void applyVectorSizeAttribute(AffectsTypeVariable applicant, const GNUAttribute& attribute);
+    void apply(AffectsTypeVariable applicant, const ParsedAttribute<VectorSizeAttribute>& attribute);
 
-    void applyUsedAttribute(AffectsVariableFunction declaration, const GNUAttribute& attribute);
+    void apply(AffectsVariableFunction declaration, const ParsedAttribute<UsedAttribute>& attribute);
 
-    void applyNoinlineAttribute(AffectsFunction declaration, const GNUAttribute& attribute);
+    void apply(AffectsFunction declaration, const ParsedAttribute<NoinlineAttribute>& attribute);
 
-    void applyAlwaysInlineAttribute(AffectsFunction declaration, const GNUAttribute& attribute);
+    void apply(AffectsFunction declaration, const ParsedAttribute<AlwaysInlineAttribute>& attribute);
 
-    void applyGnuInlineAttribute(AffectsFunction declaration, const GNUAttribute& attribute,
-                                 const CallingContext& context);
+    void apply(AffectsFunction declaration, const ParsedAttribute<GnuInlineAttribute>& attribute,
+               const CallingContext& context);
 
-    void applyArtificialAttribute(AffectsFunction declaration, const GNUAttribute& attribute);
+    void apply(AffectsFunction declaration, const ParsedAttribute<ArtificialAttribute>& attribute);
 
-    void applyDllImportAttribute(AffectsVariableFunction declaration, const GNUAttribute& attribute);
+    void apply(AffectsVariableFunction declaration, const ParsedAttribute<DllImportAttribute>& attribute);
+
+    void apply(AffectsTagVariableFunction declaration, const ParsedAttribute<DeprecatedAttribute>& attribute);
+
+    void apply(AffectsVariable declaration, const ParsedAttribute<CleanupAttribute>& attribute);
 
 private:
-    std::unordered_map<std::string, std::function<bool(const GNUAttribute&, AffectsAll, const CallingContext&)>>
-        m_attributesHandler;
+    std::unordered_map<std::string,
+                       std::optional<AllAttributes> (SemanticAnalysis::*)(const Syntax::GNUAttributes::GNUAttribute&)>
+        m_attributesParser;
+
+    template <class T>
+    std::optional<AllAttributes> parseAttribute(const Syntax::GNUAttributes::GNUAttribute& attribute);
+
+    bool parseMember(std::uint64_t& unsignedInteger, Lexer::CTokenIterator attributeName,
+                     const Syntax::AssignmentExpression* expression);
+
+    bool parseMember(Lexer::CTokenIterator& identifier, Lexer::CTokenIterator attributeName,
+                     const Syntax::AssignmentExpression* expression);
+
+    bool parseMember(const Useable*& useable, Lexer::CTokenIterator attributeName,
+                     const Syntax::AssignmentExpression* expression);
+
+    bool parseMember(std::string_view& text, Lexer::CTokenIterator attributeName,
+                     const Syntax::AssignmentExpression* expression);
+
+    template <class T>
+    bool parseMember(std::optional<T>& optional, Lexer::CTokenIterator attributeName,
+                     const Syntax::AssignmentExpression* expression);
 };
 
 } // namespace cld::Semantics
