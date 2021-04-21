@@ -180,7 +180,8 @@ bool cld::Parser::firstIsInPointer(const Lexer::CToken& token, const cld::Parser
     return token.getTokenType() == Lexer::TokenType::Asterisk;
 }
 
-[[maybe_unused]] bool cld::Parser::firstIsInCompoundItem(const Lexer::CToken& token, const cld::Parser::Context& context)
+[[maybe_unused]] bool cld::Parser::firstIsInCompoundItem(const Lexer::CToken& token,
+                                                         const cld::Parser::Context& context)
 {
     return firstIsInDeclaration(token, context) || firstIsInStatement(token, context)
            || token.getTokenType() == Lexer::TokenType::GNUExtension;

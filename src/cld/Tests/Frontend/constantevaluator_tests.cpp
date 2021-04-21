@@ -108,40 +108,46 @@ std::pair<cld::Semantics::ConstValue, std::string>
 } // namespace
 
 #define INT_EVAL_PRODUCES(text, matcher)                    \
-    [&](std::string source) {                               \
+    [&](std::string source)                                 \
+    {                                                       \
         auto [_, str] = evaluateConstantExpression(source); \
         CHECK_THAT(str, matcher);                           \
     }(text)
 
 #define ARITH_EVAL_PRODUCES(text, matcher)                                                        \
-    [&](std::string source) {                                                                     \
+    [&](std::string source)                                                                       \
+    {                                                                                             \
         auto [_, str] = evaluateConstantExpression(source, cld::LanguageOptions::native(),        \
                                                    cld::Semantics::SemanticAnalysis::Arithmetic); \
         CHECK_THAT(str, matcher);                                                                 \
     }(text)
 
 #define INIT_EVAL_PRODUCES(text, matcher)                                                             \
-    [&](std::string source) {                                                                         \
+    [&](std::string source)                                                                           \
+    {                                                                                                 \
         auto [_, str] = evaluateConstantExpression(source, cld::LanguageOptions::native(),            \
                                                    cld::Semantics::SemanticAnalysis::Initialization); \
         CHECK_THAT(str, matcher);                                                                     \
     }(text)
 
 #define INT_EVAL_PROG_PRODUCES(text, matcher)    \
-    [&](std::string source) {                    \
+    [&](std::string source)                      \
+    {                                            \
         auto [_, str] = evaluateProgram(source); \
         CHECK_THAT(str, matcher);                \
     }(text)
 
 #define ARITH_EVAL_PROG_PRODUCES(text, matcher)                                                                    \
-    [&](std::string source) {                                                                                      \
+    [&](std::string source)                                                                                        \
+    {                                                                                                              \
         auto [_, str] =                                                                                            \
             evaluateProgram(source, cld::LanguageOptions::native(), cld::Semantics::SemanticAnalysis::Arithmetic); \
         CHECK_THAT(str, matcher);                                                                                  \
     }(text)
 
 #define INIT_EVAL_PROG_PRODUCES(text, matcher)                                                                         \
-    [&](std::string source) {                                                                                          \
+    [&](std::string source)                                                                                            \
+    {                                                                                                                  \
         auto [_, str] =                                                                                                \
             evaluateProgram(source, cld::LanguageOptions::native(), cld::Semantics::SemanticAnalysis::Initialization); \
         CHECK_THAT(str, matcher);                                                                                      \

@@ -355,12 +355,14 @@ namespace
 llvm::Align calcAlign(const llvm::DataLayout& dataLayout, llvm::Value* gep, llvm::Align alignment)
 {
     bool deleteInst = false;
-    cld::ScopeExit exit([&] {
-        if (deleteInst)
+    cld::ScopeExit exit(
+        [&]
         {
-            gep->deleteValue();
-        }
-    });
+            if (deleteInst)
+            {
+                gep->deleteValue();
+            }
+        });
     auto* constExpr = llvm::dyn_cast<llvm::ConstantExpr>(gep);
     if (constExpr)
     {

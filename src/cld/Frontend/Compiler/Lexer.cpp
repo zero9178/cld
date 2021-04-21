@@ -664,11 +664,9 @@ decltype(auto) mapArgument(const IntervalMap& intervalMap, Arg&& arg)
         static_assert(std::tuple_size_v<T> == 3 || std::tuple_size_v<T> == 2);
         if constexpr (std::tuple_size_v<T> == 2)
         {
-            return std::apply(
-                [&intervalMap](auto&&... args) {
-                    return std::tuple(mapArgument(intervalMap, std::forward<decltype(args)>(args))...);
-                },
-                std::forward<Arg>(arg));
+            return std::apply([&intervalMap](auto&&... args)
+                              { return std::tuple(mapArgument(intervalMap, std::forward<decltype(args)>(args))...); },
+                              std::forward<Arg>(arg));
         }
         else
         {
@@ -698,17 +696,19 @@ decltype(auto) mapArgument(const IntervalMap& intervalMap, Arg&& arg)
 template <class Diag, class Tuple, std::size_t... ints>
 auto mapArguments(const Diag&, const IntervalMap& intervalMap, Tuple&& tuple, std::index_sequence<ints...>)
 {
-    return std::make_tuple([&tuple, &intervalMap](auto value) {
-        constexpr auto i = decltype(value)::value;
-        if constexpr ((bool)(Diag::constraints[i] & Diag::LocationConstraint))
+    return std::make_tuple(
+        [&tuple, &intervalMap](auto value)
         {
-            return mapArgument(intervalMap, std::get<i>(tuple));
-        }
-        else
-        {
-            return std::get<i>(tuple);
-        }
-    }(std::integral_constant<std::size_t, ints>{})...);
+            constexpr auto i = decltype(value)::value;
+            if constexpr ((bool)(Diag::constraints[i] & Diag::LocationConstraint))
+            {
+                return mapArgument(intervalMap, std::get<i>(tuple));
+            }
+            else
+            {
+                return std::get<i>(tuple);
+            }
+        }(std::integral_constant<std::size_t, ints>{})...);
 }
 
 class Context : private cld::SourceInterface
@@ -805,7 +805,8 @@ public:
         if (m_reporter)
         {
             std::apply(
-                [&](auto&&... args) {
+                [&](auto&&... args)
+                {
                     if constexpr (std::is_integral_v<std::decay_t<Location>>)
                     {
                         *m_reporter << diag.args(map(m_characterToSourceSpace, location).first, *this,
@@ -1720,7 +1721,8 @@ cld::PPSourceObject cld::Lexer::tokenize(std::string source, not_null<const Lang
     {
         std::uint64_t step = 1;
         std::uint64_t prevOffset = offset;
-        auto visitor = [iter, &step, &stateMachine, &context, &offset, end, prevOffset](auto&& state) -> bool {
+        auto visitor = [iter, &step, &stateMachine, &context, &offset, end, prevOffset](auto&& state) -> bool
+        {
             using T = std::decay_t<decltype(state)>;
             constexpr bool needsCodepoint =
                 std::is_same_v<std::uint32_t, typename FirstArgOfMethod<decltype(&T::advance)>::Type>;
@@ -1799,22 +1801,26 @@ cld::PPSourceObject cld::Lexer::tokenize(std::string source, not_null<const Lang
     }
     bool needNewline = cld::match(
         stateMachine,
-        [&context](BlockComment&) {
+        [&context](BlockComment&)
+        {
             context.report(Errors::Lexer::UNTERMINATED_BLOCK_COMMENT, context.tokenStartOffset,
                            std::pair{context.tokenStartOffset, context.getOffset()});
             return false;
         },
-        [&context](StringLiteral&) {
+        [&context](StringLiteral&)
+        {
             context.report(Errors::Lexer::UNTERMINATED_STRING_LITERAL, context.tokenStartOffset,
                            std::pair{context.tokenStartOffset, context.getOffset()});
             return false;
         },
-        [&context](CharacterLiteral&) {
+        [&context](CharacterLiteral&)
+        {
             context.report(Errors::Lexer::UNTERMINATED_CHARACTER_LITERAL, context.tokenStartOffset,
                            std::pair{context.tokenStartOffset, context.getOffset()});
             return false;
         },
-        [&context](AfterInclude&) {
+        [&context](AfterInclude&)
+        {
             context.report(Errors::Lexer::UNTERMINATED_INCLUDE_DIRECTIVE, context.tokenStartOffset,
                            std::pair{context.tokenStartOffset, context.getOffset()});
             return false;
@@ -1825,7 +1831,8 @@ cld::PPSourceObject cld::Lexer::tokenize(std::string source, not_null<const Lang
         offset++;
         characterToSourceSpace.back() = {charactersSpace.size(), source.size(), source.size()};
         characterToSourceSpace.emplace_back(charactersSpace.size() + 1, 0, 0);
-        auto visitor = [offset, &context, &stateMachine](auto&& state) -> bool {
+        auto visitor = [offset, &context, &stateMachine](auto&& state) -> bool
+        {
             if constexpr (std::is_same_v<std::decay_t<decltype(state)>, Start>)
             {
                 return false;
@@ -1926,7 +1933,8 @@ struct ConversionContext
         if (reporter)
         {
             std::apply(
-                [&](auto&&... args) {
+                [&](auto&&... args)
+                {
                     if constexpr (std::is_integral_v<std::decay_t<Location>>)
                     {
                         *reporter << diag.args(
@@ -2007,7 +2015,8 @@ enum class Literal
 std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view characters, ConversionContext& context,
                                                             bool wide, Literal literalType)
 {
-    const std::uint32_t largestCharacter = [&context, wide]() -> std::uint32_t {
+    const std::uint32_t largestCharacter = [&context, wide]() -> std::uint32_t
+    {
         std::uint8_t size = 1;
         if (wide)
         {
@@ -2124,9 +2133,9 @@ std::pair<std::vector<llvm::UTF32>, bool> processCharacters(std::string_view cha
         if (iter[1] == 'x')
         {
             iter += 2;
-            const auto* lastHex = std::find_if(iter, end, [](char c) {
-                return !(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'f') && !(c >= 'A' && c <= 'F');
-            });
+            const auto* lastHex = std::find_if(
+                iter, end,
+                [](char c) { return !(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'f') && !(c >= 'A' && c <= 'F'); });
             if (lastHex == iter)
             {
                 auto start = context.token.getCharSpaceOffset() + (wide ? 2 : 1) + (iter - characters.data() - 2);
@@ -2297,7 +2306,8 @@ std::optional<std::pair<CToken::ValueType, CToken::Type>>
         std::iota(legalValues.begin() + 10 + 6, legalValues.end(), 'a');
     }
     bool isFloat = false;
-    auto searchFunction = [&legalValues, &isFloat](char c) mutable {
+    auto searchFunction = [&legalValues, &isFloat](char c) mutable
+    {
         if (c == '.' && !isFloat)
         {
             isFloat = true;

@@ -65,14 +65,16 @@ static Program generateProgram(std::string_view source, cld::Triple triple = cld
 }
 
 #define SEMA_PRODUCES(source, matcher)               \
-    [&](std::string input) {                         \
+    [&](std::string input)                           \
+    {                                                \
         auto text = generateSemantics(input).second; \
         CHECK_THAT(text, matcher);                   \
         llvm::errs() << text;                        \
     }(source)
 
 #define SEMA_PRODUCES_WITH(source, matcher, tripleOrOption)          \
-    [&](std::string input) {                                         \
+    [&](std::string input)                                           \
+    {                                                                \
         auto text = generateSemantics(input, tripleOrOption).second; \
         CHECK_THAT(text, matcher);                                   \
         llvm::errs() << text;                                        \
@@ -867,7 +869,7 @@ TEST_CASE("Semantics function prototypes", "[semantics]")
         CHECK(decl->getNameToken()->getText() == "atexit");
         auto integer = PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native());
         auto voidType = PrimitiveType(PrimitiveType::Void, cld::LanguageOptions::native());
-        auto callBack = FunctionType(&voidType,{});
+        auto callBack = FunctionType(&voidType, {});
         auto pointer = PointerType(&callBack);
         CHECK(decl->getType() == FunctionType(&integer, {{&pointer, ""}}));
     }
@@ -1667,7 +1669,7 @@ TEST_CASE("Semantics type printing", "[semantics]")
         auto arrayType = ArrayType(&charType, 5);
         CHECK(toStr(PointerType(&arrayType)) == "signed char(*)[5]");
         auto signedChar = PrimitiveType(PrimitiveType::SignedChar, cld::LanguageOptions::native());
-        auto function = FunctionType(&signedChar,{});
+        auto function = FunctionType(&signedChar, {});
         CHECK(toStr(PointerType(&function)) == "signed char(*)(void)");
     }
     SECTION("Array")
@@ -1688,7 +1690,7 @@ TEST_CASE("Semantics type printing", "[semantics]")
     SECTION("Functions")
     {
         auto integer = PrimitiveType(PrimitiveType::Int, cld::LanguageOptions::native());
-        CHECK(toStr(FunctionType(&integer,{})) == "int(void)");
+        CHECK(toStr(FunctionType(&integer, {})) == "int(void)");
         CHECK(toStr(FunctionType(&integer, {}, flag::isKAndR = true)) == "int()");
         CHECK(toStr(FunctionType(&integer, {{&integer, ""}}, flag::isVARArg = true)) == "int(int,...)");
         auto charType = PrimitiveType(PrimitiveType::Char, cld::LanguageOptions::native());
@@ -1879,7 +1881,7 @@ TEST_CASE("Semantics primary expressions", "[semantics]")
         {
             auto& expr = generateExpression("void foo(void) { foo;}");
             auto voidType = PrimitiveType(PrimitiveType::Void, cld::LanguageOptions::native());
-            CHECK(expr.getType() == FunctionType(&voidType,{}));
+            CHECK(expr.getType() == FunctionType(&voidType, {}));
             CHECK(expr.getValueCategory() == ValueCategory::Lvalue);
             REQUIRE(expr.is<DeclarationRead>());
             CHECK(expr.as<DeclarationRead>().getDeclRead().is<FunctionDefinition>());
@@ -3532,10 +3534,10 @@ TEST_CASE("Semantics assignment expression", "[semantics]")
                   }
                   if (operand == "^=")
                   {
-                return Assignment::BitXor;
-            }
-            CLD_UNREACHABLE;
-        }());
+                      return Assignment::BitXor;
+                  }
+                  CLD_UNREACHABLE;
+              }());
         SEMA_PRODUCES("void foo(void) {\n"
                       "5 " + operand
                           + " 3;\n"

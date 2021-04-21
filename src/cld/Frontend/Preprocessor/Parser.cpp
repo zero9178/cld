@@ -32,9 +32,9 @@ bool expect(cld::Lexer::TokenType tokenType, cld::Lexer::PPTokenIterator& begin,
 
 cld::Lexer::PPTokenIterator findNewline(cld::Lexer::PPTokenIterator begin, cld::Lexer::PPTokenIterator end)
 {
-    return std::find_if(begin, end, [](const cld::Lexer::PPToken& token) {
-        return token.getTokenType() == cld::Lexer::TokenType::Newline;
-    });
+    return std::find_if(begin, end,
+                        [](const cld::Lexer::PPToken& token)
+                        { return token.getTokenType() == cld::Lexer::TokenType::Newline; });
 }
 
 void skipLine(cld::Lexer::PPTokenIterator& begin, cld::Lexer::PPTokenIterator end)
@@ -47,10 +47,12 @@ template <std::size_t N>
 void skipUntil(cld::Lexer::PPTokenIterator& begin, cld::Lexer::PPTokenIterator end,
                const std::array<cld::Lexer::TokenType, N>& tokens)
 {
-    begin = std::find_if(begin, end, [&tokens](const cld::Lexer::PPToken& token) {
-        return std::any_of(tokens.begin(), tokens.end(),
-                           [&token](auto&& value) { return token.getTokenType() == value; });
-    });
+    begin = std::find_if(begin, end,
+                         [&tokens](const cld::Lexer::PPToken& token)
+                         {
+                             return std::any_of(tokens.begin(), tokens.end(),
+                                                [&token](auto&& value) { return token.getTokenType() == value; });
+                         });
 }
 
 } // namespace

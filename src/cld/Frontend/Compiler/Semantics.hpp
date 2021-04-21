@@ -18,7 +18,6 @@
 
 namespace cld
 {
-
 namespace Syntax
 {
 class Declarator;
@@ -651,7 +650,6 @@ public:
     {
         return *m_info;
     }
-
 };
 
 class PointerType final : public Type
@@ -1832,7 +1830,6 @@ protected:
     }
 
 public:
-
     [[nodiscard]] Linkage getLinkage() const
     {
         return m_linkage;

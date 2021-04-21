@@ -59,18 +59,20 @@ PointRange getPointRange(const T& arg)
     }
     else if constexpr (IsVariant<U>{})
     {
-        return cld::match(arg, [](auto&& value) {
-            using V = std::decay_t<decltype(value)>;
-            if constexpr (std::is_pointer_v<V> || IsSmartPtr<V>{})
-            {
-                CLD_ASSERT(value);
-                return getPointRange(*value);
-            }
-            else
-            {
-                return getPointRange(value);
-            }
-        });
+        return cld::match(arg,
+                          [](auto&& value)
+                          {
+                              using V = std::decay_t<decltype(value)>;
+                              if constexpr (std::is_pointer_v<V> || IsSmartPtr<V>{})
+                              {
+                                  CLD_ASSERT(value);
+                                  return getPointRange(*value);
+                              }
+                              else
+                              {
+                                  return getPointRange(value);
+                              }
+                          });
     }
     else if constexpr (std::tuple_size_v<U> == 2)
     {

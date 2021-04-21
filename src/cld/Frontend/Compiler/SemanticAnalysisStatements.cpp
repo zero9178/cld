@@ -24,16 +24,19 @@ std::unique_ptr<cld::Semantics::ReturnStatement>
     auto value = lvalueConversion(visit(*node.getExpression()));
     doAssignmentLikeConstraints(
         ft.getReturnType(), value,
-        [&] {
+        [&]
+        {
             log(Errors::Semantics::EXPECTED_RETURN_VALUE_TO_BE_AN_ARITHMETIC_TYPE.args(*value, m_sourceInterface,
                                                                                        *node.begin(), *value));
         },
-        [&] {
+        [&]
+        {
             log(Errors::Semantics::EXPECTED_RETURN_VALUE_TO_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
                 *value, m_sourceInterface, *node.begin(), *value));
         },
         [&] {},
-        [&] {
+        [&]
+        {
             log(Errors::Semantics::CANNOT_RETURN_VARIABLE_OF_TYPE_N_TO_INCOMPATIBLE_RETURN_TYPE_N.args(
                 *value, m_sourceInterface, *value, ft.getReturnType(), *node.begin()));
         },
@@ -41,15 +44,18 @@ std::unique_ptr<cld::Semantics::ReturnStatement>
             log(Errors::Semantics::EXPECTED_RETURN_VALUE_TO_BE_NULL_2.args(*value, m_sourceInterface, *node.begin(),
                                                                            *value));
         },
-        [&](const ConstValue& constant) {
+        [&](const ConstValue& constant)
+        {
             log(Errors::Semantics::EXPECTED_RETURN_VALUE_TO_BE_NULL.args(*value, m_sourceInterface, *node.begin(),
                                                                          *value, constant));
         },
-        [&] {
+        [&]
+        {
             log(Errors::Semantics::EXPECTED_RETURN_VALUE_TO_BE_A_POINTER_TYPE.args(*value, m_sourceInterface,
                                                                                    *node.begin(), *value));
         },
-        [&] {
+        [&]
+        {
             if (isVoid(ft.getReturnType()))
             {
                 log(Errors::Semantics::CANNOT_RETURN_FUNCTION_POINTER_WITH_VOID_POINTER_RETURN_TYPE.args(

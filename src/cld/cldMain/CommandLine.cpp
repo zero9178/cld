@@ -11,9 +11,10 @@ void cld::detail::CommandLine::printHelp(llvm::raw_ostream& os,
     {
         return;
     }
-    const auto maxLen = std::max_element(options.begin(), options.end(), [](const auto& lhs, const auto& rhs) {
-                            return lhs.first.size() < rhs.first.size();
-                        })->first.size();
+    const auto maxLen =
+        std::max_element(options.begin(), options.end(),
+                         [](const auto& lhs, const auto& rhs) { return lhs.first.size() < rhs.first.size(); })
+            ->first.size();
     constexpr auto indentStep = 4;
     auto width = roundUpTo(maxLen, indentStep);
 

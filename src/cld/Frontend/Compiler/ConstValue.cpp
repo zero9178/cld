@@ -15,11 +15,13 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::negate(const LanguageOpti
     return match(
         getValue(), [](VoidStar) -> ConstValue { CLD_UNREACHABLE; },
         [](AddressConstant) -> ConstValue { CLD_UNREACHABLE; }, [](std::monostate) -> ConstValue { CLD_UNREACHABLE; },
-        [](llvm::APFloat floating) -> ConstValue {
+        [](llvm::APFloat floating) -> ConstValue
+        {
             floating.changeSign();
             return {floating};
         },
-        [](llvm::APSInt integer) -> ConstValue {
+        [](llvm::APSInt integer) -> ConstValue
+        {
             integer.negate();
             return {integer};
         });
@@ -29,21 +31,19 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::logicalNegate(const Langu
 {
     return match(
         m_value,
-        [&options](VoidStar address) -> ConstValue {
-            return {llvm::APSInt(llvm::APInt(options.sizeOfInt * 8, address.address == 0), false)};
-        },
-        [&options](AddressConstant) -> ConstValue {
+        [&options](VoidStar address) -> ConstValue
+        { return {llvm::APSInt(llvm::APInt(options.sizeOfInt * 8, address.address == 0), false)}; },
+        [&options](AddressConstant) -> ConstValue
+        {
             // AddressConstants are always non null. If the ConstValue were null they'd be VoidStar
             // therefore return 0
             return {llvm::APSInt(llvm::APInt(options.sizeOfInt * 8, 0), false)};
         },
         [](std::monostate) -> ConstValue { CLD_UNREACHABLE; },
-        [&options](const llvm::APFloat& floating) -> ConstValue {
-            return {llvm::APSInt(llvm::APInt(options.sizeOfInt * 8, floating.isZero()), false)};
-        },
-        [&options](const llvm::APSInt& integer) -> ConstValue {
-            return {llvm::APSInt(llvm::APInt(options.sizeOfInt * 8, integer == 0), false)};
-        });
+        [&options](const llvm::APFloat& floating) -> ConstValue
+        { return {llvm::APSInt(llvm::APInt(options.sizeOfInt * 8, floating.isZero()), false)}; },
+        [&options](const llvm::APSInt& integer) -> ConstValue
+        { return {llvm::APSInt(llvm::APInt(options.sizeOfInt * 8, integer == 0), false)}; });
 }
 
 cld::Semantics::ConstValue cld::Semantics::ConstValue::bitwiseNegate(const LanguageOptions&) const
@@ -52,7 +52,8 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::bitwiseNegate(const Langu
         m_value, [](VoidStar) -> ConstValue { CLD_UNREACHABLE; }, [](std::monostate) -> ConstValue { CLD_UNREACHABLE; },
         [](const llvm::APFloat&) -> ConstValue { CLD_UNREACHABLE; },
         [](AddressConstant) -> ConstValue { CLD_UNREACHABLE; },
-        [](llvm::APSInt integer) -> ConstValue {
+        [](llvm::APSInt integer) -> ConstValue
+        {
             integer.flipAllBits();
             return {integer};
         });
@@ -68,81 +69,87 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::castTo(const cld::Semanti
     }
     return match(
         m_value, [](std::monostate) -> ConstValue { return {}; }, [&](AddressConstant) -> ConstValue { return *this; },
-        [&](VoidStar address) -> ConstValue {
-            return type.match(
-                [](const auto&) -> ConstValue { CLD_UNREACHABLE; },
-                [&](const PrimitiveType& primitiveType) -> ConstValue {
-                    if (primitiveType.isFloatingPoint())
-                    {
-                        CLD_UNREACHABLE;
-                    }
-                    if (primitiveType.getKind() == PrimitiveType::Bool)
-                    {
-                        return toBool(options);
-                    }
-                    if (issues
-                        && (primitiveType.isSigned() ? llvm::APInt::getSignedMaxValue(primitiveType.getBitCount()) :
-                                                       llvm::APInt::getMaxValue(primitiveType.getBitCount()))
-                               .ugt(address.address))
-                    {
-                        *issues = Issue::NotRepresentable;
-                    }
-                    return {llvm::APSInt(llvm::APInt(primitiveType.getBitCount(), address.address),
-                                         !primitiveType.isSigned())};
-                },
-                [&](const PointerType&) -> ConstValue { return {address}; });
+        [&](VoidStar address) -> ConstValue
+        {
+            return type.match([](const auto&) -> ConstValue { CLD_UNREACHABLE; },
+                              [&](const PrimitiveType& primitiveType) -> ConstValue
+                              {
+                                  if (primitiveType.isFloatingPoint())
+                                  {
+                                      CLD_UNREACHABLE;
+                                  }
+                                  if (primitiveType.getKind() == PrimitiveType::Bool)
+                                  {
+                                      return toBool(options);
+                                  }
+                                  if (issues
+                                      && (primitiveType.isSigned() ?
+                                              llvm::APInt::getSignedMaxValue(primitiveType.getBitCount()) :
+                                              llvm::APInt::getMaxValue(primitiveType.getBitCount()))
+                                             .ugt(address.address))
+                                  {
+                                      *issues = Issue::NotRepresentable;
+                                  }
+                                  return {llvm::APSInt(llvm::APInt(primitiveType.getBitCount(), address.address),
+                                                       !primitiveType.isSigned())};
+                              },
+                              [&](const PointerType&) -> ConstValue { return {address}; });
         },
-        [&](llvm::APFloat floating) -> ConstValue {
-            return type.match(
-                [](const auto&) -> ConstValue { CLD_UNREACHABLE; },
-                [&](const PrimitiveType& primitiveType) mutable -> ConstValue {
-                    bool response;
-                    llvm::APFloat::opStatus op;
-                    if (primitiveType.isFloatingPoint())
-                    {
-                        switch (primitiveType.getBitCount())
-                        {
-                            case 32:
-                                op = floating.convert(llvm::APFloat::IEEEsingle(), llvm::APFloat::rmNearestTiesToEven,
-                                                      &response);
-                                break;
-                            case 64:
-                                op = floating.convert(llvm::APFloat::IEEEdouble(), llvm::APFloat::rmNearestTiesToEven,
-                                                      &response);
-                                break;
-                            case 80:
-                                op = floating.convert(llvm::APFloat::x87DoubleExtended(),
-                                                      llvm::APFloat::rmNearestTiesToEven, &response);
-                                break;
-                            case 128:
-                                op = floating.convert(llvm::APFloat::IEEEquad(), llvm::APFloat::rmNearestTiesToEven,
-                                                      &response);
-                                break;
-                            default: CLD_UNREACHABLE;
-                        }
-                        return {floating};
-                    }
-                    if (primitiveType.getKind() == PrimitiveType::Bool)
-                    {
-                        return toBool(options);
-                    }
+        [&](llvm::APFloat floating) -> ConstValue
+        {
+            return type.match([](const auto&) -> ConstValue { CLD_UNREACHABLE; },
+                              [&](const PrimitiveType& primitiveType) mutable -> ConstValue
+                              {
+                                  bool response;
+                                  llvm::APFloat::opStatus op;
+                                  if (primitiveType.isFloatingPoint())
+                                  {
+                                      switch (primitiveType.getBitCount())
+                                      {
+                                          case 32:
+                                              op = floating.convert(llvm::APFloat::IEEEsingle(),
+                                                                    llvm::APFloat::rmNearestTiesToEven, &response);
+                                              break;
+                                          case 64:
+                                              op = floating.convert(llvm::APFloat::IEEEdouble(),
+                                                                    llvm::APFloat::rmNearestTiesToEven, &response);
+                                              break;
+                                          case 80:
+                                              op = floating.convert(llvm::APFloat::x87DoubleExtended(),
+                                                                    llvm::APFloat::rmNearestTiesToEven, &response);
+                                              break;
+                                          case 128:
+                                              op = floating.convert(llvm::APFloat::IEEEquad(),
+                                                                    llvm::APFloat::rmNearestTiesToEven, &response);
+                                              break;
+                                          default: CLD_UNREACHABLE;
+                                      }
+                                      return {floating};
+                                  }
+                                  if (primitiveType.getKind() == PrimitiveType::Bool)
+                                  {
+                                      return toBool(options);
+                                  }
 
-                    llvm::APSInt result(primitiveType.getBitCount(), !primitiveType.isSigned());
-                    op = floating.convertToInteger(result, llvm::APFloat::rmNearestTiesToEven, &response);
-                    if (issues && op == llvm::APFloat::opInvalidOp)
-                    {
-                        *issues = Issue::NotRepresentable;
-                    }
-                    return {result};
-                });
+                                  llvm::APSInt result(primitiveType.getBitCount(), !primitiveType.isSigned());
+                                  op = floating.convertToInteger(result, llvm::APFloat::rmNearestTiesToEven, &response);
+                                  if (issues && op == llvm::APFloat::opInvalidOp)
+                                  {
+                                      *issues = Issue::NotRepresentable;
+                                  }
+                                  return {result};
+                              });
         },
-        [&](const llvm::APSInt& integer) -> ConstValue {
+        [&](const llvm::APSInt& integer) -> ConstValue
+        {
             return type.match(
                 [](const auto&) -> ConstValue { CLD_UNREACHABLE; },
-                [&](const PrimitiveType& primitiveType) -> ConstValue {
+                [&](const PrimitiveType& primitiveType) -> ConstValue
+                {
                     if (primitiveType.isFloatingPoint())
                     {
-                        decltype(auto) semantics = [&primitiveType]() -> decltype(auto) {
+                        decltype(auto) semantics = [&primitiveType]() -> decltype(auto)
+                        {
                             switch (primitiveType.getBitCount())
                             {
                                 case 32: return llvm::APFloat::IEEEsingle();
@@ -207,11 +214,11 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::multiply(const cld::Seman
 {
     return match(
         m_value, [](std::monostate) -> ConstValue { CLD_UNREACHABLE; }, [](VoidStar) -> ConstValue { CLD_UNREACHABLE; },
-        [&rhs](const llvm::APFloat& floating) -> ConstValue {
-            return {floating * cld::get<llvm::APFloat>(rhs.getValue())};
-        },
+        [&rhs](const llvm::APFloat& floating) -> ConstValue
+        { return {floating * cld::get<llvm::APFloat>(rhs.getValue())}; },
         [](AddressConstant) -> ConstValue { CLD_UNREACHABLE; },
-        [&rhs, issues](const llvm::APSInt& integer) -> ConstValue {
+        [&rhs, issues](const llvm::APSInt& integer) -> ConstValue
+        {
             bool overflow = false;
             auto apsInt = integer.isSigned() ? integer.smul_ov(cld::get<llvm::APSInt>(rhs.getValue()), overflow) :
                                                integer.umul_ov(cld::get<llvm::APSInt>(rhs.getValue()), overflow);
@@ -229,10 +236,10 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::divide(const cld::Semanti
     return match(
         m_value, [](std::monostate) -> ConstValue { CLD_UNREACHABLE; }, [](VoidStar) -> ConstValue { CLD_UNREACHABLE; },
         [](AddressConstant) -> ConstValue { CLD_UNREACHABLE; },
-        [&rhs](const llvm::APFloat& floating) -> ConstValue {
-            return {floating / cld::get<llvm::APFloat>(rhs.getValue())};
-        },
-        [&rhs, issues](const llvm::APSInt& integer) -> ConstValue {
+        [&rhs](const llvm::APFloat& floating) -> ConstValue
+        { return {floating / cld::get<llvm::APFloat>(rhs.getValue())}; },
+        [&rhs, issues](const llvm::APSInt& integer) -> ConstValue
+        {
             if (cld::get<llvm::APSInt>(rhs.getValue()) == 0)
             {
                 if (issues)
@@ -259,7 +266,8 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::modulo(const cld::Semanti
         m_value, [](std::monostate) -> ConstValue { CLD_UNREACHABLE; }, [](VoidStar) -> ConstValue { CLD_UNREACHABLE; },
         [](AddressConstant) -> ConstValue { CLD_UNREACHABLE; },
         [](const llvm::APFloat&) -> ConstValue { CLD_UNREACHABLE; },
-        [&rhs](const llvm::APSInt& integer) -> ConstValue {
+        [&rhs](const llvm::APSInt& integer) -> ConstValue
+        {
             auto apsInt = integer.isSigned() ? integer.srem(cld::get<llvm::APSInt>(rhs.getValue())) :
                                                integer.urem(cld::get<llvm::APSInt>(rhs.getValue()));
             return {llvm::APSInt(std::move(apsInt), integer.isUnsigned())};
@@ -272,7 +280,8 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::plus(const cld::Semantics
     return match(
         m_value, [](std::monostate) -> ConstValue { CLD_UNREACHABLE; },
         [this](AddressConstant) -> ConstValue { return *this; },
-        [&rhs](VoidStar address) -> ConstValue {
+        [&rhs](VoidStar address) -> ConstValue
+        {
             CLD_ASSERT(address.elementSize > 0);
             auto& integer = cld::get<llvm::APSInt>(rhs.getValue());
             if (integer.isUnsigned())
@@ -285,10 +294,10 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::plus(const cld::Semantics
             }
             return {address};
         },
-        [&rhs](const llvm::APFloat& floating) -> ConstValue {
-            return {floating + cld::get<llvm::APFloat>(rhs.getValue())};
-        },
-        [&rhs, issues](const llvm::APSInt& integer) -> ConstValue {
+        [&rhs](const llvm::APFloat& floating) -> ConstValue
+        { return {floating + cld::get<llvm::APFloat>(rhs.getValue())}; },
+        [&rhs, issues](const llvm::APSInt& integer) -> ConstValue
+        {
             if (std::holds_alternative<VoidStar>(rhs.getValue()))
             {
                 auto address = cld::get<VoidStar>(rhs.getValue());
@@ -320,7 +329,8 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::minus(const cld::Semantic
     return match(
         m_value, [](std::monostate) -> ConstValue { CLD_UNREACHABLE; },
         [this](AddressConstant) -> ConstValue { return *this; },
-        [&rhs, &options](VoidStar address) -> ConstValue {
+        [&rhs, &options](VoidStar address) -> ConstValue
+        {
             CLD_ASSERT(address.elementSize > 0);
             if (std::holds_alternative<VoidStar>(rhs.getValue()))
             {
@@ -345,10 +355,10 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::minus(const cld::Semantic
             }
             return {address};
         },
-        [&rhs](const llvm::APFloat& floating) -> ConstValue {
-            return {floating - cld::get<llvm::APFloat>(rhs.getValue())};
-        },
-        [&rhs, issues](const llvm::APSInt& integer) -> ConstValue {
+        [&rhs](const llvm::APFloat& floating) -> ConstValue
+        { return {floating - cld::get<llvm::APFloat>(rhs.getValue())}; },
+        [&rhs, issues](const llvm::APSInt& integer) -> ConstValue
+        {
             bool overflow = false;
             auto apsInt = integer.isSigned() ? integer.ssub_ov(cld::get<llvm::APSInt>(rhs.getValue()), overflow) :
                                                integer.usub_ov(cld::get<llvm::APSInt>(rhs.getValue()), overflow);
@@ -367,7 +377,8 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::shiftLeft(const cld::Sema
         m_value, [](std::monostate) -> ConstValue { CLD_UNREACHABLE; }, [](VoidStar) -> ConstValue { CLD_UNREACHABLE; },
         [](const llvm::APFloat&) -> ConstValue { CLD_UNREACHABLE; },
         [](AddressConstant) -> ConstValue { CLD_UNREACHABLE; },
-        [&rhs, issues](const llvm::APSInt& integer) -> ConstValue {
+        [&rhs, issues](const llvm::APSInt& integer) -> ConstValue
+        {
             bool overflow = false;
             auto apsInt = integer.isSigned() ? integer.sshl_ov(cld::get<llvm::APSInt>(rhs.getValue()), overflow) :
                                                integer.ushl_ov(cld::get<llvm::APSInt>(rhs.getValue()), overflow);
@@ -386,7 +397,8 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::shiftRight(const cld::Sem
         m_value, [](std::monostate) -> ConstValue { CLD_UNREACHABLE; }, [](VoidStar) -> ConstValue { CLD_UNREACHABLE; },
         [](const llvm::APFloat&) -> ConstValue { CLD_UNREACHABLE; },
         [](AddressConstant) -> ConstValue { CLD_UNREACHABLE; },
-        [&rhs, issues](const llvm::APSInt& integer) -> ConstValue {
+        [&rhs, issues](const llvm::APSInt& integer) -> ConstValue
+        {
             auto rhsInteger = cld::get<llvm::APSInt>(rhs.getValue());
             if (issues && (rhsInteger.isSignBitSet() || rhsInteger.getZExtValue() >= integer.getBitWidth()))
             {
@@ -403,9 +415,8 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::bitAnd(const cld::Semanti
         m_value, [](std::monostate) -> ConstValue { CLD_UNREACHABLE; }, [](VoidStar) -> ConstValue { CLD_UNREACHABLE; },
         [](const llvm::APFloat&) -> ConstValue { CLD_UNREACHABLE; },
         [](AddressConstant) -> ConstValue { CLD_UNREACHABLE; },
-        [&rhs](const llvm::APSInt& integer) -> ConstValue {
-            return {integer & cld::get<llvm::APSInt>(rhs.getValue())};
-        });
+        [&rhs](const llvm::APSInt& integer) -> ConstValue
+        { return {integer & cld::get<llvm::APSInt>(rhs.getValue())}; });
 }
 
 cld::Semantics::ConstValue cld::Semantics::ConstValue::bitXor(const cld::Semantics::ConstValue& rhs,
@@ -415,9 +426,8 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::bitXor(const cld::Semanti
         m_value, [](std::monostate) -> ConstValue { CLD_UNREACHABLE; }, [](VoidStar) -> ConstValue { CLD_UNREACHABLE; },
         [](const llvm::APFloat&) -> ConstValue { CLD_UNREACHABLE; },
         [](AddressConstant) -> ConstValue { CLD_UNREACHABLE; },
-        [&rhs](const llvm::APSInt& integer) -> ConstValue {
-            return {integer ^ cld::get<llvm::APSInt>(rhs.getValue())};
-        });
+        [&rhs](const llvm::APSInt& integer) -> ConstValue
+        { return {integer ^ cld::get<llvm::APSInt>(rhs.getValue())}; });
 }
 
 cld::Semantics::ConstValue cld::Semantics::ConstValue::bitOr(const cld::Semantics::ConstValue& rhs,
@@ -427,9 +437,8 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::bitOr(const cld::Semantic
         m_value, [](std::monostate) -> ConstValue { CLD_UNREACHABLE; }, [](VoidStar) -> ConstValue { CLD_UNREACHABLE; },
         [](const llvm::APFloat&) -> ConstValue { CLD_UNREACHABLE; },
         [](AddressConstant) -> ConstValue { CLD_UNREACHABLE; },
-        [&rhs](const llvm::APSInt& integer) -> ConstValue {
-            return {integer | cld::get<llvm::APSInt>(rhs.getValue())};
-        });
+        [&rhs](const llvm::APSInt& integer) -> ConstValue
+        { return {integer | cld::get<llvm::APSInt>(rhs.getValue())}; });
 }
 
 cld::Semantics::ConstValue::operator bool() const
@@ -455,12 +464,14 @@ std::string cld::Semantics::ConstValue::toString() const
 {
     return match(
         m_value, [](VoidStar pointer) -> std::string { return "0x" + llvm::utohexstr(pointer.address); },
-        [](const llvm::APFloat& floating) -> std::string {
+        [](const llvm::APFloat& floating) -> std::string
+        {
             llvm::SmallString<20> result;
             floating.toString(result);
             return std::string(result.begin(), result.end());
         },
-        [](const llvm::APSInt& integer) -> std::string {
+        [](const llvm::APSInt& integer) -> std::string
+        {
             llvm::SmallString<20> result;
             integer.toString(result);
             return std::string(result.begin(), result.end());
@@ -475,16 +486,19 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::lessThan(const cld::Seman
     return match(
         m_value, [](std::monostate) -> ConstValue { CLD_UNREACHABLE; },
         [this](AddressConstant) -> ConstValue { return *this; },
-        [&rhs, &options](VoidStar address) -> ConstValue {
+        [&rhs, &options](VoidStar address) -> ConstValue
+        {
             return {llvm::APSInt(
                 llvm::APInt(options.sizeOfInt * 8, address.address < cld::get<VoidStar>(rhs.getValue()).address),
                 false)};
         },
-        [&rhs, &options](const llvm::APFloat& floating) -> ConstValue {
+        [&rhs, &options](const llvm::APFloat& floating) -> ConstValue
+        {
             auto cmp = floating.compare(cld::get<llvm::APFloat>(rhs.getValue()));
             return {llvm::APSInt(llvm::APInt(options.sizeOfInt * 8, cmp == llvm::APFloat::cmpLessThan), false)};
         },
-        [&rhs, &options](const llvm::APSInt& integer) -> ConstValue {
+        [&rhs, &options](const llvm::APSInt& integer) -> ConstValue
+        {
             auto apsInt = integer < cld::get<llvm::APSInt>(rhs.getValue());
             return {llvm::APSInt(llvm::APInt(options.sizeOfInt * 8, apsInt), false)};
         });
@@ -514,7 +528,8 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::equal(const cld::Semantic
     return match(
         m_value, [](std::monostate) -> ConstValue { CLD_UNREACHABLE; },
         [this](AddressConstant) -> ConstValue { return *this; },
-        [&rhs, &options](VoidStar address) -> ConstValue {
+        [&rhs, &options](VoidStar address) -> ConstValue
+        {
             if (std::holds_alternative<llvm::APSInt>(rhs.getValue()))
             {
                 CLD_ASSERT(cld::get<llvm::APSInt>(rhs.getValue()) == 0);
@@ -524,13 +539,15 @@ cld::Semantics::ConstValue cld::Semantics::ConstValue::equal(const cld::Semantic
                 llvm::APInt(options.sizeOfInt * 8, address.address == cld::get<VoidStar>(rhs.getValue()).address, true),
                 false)};
         },
-        [&rhs, &options](const llvm::APFloat& floating) -> ConstValue {
+        [&rhs, &options](const llvm::APFloat& floating) -> ConstValue
+        {
             return {llvm::APSInt(
                 llvm::APInt(options.sizeOfInt * 8,
                             floating.compare(cld::get<llvm::APFloat>(rhs.getValue())) == llvm::APFloat::cmpEqual),
                 false)};
         },
-        [&rhs, &options](const llvm::APSInt& integer) -> ConstValue {
+        [&rhs, &options](const llvm::APSInt& integer) -> ConstValue
+        {
             if (auto* address = std::get_if<VoidStar>(&rhs.getValue()))
             {
                 CLD_ASSERT(integer == 0);

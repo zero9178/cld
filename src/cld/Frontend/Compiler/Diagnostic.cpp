@@ -21,15 +21,18 @@ std::pair<PointLocation, PointLocation> toMacroId0Range(std::pair<PointLocation,
         location.first = cld::match(
             sourceInterface.getSubstitutions()[location.first.macroId],
             [](std::monostate) -> PointLocation { CLD_UNREACHABLE; },
-            [](const cld::Source::Substitution& substitution) -> PointLocation {
+            [](const cld::Source::Substitution& substitution) -> PointLocation
+            {
                 return {substitution.replacedIdentifier.getOffset(), substitution.replacedIdentifier.getFileId(),
                         substitution.replacedIdentifier.getMacroId()};
             },
-            [](const cld::Source::Stringification& substitution) -> PointLocation {
+            [](const cld::Source::Stringification& substitution) -> PointLocation
+            {
                 return {substitution.replacedIdentifier.getOffset(), substitution.replacedIdentifier.getFileId(),
                         substitution.replacedIdentifier.getMacroId()};
             },
-            [](const cld::Source::TokenConcatenation& substitution) -> PointLocation {
+            [](const cld::Source::TokenConcatenation& substitution) -> PointLocation
+            {
                 // I think it doesn't matter which we return here? Lets do left for now
                 return {substitution.leftToken.getOffset(), substitution.leftToken.getFileId(),
                         substitution.leftToken.getMacroId()};
@@ -40,15 +43,18 @@ std::pair<PointLocation, PointLocation> toMacroId0Range(std::pair<PointLocation,
         location.second = cld::match(
             sourceInterface.getSubstitutions()[location.second.macroId],
             [](std::monostate) -> PointLocation { CLD_UNREACHABLE; },
-            [](const cld::Source::Substitution& substitution) -> PointLocation {
+            [](const cld::Source::Substitution& substitution) -> PointLocation
+            {
                 return {substitution.replacedIdentifier.getOffset() + substitution.replacedIdentifier.getLength(),
                         substitution.replacedIdentifier.getFileId(), substitution.replacedIdentifier.getMacroId()};
             },
-            [](const cld::Source::Stringification& substitution) -> PointLocation {
+            [](const cld::Source::Stringification& substitution) -> PointLocation
+            {
                 return {substitution.replacedIdentifier.getOffset() + substitution.replacedIdentifier.getLength(),
                         substitution.replacedIdentifier.getFileId(), substitution.replacedIdentifier.getMacroId()};
             },
-            [](const cld::Source::TokenConcatenation& substitution) -> PointLocation {
+            [](const cld::Source::TokenConcatenation& substitution) -> PointLocation
+            {
                 // I think it doesn't matter which we return here? Lets do left for now
                 return {substitution.rightToken.getOffset() + substitution.rightToken.getLength(),
                         substitution.rightToken.getFileId(), substitution.rightToken.getMacroId()};
@@ -102,7 +108,8 @@ void printLine(llvm::raw_ostream& ss, std::uint64_t line, std::uint64_t lineStar
     {
         cld::match(
             iter.value,
-            [&](const ModifierOfLine::Underline& underline) {
+            [&](const ModifierOfLine::Underline& underline)
+            {
                 auto indent = cld::unsafeColumnWidth(text.substr(0, iter.fromToInLine.first - lineStartOffset));
                 canvas.resize(std::max<std::size_t>(1, canvas.size()), std::string(widthOfText, ' '));
 
@@ -169,7 +176,8 @@ void printLine(llvm::raw_ostream& ss, std::uint64_t line, std::uint64_t lineStar
                     ptr = start;
                 }
             },
-            [&](const ModifierOfLine::InsertAfter& insertAfter) {
+            [&](const ModifierOfLine::InsertAfter& insertAfter)
+            {
                 if (iter.fromToInLine.first == iter.fromToInLine.second)
                 {
                     // We are inserting after a Newline
@@ -210,7 +218,8 @@ void printLine(llvm::raw_ostream& ss, std::uint64_t line, std::uint64_t lineStar
                 canvas.back().resize(std::max(canvas.back().size(), indent + insertAfter.text.size()), ' ');
                 std::copy(insertAfter.text.begin(), insertAfter.text.end(), canvas.back().begin() + indent);
             },
-            [&](const ModifierOfLine::Annotate& annotate) {
+            [&](const ModifierOfLine::Annotate& annotate)
+            {
                 auto indent = cld::unsafeColumnWidth(text.substr(0, iter.fromToInLine.first - lineStartOffset));
                 canvas.resize(std::max<std::size_t>(1, canvas.size()), std::string(widthOfText, ' '));
                 const auto sizeOfTextAbove = cld::unsafeColumnWidth(text.substr(
@@ -395,7 +404,8 @@ cld::Message
                      [](const DiagnosticBase::Underline& underline) -> ModifierOfLine::variant {
                          return ModifierOfLine::Underline{underline.character, underline.continuous};
                      },
-                     [&arguments](const DiagnosticBase::InsertAfter& insertAfter) -> ModifierOfLine::variant {
+                     [&arguments](const DiagnosticBase::InsertAfter& insertAfter) -> ModifierOfLine::variant
+                     {
                          if (insertAfter.text >= 0)
                          {
                              CLD_ASSERT(arguments[insertAfter.text].inArgText);
@@ -403,7 +413,8 @@ cld::Message
                          }
                          return ModifierOfLine::InsertAfter{};
                      },
-                     [&arguments, index](const DiagnosticBase::Annotate& annotate) -> ModifierOfLine::variant {
+                     [&arguments, index](const DiagnosticBase::Annotate& annotate) -> ModifierOfLine::variant
+                     {
                          CLD_ASSERT(arguments[annotate.text].inArgText);
                          const auto begin = arguments[index].range->first.offset;
                          const auto end = arguments[index].range->second.offset;
@@ -413,9 +424,9 @@ cld::Message
         }
     }
 
-    auto width = std::max_element(fileToMaxMinLine.begin(), fileToMaxMinLine.end(), [](auto&& lhs, auto&& rhs) {
-                     return lhs.second.second < rhs.second.second;
-                 })->second.second;
+    auto width = std::max_element(fileToMaxMinLine.begin(), fileToMaxMinLine.end(),
+                                  [](auto&& lhs, auto&& rhs) { return lhs.second.second < rhs.second.second; })
+                     ->second.second;
     width = roundUpTo(1 + (std::size_t)std::floor(log10f(width)), 4);
 
     for (auto [fileId, lineBounds] : fileToMaxMinLine)
@@ -453,7 +464,8 @@ cld::Message
             }
 
             std::stable_sort(modifierForLine.begin(), modifierForLine.end(),
-                             [](const ModifierOfLine& lhs, const ModifierOfLine& rhs) {
+                             [](const ModifierOfLine& lhs, const ModifierOfLine& rhs)
+                             {
                                  if (std::holds_alternative<ModifierOfLine::Underline>(lhs.value)
                                      && std::holds_alternative<ModifierOfLine::Underline>(rhs.value))
                                  {

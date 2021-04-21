@@ -1,10 +1,10 @@
 
 #ifndef HANDLE_BUILTIN
-#error HANDLE_BUILTIN must be declared to proceed
+    #error HANDLE_BUILTIN must be declared to proceed
 #endif
 
 #ifndef HANDLE_X86
-#define HANDLE_X86(signature,kind,required) HANDLE_BUILTIN(signature,kind)
+    #define HANDLE_X86(signature, kind, required) HANDLE_BUILTIN(signature, kind)
 #endif
 
 HANDLE_BUILTIN("void __builtin_va_start(va_list,...)", VAStart);
@@ -19,20 +19,20 @@ HANDLE_BUILTIN("long double __builtin_fabsl(long double)", FAbsl);
 HANDLE_BUILTIN("double __builtin_inf()", Inf);
 HANDLE_BUILTIN("float __builtin_inff()", Inff);
 HANDLE_BUILTIN("long double __builtin_infl()", Infl);
-HANDLE_BUILTIN("type __sync_fetch_and_add(type*,type,...)",SyncFetchAndAdd);
-HANDLE_BUILTIN("type __sync_fetch_and_sub(type*,type,...)",SyncFetchAndSub);
-HANDLE_BUILTIN("type __sync_fetch_and_or(type*,type,...)",SyncFetchAndOr);
-HANDLE_BUILTIN("type __sync_fetch_and_and(type*,type,...)",SyncFetchAndAnd);
-HANDLE_BUILTIN("type __sync_fetch_and_xor(type*,type,...)",SyncFetchAndXor);
-HANDLE_BUILTIN("type __sync_fetch_and_nand(type*,type,...)",SyncFetchAndNand);
-HANDLE_BUILTIN("type __sync_add_and_fetch(type*,type,...)",SyncAddAndFetch);
-HANDLE_BUILTIN("type __sync_sub_and_fetch(type*,type,...)",SyncSubAndFetch);
-HANDLE_BUILTIN("type __sync_or_and_fetch(type*,type,...)",SyncOrAndFetch);
-HANDLE_BUILTIN("type __sync_and_and_fetch(type*,type,...)",SyncAndAndFetch);
-HANDLE_BUILTIN("type __sync_xor_and_fetch(type*,type,...)",SyncXorAndFetch);
-HANDLE_BUILTIN("type __sync_nand_and_fetch(type*,type,...)",SyncNandAndFetch);
-HANDLE_BUILTIN("bool __sync_bool_compare_and_swap(type*,type,type,...)",SyncBoolCompareAndSwap);
-HANDLE_BUILTIN("type __sync_val_compare_and_swap(type*,type,type,...)",SyncValCompareAndSwap);
+HANDLE_BUILTIN("type __sync_fetch_and_add(type*,type,...)", SyncFetchAndAdd);
+HANDLE_BUILTIN("type __sync_fetch_and_sub(type*,type,...)", SyncFetchAndSub);
+HANDLE_BUILTIN("type __sync_fetch_and_or(type*,type,...)", SyncFetchAndOr);
+HANDLE_BUILTIN("type __sync_fetch_and_and(type*,type,...)", SyncFetchAndAnd);
+HANDLE_BUILTIN("type __sync_fetch_and_xor(type*,type,...)", SyncFetchAndXor);
+HANDLE_BUILTIN("type __sync_fetch_and_nand(type*,type,...)", SyncFetchAndNand);
+HANDLE_BUILTIN("type __sync_add_and_fetch(type*,type,...)", SyncAddAndFetch);
+HANDLE_BUILTIN("type __sync_sub_and_fetch(type*,type,...)", SyncSubAndFetch);
+HANDLE_BUILTIN("type __sync_or_and_fetch(type*,type,...)", SyncOrAndFetch);
+HANDLE_BUILTIN("type __sync_and_and_fetch(type*,type,...)", SyncAndAndFetch);
+HANDLE_BUILTIN("type __sync_xor_and_fetch(type*,type,...)", SyncXorAndFetch);
+HANDLE_BUILTIN("type __sync_nand_and_fetch(type*,type,...)", SyncNandAndFetch);
+HANDLE_BUILTIN("bool __sync_bool_compare_and_swap(type*,type,type,...)", SyncBoolCompareAndSwap);
+HANDLE_BUILTIN("type __sync_val_compare_and_swap(type*,type,type,...)", SyncValCompareAndSwap);
 HANDLE_BUILTIN("void __sync_synchronize(...)", SyncSynchronize);
 HANDLE_BUILTIN("type __sync_lock_test_and_set(type*,type,...)", SyncLockTestAndSet);
 HANDLE_BUILTIN("void __sync_lock_release(type*,...)", SyncLockRelease);
@@ -47,9 +47,9 @@ HANDLE_BUILTIN("void __builtin___clear_cache(void*,void*)", ClearCache);
 HANDLE_BUILTIN("void __builtin_trap()", Trap);
 HANDLE_BUILTIN("void __builtin_unreachable()", Unreachable);
 
-HANDLE_X86("void __builtin_cpu_init()",x86CpuInit,{});
-HANDLE_X86("int __builtin_cpu_is(const char*)",x86CpuIs,{});
-HANDLE_X86("int __builtin_cpu_supports(const char*)",x86CpuSupports,{});
+HANDLE_X86("void __builtin_cpu_init()", x86CpuInit, {});
+HANDLE_X86("int __builtin_cpu_is(const char*)", x86CpuIs, {});
+HANDLE_X86("int __builtin_cpu_supports(const char*)", x86CpuSupports, {});
 
 #undef HANDLE_X86
 #undef HANDLE_BUILTIN

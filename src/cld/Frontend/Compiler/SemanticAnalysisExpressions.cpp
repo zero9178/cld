@@ -241,11 +241,13 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                 }
                 doAssignmentLikeConstraints(
                     lhsValue->getType(), rhsValue,
-                    [&, token = token] {
+                    [&, token = token]
+                    {
                         log(Errors::Semantics::EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_ARITHMETIC_TYPE.args(
                             *rhsValue, m_sourceInterface, *token, *rhsValue));
                     },
-                    [&, token = token] {
+                    [&, token = token]
+                    {
                         log(Errors::Semantics::EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_AN_ARITHMETIC_OR_POINTER_TYPE
                                 .args(*rhsValue, m_sourceInterface, *token, *rhsValue));
                     },
@@ -253,23 +255,28 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                         log(Errors::Semantics::CANNOT_ASSIGN_TO_INCOMPLETE_TYPE_N.args(*lhsValue, m_sourceInterface,
                                                                                        *lhsValue, *token));
                     },
-                    [&, token = token] {
+                    [&, token = token]
+                    {
                         log(Errors::Semantics::CANNOT_ASSIGN_INCOMPATIBLE_TYPES.args(*lhsValue, m_sourceInterface,
                                                                                      *lhsValue, *token, *rhsValue));
                     },
-                    [&, token = token] {
+                    [&, token = token]
+                    {
                         log(Errors::Semantics::EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_NULL_2.args(
                             *rhsValue, m_sourceInterface, *token, *rhsValue));
                     },
-                    [&, token = token](const ConstValue& constant) {
+                    [&, token = token](const ConstValue& constant)
+                    {
                         log(Errors::Semantics::EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_NULL.args(
                             *rhsValue, m_sourceInterface, *token, *rhsValue, constant));
                     },
-                    [&, token = token] {
+                    [&, token = token]
+                    {
                         log(Errors::Semantics::EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_A_POINTER_TYPE.args(
                             *rhsValue, m_sourceInterface, *token, *rhsValue));
                     },
-                    [&, token = token] {
+                    [&, token = token]
+                    {
                         if (isVoid(getPointerElementType(lhsValue->getType())))
                         {
                             log(Errors::Semantics::CANNOT_ASSIGN_FUNCTION_POINTER_TO_VOID_POINTER.args(
@@ -550,14 +557,16 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             }
             return ptr->getType();
         });
-    auto& useable = cld::match(*result, [](auto&& value) -> Useable& {
-        using T = std::remove_pointer_t<std::decay_t<decltype(value)>>;
-        if constexpr (std::is_base_of_v<Useable, T>)
-        {
-            return *value;
-        }
-        CLD_UNREACHABLE;
-    });
+    auto& useable = cld::match(*result,
+                               [](auto&& value) -> Useable&
+                               {
+                                   using T = std::remove_pointer_t<std::decay_t<decltype(value)>>;
+                                   if constexpr (std::is_base_of_v<Useable, T>)
+                                   {
+                                       return *value;
+                                   }
+                                   CLD_UNREACHABLE;
+                               });
     useable.incrementUsage();
     return std::make_unique<DeclarationRead>(type, useable, node.getIdentifier());
 }
@@ -1310,7 +1319,8 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
 bool cld::Semantics::SemanticAnalysis::checkFunctionCount(const ExpressionBase& function, const FunctionType& ft,
                                                           const Syntax::PostFixExpressionFunctionCall& node)
 {
-    auto callsFunction = [&] {
+    auto callsFunction = [&]
+    {
         if (!function.is<Conversion>())
         {
             return false;
@@ -1690,7 +1700,8 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
 {
     return cld::match(
         node.getVariant(),
-        [&](const std::unique_ptr<Syntax::UnaryExpression>& unaryExpression) -> IntrVarPtr<ExpressionBase> {
+        [&](const std::unique_ptr<Syntax::UnaryExpression>& unaryExpression) -> IntrVarPtr<ExpressionBase>
+        {
             auto exp = visit(*unaryExpression);
             if (exp->isUndefined())
             {
@@ -1721,7 +1732,8 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             return std::make_unique<SizeofOperator>(getLanguageOptions(), node.getSizeOfToken(), std::nullopt,
                                                     std::move(exp));
         },
-        [&](const std::unique_ptr<Syntax::TypeName>& typeName) -> IntrVarPtr<ExpressionBase> {
+        [&](const std::unique_ptr<Syntax::TypeName>& typeName) -> IntrVarPtr<ExpressionBase>
+        {
             std::vector<ParsedAttribute<>> attributes;
             auto type =
                 declaratorsToType(typeName->getSpecifierQualifiers(), typeName->getAbstractDeclarator(), &attributes);
@@ -1778,7 +1790,8 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         [&](const Syntax::UnaryExpression& unaryExpression) -> IntrVarPtr<ExpressionBase> {
             return visit(unaryExpression);
         },
-        [&](const Syntax::CastExpression::CastVariant& cast) -> IntrVarPtr<ExpressionBase> {
+        [&](const Syntax::CastExpression::CastVariant& cast) -> IntrVarPtr<ExpressionBase>
+        {
             std::vector<ParsedAttribute<>> attributes;
             auto type = declaratorsToType(cast.typeName.getSpecifierQualifiers(), cast.typeName.getAbstractDeclarator(),
                                           &attributes);
@@ -2851,7 +2864,8 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(
     std::variant<IntrVarPtr<ExpressionBase> * CLD_NON_NULL, IntrVarValue<Type> * CLD_NON_NULL> lhs,
     IntrVarPtr<ExpressionBase>& rhs)
 {
-    auto getLhsType = [](auto&& value) -> const Type& {
+    auto getLhsType = [](auto&& value) -> const Type&
+    {
         return cld::match(
             value, [](IntrVarValue<Type>* type) -> const Type& { return *type; },
             [](IntrVarPtr<ExpressionBase>* ptr) -> const Type& { return (*ptr)->getType(); });
@@ -2987,7 +3001,8 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(
         }
         cld::match(
             constant->getValue(),
-            [&](const llvm::APSInt& apsInt) {
+            [&](const llvm::APSInt& apsInt)
+            {
                 if (isInteger(elementType))
                 {
                     auto bitWidth = elementType.as<PrimitiveType>().getBitCount();
@@ -3012,7 +3027,8 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(
                     }
                 }
             },
-            [&](const llvm::APFloat& apFloat) {
+            [&](const llvm::APFloat& apFloat)
+            {
                 if (isInteger(elementType))
                 {
                     auto width = elementType.as<PrimitiveType>().getBitCount();
@@ -3150,31 +3166,37 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
 
     doAssignmentLikeConstraints(
         type, expression,
-        [&] {
+        [&]
+        {
             log(Errors::Semantics::EXPECTED_INITIALIZER_TO_BE_AN_ARITHMETIC_TYPE.args(*expression, m_sourceInterface,
                                                                                       *expression));
         },
-        [&] {
+        [&]
+        {
             log(Errors::Semantics::EXPECTED_INITIALIZER_TO_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
                 *expression, m_sourceInterface, *expression));
         },
         [&] { CLD_UNREACHABLE; },
-        [&] {
+        [&]
+        {
             log(Errors::Semantics::CANNOT_INITIALIZE_VARIABLE_OF_TYPE_N_WITH_INCOMPATIBLE_TYPE_N.args(
                 *expression, m_sourceInterface, type, *expression));
         },
         [&] {
             log(Errors::Semantics::EXPECTED_INITIALIZER_TO_BE_NULL_2.args(*expression, m_sourceInterface, *expression));
         },
-        [&](const ConstValue& constant) {
+        [&](const ConstValue& constant)
+        {
             log(Errors::Semantics::EXPECTED_INITIALIZER_TO_BE_NULL.args(*expression, m_sourceInterface, *expression,
                                                                         constant));
         },
-        [&] {
+        [&]
+        {
             log(Errors::Semantics::EXPECTED_INITIALIZER_TO_BE_A_POINTER_TYPE.args(*expression, m_sourceInterface,
                                                                                   *expression));
         },
-        [&] {
+        [&]
+        {
             if (isVoid(type.as<PointerType>().getElementType()))
             {
                 log(Errors::Semantics::CANNOT_INITIALIZE_VOID_POINTER_WITH_FUNCTION_POINTER.args(
@@ -3218,7 +3240,8 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const Syntax
 {
     return cld::match(
         node.getVariant(),
-        [&](const Syntax::AssignmentExpression& assignmentExpression) -> Initializer {
+        [&](const Syntax::AssignmentExpression& assignmentExpression) -> Initializer
+        {
             auto value = visit(assignmentExpression);
             if (type.isUndefined() || value->isUndefined())
             {
@@ -3231,9 +3254,8 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const Syntax
             }
             return doSingleElementInitialization(assignmentExpression, type, std::move(value), staticLifetime, size);
         },
-        [&](const Syntax::InitializerList& initializerList) -> Initializer {
-            return visit(initializerList, type, staticLifetime, size);
-        });
+        [&](const Syntax::InitializerList& initializerList) -> Initializer
+        { return visit(initializerList, type, staticLifetime, size); });
 }
 
 cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const Syntax::InitializerList& node,
@@ -3373,57 +3395,58 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const Syntax
 
     } top(type);
 
-    auto assignChildren = YComb{[&](auto&& self, const Type& type, INode& parent) -> void {
-        if (isRecord(type))
-        {
-            auto ref = getFieldLayout(type);
-            if (isAbstractArray(*ref.back().type))
-            {
-                ref = ref.drop_back();
-            }
-            parent.resize(ref.size());
-            for (std::size_t i = 0; i < ref.size(); i++)
-            {
-                parent.at(i).type = ref[i].type;
-                parent.at(i).index = i;
-                parent.at(i).parent = &parent;
-                if (isAggregate(*ref[i].type))
-                {
-                    self(*ref[i].type, parent.at(i));
-                }
-            }
-        }
-        if (isArrayType(type))
-        {
-            auto& arrayType = type.as<ArrayType>();
-            parent.resize(arrayType.getSize());
-            for (std::size_t i = 0; i < arrayType.getSize(); i++)
-            {
-                parent.at(i).type = &arrayType.getType();
-                parent.at(i).index = i;
-                parent.at(i).parent = &parent;
-                if (isAggregate(arrayType.getType()))
-                {
-                    self(arrayType.getType(), parent.at(i));
-                }
-            }
-        }
-        if (isVector(type))
-        {
-            auto& vectorType = type.as<VectorType>();
-            parent.resize(vectorType.getSize());
-            for (std::size_t i = 0; i < vectorType.getSize(); i++)
-            {
-                parent.at(i).type = &vectorType.getType();
-                parent.at(i).index = i;
-                parent.at(i).parent = &parent;
-                if (isAggregate(vectorType.getType()))
-                {
-                    self(vectorType.getType(), parent.at(i));
-                }
-            }
-        }
-    }};
+    auto assignChildren = YComb{[&](auto&& self, const Type& type, INode& parent) -> void
+                                {
+                                    if (isRecord(type))
+                                    {
+                                        auto ref = getFieldLayout(type);
+                                        if (isAbstractArray(*ref.back().type))
+                                        {
+                                            ref = ref.drop_back();
+                                        }
+                                        parent.resize(ref.size());
+                                        for (std::size_t i = 0; i < ref.size(); i++)
+                                        {
+                                            parent.at(i).type = ref[i].type;
+                                            parent.at(i).index = i;
+                                            parent.at(i).parent = &parent;
+                                            if (isAggregate(*ref[i].type))
+                                            {
+                                                self(*ref[i].type, parent.at(i));
+                                            }
+                                        }
+                                    }
+                                    if (isArrayType(type))
+                                    {
+                                        auto& arrayType = type.as<ArrayType>();
+                                        parent.resize(arrayType.getSize());
+                                        for (std::size_t i = 0; i < arrayType.getSize(); i++)
+                                        {
+                                            parent.at(i).type = &arrayType.getType();
+                                            parent.at(i).index = i;
+                                            parent.at(i).parent = &parent;
+                                            if (isAggregate(arrayType.getType()))
+                                            {
+                                                self(arrayType.getType(), parent.at(i));
+                                            }
+                                        }
+                                    }
+                                    if (isVector(type))
+                                    {
+                                        auto& vectorType = type.as<VectorType>();
+                                        parent.resize(vectorType.getSize());
+                                        for (std::size_t i = 0; i < vectorType.getSize(); i++)
+                                        {
+                                            parent.at(i).type = &vectorType.getType();
+                                            parent.at(i).index = i;
+                                            parent.at(i).parent = &parent;
+                                            if (isAggregate(vectorType.getType()))
+                                            {
+                                                self(vectorType.getType(), parent.at(i));
+                                            }
+                                        }
+                                    }
+                                }};
     bool abstractArray = false;
     if (isAbstractArray(type))
     {
@@ -3443,34 +3466,37 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const Syntax
     }
 
     auto finishRest = YComb{[&](auto&& self, Syntax::InitializerList::vector::const_iterator begin,
-                                Syntax::InitializerList::vector::const_iterator end) -> void {
-        for (auto iter = begin; iter != end; iter++)
-        {
-            auto& [initializer, designationList] = *iter;
-            if (!designationList.empty())
-            {
-                // We can check if they're proper integer constant expressions but that's about it
-                for (auto& desig : designationList)
-                {
-                    if (!std::holds_alternative<Syntax::ConstantExpression>(desig))
-                    {
-                        continue;
-                    }
-                    auto exp = visit(cld::get<Syntax::ConstantExpression>(desig));
-                }
-            }
-            if (std::holds_alternative<Syntax::InitializerList>(initializer.getVariant()))
-            {
-                auto& initializerList = cld::get<Syntax::InitializerList>(initializer.getVariant());
-                self(initializerList.getNonCommaExpressionsAndBlocks().begin(),
-                     initializerList.getNonCommaExpressionsAndBlocks().end());
-            }
-            else
-            {
-                visit(cld::get<Syntax::AssignmentExpression>(initializer.getVariant()));
-            }
-        }
-    }};
+                                Syntax::InitializerList::vector::const_iterator end) -> void
+                            {
+                                for (auto iter = begin; iter != end; iter++)
+                                {
+                                    auto& [initializer, designationList] = *iter;
+                                    if (!designationList.empty())
+                                    {
+                                        // We can check if they're proper integer constant expressions but that's about
+                                        // it
+                                        for (auto& desig : designationList)
+                                        {
+                                            if (!std::holds_alternative<Syntax::ConstantExpression>(desig))
+                                            {
+                                                continue;
+                                            }
+                                            auto exp = visit(cld::get<Syntax::ConstantExpression>(desig));
+                                        }
+                                    }
+                                    if (std::holds_alternative<Syntax::InitializerList>(initializer.getVariant()))
+                                    {
+                                        auto& initializerList =
+                                            cld::get<Syntax::InitializerList>(initializer.getVariant());
+                                        self(initializerList.getNonCommaExpressionsAndBlocks().begin(),
+                                             initializerList.getNonCommaExpressionsAndBlocks().end());
+                                    }
+                                    else
+                                    {
+                                        visit(cld::get<Syntax::AssignmentExpression>(initializer.getVariant()));
+                                    }
+                                }
+                            }};
 
     if (type.isUndefined())
     {
@@ -3588,7 +3614,8 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const Syntax
                                         *token, m_sourceInterface, *token, structType.getStructName()));
                                 }
                             },
-                            [&](const UnionType& unionType) {
+                            [&](const UnionType& unionType)
+                            {
                                 if (unionType.isAnonymous())
                                 {
                                     log(Errors::Semantics::NO_MEMBER_CALLED_N_FOUND_IN_ANONYMOUS_UNION.args(
@@ -3693,7 +3720,8 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const Syntax
                     std::move_iterator(std::move(initializerList).getFields().begin()),
                     std::move_iterator(std::move(initializerList).getFields().end()),
                     std::back_inserter(initializations),
-                    [&](InitializerList::Initialization&& initialization) -> InitializerList::Initialization&& {
+                    [&](InitializerList::Initialization&& initialization) -> InitializerList::Initialization&&
+                    {
                         initialization.path.insert(initialization.path.begin(), path.rbegin(), path.rend());
                         return std::move(initialization);
                     });

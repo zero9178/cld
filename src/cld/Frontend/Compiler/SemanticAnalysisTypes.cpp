@@ -279,15 +279,18 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::applyD
         {
             cld::match(
                 iter,
-                [&](const Syntax::DirectDeclaratorParenthesesIdentifiers& dd) {
+                [&](const Syntax::DirectDeclaratorParenthesesIdentifiers& dd)
+                {
                     declarationsOwner = &dd;
                     isFunctionPrototype = true;
                 },
-                [&](const Syntax::DirectDeclaratorParenthesesParameters& dd) {
+                [&](const Syntax::DirectDeclaratorParenthesesParameters& dd)
+                {
                     declarationsOwner = &dd;
                     isFunctionPrototype = true;
                 },
-                [&](const Syntax::DirectDeclaratorParentheses& parentheses) {
+                [&](const Syntax::DirectDeclaratorParentheses& parentheses)
+                {
                     if (!parentheses.getDeclarator().getPointers().empty())
                     {
                         isFunctionPrototype = false;
@@ -357,19 +360,22 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::applyD
                 }
                 cld::match(parentheses.getDeclarator().getDirectDeclarator(), self);
             },
-            [&](auto&& self, const Syntax::DirectDeclaratorNoStaticOrAsterisk& noStaticOrAsterisk) {
+            [&](auto&& self, const Syntax::DirectDeclaratorNoStaticOrAsterisk& noStaticOrAsterisk)
+            {
                 auto scope = cld::ScopeExit([&] { cld::match(noStaticOrAsterisk.getDirectDeclarator(), self); });
                 handleArray(type, noStaticOrAsterisk.getTypeQualifiers(),
                             noStaticOrAsterisk.getAssignmentExpression().get(), nullptr, false,
                             diag::getPointRange(noStaticOrAsterisk.getDirectDeclarator()));
             },
-            [&](auto&& self, const Syntax::DirectDeclaratorStatic& declaratorStatic) {
+            [&](auto&& self, const Syntax::DirectDeclaratorStatic& declaratorStatic)
+            {
                 auto scope = cld::ScopeExit([&] { cld::match(declaratorStatic.getDirectDeclarator(), self); });
                 handleArray(type, declaratorStatic.getTypeQualifiers(), &declaratorStatic.getAssignmentExpression(),
                             declaratorStatic.getStaticLoc(), false,
                             diag::getPointRange(declaratorStatic.getDirectDeclarator()));
             },
-            [&](auto&& self, const Syntax::DirectDeclaratorAsterisk& asterisk) {
+            [&](auto&& self, const Syntax::DirectDeclaratorAsterisk& asterisk)
+            {
                 auto scope = cld::ScopeExit([&] { cld::match(asterisk.getDirectDeclarator(), self); });
                 if (!m_inFunctionPrototype)
                 {
@@ -380,7 +386,8 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::applyD
                 handleArray(type, asterisk.getTypeQualifiers(), nullptr, nullptr, true,
                             diag::getPointRange(asterisk.getDirectDeclarator()));
             },
-            [&](auto&& self, const Syntax::DirectDeclaratorParenthesesIdentifiers& identifiers) {
+            [&](auto&& self, const Syntax::DirectDeclaratorParenthesesIdentifiers& identifiers)
+            {
                 auto scope = cld::ScopeExit([&] { cld::match(identifiers.getDirectDeclarator(), self); });
                 std::optional<decltype(pushScope())> scope2;
                 if (isFunctionPrototype)
@@ -539,7 +546,8 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::applyD
                 }
                 type.emplace<FunctionType>(typeAlloc(std::move(*type)), std::move(parameters), flag::isKAndR = true);
             },
-            [&](auto&& self, const Syntax::DirectDeclaratorParenthesesParameters& parameterList) {
+            [&](auto&& self, const Syntax::DirectDeclaratorParenthesesParameters& parameterList)
+            {
                 auto scope = cld::ScopeExit([&] { cld::match(parameterList.getDirectDeclarator(), self); });
                 std::optional<decltype(pushScope())> scope2;
                 if (isFunctionPrototype)
@@ -633,13 +641,16 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::applyD
                     cld::match(*parentheses.getAbstractDeclarator().getDirectAbstractDeclarator(), self);
                 }
             },
-            [&](auto&& self, const Syntax::DirectAbstractDeclaratorAsterisk& asterisk) {
-                auto scope = cld::ScopeExit([&] {
-                    if (asterisk.getDirectAbstractDeclarator())
+            [&](auto&& self, const Syntax::DirectAbstractDeclaratorAsterisk& asterisk)
+            {
+                auto scope = cld::ScopeExit(
+                    [&]
                     {
-                        cld::match(*asterisk.getDirectAbstractDeclarator(), self);
-                    }
-                });
+                        if (asterisk.getDirectAbstractDeclarator())
+                        {
+                            cld::match(*asterisk.getDirectAbstractDeclarator(), self);
+                        }
+                    });
                 if (!m_inFunctionPrototype)
                 {
                     type.emplace<ErrorType>();
@@ -656,13 +667,16 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::applyD
                     handleArray(type, {}, nullptr, nullptr, true, /*TODO:*/ diag::getPointRange(asterisk));
                 }
             },
-            [&](auto&& self, const Syntax::DirectAbstractDeclaratorAssignmentExpression& expression) {
-                auto scope = cld::ScopeExit([&] {
-                    if (expression.getDirectAbstractDeclarator())
+            [&](auto&& self, const Syntax::DirectAbstractDeclaratorAssignmentExpression& expression)
+            {
+                auto scope = cld::ScopeExit(
+                    [&]
                     {
-                        cld::match(*expression.getDirectAbstractDeclarator(), self);
-                    }
-                });
+                        if (expression.getDirectAbstractDeclarator())
+                        {
+                            cld::match(*expression.getDirectAbstractDeclarator(), self);
+                        }
+                    });
                 if (expression.getDirectAbstractDeclarator())
                 {
                     handleArray(type, expression.getTypeQualifiers(), expression.getAssignmentExpression(), nullptr,
@@ -674,23 +688,29 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::applyD
                                 false, /*TODO:*/ diag::getPointRange(expression));
                 }
             },
-            [&](auto&& self, const Syntax::DirectAbstractDeclaratorParameterTypeList& parameterTypeList) {
-                auto scope = cld::ScopeExit([&] {
-                    if (parameterTypeList.getDirectAbstractDeclarator())
+            [&](auto&& self, const Syntax::DirectAbstractDeclaratorParameterTypeList& parameterTypeList)
+            {
+                auto scope = cld::ScopeExit(
+                    [&]
                     {
-                        cld::match(*parameterTypeList.getDirectAbstractDeclarator(), self);
-                    }
-                });
+                        if (parameterTypeList.getDirectAbstractDeclarator())
+                        {
+                            cld::match(*parameterTypeList.getDirectAbstractDeclarator(), self);
+                        }
+                    });
                 handleParameterList(type, parameterTypeList.getParameterTypeList(),
                                     /*TODO:*/ diag::getPointRange(parameterTypeList), {});
             },
-            [&](auto&& self, const Syntax::DirectAbstractDeclaratorStatic& declaratorStatic) {
-                auto scope = cld::ScopeExit([&] {
-                    if (declaratorStatic.getDirectAbstractDeclarator())
+            [&](auto&& self, const Syntax::DirectAbstractDeclaratorStatic& declaratorStatic)
+            {
+                auto scope = cld::ScopeExit(
+                    [&]
                     {
-                        cld::match(*declaratorStatic.getDirectAbstractDeclarator(), self);
-                    }
-                });
+                        if (declaratorStatic.getDirectAbstractDeclarator())
+                        {
+                            cld::match(*declaratorStatic.getDirectAbstractDeclarator(), self);
+                        }
+                    });
                 handleArray(type, declaratorStatic.getTypeQualifiers(), &declaratorStatic.getAssignmentExpression(),
                             declaratorStatic.getStaticLoc(), false,
                             diag::getPointRange(declaratorStatic.getAssignmentExpression()));
@@ -1057,7 +1077,9 @@ cld::IntrVarValue<cld::Semantics::Type>
     {
         auto& [specifiers, declarators] = *iter;
         auto fieldStructOrUnion = std::find_if(
-            specifiers.begin(), specifiers.end(), [](const Syntax::SpecifierQualifier& specifierQualifier) {
+            specifiers.begin(), specifiers.end(),
+            [](const Syntax::SpecifierQualifier& specifierQualifier)
+            {
                 if (!std::holds_alternative<Syntax::TypeSpecifier>(specifierQualifier))
                 {
                     return false;
@@ -1507,7 +1529,8 @@ cld::Semantics::PrimitiveType cld::Semantics::SemanticAnalysis::primitiveTypeSpe
         }
     };
 
-    constexpr auto clz = [](std::size_t value) {
+    constexpr auto clz = [](std::size_t value)
+    {
         std::size_t i = 0;
         for (; value != 0; value >>= 1, i++)
             ;
@@ -1515,7 +1538,8 @@ cld::Semantics::PrimitiveType cld::Semantics::SemanticAnalysis::primitiveTypeSpe
     };
 
     using BitSet = Bitset2::bitset2<clz(PrimitiveTypeSpecifier::MAX_VALUE)>;
-    static const auto table = []() -> std::unordered_map<BitSet, std::pair<BitSet, PrimitiveType::Kind>> {
+    static const auto table = []() -> std::unordered_map<BitSet, std::pair<BitSet, PrimitiveType::Kind>>
+    {
         using Tuple = std::tuple<std::underlying_type_t<PrimitiveTypeSpecifier>,
                                  std::underlying_type_t<PrimitiveTypeSpecifier>, PrimitiveType::Kind>;
         std::vector<Tuple> temp = {
@@ -1605,7 +1629,8 @@ cld::Semantics::PrimitiveType cld::Semantics::SemanticAnalysis::primitiveTypeSpe
     auto primKindToType = [isConst, isVolatile, this](PrimitiveType::Kind kind)
     { return PrimitiveType(kind, getLanguageOptions(), flag::isConst = isConst, flag::isVolatile = isVolatile); };
 
-    auto primTypeSpecToString = [](PrimitiveTypeSpecifier spec) -> std::string_view {
+    auto primTypeSpecToString = [](PrimitiveTypeSpecifier spec) -> std::string_view
+    {
         switch (spec)
         {
             case Syntax::TypeSpecifier::Void: return "void";

@@ -180,14 +180,16 @@ public:
         m_attributes.reserve(m_attributes.size() + attributes.size());
         for (auto& iter : attributes)
         {
-            cld::match(std::move(iter), [&](auto&& value) {
-                using W = std::decay_t<decltype(value)>;
-                static_assert(std::is_move_constructible_v<W>);
-                if constexpr (std::is_constructible_v<T, W&&>)
-                {
-                    addAttribute(std::move(value));
-                }
-            });
+            cld::match(std::move(iter),
+                       [&](auto&& value)
+                       {
+                           using W = std::decay_t<decltype(value)>;
+                           static_assert(std::is_move_constructible_v<W>);
+                           if constexpr (std::is_constructible_v<T, W&&>)
+                           {
+                               addAttribute(std::move(value));
+                           }
+                       });
         }
     }
 
@@ -198,14 +200,16 @@ public:
         m_attributes.reserve(m_attributes.size() + attributes.size());
         for (auto& iter : attributes)
         {
-            cld::match(iter, [&](auto&& value) {
-                using W = std::decay_t<decltype(value)>;
-                static_assert(std::is_copy_constructible_v<W>);
-                if constexpr (std::is_constructible_v<T, W>)
-                {
-                    addAttribute(std::move(value));
-                }
-            });
+            cld::match(iter,
+                       [&](auto&& value)
+                       {
+                           using W = std::decay_t<decltype(value)>;
+                           static_assert(std::is_copy_constructible_v<W>);
+                           if constexpr (std::is_constructible_v<T, W>)
+                           {
+                               addAttribute(std::move(value));
+                           }
+                       });
         }
     }
 };

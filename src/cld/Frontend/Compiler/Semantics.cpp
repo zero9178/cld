@@ -109,8 +109,10 @@ bool cld::Semantics::Type::operator==(const cld::Semantics::Type& rhs) const
     {
         return false;
     }
-    return match([&](auto&& value) -> bool {
-        using T = std::decay_t<decltype(value)>;
+    return match(
+        [&](auto&& value) -> bool
+        {
+            using T = std::decay_t<decltype(value)>;
             return value.equalsImpl(rhs.template as<T>());
         });
 }
@@ -122,16 +124,18 @@ bool cld::Semantics::Type::operator!=(const cld::Semantics::Type& rhs) const
 
 std::uint64_t cld::Semantics::Type::getSizeOf(const ProgramInterface& program) const
 {
-    return match([&](auto&& value) -> std::size_t {
-        if constexpr (std::is_same_v<std::monostate, std::decay_t<decltype(value)>>)
+    return match(
+        [&](auto&& value) -> std::size_t
         {
-            CLD_UNREACHABLE;
-        }
-        else
-        {
-            return value.getSizeOfImpl(program);
-        }
-    });
+            if constexpr (std::is_same_v<std::monostate, std::decay_t<decltype(value)>>)
+            {
+                CLD_UNREACHABLE;
+            }
+            else
+            {
+                return value.getSizeOfImpl(program);
+            }
+        });
 }
 
 std::uint64_t cld::Semantics::Type::getAlignOf(const ProgramInterface& program) const
@@ -252,14 +256,15 @@ cld::Lexer::CTokenIterator cld::Semantics::declaratorToLoc(const cld::Syntax::De
 {
     return matchWithSelf(
         declarator.getDirectDeclarator(),
-        [](auto&&, const Syntax::DirectDeclaratorIdentifier& name) -> cld::Lexer::CTokenIterator {
-            return name.getIdentifierLoc();
-        },
-        [](auto&& self, const Syntax::DirectDeclaratorParentheses& declarator) -> cld::Lexer::CTokenIterator {
+        [](auto&&, const Syntax::DirectDeclaratorIdentifier& name) -> cld::Lexer::CTokenIterator
+        { return name.getIdentifierLoc(); },
+        [](auto&& self, const Syntax::DirectDeclaratorParentheses& declarator) -> cld::Lexer::CTokenIterator
+        {
             return cld::match(declarator.getDeclarator().getDirectDeclarator(),
                               [&self](auto&& value) -> cld::Lexer::CTokenIterator { return self(value); });
         },
-        [](auto&& self, auto&& value) -> cld::Lexer::CTokenIterator {
+        [](auto&& self, auto&& value) -> cld::Lexer::CTokenIterator
+        {
             return cld::match(value.getDirectDeclarator(),
                               [&self](auto&& value) -> cld::Lexer::CTokenIterator { return self(value); });
         });
@@ -413,7 +418,8 @@ std::string typeToString(const cld::Semantics::Type& arg, bool respectTypedefs)
                 }
                 return {};
             },
-            [&](const PointerType&) -> const Type* {
+            [&](const PointerType&) -> const Type*
+            {
                 std::string temp;
                 const auto* curr = maybeCurr;
                 while (auto* pointerType = curr->tryAs<PointerType>())
@@ -463,7 +469,8 @@ std::string typeToString(const cld::Semantics::Type& arg, bool respectTypedefs)
                 qualifiersAndSpecifiers = typeToString(*curr, respectTypedefs) + " " + temp;
                 return {};
             },
-            [&](const ValArrayType& valArrayType) -> const Type* {
+            [&](const ValArrayType& valArrayType) -> const Type*
+            {
                 declarators += "[";
                 if (valArrayType.isStatic())
                 {
@@ -484,7 +491,8 @@ std::string typeToString(const cld::Semantics::Type& arg, bool respectTypedefs)
                 declarators += "*]";
                 return &valArrayType.getType();
             },
-            [&](const ArrayType& arrayType) -> const Type* {
+            [&](const ArrayType& arrayType) -> const Type*
+            {
                 declarators += "[";
                 if (arrayType.isStatic())
                 {
@@ -505,7 +513,8 @@ std::string typeToString(const cld::Semantics::Type& arg, bool respectTypedefs)
                 declarators += cld::to_string(arrayType.getSize()) + "]";
                 return &arrayType.getType();
             },
-            [&](const AbstractArrayType& arrayType) -> const Type* {
+            [&](const AbstractArrayType& arrayType) -> const Type*
+            {
                 declarators += "[";
                 if (arrayType.isRestricted())
                 {
@@ -522,13 +531,15 @@ std::string typeToString(const cld::Semantics::Type& arg, bool respectTypedefs)
                 declarators += "]";
                 return &arrayType.getType();
             },
-            [&](const VectorType& vectorType) -> const Type* {
+            [&](const VectorType& vectorType) -> const Type*
+            {
                 qualifiersAndSpecifiers += "__attribute__((vector_size(" + std::to_string(vectorType.getSize())
                                            + " * sizeof(" + typeToString(vectorType.getType(), respectTypedefs)
                                            + ")))) ";
                 return &vectorType.getType();
             },
-            [&](const FunctionType& functionType) -> const Type* {
+            [&](const FunctionType& functionType) -> const Type*
+            {
                 declarators += "(";
                 if (functionType.getParameters().empty())
                 {
@@ -551,7 +562,8 @@ std::string typeToString(const cld::Semantics::Type& arg, bool respectTypedefs)
                 declarators += ")";
                 return &functionType.getReturnType();
             },
-            [&](const StructType& structType) -> const Type* {
+            [&](const StructType& structType) -> const Type*
+            {
                 if (maybeCurr->isConst())
                 {
                     qualifiersAndSpecifiers += "const ";
@@ -570,7 +582,8 @@ std::string typeToString(const cld::Semantics::Type& arg, bool respectTypedefs)
                 }
                 return {};
             },
-            [&](const UnionType& unionType) -> const Type* {
+            [&](const UnionType& unionType) -> const Type*
+            {
                 if (maybeCurr->isConst())
                 {
                     qualifiersAndSpecifiers += "const ";
@@ -589,7 +602,8 @@ std::string typeToString(const cld::Semantics::Type& arg, bool respectTypedefs)
                 }
                 return {};
             },
-            [&](const EnumType& enumType) -> const Type* {
+            [&](const EnumType& enumType) -> const Type*
+            {
                 if (maybeCurr->isConst())
                 {
                     qualifiersAndSpecifiers += "const ";
@@ -608,7 +622,8 @@ std::string typeToString(const cld::Semantics::Type& arg, bool respectTypedefs)
                 }
                 return {};
             },
-            [&](const ErrorType&) -> const Type* {
+            [&](const ErrorType&) -> const Type*
+            {
                 if (maybeCurr->isConst())
                 {
                     qualifiersAndSpecifiers += "const ";

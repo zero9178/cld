@@ -131,9 +131,10 @@ cld::Parser::Context::TokenBitReseter::~TokenBitReseter()
 
 void cld::Parser::Context::skipUntil(Lexer::CTokenIterator& begin, Lexer::CTokenIterator end, TokenBitSet additional)
 {
-    begin = std::find_if(begin, end, [bitset = m_recoverySet | additional](const Lexer::CToken& token) {
-        return bitset[static_cast<std::underlying_type_t<Lexer::TokenType>>(token.getTokenType())];
-    });
+    begin = std::find_if(begin, end,
+                         [bitset = m_recoverySet | additional](const Lexer::CToken& token) {
+                             return bitset[static_cast<std::underlying_type_t<Lexer::TokenType>>(token.getTokenType())];
+                         });
 }
 
 cld::ValueReset<std::uint64_t> cld::Parser::Context::parenthesesEntered(Lexer::CTokenIterator bracket)

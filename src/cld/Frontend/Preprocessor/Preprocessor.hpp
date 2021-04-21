@@ -37,14 +37,16 @@ std::string reconstruct(const T* begin, const T* end, const SourceInterface& sou
     while (begin != end)
     {
         std::uint64_t newLines = 0;
-        auto toMacroId0 = [&](std::uint32_t macroId, std::uint32_t fileId, std::uint64_t offset, bool isPrev) {
+        auto toMacroId0 = [&](std::uint32_t macroId, std::uint32_t fileId, std::uint64_t offset, bool isPrev)
+        {
             auto tuple = std::make_tuple(macroId, fileId, offset);
             while (std::get<0>(tuple) != 0)
             {
                 tuple = cld::match(
                     sourceInterface.getSubstitutions()[std::get<0>(tuple)],
                     [](std::monostate) -> std::tuple<std::uint32_t, std::uint32_t, std::uint64_t> { CLD_UNREACHABLE; },
-                    [isPrev](const Source::Substitution& substitution) {
+                    [isPrev](const Source::Substitution& substitution)
+                    {
                         if (isPrev && substitution.closeParentheses)
                         {
                             return std::make_tuple(substitution.closeParentheses->getMacroId(),
@@ -55,12 +57,14 @@ std::string reconstruct(const T* begin, const T* end, const SourceInterface& sou
                                                substitution.replacedIdentifier.getFileId(),
                                                substitution.replacedIdentifier.getOffset());
                     },
-                    [](const Source::Stringification& stringification) {
+                    [](const Source::Stringification& stringification)
+                    {
                         return std::make_tuple(stringification.replacedIdentifier.getMacroId(),
                                                stringification.replacedIdentifier.getFileId(),
                                                stringification.replacedIdentifier.getOffset());
                     },
-                    [isPrev](const Source::TokenConcatenation& concat) {
+                    [isPrev](const Source::TokenConcatenation& concat)
+                    {
                         if (isPrev)
                         {
                             return std::make_tuple(concat.rightToken.getMacroId(), concat.rightToken.getFileId(),

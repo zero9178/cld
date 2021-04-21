@@ -43,7 +43,8 @@ llvm::Type* cld::CGLLVM::CodeGenerator::visit(const Semantics::Type& type)
             }
             CLD_UNREACHABLE;
         },
-        [&](const Semantics::ArrayType& arrayType) -> llvm::Type* {
+        [&](const Semantics::ArrayType& arrayType) -> llvm::Type*
+        {
             auto* elementType = visit(arrayType.getType());
             if (Semantics::isVariableLengthArray(arrayType.getType()))
             {
@@ -51,7 +52,8 @@ llvm::Type* cld::CGLLVM::CodeGenerator::visit(const Semantics::Type& type)
             }
             return llvm::ArrayType::get(elementType, arrayType.getSize());
         },
-        [&](const Semantics::FunctionType& functionType) -> llvm::Type* {
+        [&](const Semantics::FunctionType& functionType) -> llvm::Type*
+        {
             auto* returnType = visit(functionType.getReturnType());
             std::vector<llvm::Type*> args;
             for (auto& [type, name] : functionType.getParameters())
@@ -95,7 +97,8 @@ llvm::Type* cld::CGLLVM::CodeGenerator::visit(const Semantics::Type& type)
             type->setBody(fields);
             return type;
         },
-        [&](const Semantics::UnionType& unionType) -> llvm::Type* {
+        [&](const Semantics::UnionType& unionType) -> llvm::Type*
+        {
             auto result = m_types.find(unionType);
             if (result != m_types.end())
             {
@@ -255,7 +258,8 @@ llvm::DIType* cld::CGLLVM::CodeGenerator::visitDebug(const Semantics::Type& type
             }
             return m_debugInfo->createBasicType(name, primitive.getBitCount(), encoding);
         },
-        [&](const Semantics::PointerType& pointerType) -> llvm::DIType* {
+        [&](const Semantics::PointerType& pointerType) -> llvm::DIType*
+        {
             auto* element = visitDebug(pointerType.getElementType());
             auto* pointer =
                 m_debugInfo->createPointerType(element, m_programInterface.getLanguageOptions().sizeOfVoidStar);
@@ -265,32 +269,37 @@ llvm::DIType* cld::CGLLVM::CodeGenerator::visitDebug(const Semantics::Type& type
             }
             return pointer;
         },
-        [&](const Semantics::ArrayType& arrayType) -> llvm::DIType* {
+        [&](const Semantics::ArrayType& arrayType) -> llvm::DIType*
+        {
             auto* element = visitDebug(arrayType.getType());
             return m_debugInfo->createArrayType(
                 arrayType.getSizeOf(m_programInterface) * 8, arrayType.getType().getAlignOf(m_programInterface) * 8,
                 element,
                 m_debugInfo->getOrCreateArray(llvm::DISubrange::get(m_module.getContext(), arrayType.getSize())));
         },
-        [&](const Semantics::AbstractArrayType& arrayType) -> llvm::DIType* {
+        [&](const Semantics::AbstractArrayType& arrayType) -> llvm::DIType*
+        {
             auto* element = visitDebug(arrayType.getType());
             return m_debugInfo->createArrayType(
                 arrayType.getType().getSizeOf(m_programInterface) * 8,
                 arrayType.getType().getAlignOf(m_programInterface) * 8, element,
                 m_debugInfo->getOrCreateArray(llvm::DISubrange::get(m_module.getContext(), 1)));
         },
-        [&](const Semantics::ValArrayType&) -> llvm::DIType* {
+        [&](const Semantics::ValArrayType&) -> llvm::DIType*
+        {
             // TODO:
             CLD_UNREACHABLE;
         },
-        [&](const Semantics::VectorType& vectorType) -> llvm::DIType* {
+        [&](const Semantics::VectorType& vectorType) -> llvm::DIType*
+        {
             auto* element = visitDebug(vectorType.getType());
             return m_debugInfo->createVectorType(
                 vectorType.getType().getSizeOf(m_programInterface) * 8,
                 vectorType.getType().getAlignOf(m_programInterface) * 8, element,
                 m_debugInfo->getOrCreateArray(llvm::DISubrange::get(m_module.getContext(), vectorType.getSize())));
         },
-        [&](const Semantics::StructType& structType) -> llvm::DIType* {
+        [&](const Semantics::StructType& structType) -> llvm::DIType*
+        {
             auto result = m_debugTypes.find(structType);
             if (result != m_debugTypes.end())
             {
@@ -355,7 +364,8 @@ llvm::DIType* cld::CGLLVM::CodeGenerator::visitDebug(const Semantics::Type& type
             m_debugTypes.insert_or_assign(structType, debugStructDef);
             return debugStructDef;
         },
-        [&](const Semantics::UnionType& unionType) -> llvm::DIType* {
+        [&](const Semantics::UnionType& unionType) -> llvm::DIType*
+        {
             auto result = m_debugTypes.find(unionType);
             if (result != m_debugTypes.end())
             {
@@ -419,7 +429,8 @@ llvm::DIType* cld::CGLLVM::CodeGenerator::visitDebug(const Semantics::Type& type
             m_debugTypes.insert_or_assign(unionType, debugUnionDef);
             return debugUnionDef;
         },
-        [&](const Semantics::FunctionType& functionType) -> llvm::DIType* {
+        [&](const Semantics::FunctionType& functionType) -> llvm::DIType*
+        {
             std::vector<llvm::Metadata*> parameters;
             if (Semantics::isVoid(functionType.getReturnType()))
             {
@@ -436,7 +447,8 @@ llvm::DIType* cld::CGLLVM::CodeGenerator::visitDebug(const Semantics::Type& type
             }
             return m_debugInfo->createSubroutineType(m_debugInfo->getOrCreateTypeArray(parameters));
         },
-        [&](const Semantics::EnumType& enumType) -> llvm::DIType* {
+        [&](const Semantics::EnumType& enumType) -> llvm::DIType*
+        {
             auto result = m_debugTypes.find(enumType);
             if (result != m_debugTypes.end())
             {
@@ -480,7 +492,8 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::TranslationUnit& transla
     for (auto& iter : translationUnit.getGlobals())
     {
         iter->match([&](const Semantics::FunctionDefinition& functionDefinition) { visit(functionDefinition); },
-                    [&](const Semantics::VariableDeclaration& declaration) {
+                    [&](const Semantics::VariableDeclaration& declaration)
+                    {
                         auto global = visit(declaration);
                         if (llvm::isa_and_nonnull<llvm::GlobalVariable>(global.value))
                         {
@@ -548,7 +561,8 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::VariableDe
         {
             return nullptr;
         }
-        auto& declType = [&]() -> decltype(auto) {
+        auto& declType = [&]() -> decltype(auto)
+        {
             if (m_currentFunction)
             {
                 return declaration.getType();
@@ -788,10 +802,11 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDefinition& func
 
     auto* bb = llvm::BasicBlock::Create(m_module.getContext(), "entry", function);
     m_builder.SetInsertPoint(bb);
-    cld::ScopeExit insertionPointReset{[&] {
-        m_builder.ClearInsertionPoint();
-        m_builder.SetCurrentDebugLocation({});
-    }};
+    cld::ScopeExit insertionPointReset{[&]
+                                       {
+                                           m_builder.ClearInsertionPoint();
+                                           m_builder.SetCurrentDebugLocation({});
+                                       }};
 
     m_currentFunction = function;
     cld::ValueReset currentFunctionReset(m_currentFunction, nullptr);

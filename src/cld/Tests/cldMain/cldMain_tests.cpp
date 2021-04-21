@@ -6,7 +6,8 @@
 #include <TestConfig.hpp>
 
 #define CLD_MAIN_PRODUCES(matcher, ...)       \
-    [](std::vector<std::string_view> ref) {   \
+    [](std::vector<std::string_view> ref)     \
+    {                                         \
         std::string storage;                  \
         llvm::raw_string_ostream ss(storage); \
         cld::main(ref, &ss);                  \

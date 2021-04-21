@@ -72,12 +72,14 @@ constexpr bool checkForNoHoles(std::u32string_view text)
             const auto end = result.get_end_position();
             text.remove_prefix(end - text.begin());
         }
-        (([&seen](auto&& array) {
-             for (auto iter : array)
+        ((
+             [&seen](auto&& array)
              {
-                 seen[iter] = true;
-             }
-         }(Args::indices)),
+                 for (auto iter : array)
+                 {
+                     seen[iter] = true;
+                 }
+             }(Args::indices)),
          ...);
         for (auto iter : seen)
         {
@@ -142,20 +144,22 @@ constexpr bool checkForNoDuplicates()
     else
     {
         std::array<bool, N> seen = {{false}};
-        return (([&seen](auto value) {
-                    using T = decltype(value);
-                    if constexpr (IsInsertAfter<T>{})
+        return ((
+                    [&seen](auto value)
                     {
+                        using T = decltype(value);
+                        if constexpr (IsInsertAfter<T>{})
+                        {
+                            return true;
+                        }
+                        constexpr auto index = T::affects;
+                        if (seen[index])
+                        {
+                            return false;
+                        }
+                        seen[index] = true;
                         return true;
-                    }
-                    constexpr auto index = T::affects;
-                    if (seen[index])
-                    {
-                        return false;
-                    }
-                    seen[index] = true;
-                    return true;
-                }(Args{}))
+                    }(Args{}))
                 && ...);
     }
 }
@@ -359,21 +363,24 @@ private:
         {
             constexpr auto size = std::variant_size_v<U>;
             return std::apply(
-                [](auto&&... values) {
-                    return ([](auto indexT) {
-                        constexpr auto index = decltype(indexT)::value;
-                        // Don't usually allow pointers except in variants.
-                        using V = std::remove_pointer_t<std::variant_alternative_t<index, U>>;
-                        if constexpr (IsSmartPtr<V>{})
+                [](auto&&... values)
+                {
+                    return (
+                        [](auto indexT)
                         {
-                            return locationConstraintCheck<typename V::element_type>();
-                        }
-                        else
-                        {
-                            return locationConstraintCheck<V>();
-                        }
-                    }(values)
-                            && ...);
+                            constexpr auto index = decltype(indexT)::value;
+                            // Don't usually allow pointers except in variants.
+                            using V = std::remove_pointer_t<std::variant_alternative_t<index, U>>;
+                            if constexpr (IsSmartPtr<V>{})
+                            {
+                                return locationConstraintCheck<typename V::element_type>();
+                            }
+                            else
+                            {
+                                return locationConstraintCheck<V>();
+                            }
+                        }(values)
+                        && ...);
                 },
                 Constexpr::integerSequenceToTuple(std::make_index_sequence<size>{}));
         }
@@ -479,7 +486,8 @@ private:
     template <std::size_t i>
     constexpr static auto customModifiersFor()
     {
-        constexpr std::size_t amountOfCustomModifiers = [] {
+        constexpr std::size_t amountOfCustomModifiers = []
+        {
             std::size_t count = 0;
             auto text = getFormat();
             while (auto result = ctre::search<detail::Diagnostic::DIAG_ARG_PATTERN>(text))
@@ -519,14 +527,16 @@ private:
                                                 Tuple& args)
     {
         constexpr std::tuple tuple = std::apply(
-            [](auto... stringIndices) {
+            [](auto... stringIndices)
+            {
                 return std::make_tuple(
                     std::integral_constant<char32_t,
                                            std::get<i1>(allFormatModifiers)[i2][decltype(stringIndices)::value]>{}...);
             },
             Constexpr::integerSequenceToTuple(std::make_index_sequence<std::get<i1>(allFormatModifiers)[i2].size()>{}));
         result[i1].customModifiers[std::get<i1>(allFormatModifiers)[i2]] = std::apply(
-            [&args](auto... chars) -> std::string {
+            [&args](auto... chars) -> std::string
+            {
                 static_assert(
                     IsTypeCompleteV<diag::CustomFormat<decltype(chars)::value...>>,
                     "No template specialization of cld::diag::CustomModifier exists for a given format modifier");
@@ -643,7 +653,8 @@ constexpr auto Diagnostic<N, format, Mods...>::getConstraints() -> std::array<st
         i++;
     }
     (
-        [&result](auto value) {
+        [&result](auto value)
+        {
             using T = decltype(value);
             if constexpr (detail::Diagnostic::IsUnderline<T>{})
             {
@@ -683,7 +694,8 @@ auto Diagnostic<N, format, Mods...>::createArgumentArray(const SourceInterface* 
     (void)sourceInterface;
     std::array<Argument, N> result;
     (
-        [&result, &args, sourceInterface](auto integer) {
+        [&result, &args, sourceInterface](auto integer)
+        {
             using IntegerTy = decltype(integer);
             using ArgTy = std::decay_t<std::tuple_element_t<IntegerTy::value, Tuple>>;
             static_assert(constraints[IntegerTy::value]);
@@ -710,9 +722,8 @@ auto Diagnostic<N, format, Mods...>::createArgumentArray(const SourceInterface* 
             }
             if constexpr ((bool)(constraints[IntegerTy::value] & Constraint::CustomConstraint))
             {
-                auto apply = [&result, &args](auto... values) {
-                    (convertCustomModifier<IntegerTy::value, decltype(values)::value>(result, args), ...);
-                };
+                auto apply = [&result, &args](auto... values)
+                { (convertCustomModifier<IntegerTy::value, decltype(values)::value>(result, args), ...); };
                 std::apply(apply,
                            Constexpr::integerSequenceToTuple(
                                std::make_index_sequence<std::get<IntegerTy::value>(allFormatModifiers).size()>{}));
@@ -729,7 +740,8 @@ constexpr auto Diagnostic<N, format, Mods...>::getModifiers(std::index_sequence<
 {
     std::array<Modifiers, sizeof...(Mods)> result = {};
     (
-        [&result](auto value) {
+        [&result](auto value)
+        {
             constexpr std::size_t i = decltype(value)::value;
             using T = std::tuple_element_t<i, std::tuple<Mods...>>;
             if constexpr (detail::Diagnostic::IsUnderline<T>{})

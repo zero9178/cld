@@ -970,7 +970,8 @@ TEST_CASE("Lexing Number Literals", "[lexer]")
     }
     SECTION("Integer type selection")
     {
-        auto test = [](const std::string& text, const llvm::APSInt& result) {
+        auto test = [](const std::string& text, const llvm::APSInt& result)
+        {
             {
                 INFO(text);
                 auto tokens = lexes(text);
@@ -1746,11 +1747,13 @@ namespace
 std::string toS(const std::vector<std::uint8_t>& data)
 {
     std::string input(data.size(), ' ');
-    std::transform(data.begin(), data.end(), input.begin(), [](std::uint8_t byte) -> char {
-        char result;
-        std::memcpy(&result, &byte, 1);
-        return result;
-    });
+    std::transform(data.begin(), data.end(), input.begin(),
+                   [](std::uint8_t byte) -> char
+                   {
+                       char result;
+                       std::memcpy(&result, &byte, 1);
+                       return result;
+                   });
     return input;
 }
 } // namespace

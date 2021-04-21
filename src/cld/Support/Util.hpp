@@ -448,7 +448,8 @@ template <typename T, typename... Ts>
 constexpr size_t getIndex(const std::variant<Ts...>&) noexcept
 {
     size_t r = 0;
-    auto test = [&](bool b) {
+    auto test = [&](bool b)
+    {
         if (!b)
             ++r;
         return b;
@@ -510,9 +511,8 @@ public:
     decltype(auto) operator()(Last&&... last) & noexcept(std::is_nothrow_invocable_v<F, Args..., Last...>)
     {
         return std::apply(
-            [&](auto&&... members) -> decltype(auto) {
-                return std::invoke(f, std::forward<decltype(members)>(members)..., std::forward<Last>(last)...);
-            },
+            [&](auto&&... members) -> decltype(auto)
+            { return std::invoke(f, std::forward<decltype(members)>(members)..., std::forward<Last>(last)...); },
             front);
     }
 
@@ -520,9 +520,8 @@ public:
     decltype(auto) operator()(Last&&... last) const& noexcept(std::is_nothrow_invocable_v<F, Args..., Last...>)
     {
         return std::apply(
-            [&](auto&&... members) -> decltype(auto) {
-                return std::invoke(f, std::forward<decltype(members)>(members)..., std::forward<Last>(last)...);
-            },
+            [&](auto&&... members) -> decltype(auto)
+            { return std::invoke(f, std::forward<decltype(members)>(members)..., std::forward<Last>(last)...); },
             front);
     }
 

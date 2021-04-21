@@ -1,6 +1,6 @@
 
 #ifndef HANDLE_VALUE
-#error HANDLE_VALUE undefined
+    #error HANDLE_VALUE undefined
 #endif
 
 HANDLE_VALUE(MMX)

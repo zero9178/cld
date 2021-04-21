@@ -134,9 +134,8 @@ public:
         }
         constexpr std::array<bool (*)(const AbstractIntrusiveVariant&, const AbstractIntrusiveVariant&),
                              sizeof...(Args)>
-            equality = {{+[](const AbstractIntrusiveVariant& lhs, const AbstractIntrusiveVariant& rhs) -> bool {
-                return static_cast<const Args&>(lhs) == static_cast<const Args&>(rhs);
-            }...}};
+            equality = {{+[](const AbstractIntrusiveVariant& lhs, const AbstractIntrusiveVariant& rhs) -> bool
+                         { return static_cast<const Args&>(lhs) == static_cast<const Args&>(rhs); }...}};
         return equality[lhs.index()](lhs, rhs);
     }
 
@@ -178,16 +177,18 @@ public:
 
     void operator()(Base* pointer) const noexcept
     {
-        constexpr std::array<void (*)(Base*), sizeof...(SubClasses)> deleteFuncs = {{+[](Base* ptr) {
-            if constexpr (std::is_base_of_v<Base, SubClasses>)
-            {
-                delete static_cast<SubClasses*>(ptr);
-            }
-            else
-            {
-                CLD_UNREACHABLE;
-            }
-        }...}};
+        constexpr std::array<void (*)(Base*), sizeof...(SubClasses)> deleteFuncs = {
+            {+[](Base* ptr)
+             {
+                 if constexpr (std::is_base_of_v<Base, SubClasses>)
+                 {
+                     delete static_cast<SubClasses*>(ptr);
+                 }
+                 else
+                 {
+                     CLD_UNREACHABLE;
+                 }
+             }...}};
         deleteFuncs[pointer->index()](pointer);
     }
 };

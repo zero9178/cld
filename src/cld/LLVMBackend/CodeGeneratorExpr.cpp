@@ -630,7 +630,8 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::SizeofOper
         [](const cld::IntrVarPtr<Semantics::ExpressionBase>& expression) -> const Semantics::Type& {
             return expression->getType();
         });
-    auto& elementType = [&]() -> decltype(auto) {
+    auto& elementType = [&]() -> decltype(auto)
+    {
         auto* currType = &type;
         while (Semantics::isArray(*currType))
         {
@@ -756,7 +757,8 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::Assignment
 {
     if (!Semantics::isBitfieldAccess(assignment.getLeftExpression()))
     {
-        auto lhs = [&] {
+        auto lhs = [&]
+        {
             if (auto* subscript = assignment.getLeftExpression().tryAs<Semantics::SubscriptOperator>();
                 subscript && Semantics::isVector(subscript->getPointerExpression().getType()))
             {
@@ -1371,9 +1373,8 @@ llvm::Value* visitStaticInitializerList(cld::CGLLVM::CodeGenerator& codeGenerato
                                      cld::match(
                                          constant.getValue(),
                                          [](const std::string& str) -> std::size_t { return str.size() + 1; },
-                                         [](const cld::Lexer::NonCharString& nonCharString) -> std::size_t {
-                                             return nonCharString.characters.size();
-                                         },
+                                         [](const cld::Lexer::NonCharString& nonCharString) -> std::size_t
+                                         { return nonCharString.characters.size(); },
                                          [](const auto&) -> std::size_t { CLD_UNREACHABLE; }));
                 auto* elementType = cld::match(
                     constant.getValue(),
@@ -1392,7 +1393,8 @@ llvm::Value* visitStaticInitializerList(cld::CGLLVM::CodeGenerator& codeGenerato
                 {
                     auto* constantValue = cld::match(
                         constant.getValue(),
-                        [&](const std::string& str) -> llvm::Constant* {
+                        [&](const std::string& str) -> llvm::Constant*
+                        {
                             if (i == str.size())
                             {
                                 return llvm::ConstantInt::get(elementType, 0);
@@ -1431,137 +1433,145 @@ llvm::Value* visitStaticInitializerList(cld::CGLLVM::CodeGenerator& codeGenerato
         }
     }
 
-    return cld::YComb{[&](auto&& self, const cld::Semantics::Type& type, llvm::Type* llvmType,
-                          const Aggregate& aggregate) -> llvm::Constant* {
-        const llvm::Module& module = codeGenerator.getModule();
-        if (cld::Semantics::isStruct(type))
+    return cld::YComb{
+        [&](auto&& self, const cld::Semantics::Type& type, llvm::Type* llvmType,
+            const Aggregate& aggregate) -> llvm::Constant*
         {
-            std::vector<llvm::Constant*> elements;
-            std::vector<llvm::Type*> elementTypes;
-            auto fields = cld::Semantics::getFieldLayout(type);
-            for (std::size_t i = 0; i < aggregate.vector.size();)
+            const llvm::Module& module = codeGenerator.getModule();
+            if (cld::Semantics::isStruct(type))
             {
-                if (!fields[i].bitFieldBounds)
+                std::vector<llvm::Constant*> elements;
+                std::vector<llvm::Type*> elementTypes;
+                auto fields = cld::Semantics::getFieldLayout(type);
+                for (std::size_t i = 0; i < aggregate.vector.size();)
+                {
+                    if (!fields[i].bitFieldBounds)
+                    {
+                        elements.push_back(cld::match(
+                            aggregate.vector[i],
+                            [&](const Aggregate& subAggregate) -> llvm::Constant* {
+                                return self(*fields[i].type, llvmType->getStructElementType(fields[i].layoutIndex),
+                                            subAggregate);
+                            },
+                            [&](llvm::Constant* constant)
+                            {
+                                if (constant)
+                                {
+                                    return constant;
+                                }
+                                return llvm::Constant::getNullValue(
+                                    llvmType->getStructElementType(fields[i].layoutIndex));
+                            }));
+                        elementTypes.push_back(elements.back()->getType());
+                        i++;
+                        continue;
+                    }
+                    elements.push_back(
+                        llvm::Constant::getNullValue(llvmType->getStructElementType(fields[i].layoutIndex)));
+                    elementTypes.push_back(elements.back()->getType());
+                    for (; i < aggregate.vector.size() && fields[i].bitFieldBounds; i++)
+                    {
+                        auto* value = cld::match(
+                            aggregate.vector[i],
+                            [&](const Aggregate& subAggregate) -> llvm::Constant* {
+                                return self(*fields[i].type, llvmType->getStructElementType(fields[i].layoutIndex),
+                                            subAggregate);
+                            },
+                            [&](llvm::Constant* constant) -> llvm::Constant*
+                            {
+                                if (constant)
+                                {
+                                    return constant;
+                                }
+                                return llvm::Constant::getNullValue(
+                                    llvmType->getStructElementType(fields[i].layoutIndex));
+                            });
+                        auto size = fields[i].bitFieldBounds->second - fields[i].bitFieldBounds->first;
+                        auto* mask = llvm::ConstantInt::get(value->getType(), (1u << size) - 1);
+                        value = llvm::ConstantExpr::getAnd(value, mask);
+                        value = llvm::ConstantExpr::getShl(
+                            value, llvm::ConstantInt::get(value->getType(), fields[i].bitFieldBounds->first));
+                        mask = llvm::ConstantExpr::getShl(
+                            mask, llvm::ConstantInt::get(mask->getType(), fields[i].bitFieldBounds->first));
+                        mask = llvm::ConstantExpr::getNot(mask);
+                        elements.back() = llvm::ConstantExpr::getAnd(elements.back(), mask);
+                        elements.back() = llvm::ConstantExpr::getOr(elements.back(), value);
+                    }
+                }
+                return llvm::ConstantStruct::get(llvm::StructType::get(module.getContext(), elementTypes), elements);
+            }
+            if (cld::Semantics::isArray(type))
+            {
+                bool isSame = true;
+                llvm::Type* elementType = nullptr;
+                std::vector<llvm::Type*> elementTypes;
+                std::vector<llvm::Constant*> elements;
+                for (std::size_t i = 0; i < aggregate.vector.size(); i++)
                 {
                     elements.push_back(cld::match(
                         aggregate.vector[i],
-                        [&](const Aggregate& subAggregate) -> llvm::Constant* {
-                            return self(*fields[i].type, llvmType->getStructElementType(fields[i].layoutIndex),
-                                        subAggregate);
-                        },
-                        [&](llvm::Constant* constant) {
+                        [&](llvm::Constant* constant)
+                        {
                             if (constant)
                             {
                                 return constant;
                             }
-                            return llvm::Constant::getNullValue(llvmType->getStructElementType(fields[i].layoutIndex));
+                            return llvm::Constant::getNullValue(llvmType->getArrayElementType());
+                        },
+                        [&](const Aggregate& subAggregate) -> llvm::Constant* {
+                            return self(type.as<cld::Semantics::ArrayType>().getType(), llvmType->getArrayElementType(),
+                                        subAggregate);
                         }));
                     elementTypes.push_back(elements.back()->getType());
-                    i++;
-                    continue;
+                    if (elementType == nullptr)
+                    {
+                        elementType = elementTypes.back();
+                    }
+                    else
+                    {
+                        isSame = isSame && elementType == elementTypes.back();
+                    }
                 }
-                elements.push_back(llvm::Constant::getNullValue(llvmType->getStructElementType(fields[i].layoutIndex)));
-                elementTypes.push_back(elements.back()->getType());
-                for (; i < aggregate.vector.size() && fields[i].bitFieldBounds; i++)
+                if (isSame)
                 {
-                    auto* value = cld::match(
-                        aggregate.vector[i],
-                        [&](const Aggregate& subAggregate) -> llvm::Constant* {
-                            return self(*fields[i].type, llvmType->getStructElementType(fields[i].layoutIndex),
-                                        subAggregate);
-                        },
-                        [&](llvm::Constant* constant) -> llvm::Constant* {
-                            if (constant)
-                            {
-                                return constant;
-                            }
-                            return llvm::Constant::getNullValue(llvmType->getStructElementType(fields[i].layoutIndex));
-                        });
-                    auto size = fields[i].bitFieldBounds->second - fields[i].bitFieldBounds->first;
-                    auto* mask = llvm::ConstantInt::get(value->getType(), (1u << size) - 1);
-                    value = llvm::ConstantExpr::getAnd(value, mask);
-                    value = llvm::ConstantExpr::getShl(
-                        value, llvm::ConstantInt::get(value->getType(), fields[i].bitFieldBounds->first));
-                    mask = llvm::ConstantExpr::getShl(
-                        mask, llvm::ConstantInt::get(mask->getType(), fields[i].bitFieldBounds->first));
-                    mask = llvm::ConstantExpr::getNot(mask);
-                    elements.back() = llvm::ConstantExpr::getAnd(elements.back(), mask);
-                    elements.back() = llvm::ConstantExpr::getOr(elements.back(), value);
+                    return llvm::ConstantArray::get(llvm::ArrayType::get(elementType, elements.size()), elements);
                 }
+                return llvm::ConstantStruct::get(llvm::StructType::get(module.getContext(), elementTypes), elements);
             }
-            return llvm::ConstantStruct::get(llvm::StructType::get(module.getContext(), elementTypes), elements);
-        }
-        if (cld::Semantics::isArray(type))
-        {
-            bool isSame = true;
-            llvm::Type* elementType = nullptr;
-            std::vector<llvm::Type*> elementTypes;
+            if (cld::Semantics::isUnion(type))
+            {
+                // Union
+                auto fields = cld::Semantics::getFieldLayout(type);
+                auto* llvmSubType = codeGenerator.visit(*fields[*aggregate.unionIndex].type);
+                llvm::Constant* element = cld::match(
+                    aggregate.vector[0], [](llvm::Constant* constant) -> llvm::Constant* { return constant; },
+                    [&](const Aggregate& subAggregate) -> llvm::Constant* {
+                        return self(*fields[*aggregate.unionIndex].type, llvmSubType, subAggregate);
+                    });
+                auto paddingSize = module.getDataLayout().getTypeAllocSize(llvmType).getKnownMinSize()
+                                   - module.getDataLayout().getTypeAllocSize(element->getType()).getKnownMinSize();
+                if (paddingSize == 0)
+                {
+                    return llvm::ConstantStruct::get(llvm::StructType::get(element->getType()), element);
+                }
+                auto* padding = llvm::ArrayType::get(llvm::IntegerType::getInt8Ty(module.getContext()), paddingSize);
+                auto* newType = llvm::StructType::get(element->getType(), padding);
+
+                return llvm::ConstantStruct::get(newType, {element, llvm::UndefValue::get(padding)});
+            }
+            // Vector
+            CLD_ASSERT(cld::Semantics::isVector(type));
             std::vector<llvm::Constant*> elements;
             for (std::size_t i = 0; i < aggregate.vector.size(); i++)
             {
-                elements.push_back(cld::match(
-                    aggregate.vector[i],
-                    [&](llvm::Constant* constant) {
-                        if (constant)
-                        {
-                            return constant;
-                        }
-                        return llvm::Constant::getNullValue(llvmType->getArrayElementType());
-                    },
-                    [&](const Aggregate& subAggregate) -> llvm::Constant* {
-                        return self(type.as<cld::Semantics::ArrayType>().getType(), llvmType->getArrayElementType(),
-                                    subAggregate);
-                    }));
-                elementTypes.push_back(elements.back()->getType());
-                if (elementType == nullptr)
+                elements.push_back(cld::get<llvm::Constant*>(aggregate.vector[i]));
+                if (!elements.back())
                 {
-                    elementType = elementTypes.back();
-                }
-                else
-                {
-                    isSame = isSame && elementType == elementTypes.back();
+                    elements.back() = llvm::Constant::getNullValue(llvmType->getScalarType());
                 }
             }
-            if (isSame)
-            {
-                return llvm::ConstantArray::get(llvm::ArrayType::get(elementType, elements.size()), elements);
-            }
-            return llvm::ConstantStruct::get(llvm::StructType::get(module.getContext(), elementTypes), elements);
-        }
-        if (cld::Semantics::isUnion(type))
-        {
-            // Union
-            auto fields = cld::Semantics::getFieldLayout(type);
-            auto* llvmSubType = codeGenerator.visit(*fields[*aggregate.unionIndex].type);
-            llvm::Constant* element = cld::match(
-                aggregate.vector[0], [](llvm::Constant* constant) -> llvm::Constant* { return constant; },
-                [&](const Aggregate& subAggregate) -> llvm::Constant* {
-                    return self(*fields[*aggregate.unionIndex].type, llvmSubType, subAggregate);
-                });
-            auto paddingSize = module.getDataLayout().getTypeAllocSize(llvmType).getKnownMinSize()
-                               - module.getDataLayout().getTypeAllocSize(element->getType()).getKnownMinSize();
-            if (paddingSize == 0)
-            {
-                return llvm::ConstantStruct::get(llvm::StructType::get(element->getType()), element);
-            }
-            auto* padding = llvm::ArrayType::get(llvm::IntegerType::getInt8Ty(module.getContext()), paddingSize);
-            auto* newType = llvm::StructType::get(element->getType(), padding);
-
-            return llvm::ConstantStruct::get(newType, {element, llvm::UndefValue::get(padding)});
-        }
-        // Vector
-        CLD_ASSERT(cld::Semantics::isVector(type));
-        std::vector<llvm::Constant*> elements;
-        for (std::size_t i = 0; i < aggregate.vector.size(); i++)
-        {
-            elements.push_back(cld::get<llvm::Constant*>(aggregate.vector[i]));
-            if (!elements.back())
-            {
-                elements.back() = llvm::Constant::getNullValue(llvmType->getScalarType());
-            }
-        }
-        return llvm::ConstantVector::get(elements);
-    }}(type, llvmType, constants);
+            return llvm::ConstantVector::get(elements);
+        }}(type, llvmType, constants);
 }
 } // namespace
 
@@ -1571,7 +1581,8 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::Initialize
 {
     return cld::match(
         initializer,
-        [&](const cld::IntrVarPtr<Semantics::ExpressionBase>& expression) -> Value {
+        [&](const cld::IntrVarPtr<Semantics::ExpressionBase>& expression) -> Value
+        {
             if (std::holds_alternative<Value>(pointer))
             {
                 auto value = visit(*expression);
@@ -1591,7 +1602,8 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::Initialize
             }
             return visit(*expression);
         },
-        [&](const Semantics::InitializerList& initializerList) -> Value {
+        [&](const Semantics::InitializerList& initializerList) -> Value
+        {
             if (std::holds_alternative<llvm::Type*>(pointer))
             {
                 return visitStaticInitializerList(*this, initializerList, type, cld::get<llvm::Type*>(pointer));

@@ -20,14 +20,16 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::CompoundStatement& compo
     {
         cld::match(
             iter,
-            [&](const std::shared_ptr<const Semantics::ExpressionBase>& expr) {
+            [&](const std::shared_ptr<const Semantics::ExpressionBase>& expr)
+            {
                 auto result = m_valSizes.emplace(
                     expr, m_builder.CreateIntCast(visit(*expr).value, m_builder.getInt64Ty(),
                                                   expr->getType().as<Semantics::PrimitiveType>().isSigned()));
                 (void)result;
                 CLD_ASSERT(result.second);
             },
-            [&](const cld::IntrVarPtr<Semantics::Declaration>& decl) {
+            [&](const cld::IntrVarPtr<Semantics::Declaration>& decl)
+            {
                 if (auto* varDecl = decl->tryAs<Semantics::VariableDeclaration>())
                 {
                     visit(*varDecl);
@@ -48,7 +50,8 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::CompoundStatement& compo
 void cld::CGLLVM::CodeGenerator::visit(const Semantics::Statement& statement)
 {
     statement.match([&](const auto& statement) { visit(statement); },
-                    [&](const Semantics::ExpressionStatement& expressionStatement) {
+                    [&](const Semantics::ExpressionStatement& expressionStatement)
+                    {
                         if (!expressionStatement.getExpression() || !m_builder.GetInsertBlock())
                         {
                             return;
@@ -91,7 +94,8 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::ForStatement& forStateme
     std::optional<cld::ValueReset<llvm::DIScope*>> reset;
     cld::match(
         forStatement.getInitial(), [](std::monostate) {},
-        [&](const std::vector<cld::IntrVarPtr<Semantics::Declaration>>& declaration) {
+        [&](const std::vector<cld::IntrVarPtr<Semantics::Declaration>>& declaration)
+        {
             if (m_options.debugEmission != cld::CGLLVM::DebugEmission::None)
             {
                 if (!m_scopeIdToScope[forStatement.getScope()])

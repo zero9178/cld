@@ -75,7 +75,8 @@ cld::Semantics::TranslationUnit cld::Semantics::SemanticAnalysis::visit(const Sy
         }
         cld::match(
             declared.declared, [](const auto&) {},
-            [&declared = declared, this](VariableDeclaration* declaration) {
+            [&declared = declared, this](VariableDeclaration* declaration)
+            {
                 if (declaration->getKind() == VariableDeclaration::TentativeDefinition
                     && !isCompleteType(declaration->getType()) && !isAbstractArray(declaration->getType()))
                 {
@@ -90,7 +91,8 @@ cld::Semantics::TranslationUnit cld::Semantics::SemanticAnalysis::visit(const Sy
                 log(Warnings::Semantics::UNUSED_VARIABLE_N.args(*declared.identifier, m_sourceInterface,
                                                                 *declared.identifier));
             },
-            [&declared = declared, this](FunctionDefinition* functionDefinition) {
+            [&declared = declared, this](FunctionDefinition* functionDefinition)
+            {
                 if (functionDefinition->isUsed() || functionDefinition->getLinkage() == Linkage::External
                     || functionDefinition->hasAttribute<UsedAttribute>())
                 {
@@ -197,23 +199,27 @@ std::vector<cld::IntrVarPtr<cld::Semantics::Useable>>
     {
         cld::match(
             iter,
-            [&](const Syntax::DirectDeclaratorParenthesesParameters& dd) {
+            [&](const Syntax::DirectDeclaratorParenthesesParameters& dd)
+            {
                 parameters = &dd;
                 identifierList = nullptr;
             },
-            [&](const Syntax::DirectDeclaratorParenthesesIdentifiers& dd) {
+            [&](const Syntax::DirectDeclaratorParenthesesIdentifiers& dd)
+            {
                 parameters = nullptr;
                 identifierList = &dd;
             },
             [](const Syntax::DirectDeclaratorIdentifier&) {},
-            [&](const Syntax::DirectDeclaratorParentheses& parentheses) {
+            [&](const Syntax::DirectDeclaratorParentheses& parentheses)
+            {
                 if (!parentheses.getDeclarator().getPointers().empty())
                 {
                     parameters = nullptr;
                     identifierList = nullptr;
                 }
             },
-            [&](const auto&) {
+            [&](const auto&)
+            {
                 parameters = nullptr;
                 identifierList = nullptr;
             });
@@ -246,9 +252,9 @@ std::vector<cld::IntrVarPtr<cld::Semantics::Useable>>
         auto begin = parameterDeclarations.begin();
         for (auto& iter : identifierList->getIdentifiers())
         {
-            auto element = std::find_if(begin, parameterDeclarations.end(), [iter](const auto& ptr) {
-                return ptr->getNameToken()->getText() == iter->getText();
-            });
+            auto element =
+                std::find_if(begin, parameterDeclarations.end(),
+                             [iter](const auto& ptr) { return ptr->getNameToken()->getText() == iter->getText(); });
             if (element == parameterDeclarations.end())
             {
                 // Possible in error cases
@@ -398,7 +404,8 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
     {
         bool declaresSomething = std::any_of(
             node.getDeclarationSpecifiers().begin(), node.getDeclarationSpecifiers().end(),
-            [](const Syntax::DeclarationSpecifier& declarationSpecifier) {
+            [](const Syntax::DeclarationSpecifier& declarationSpecifier)
+            {
                 if (!std::holds_alternative<Syntax::TypeSpecifier>(declarationSpecifier))
                 {
                     return false;
@@ -915,14 +922,16 @@ std::vector<cld::Semantics::CompoundStatement::Variant>
     std::vector<CompoundStatement::Variant> result;
     cld::match(
         node,
-        [&](const Syntax::Declaration& declaration) {
+        [&](const Syntax::Declaration& declaration)
+        {
             auto tmp = visit(declaration);
             result.reserve(result.size() + tmp.size());
             std::transform(std::move_iterator(tmp.begin()), std::move_iterator(tmp.end()), std::back_inserter(result),
-                           [](DeclRetVariant&& variant) {
-                               return cld::match(std::move(variant), [](auto&& value) -> CompoundStatement::Variant {
-                                   return {std::move(value)};
-                               });
+                           [](DeclRetVariant&& variant)
+                           {
+                               return cld::match(std::move(variant),
+                                                 [](auto&& value) -> CompoundStatement::Variant
+                                                 { return {std::move(value)}; });
                            });
         },
         [&](const Syntax::Statement& statement) { result.emplace_back(visit(statement)); });
@@ -933,7 +942,8 @@ cld::IntrVarPtr<cld::Semantics::Statement> cld::Semantics::SemanticAnalysis::vis
 {
     return cld::match(
         node, [&](const auto& node) -> cld::IntrVarPtr<Statement> { return visit(node); },
-        [&](const Syntax::ExpressionStatement& node) -> cld::IntrVarPtr<Statement> {
+        [&](const Syntax::ExpressionStatement& node) -> cld::IntrVarPtr<Statement>
+        {
             if (!node.getOptionalExpression())
             {
                 return std::make_unique<ExpressionStatement>(m_currentScope, nullptr);
@@ -1354,13 +1364,15 @@ cld::Expected<cld::Semantics::ConstValue, std::vector<cld::Message>>
 {
     std::vector<Message> messages;
     bool errors = false;
-    auto value = evaluate(constantExpression, mode, [&](const Message& message) {
-        if (message.getSeverity() == Severity::Error)
-        {
-            errors = true;
-        }
-        messages.push_back(message);
-    });
+    auto value = evaluate(constantExpression, mode,
+                          [&](const Message& message)
+                          {
+                              if (message.getSeverity() == Severity::Error)
+                              {
+                                  errors = true;
+                              }
+                              messages.push_back(message);
+                          });
     if (errors)
     {
         return {std::move(messages)};
@@ -1373,7 +1385,8 @@ cld::Semantics::ConstValue
     cld::Semantics::SemanticAnalysis::evaluate(const ExpressionBase& expression, Mode mode,
                                                cld::function_ref<void(const Message&)> logger) const
 {
-    auto typeCheck = [=](const ExpressionBase& exp, const ConstValue& value) {
+    auto typeCheck = [=](const ExpressionBase& exp, const ConstValue& value)
+    {
         if (!value.isUndefined() && !isInteger(exp.getType()) && mode == Integer)
         {
             logger(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS.args(exp, m_sourceInterface,
@@ -1384,7 +1397,8 @@ cld::Semantics::ConstValue
     };
     return expression.match(
         [](const ErrorExpression&) { return ConstValue{}; },
-        [&](const Constant& constant) -> ConstValue {
+        [&](const Constant& constant) -> ConstValue
+        {
             if (std::holds_alternative<std::string>(constant.getValue())
                 || std::holds_alternative<Lexer::NonCharString>(constant.getValue()))
             {
@@ -1406,7 +1420,8 @@ cld::Semantics::ConstValue
             }
             CLD_UNREACHABLE;
         },
-        [&](const CommaExpression& commaExpression) -> ConstValue {
+        [&](const CommaExpression& commaExpression) -> ConstValue
+        {
             for (auto& [exp, comma] : commaExpression.getCommaExpressions())
             {
                 (void)exp;
@@ -1414,7 +1429,8 @@ cld::Semantics::ConstValue
             }
             return evaluate(commaExpression.getLastExpression(), mode, logger);
         },
-        [&](const CompoundLiteral& compoundLiteral) -> ConstValue {
+        [&](const CompoundLiteral& compoundLiteral) -> ConstValue
+        {
             if (mode != Initialization)
             {
                 logger(Errors::Semantics::COMPOUND_LITERAL_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
@@ -1423,7 +1439,8 @@ cld::Semantics::ConstValue
             }
             return {AddressConstant{}};
         },
-        [&](const DeclarationRead& declRead) -> ConstValue {
+        [&](const DeclarationRead& declRead) -> ConstValue
+        {
             if (mode != Initialization
                 || declRead.getDeclRead().match([](const FunctionDefinition&) { return false; },
                                                 [](const FunctionDeclaration&) { return false; },
@@ -1441,7 +1458,8 @@ cld::Semantics::ConstValue
             }
             return {AddressConstant{}};
         },
-        [&](const Conversion& conversion) -> ConstValue {
+        [&](const Conversion& conversion) -> ConstValue
+        {
             auto exp = evaluate(conversion.getExpression(), mode, logger);
             if (exp.isUndefined())
             {
@@ -1466,7 +1484,8 @@ cld::Semantics::ConstValue
             }
             return exp.castTo(conversion.getType(), this, getLanguageOptions());
         },
-        [&](const BinaryOperator& binaryOperator) -> ConstValue {
+        [&](const BinaryOperator& binaryOperator) -> ConstValue
+        {
             auto lhs = evaluate(binaryOperator.getLeftExpression(), mode, logger);
             bool integer = typeCheck(binaryOperator.getLeftExpression(), lhs);
             if (binaryOperator.getKind() == BinaryOperator::LogicAnd
@@ -1637,7 +1656,8 @@ cld::Semantics::ConstValue
             }
             CLD_UNREACHABLE;
         },
-        [&](const Cast& cast) -> ConstValue {
+        [&](const Cast& cast) -> ConstValue
+        {
             if (mode == Integer && !isInteger(expression.getType()))
             {
                 logger(Errors::Semantics::CANNOT_CAST_TO_NON_INTEGER_TYPE_IN_INTEGER_CONSTANT_EXPRESSION.args(
@@ -1664,7 +1684,8 @@ cld::Semantics::ConstValue
             }
             return ret;
         },
-        [&](const UnaryOperator& unaryOperator) -> ConstValue {
+        [&](const UnaryOperator& unaryOperator) -> ConstValue
+        {
             if (unaryOperator.getKind() == UnaryOperator::AddressOf)
             {
                 if (unaryOperator.getOperand().is<UnaryOperator>())
@@ -1716,7 +1737,8 @@ cld::Semantics::ConstValue
             }
             CLD_UNREACHABLE;
         },
-        [&](const SizeofOperator& sizeofOperator) -> ConstValue {
+        [&](const SizeofOperator& sizeofOperator) -> ConstValue
+        {
             if (sizeofOperator.getSize())
             {
                 auto type = PrimitiveType(getLanguageOptions().sizeTType, getLanguageOptions());
@@ -1726,7 +1748,8 @@ cld::Semantics::ConstValue
                 sizeofOperator, m_sourceInterface, sizeofOperator));
             return {};
         },
-        [&](const SubscriptOperator& subscriptOperator) -> ConstValue {
+        [&](const SubscriptOperator& subscriptOperator) -> ConstValue
+        {
             auto lhs = evaluate(subscriptOperator.getLeftExpression(), mode, logger);
             if (!typeCheck(subscriptOperator.getLeftExpression(), lhs))
             {
@@ -1739,7 +1762,8 @@ cld::Semantics::ConstValue
             }
             return {AddressConstant{}};
         },
-        [&](const Conditional& conditional) -> ConstValue {
+        [&](const Conditional& conditional) -> ConstValue
+        {
             auto boolean = evaluate(conditional.getBoolExpression(), mode, logger);
             if (!typeCheck(conditional.getBoolExpression(), boolean))
             {
@@ -1764,26 +1788,31 @@ cld::Semantics::ConstValue
             }
             return result.castTo(expression.getType(), this, getLanguageOptions());
         },
-        [&](const Assignment& assignment) -> ConstValue {
+        [&](const Assignment& assignment) -> ConstValue
+        {
             logger(Errors::Semantics::N_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
                 *assignment.getOperatorToken(), m_sourceInterface, *assignment.getOperatorToken()));
             return {};
         },
-        [&](const CallExpression& call) -> ConstValue {
+        [&](const CallExpression& call) -> ConstValue
+        {
             logger(Errors::Semantics::FUNCTION_CALL_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(call, m_sourceInterface,
                                                                                             call));
             return {};
         },
-        [&](const MemberAccess& memberAccess) -> ConstValue {
+        [&](const MemberAccess& memberAccess) -> ConstValue
+        {
             auto exp = evaluate(memberAccess.getRecordExpression(), mode, logger);
             return {};
         },
-        [&](const BuiltinVAArg& builtinVaArg) -> ConstValue {
+        [&](const BuiltinVAArg& builtinVaArg) -> ConstValue
+        {
             logger(Errors::Semantics::FUNCTION_CALL_NOT_ALLOWED_IN_CONSTANT_EXPRESSION.args(
                 builtinVaArg, m_sourceInterface, builtinVaArg));
             return {};
         },
-        [&](const BuiltinOffsetOf& builtinOffsetOf) -> ConstValue {
+        [&](const BuiltinOffsetOf& builtinOffsetOf) -> ConstValue
+        {
             auto type = PrimitiveType(getLanguageOptions().sizeTType, getLanguageOptions());
             return {llvm::APSInt(llvm::APInt(type.as<PrimitiveType>().getBitCount(), builtinOffsetOf.getOffset()))};
         });

@@ -90,9 +90,9 @@ class Preprocessor final : private cld::PPSourceInterface
         }
         if (lhs.argumentList
             && !std::equal(lhs.argumentList->begin(), lhs.argumentList->end(), rhs.argumentList->begin(),
-                           rhs.argumentList->end(), [](const cld::Lexer::PPToken& lhs, const cld::Lexer::PPToken& rhs) {
-                               return lhs.getValue() == rhs.getValue();
-                           }))
+                           rhs.argumentList->end(),
+                           [](const cld::Lexer::PPToken& lhs, const cld::Lexer::PPToken& rhs)
+                           { return lhs.getValue() == rhs.getValue(); }))
         {
             return false;
         }
@@ -101,7 +101,9 @@ class Preprocessor final : private cld::PPSourceInterface
             return false;
         }
         return std::equal(lhs.replacement.begin(), lhs.replacement.end(), rhs.replacement.begin(),
-                          rhs.replacement.end(), [](const cld::Lexer::PPToken& lhs, const cld::Lexer::PPToken& rhs) {
+                          rhs.replacement.end(),
+                          [](const cld::Lexer::PPToken& lhs, const cld::Lexer::PPToken& rhs)
+                          {
                               if (lhs.getTokenType() != rhs.getTokenType())
                               {
                                   return false;
@@ -208,13 +210,15 @@ class Preprocessor final : private cld::PPSourceInterface
             {
                 if (!inTokenPasting)
                 {
-                    macroSubstitute(std::move(copy), [&result, iter](auto&& vector) {
-                        if (!vector.empty())
-                        {
-                            vector[0].setLeadingWhitespace(iter->hasLeadingWhitespace());
-                        }
-                        append(result, std::move(vector));
-                    });
+                    macroSubstitute(std::move(copy),
+                                    [&result, iter](auto&& vector)
+                                    {
+                                        if (!vector.empty())
+                                        {
+                                            vector[0].setLeadingWhitespace(iter->hasLeadingWhitespace());
+                                        }
+                                        append(result, std::move(vector));
+                                    });
                 }
                 else
                 {
@@ -335,36 +339,39 @@ class Preprocessor final : private cld::PPSourceInterface
         {
             auto count = 0;
             auto* closeParenthesesOrComma =
-                std::find_if(first, end, [&count, &line](const cld::Lexer::PPToken& token) mutable -> bool {
-                    if (token.getTokenType() == cld::Lexer::TokenType::Newline)
-                    {
-                        line++;
-                        return false;
-                    }
-                    if (token.getTokenType() == cld::Lexer::TokenType::CloseParentheses)
-                    {
-                        if (count == 0)
-                        {
-                            return true;
-                        }
-                        count--;
-                    }
-                    else if (token.getTokenType() == cld::Lexer::TokenType::OpenParentheses)
-                    {
-                        count++;
-                    }
-                    else if (token.getTokenType() == cld::Lexer::TokenType::Comma && count == 0)
-                    {
-                        return true;
-                    }
-                    return false;
-                });
+                std::find_if(first, end,
+                             [&count, &line](const cld::Lexer::PPToken& token) mutable -> bool
+                             {
+                                 if (token.getTokenType() == cld::Lexer::TokenType::Newline)
+                                 {
+                                     line++;
+                                     return false;
+                                 }
+                                 if (token.getTokenType() == cld::Lexer::TokenType::CloseParentheses)
+                                 {
+                                     if (count == 0)
+                                     {
+                                         return true;
+                                     }
+                                     count--;
+                                 }
+                                 else if (token.getTokenType() == cld::Lexer::TokenType::OpenParentheses)
+                                 {
+                                     count++;
+                                 }
+                                 else if (token.getTokenType() == cld::Lexer::TokenType::Comma && count == 0)
+                                 {
+                                     return true;
+                                 }
+                                 return false;
+                             });
             if (closeParenthesesOrComma == end)
             {
                 // There can be infinitely many newlines in between the name and the (
-                auto* openParentheses = std::find_if(&namePos, end, [](const cld::Lexer::PPToken& token) {
-                    return token.getTokenType() == cld::Lexer::TokenType::OpenParentheses;
-                });
+                auto* openParentheses =
+                    std::find_if(&namePos, end,
+                                 [](const cld::Lexer::PPToken& token)
+                                 { return token.getTokenType() == cld::Lexer::TokenType::OpenParentheses; });
                 log(cld::Errors::Parser::EXPECTED_N.args(*(closeParenthesesOrComma - 1), *this,
                                                          cld::Lexer::TokenType::CloseParentheses,
                                                          *(closeParenthesesOrComma - 1)));
@@ -593,10 +600,10 @@ class Preprocessor final : private cld::PPSourceInterface
             }
             if (result->second.argumentList)
             {
-                auto* maybeOpenParenth =
-                    std::find_if(iter + 1, tokens.data() + tokens.size(), [](const cld::Lexer::PPToken& token) {
-                        return token.getTokenType() != cld::Lexer::TokenType::Newline;
-                    });
+                auto* maybeOpenParenth = std::find_if(iter + 1, tokens.data() + tokens.size(),
+                                                      [](const cld::Lexer::PPToken& token) {
+                                                          return token.getTokenType() != cld::Lexer::TokenType::Newline;
+                                                      });
                 if (maybeOpenParenth == tokens.data() + tokens.size()
                     || maybeOpenParenth->getTokenType() != cld::Lexer::TokenType::OpenParentheses)
                 {
@@ -648,7 +655,8 @@ class Preprocessor final : private cld::PPSourceInterface
             m_substitutions.push_back({});
             CLD_ASSERT(i == m_substitutions.size() - 1);
             iter = std::find_if(iter + 1, tokens.data() + tokens.size(),
-                                [&line](const cld::Lexer::PPToken& token) {
+                                [&line](const cld::Lexer::PPToken& token)
+                                {
                                     if (token.getTokenType() == cld::Lexer::TokenType::Newline)
                                     {
                                         line++;
@@ -868,9 +876,8 @@ class Preprocessor final : private cld::PPSourceInterface
         std::vector<cld::Lexer::PPToken> result;
         macroSubstitute(
             tokens,
-            [&result](auto&& tokens) {
-                result.insert(result.end(), std::move_iterator(tokens.begin()), std::move_iterator(tokens.end()));
-            },
+            [&result](auto&& tokens)
+            { result.insert(result.end(), std::move_iterator(tokens.begin()), std::move_iterator(tokens.end())); },
             true);
         bool errorsOccurred = false;
         auto ctokens =
@@ -963,9 +970,11 @@ class Preprocessor final : private cld::PPSourceInterface
             m_errorsOccurred = true;
             return {};
         }
-        cld::Semantics::SemanticAnalysis analysis(*this, m_reporter, &errorsOccurred, [this](std::string_view macro) {
-            return macro == "__FILE__" || macro == "__LINE__" || m_defines.count(macro) != 0;
-        });
+        cld::Semantics::SemanticAnalysis analysis(*this, m_reporter, &errorsOccurred,
+                                                  [this](std::string_view macro) {
+                                                      return macro == "__FILE__" || macro == "__LINE__"
+                                                             || m_defines.count(macro) != 0;
+                                                  });
         auto exp = analysis.visit(*tree);
         if (errorsOccurred)
         {
@@ -1129,9 +1138,9 @@ public:
                 return std::nullopt;
             }
             if (std::any_of(cld::get<cld::PP::TextBlock>(iter).tokens.begin(),
-                            cld::get<cld::PP::TextBlock>(iter).tokens.end(), [](const cld::Lexer::PPToken& ppToken) {
-                                return ppToken.getTokenType() != cld::Lexer::TokenType::Newline;
-                            }))
+                            cld::get<cld::PP::TextBlock>(iter).tokens.end(),
+                            [](const cld::Lexer::PPToken& ppToken)
+                            { return ppToken.getTokenType() != cld::Lexer::TokenType::Newline; }))
             {
                 return std::nullopt;
             }
@@ -1302,9 +1311,9 @@ public:
         else
         {
             std::vector<cld::Lexer::PPToken> result;
-            macroSubstitute(includeTag.tokens, [&result](auto&& tokens) {
-                result.insert(result.end(), std::move_iterator(tokens.begin()), std::move_iterator(tokens.end()));
-            });
+            macroSubstitute(
+                includeTag.tokens, [&result](auto&& tokens)
+                { result.insert(result.end(), std::move_iterator(tokens.begin()), std::move_iterator(tokens.end())); });
             if (result.empty())
             {
                 if (includeTag.tokens.empty())
@@ -1496,9 +1505,9 @@ public:
         }
         else
         {
-            macroSubstitute(lineTag.tokens, [&result](auto&& tokens) {
-                result.insert(result.end(), std::move_iterator(tokens.begin()), std::move_iterator(tokens.end()));
-            });
+            macroSubstitute(
+                lineTag.tokens, [&result](auto&& tokens)
+                { result.insert(result.end(), std::move_iterator(tokens.begin()), std::move_iterator(tokens.end())); });
             if (result.empty())
             {
                 log(cld::Errors::PP::EXPECTED_A_NUMBER_AFTER_LINE.args(*lineTag.lineToken, *this, *lineTag.lineToken));
@@ -1593,7 +1602,8 @@ public:
         if (!macro->hasEllipse)
         {
             const auto* iter = std::find_if(macro->replacement.begin(), macro->replacement.end(),
-                                            [](const cld::Lexer::PPToken& token) {
+                                            [](const cld::Lexer::PPToken& token)
+                                            {
                                                 if (token.getTokenType() != cld::Lexer::TokenType::Identifier)
                                                 {
                                                     return false;
@@ -1616,9 +1626,8 @@ public:
                     if (iter == macro->replacement.end() || iter->getTokenType() != cld::Lexer::TokenType::Identifier
                         || (std::none_of(macro->argumentList->begin(),
                                          macro->argumentList->end() - (macro->hasEllipse ? 1 : 0),
-                                         [&iter](const cld::Lexer::PPToken& token) {
-                                             return token.getValue() == iter->getValue();
-                                         })
+                                         [&iter](const cld::Lexer::PPToken& token)
+                                         { return token.getValue() == iter->getValue(); })
                             && (!macro->hasEllipse || iter->getValue() != "__VA_ARGS__")))
                     {
                         log(cld::Errors::PP::EXPECTED_AN_ARGUMENT_AFTER_POUND.args(*iter, *this, *(iter - 1), *iter));

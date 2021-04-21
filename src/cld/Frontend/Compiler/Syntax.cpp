@@ -1439,11 +1439,11 @@ cld::Syntax::GNUASMQualifier::GNUASMQualifier(Lexer::CTokenIterator qualifier)
               switch (qualifier->getTokenType())
               {
                   case Lexer::TokenType::VolatileKeyword: return Qualifier::Volatile;
-              case Lexer::TokenType::InlineKeyword: return Qualifier::Inline;
-              case Lexer::TokenType::GotoKeyword: return Qualifier::Goto;
-              default: CLD_UNREACHABLE;
-          }
-      }())
+                  case Lexer::TokenType::InlineKeyword: return Qualifier::Inline;
+                  case Lexer::TokenType::GotoKeyword: return Qualifier::Goto;
+                  default: CLD_UNREACHABLE;
+              }
+          }())
 {
 }
 

@@ -83,10 +83,12 @@ class SemanticAnalysis final : public ProgramInterface
     {
         m_functionScopes.push_back({&functionDefinition, {}});
         m_currentFunctionScope = m_functionScopes.size() - 1;
-        return cld::ScopeExit([this] {
-            resolveGotos();
-            m_currentFunctionScope = END_OF_SCOPES;
-        });
+        return cld::ScopeExit(
+            [this]
+            {
+                resolveGotos();
+                m_currentFunctionScope = END_OF_SCOPES;
+            });
     }
 
     [[nodiscard]] bool inFunction() const
@@ -110,20 +112,24 @@ class SemanticAnalysis final : public ProgramInterface
         m_scopes[m_currentScope].subScopes.push_back(m_scopes.size());
         m_scopes.push_back({m_currentScope, {}, {}, {}});
         m_currentScope = m_scopes.size() - 1;
-        return cld::ScopeExit([&, prev = m_scopes.back().previousScope] {
-            diagnoseUnusedLocals();
-            m_currentScope = prev;
-        });
+        return cld::ScopeExit(
+            [&, prev = m_scopes.back().previousScope]
+            {
+                diagnoseUnusedLocals();
+                m_currentScope = prev;
+            });
     }
 
     [[nodiscard]] auto pushLoop(LoopStatements loop)
     {
         m_loopStatements.push_back(loop);
         cld::match(loop, [&](auto&& value) { m_breakableStatements.emplace_back(value); });
-        return cld::ScopeExit([&] {
-            m_loopStatements.pop_back();
-            m_breakableStatements.pop_back();
-        });
+        return cld::ScopeExit(
+            [&]
+            {
+                m_loopStatements.pop_back();
+                m_breakableStatements.pop_back();
+            });
     }
 
     [[nodiscard]] auto pushSwitch(const SwitchStatement& switchStatement)

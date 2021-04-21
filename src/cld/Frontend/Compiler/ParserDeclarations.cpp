@@ -73,9 +73,9 @@ TranslationUnit cld::Parser::parseTranslationUnit(Lexer::CTokenIterator& begin, 
         {
             // I'd love to make this a GNU only extension but MinGW headers have this defect and I don't want to
             // to switch to gnu99 just to use MinGW
-            begin = std::find_if_not(begin, end, [](const Lexer::CToken& token) {
-                return token.getTokenType() == Lexer::TokenType ::SemiColon;
-            });
+            begin = std::find_if_not(begin, end,
+                                     [](const Lexer::CToken& token)
+                                     { return token.getTokenType() == Lexer::TokenType ::SemiColon; });
             auto result = parseExternalDeclaration(begin, end, context.withRecoveryTokens(firstExternalDeclarationSet));
             if (result)
             {
@@ -104,7 +104,8 @@ std::optional<cld::Syntax::Declaration> finishDeclaration(
     using namespace cld::Parser;
     using namespace cld;
     bool isTypedef = std::any_of(declarationSpecifiers.begin(), declarationSpecifiers.end(),
-                                 [](const DeclarationSpecifier& declarationSpecifier) {
+                                 [](const DeclarationSpecifier& declarationSpecifier)
+                                 {
                                      auto* storage = std::get_if<StorageClassSpecifier>(&declarationSpecifier);
                                      if (!storage)
                                      {
@@ -114,9 +115,9 @@ std::optional<cld::Syntax::Declaration> finishDeclaration(
                                  });
     bool declaratorMightActuallyBeTypedef = false;
     if (begin < end
-        && std::none_of(
-            declarationSpecifiers.begin(), declarationSpecifiers.end(),
-            [](const DeclarationSpecifier& specifier) { return std::holds_alternative<TypeSpecifier>(specifier); })
+        && std::none_of(declarationSpecifiers.begin(), declarationSpecifiers.end(),
+                        [](const DeclarationSpecifier& specifier)
+                        { return std::holds_alternative<TypeSpecifier>(specifier); })
         && begin->getTokenType() == Lexer::TokenType::Identifier && context.isTypedef(begin->getText()))
     {
         declaratorMightActuallyBeTypedef = true;
@@ -228,10 +229,12 @@ std::optional<cld::Syntax::Declaration> finishDeclaration(
         auto* loc = context.getLocationOf(Semantics::declaratorToLoc(*initDeclarators[0].declarator)->getText());
         if (loc)
         {
-            if (!expect(Lexer::TokenType::SemiColon, begin, end, context, [&] {
-                    return Notes::TYPEDEF_OVERSHADOWED_BY_DECLARATION.args(
-                        *loc->identifier, context.getSourceInterface(), *loc->identifier);
-                }))
+            if (!expect(Lexer::TokenType::SemiColon, begin, end, context,
+                        [&]
+                        {
+                            return Notes::TYPEDEF_OVERSHADOWED_BY_DECLARATION.args(
+                                *loc->identifier, context.getSourceInterface(), *loc->identifier);
+                        }))
             {
                 context.skipUntil(begin, end);
                 return {};
@@ -338,23 +341,27 @@ std::optional<cld::Syntax::ExternalDeclaration>
         {
             cld::match(
                 iter,
-                [&](const DirectDeclaratorParenthesesParameters& dd) {
+                [&](const DirectDeclaratorParenthesesParameters& dd)
+                {
                     parameters = &dd;
                     identifierList = nullptr;
                 },
-                [&](const DirectDeclaratorParenthesesIdentifiers& dd) {
+                [&](const DirectDeclaratorParenthesesIdentifiers& dd)
+                {
                     parameters = nullptr;
                     identifierList = &dd;
                 },
                 [](const DirectDeclaratorIdentifier&) {},
-                [&](const DirectDeclaratorParentheses& parentheses) {
+                [&](const DirectDeclaratorParentheses& parentheses)
+                {
                     if (!parentheses.getDeclarator().getPointers().empty())
                     {
                         parameters = nullptr;
                         identifierList = nullptr;
                     }
                 },
-                [&](const auto&) {
+                [&](const auto&)
+                {
                     parameters = nullptr;
                     identifierList = nullptr;
                 });
@@ -986,16 +993,20 @@ std::optional<cld::Syntax::DirectDeclarator>
             {
                 auto scope = context.parenthesesEntered(begin);
                 const auto* openPpos = begin;
-                auto checkForClose = std::optional{cld::ScopeExit([&] {
-                    if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context, [&] {
-                            return Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos);
-                        }))
+                auto checkForClose = std::optional{cld::ScopeExit(
+                    [&]
                     {
-                        context.skipUntil(begin, end,
-                                          Context::fromTokenTypes(Lexer::TokenType::OpenParentheses,
-                                                                  Lexer::TokenType::OpenSquareBracket));
-                    }
-                })};
+                        if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
+                                    [&] {
+                                        return Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(),
+                                                                           *openPpos);
+                                    }))
+                        {
+                            context.skipUntil(begin, end,
+                                              Context::fromTokenTypes(Lexer::TokenType::OpenParentheses,
+                                                                      Lexer::TokenType::OpenSquareBracket));
+                        }
+                    })};
                 begin++;
                 if (begin < end && firstIsInParameterTypeList(*begin, context))
                 {
@@ -1066,16 +1077,20 @@ std::optional<cld::Syntax::DirectDeclarator>
             {
                 auto scope = context.squareBracketEntered(begin);
                 const auto* openPpos = begin;
-                auto checkForClose = std::optional{cld::ScopeExit([&] {
-                    if (!expect(Lexer::TokenType::CloseSquareBracket, begin, end, context, [&] {
-                            return Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos);
-                        }))
+                auto checkForClose = std::optional{cld::ScopeExit(
+                    [&]
                     {
-                        context.skipUntil(begin, end,
-                                          Context::fromTokenTypes(Lexer::TokenType::OpenParentheses,
-                                                                  Lexer::TokenType::OpenSquareBracket));
-                    }
-                })};
+                        if (!expect(Lexer::TokenType::CloseSquareBracket, begin, end, context,
+                                    [&] {
+                                        return Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(),
+                                                                           *openPpos);
+                                    }))
+                        {
+                            context.skipUntil(begin, end,
+                                              Context::fromTokenTypes(Lexer::TokenType::OpenParentheses,
+                                                                      Lexer::TokenType::OpenSquareBracket));
+                        }
+                    })};
                 begin++;
                 if (begin == end)
                 {
@@ -1224,16 +1239,20 @@ std::optional<cld::Syntax::DirectAbstractDeclarator>
             {
                 auto scope = context.parenthesesEntered(begin);
                 const auto* openPpos = begin;
-                auto closeParenth = std::optional{cld::ScopeExit([&] {
-                    if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context, [&] {
-                            return Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos);
-                        }))
+                auto closeParenth = std::optional{cld::ScopeExit(
+                    [&]
                     {
-                        context.skipUntil(begin, end,
-                                          Context::fromTokenTypes(Lexer::TokenType::OpenParentheses,
-                                                                  Lexer::TokenType::OpenSquareBracket));
-                    }
-                })};
+                        if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
+                                    [&] {
+                                        return Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(),
+                                                                           *openPpos);
+                                    }))
+                        {
+                            context.skipUntil(begin, end,
+                                              Context::fromTokenTypes(Lexer::TokenType::OpenParentheses,
+                                                                      Lexer::TokenType::OpenSquareBracket));
+                        }
+                    })};
                 begin++;
 
                 // https://gcc.gnu.org/onlinedocs/gcc/Attribute-Syntax.html#Attribute-Syntax:
@@ -1277,16 +1296,20 @@ std::optional<cld::Syntax::DirectAbstractDeclarator>
             {
                 auto scope = context.squareBracketEntered(begin);
                 const auto* openPpos = begin;
-                auto closeParenth = std::optional{cld::ScopeExit([&] {
-                    if (!expect(Lexer::TokenType::CloseSquareBracket, begin, end, context, [&] {
-                            return Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos);
-                        }))
+                auto closeParenth = std::optional{cld::ScopeExit(
+                    [&]
                     {
-                        context.skipUntil(begin, end,
-                                          Context::fromTokenTypes(Lexer::TokenType::OpenParentheses,
-                                                                  Lexer::TokenType::OpenSquareBracket));
-                    }
-                })};
+                        if (!expect(Lexer::TokenType::CloseSquareBracket, begin, end, context,
+                                    [&] {
+                                        return Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(),
+                                                                           *openPpos);
+                                    }))
+                        {
+                            context.skipUntil(begin, end,
+                                              Context::fromTokenTypes(Lexer::TokenType::OpenParentheses,
+                                                                      Lexer::TokenType::OpenSquareBracket));
+                        }
+                    })};
                 begin++;
                 if (begin == end)
                 {
@@ -1598,18 +1621,22 @@ cld::Syntax::ParameterList cld::Parser::parseParameterList(Lexer::CTokenIterator
                         // This can happen if the previous ( was actually not a Direct(Abstract)DeclaratorParentheses
                         // but is a function declarator instead. In this case we need to pop. This syntax is possible
                         // when the DirectAbstractDeclarator of the function declarator does not exist
-                        auto closeParenth = std::optional{cld::ScopeExit([&] {
-                            if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context, [&] {
-                                    return Notes::TO_MATCH_N_HERE.args(*pointerStack.back().openParentheses,
-                                                                       context.getSourceInterface(),
-                                                                       *pointerStack.back().openParentheses);
-                                }))
+                        auto closeParenth = std::optional{cld::ScopeExit(
+                            [&]
                             {
-                                context.skipUntil(begin, end,
-                                                  Context::fromTokenTypes(Lexer::TokenType::OpenParentheses,
-                                                                          Lexer::TokenType::OpenSquareBracket));
-                            }
-                        })};
+                                if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
+                                            [&]
+                                            {
+                                                return Notes::TO_MATCH_N_HERE.args(
+                                                    *pointerStack.back().openParentheses, context.getSourceInterface(),
+                                                    *pointerStack.back().openParentheses);
+                                            }))
+                                {
+                                    context.skipUntil(begin, end,
+                                                      Context::fromTokenTypes(Lexer::TokenType::OpenParentheses,
+                                                                              Lexer::TokenType::OpenSquareBracket));
+                                }
+                            })};
                         if (begin->getTokenType() == Lexer::TokenType::CloseParentheses)
                         {
                             closeParenth.reset();
@@ -1671,10 +1698,11 @@ cld::Syntax::ParameterList cld::Parser::parseParameterList(Lexer::CTokenIterator
         for (auto iter = pointerStack.rbegin(); iter != pointerStack.rend();
              pointerStack.pop_back(), iter = pointerStack.rbegin())
         {
-            if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context, [&] {
-                    return Notes::TO_MATCH_N_HERE.args(*iter->openParentheses, context.getSourceInterface(),
-                                                       *iter->openParentheses);
-                }))
+            if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
+                        [&] {
+                            return Notes::TO_MATCH_N_HERE.args(*iter->openParentheses, context.getSourceInterface(),
+                                                               *iter->openParentheses);
+                        }))
             {
                 context.skipUntil(begin, end,
                                   Context::fromTokenTypes(Lexer::TokenType::CloseParentheses, Lexer::TokenType::Comma));
@@ -1682,7 +1710,8 @@ cld::Syntax::ParameterList cld::Parser::parseParameterList(Lexer::CTokenIterator
             iter->scope.reset();
             foundDeclarator = cld::match(
                 std::move(foundDeclarator), [](std::monostate) -> DeclaratorVariant { CLD_UNREACHABLE; },
-                [&](std::unique_ptr<Declarator>&& declarator) -> DeclaratorVariant {
+                [&](std::unique_ptr<Declarator>&& declarator) -> DeclaratorVariant
+                {
                     std::unique_ptr<DirectDeclarator> parentheses;
                     if (declarator)
                     {
@@ -1697,7 +1726,8 @@ cld::Syntax::ParameterList cld::Parser::parseParameterList(Lexer::CTokenIterator
                     }
                     return std::unique_ptr<Declarator>{};
                 },
-                [&](std::unique_ptr<AbstractDeclarator>&& abstractDeclarator) -> DeclaratorVariant {
+                [&](std::unique_ptr<AbstractDeclarator>&& abstractDeclarator) -> DeclaratorVariant
+                {
                     auto parentheses = std::make_unique<DirectAbstractDeclarator>(DirectAbstractDeclaratorParentheses(
                         iter->openParentheses, begin, std::move(iter->attributes), std::move(abstractDeclarator)));
                     auto result = parseDirectAbstractDeclaratorSuffix(begin, end, context, std::move(parentheses));
@@ -1708,11 +1738,13 @@ cld::Syntax::ParameterList cld::Parser::parseParameterList(Lexer::CTokenIterator
         auto attributes = parseGNUAttributes(begin, end, context);
         cld::match(
             std::move(foundDeclarator), [](std::monostate) { CLD_UNREACHABLE; },
-            [&](std::unique_ptr<Declarator>&& declarator) {
+            [&](std::unique_ptr<Declarator>&& declarator)
+            {
                 parameterDeclarations.emplace_back(parameterBegin, begin, std::move(declarationSpecifiers),
                                                    std::move(declarator), std::move(attributes));
             },
-            [&](std::unique_ptr<AbstractDeclarator>&& abstractDeclarator) {
+            [&](std::unique_ptr<AbstractDeclarator>&& abstractDeclarator)
+            {
                 parameterDeclarations.emplace_back(parameterBegin, begin, std::move(declarationSpecifiers),
                                                    std::move(abstractDeclarator), std::move(attributes));
             });
@@ -2053,9 +2085,10 @@ std::optional<cld::Syntax::InitializerList>
                 {
                     designation.emplace_back(std::move(*constant));
                 }
-                if (!expect(Lexer::TokenType::CloseSquareBracket, begin, end, context, [&] {
-                        return Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos);
-                    }))
+                if (!expect(Lexer::TokenType::CloseSquareBracket, begin, end, context,
+                            [&] {
+                                return Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos);
+                            }))
                 {
                     context.skipUntil(begin, end,
                                       Context::fromTokenTypes(Lexer::TokenType::Assignment,
@@ -2287,10 +2320,12 @@ std::optional<cld::Syntax::Statement> cld::Parser::parseStatement(Lexer::CTokenI
             auto* loc = context.getLocationOf(start->getText());
             if (loc)
             {
-                if (!expect(Lexer::TokenType::SemiColon, begin, end, context, [&] {
-                        return Notes::TYPEDEF_OVERSHADOWED_BY_DECLARATION.args(
-                            *loc->identifier, context.getSourceInterface(), *loc->identifier);
-                    }))
+                if (!expect(Lexer::TokenType::SemiColon, begin, end, context,
+                            [&]
+                            {
+                                return Notes::TYPEDEF_OVERSHADOWED_BY_DECLARATION.args(
+                                    *loc->identifier, context.getSourceInterface(), *loc->identifier);
+                            }))
                 {
                     context.skipUntil(begin, end);
                 }
@@ -2695,9 +2730,9 @@ std::optional<cld::Syntax::GNUAttributes> cld::Parser::parseGNUAttributes(Lexer:
         }
         while (begin != end && begin->getTokenType() != Lexer::TokenType::CloseParentheses)
         {
-            begin = std::find_if_not(begin, end, [](const Lexer::CToken& token) {
-                return token.getTokenType() == Lexer::TokenType ::Comma;
-            });
+            begin = std::find_if_not(begin, end,
+                                     [](const Lexer::CToken& token)
+                                     { return token.getTokenType() == Lexer::TokenType ::Comma; });
             if (begin == end)
             {
                 break;
@@ -2834,10 +2869,11 @@ std::optional<cld::Syntax::GNUAttributes> cld::Parser::parseGNUAttributes(Lexer:
         }
         if (secondOpenParenth)
         {
-            expect(Lexer::TokenType::CloseParentheses, begin, end, context, [&] {
-                return Notes::TO_MATCH_N_HERE.args(**secondOpenParenth, context.getSourceInterface(),
-                                                   **secondOpenParenth);
-            });
+            expect(Lexer::TokenType::CloseParentheses, begin, end, context,
+                   [&] {
+                       return Notes::TO_MATCH_N_HERE.args(**secondOpenParenth, context.getSourceInterface(),
+                                                          **secondOpenParenth);
+                   });
         }
         else
         {
@@ -2845,10 +2881,11 @@ std::optional<cld::Syntax::GNUAttributes> cld::Parser::parseGNUAttributes(Lexer:
         }
         if (firstOpenParenth)
         {
-            expect(Lexer::TokenType::CloseParentheses, begin, end, context, [&] {
-                return Notes::TO_MATCH_N_HERE.args(**firstOpenParenth, context.getSourceInterface(),
-                                                   **firstOpenParenth);
-            });
+            expect(Lexer::TokenType::CloseParentheses, begin, end, context,
+                   [&] {
+                       return Notes::TO_MATCH_N_HERE.args(**firstOpenParenth, context.getSourceInterface(),
+                                                          **firstOpenParenth);
+                   });
         }
         else
         {
@@ -2916,9 +2953,10 @@ std::optional<cld::Syntax::GNUSimpleASM> cld::Parser::parseGNUSimpleASM(Lexer::C
     auto value = parseGNUASMString(begin, end, context);
     if (openParentheses)
     {
-        expect(Lexer::TokenType::CloseParentheses, begin, end, context, [&] {
-            return Notes::TO_MATCH_N_HERE.args(*openParentheses, context.getSourceInterface(), *openParentheses);
-        });
+        expect(Lexer::TokenType::CloseParentheses, begin, end, context,
+               [&] {
+                   return Notes::TO_MATCH_N_HERE.args(*openParentheses, context.getSourceInterface(), *openParentheses);
+               });
     }
     else
     {
@@ -2954,7 +2992,8 @@ std::optional<cld::Syntax::GNUASMStatement>
     if (begin != end && begin->getTokenType() == Lexer::TokenType::Colon)
     {
         begin++;
-        auto parseASMOperand = [&context, &begin, end](std::vector<Syntax::GNUASMStatement::GNUASMOperand>& result) {
+        auto parseASMOperand = [&context, &begin, end](std::vector<Syntax::GNUASMStatement::GNUASMOperand>& result)
+        {
             bool first = true;
             while (begin != end
                    && (first ? begin->getTokenType() == Lexer::TokenType::StringLiteral
@@ -2977,10 +3016,11 @@ std::optional<cld::Syntax::GNUASMStatement>
                     {
                         identifier = begin - 1;
                     }
-                    expect(Lexer::TokenType::CloseSquareBracket, begin, end, context, [&] {
-                        return Notes::TO_MATCH_N_HERE.args(*openSquareBracket, context.getSourceInterface(),
-                                                           *openSquareBracket);
-                    });
+                    expect(Lexer::TokenType::CloseSquareBracket, begin, end, context,
+                           [&] {
+                               return Notes::TO_MATCH_N_HERE.args(*openSquareBracket, context.getSourceInterface(),
+                                                                  *openSquareBracket);
+                           });
                 }
                 auto string = parseGNUASMString(begin, end, context);
                 const Lexer::CToken* subOpenParentheses = nullptr;
@@ -2991,10 +3031,11 @@ std::optional<cld::Syntax::GNUASMStatement>
                 auto expression = parseExpression(begin, end, context);
                 if (subOpenParentheses)
                 {
-                    expect(Lexer::TokenType::CloseParentheses, begin, end, context, [&] {
-                        return Notes::TO_MATCH_N_HERE.args(*subOpenParentheses, context.getSourceInterface(),
-                                                           *subOpenParentheses);
-                    });
+                    expect(Lexer::TokenType::CloseParentheses, begin, end, context,
+                           [&] {
+                               return Notes::TO_MATCH_N_HERE.args(*subOpenParentheses, context.getSourceInterface(),
+                                                                  *subOpenParentheses);
+                           });
                 }
                 else
                 {
@@ -3023,9 +3064,10 @@ std::optional<cld::Syntax::GNUASMStatement>
 
     if (openParentheses)
     {
-        expect(Lexer::TokenType::CloseParentheses, begin, end, context, [&] {
-            return Notes::TO_MATCH_N_HERE.args(*openParentheses, context.getSourceInterface(), *openParentheses);
-        });
+        expect(Lexer::TokenType::CloseParentheses, begin, end, context,
+               [&] {
+                   return Notes::TO_MATCH_N_HERE.args(*openParentheses, context.getSourceInterface(), *openParentheses);
+               });
     }
     else
     {

@@ -14,7 +14,8 @@
 
 using namespace Catch::Matchers;
 
-static cld::CGLLVM::Options emitAllDecls = [] {
+static cld::CGLLVM::Options emitAllDecls = []
+{
     cld::CGLLVM::Options result;
     result.emitAllDecls = true;
     return result;
@@ -2756,7 +2757,8 @@ TEST_CASE("LLVM codegen function call", "[LLVM]")
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
             REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
-            auto* func = +[](struct R r, int* success) {
+            auto* func = +[](struct R r, int* success)
+            {
                 if (r.c == 5 && r.f == 3)
                 {
                     *success = true;
@@ -2788,7 +2790,8 @@ TEST_CASE("LLVM codegen function call", "[LLVM]")
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
             REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
-            auto* func = +[](struct R r, int* success) {
+            auto* func = +[](struct R r, int* success)
+            {
                 if (r.r == 3.5 && r.f[0] == 3456.34f && r.f[1] == 4356.2134f)
                 {
                     *success = true;
@@ -2823,7 +2826,8 @@ TEST_CASE("LLVM codegen function call", "[LLVM]")
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
             REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
-            auto* func = +[](struct R r, int* success) {
+            auto* func = +[](struct R r, int* success)
+            {
                 for (std::size_t i = 0; i < 8; i++)
                 {
                     if (r.f[i] != i)
@@ -2934,7 +2938,8 @@ TEST_CASE("LLVM codegen function call", "[LLVM]")
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
             REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
-            auto* func = +[](struct R r, int* success) {
+            auto* func = +[](struct R r, int* success)
+            {
                 if (r.c == 5 && r.f == 3)
                 {
                     *success = true;
@@ -2966,7 +2971,8 @@ TEST_CASE("LLVM codegen function call", "[LLVM]")
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
             REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
-            auto* func = +[](struct R r, int* success) {
+            auto* func = +[](struct R r, int* success)
+            {
                 if (r.r == 3.5 && r.f[0] == 3456.34f && r.f[1] == 4356.2134f)
                 {
                     *success = true;
@@ -3001,7 +3007,8 @@ TEST_CASE("LLVM codegen function call", "[LLVM]")
             cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
             REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
-            auto* func = +[](struct R r, int* success) {
+            auto* func = +[](struct R r, int* success)
+            {
                 for (std::size_t i = 0; i < 8; i++)
                 {
                     if (r.f[i] != i)

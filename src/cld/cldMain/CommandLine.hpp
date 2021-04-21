@@ -272,13 +272,15 @@ constexpr std::array<std::pair<std::string_view, bool>, size> evaluateOptional(M
     {
         result[i].first = args[i];
         result[i].second = !std::apply(
-            [arg = args[i]](auto&&... args) {
+            [arg = args[i]](auto&&... args)
+            {
                 return (std::apply(
-                            [arg](auto&&... tokens) {
+                            [arg](auto&&... tokens)
+                            {
                                 auto argsFiltered = filterOutArgs(tokens...);
-                                return std::apply(
-                                    [arg](auto&&... inputArgs) { return ((arg == inputArgs.value) || ...); },
-                                    argsFiltered);
+                                return std::apply([arg](auto&&... inputArgs)
+                                                  { return ((arg == inputArgs.value) || ...); },
+                                                  argsFiltered);
                             },
                             args)
                         && ...);
@@ -356,9 +358,8 @@ struct Pack
         constexpr auto tuple = std::make_tuple(parseOption<args, 0>()...);
         static_assert((std::apply([](auto&&... input) { (validateTokens(input), ...); }, tuple), true));
         constexpr auto allArgsTuple = std::apply(
-            [](auto&&... input) {
-                return std::apply([](auto&&... input) { return filterOutArgs(input...); }, std::tuple_cat(input...));
-            },
+            [](auto&&... input)
+            { return std::apply([](auto&&... input) { return filterOutArgs(input...); }, std::tuple_cat(input...)); },
             tuple);
         constexpr auto firstString = std::get<0>(std::tuple(args...));
         // libc++ until either version LLVM 11 or 12 does not support constexpr std::array<T,0>
@@ -408,7 +409,8 @@ constexpr auto parsedTuple = T::parseOptionsImpl();
 template <class T, auto&... args>
 constexpr auto parseOptions(std::string_view description, CLIMultiArg multiArg = CLIMultiArg::Overwrite)
 {
-    constexpr auto tuple = [] {
+    constexpr auto tuple = []
+    {
         if constexpr (sizeof...(args) == 0)
         {
             return std::make_tuple();
@@ -419,7 +421,8 @@ constexpr auto parseOptions(std::string_view description, CLIMultiArg multiArg =
         }
     }();
     constexpr auto value = std::apply(
-        [&](auto&&... values) {
+        [&](auto&&... values)
+        {
             constexpr auto arguments = std::get<1>(parsedTuple<T>);
             using Tuple = std::tuple<
                 std::conditional_t<isOptional(std::decay_t<decltype(values.first)>::pointer->view(), arguments),
@@ -559,36 +562,32 @@ class Mutator
 
     LazyMessage buildConsumeFailure(std::string_view text)
     {
-        return [text, currentIndex = m_currentIndex, currentPos = m_currentPos, commandLine = m_commandLine] {
-            return emitConsumeFailure(currentIndex, currentPos, commandLine, text);
-        };
+        return [text, currentIndex = m_currentIndex, currentPos = m_currentPos, commandLine = m_commandLine]
+        { return emitConsumeFailure(currentIndex, currentPos, commandLine, text); };
     }
 
     LazyMessage buildMissingArg(bool immediatelyAfter)
     {
-        return [currentIndex = m_currentIndex, currentPos = m_currentPos, commandLine = m_commandLine,
-                immediatelyAfter] { return emitMissingArg(currentIndex, currentPos, commandLine, immediatelyAfter); };
+        return [currentIndex = m_currentIndex, currentPos = m_currentPos, commandLine = m_commandLine, immediatelyAfter]
+        { return emitMissingArg(currentIndex, currentPos, commandLine, immediatelyAfter); };
     }
 
     LazyMessage buildMissingWhitespace()
     {
-        return [currentIndex = m_currentIndex, currentPos = m_currentPos, commandLine = m_commandLine] {
-            return emitMissingWhitespace(currentIndex, currentPos, commandLine);
-        };
+        return [currentIndex = m_currentIndex, currentPos = m_currentPos, commandLine = m_commandLine]
+        { return emitMissingWhitespace(currentIndex, currentPos, commandLine); };
     }
 
     LazyMessage buildFailedInteger()
     {
-        return [currentIndex = m_currentIndex, currentPos = m_currentPos, commandLine = m_commandLine] {
-            return emitFailedInteger(currentIndex, currentPos, commandLine);
-        };
+        return [currentIndex = m_currentIndex, currentPos = m_currentPos, commandLine = m_commandLine]
+        { return emitFailedInteger(currentIndex, currentPos, commandLine); };
     }
 
     LazyMessage buildInvalidUTF8()
     {
-        return [currentIndex = m_currentIndex, currentPos = m_currentPos, commandLine = m_commandLine] {
-            return emitInvalidUTF8(currentIndex, currentPos, commandLine);
-        };
+        return [currentIndex = m_currentIndex, currentPos = m_currentPos, commandLine = m_commandLine]
+        { return emitInvalidUTF8(currentIndex, currentPos, commandLine); };
     }
 
 public:
@@ -688,7 +687,8 @@ public:
             static_assert(always_false<std::integral_constant<std::size_t, i>>);
         }
 
-        auto assign = [=](auto&& value) {
+        auto assign = [=](auto&& value)
+        {
             if constexpr (cliOption->getMultiArg() == CLIMultiArg::List)
             {
                 if constexpr (containsNegate<*cliOption>())
@@ -713,20 +713,24 @@ public:
                         {
                             m_queue.push_back([this] { m_storage.emplace_back(); });
                         }
-                        m_queue.push_back([=] {
+                        m_queue.push_back(
+                            [=]
+                            {
 #if defined(_MSC_VER) && !defined(__clang__)
-                            constexpr std::size_t storageIndex =
-                                indexOf(cliOption->getArgNames(), arg<cliOption, i, index>.value);
+                                constexpr std::size_t storageIndex =
+                                    indexOf(cliOption->getArgNames(), arg<cliOption, i, index>.value);
 #endif
-                            std::get<storageIndex>(m_storage.back()) = value;
-                        });
+                                std::get<storageIndex>(m_storage.back()) = value;
+                            });
                     }
                     else
                     {
-                        m_queue.push_back([this, value] {
-                            m_storage.emplace_back();
-                            m_storage.back() = value;
-                        });
+                        m_queue.push_back(
+                            [this, value]
+                            {
+                                m_storage.emplace_back();
+                                m_storage.back() = value;
+                            });
                     }
                 }
             }
@@ -859,25 +863,26 @@ std::optional<Failure> checkAlternative(llvm::MutableArrayRef<std::string_view>&
 {
     using AlternativeType = std::tuple_element_t<i, std::decay_t<decltype(cliOption->getAlternatives())>>;
     Mutator<cliOption, std::tuple_size_v<AlternativeType>, Storage> mutator(commandLine, storage);
-    auto failure = YComb{[&](auto&& self, auto indexT) -> std::optional<Failure> {
-        constexpr std::size_t index = std::decay_t<decltype(indexT)>::value;
-        if (auto opt = evaluateArg<cliOption, i, index>(mutator))
-        {
-            return Failure{index, std::move(opt)};
-        }
-        if constexpr (index + 1 < std::tuple_size_v<AlternativeType>)
-        {
-            return self(std::integral_constant<std::size_t, index + 1>{});
-        }
-        else
-        {
-            if (auto opt = mutator.tryEnd())
-            {
-                return Failure{index, std::move(opt)};
-            }
-            return std::nullopt;
-        }
-    }}(std::integral_constant<std::size_t, 0>{});
+    auto failure = YComb{[&](auto&& self, auto indexT) -> std::optional<Failure>
+                         {
+                             constexpr std::size_t index = std::decay_t<decltype(indexT)>::value;
+                             if (auto opt = evaluateArg<cliOption, i, index>(mutator))
+                             {
+                                 return Failure{index, std::move(opt)};
+                             }
+                             if constexpr (index + 1 < std::tuple_size_v<AlternativeType>)
+                             {
+                                 return self(std::integral_constant<std::size_t, index + 1>{});
+                             }
+                             else
+                             {
+                                 if (auto opt = mutator.tryEnd())
+                                 {
+                                     return Failure{index, std::move(opt)};
+                                 }
+                                 return std::nullopt;
+                             }
+                         }}(std::integral_constant<std::size_t, 0>{});
     if (!failure)
     {
         mutator.exec();
@@ -891,7 +896,8 @@ bool checkAllAlternatives(llvm::raw_ostream* reporter, llvm::MutableArrayRef<std
 {
     using AllAlternatives = std::decay_t<decltype(cliOption->getAlternatives())>;
     return std::apply(
-        [&](auto&&... indices) -> bool {
+        [&](auto&&... indices) -> bool
+        {
             MaxVector<Failure, std::tuple_size_v<AllAlternatives>> failures;
             auto success = ([&](auto index) -> bool {
                 using Index = decltype(index);
@@ -1007,9 +1013,11 @@ public:
     {
         std::vector<std::pair<std::string_view, std::string_view>> textAndDesc;
         std::apply(
-            [&](auto&&... values) {
+            [&](auto&&... values)
+            {
                 (
-                    [&](auto&& tuple) {
+                    [&](auto&& tuple)
+                    {
                         using Tuple = std::decay_t<decltype(tuple)>;
                         using Pointer = std::tuple_element_t<0, Tuple>;
                         textAndDesc.emplace_back(Pointer::pointer->getFirstOptionString(),
@@ -1046,18 +1054,22 @@ auto parseCommandLine(llvm::MutableArrayRef<std::string_view> commandLine, llvm:
     while (!commandLine.empty())
     {
         if (!std::apply(
-                [&](auto&&... indices) -> bool {
-                    return ([&](auto index) -> bool {
-                        constexpr std::size_t i = decltype(index)::value;
-                        if (detail::CommandLine::checkAllAlternatives<
-                                std::tuple_element_t<i, decltype(tuple)>::pointer>(reporter, commandLine,
-                                                                                   std::get<1>(std::get<i>(storage))))
-                        {
-                            std::get<2>(std::get<i>(storage)) = counter;
-                            return true;
-                        }
-                        return false;
-                    }(indices) || ...);
+                [&](auto&&... indices) -> bool
+                {
+                    return (
+                        [&](auto index) -> bool
+                                               {
+                                                   constexpr std::size_t i = decltype(index)::value;
+                                                   if (detail::CommandLine::checkAllAlternatives<
+                                                           std::tuple_element_t<i, decltype(tuple)>::pointer>(
+                                                           reporter, commandLine, std::get<1>(std::get<i>(storage))))
+                                                   {
+                                                       std::get<2>(std::get<i>(storage)) = counter;
+                                                       return true;
+                                                   }
+                                                   return false;
+                                               }(indices)
+                                               || ...);
                 },
                 Constexpr::integerSequenceToTuple(std::make_index_sequence<sizeof...(options)>{})))
         {

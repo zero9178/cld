@@ -104,7 +104,8 @@ public:
     }
 };
 
-constexpr auto DIRECT_DECL_NEXT_FN = [](const Syntax::DirectDeclarator& value) -> const Syntax::DirectDeclarator* {
+constexpr auto DIRECT_DECL_NEXT_FN = [](const Syntax::DirectDeclarator& value) -> const Syntax::DirectDeclarator*
+{
     return cld::match(
         value,
         [](const Syntax::DirectDeclaratorParentheses& parentheses) -> const Syntax::DirectDeclarator* {
@@ -114,24 +115,29 @@ constexpr auto DIRECT_DECL_NEXT_FN = [](const Syntax::DirectDeclarator& value) -
         [](const auto& value) -> const Syntax::DirectDeclarator* { return &value.getDirectDeclarator(); });
 };
 
-constexpr auto ARRAY_TYPE_NEXT_FN = [](const Type& type) -> const Type* {
-    return type.match([](auto&& value) -> const Type* {
-        using T = std::decay_t<decltype(value)>;
-        if constexpr (std::is_same_v<ArrayType,
-                                     T> || std::is_same_v<AbstractArrayType, T> || std::is_same_v<ValArrayType, T>)
+constexpr auto ARRAY_TYPE_NEXT_FN = [](const Type& type) -> const Type*
+{
+    return type.match(
+        [](auto&& value) -> const Type*
         {
-            if (isArray(value.getType()))
+            using T = std::decay_t<decltype(value)>;
+            if constexpr (std::is_same_v<ArrayType,
+                                         T> || std::is_same_v<AbstractArrayType, T> || std::is_same_v<ValArrayType, T>)
             {
-                return &value.getType();
+                if (isArray(value.getType()))
+                {
+                    return &value.getType();
+                }
             }
-        }
-        return nullptr;
-    });
+            return nullptr;
+        });
 };
 
-constexpr auto TYPE_NEXT_FN = [](const Type& type) -> const Type* {
+constexpr auto TYPE_NEXT_FN = [](const Type& type) -> const Type*
+{
     return type.match(
-        [](const auto& value) -> const Type* {
+        [](const auto& value) -> const Type*
+        {
             using T = std::decay_t<decltype(value)>;
             if constexpr (std::is_same_v<ArrayType,
                                          T> || std::is_same_v<AbstractArrayType, T> || std::is_same_v<ValArrayType, T>)

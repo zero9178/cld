@@ -270,7 +270,8 @@ llvm::AttributeList cld::CGLLVM::X64ABI::generateFunctionAttributes(llvm::Attrib
     {
         cld::match(
             adjustment.arguments[origArgI],
-            [&](X64ABIImpl::Unchanged) {
+            [&](X64ABIImpl::Unchanged)
+            {
                 cld::ScopeExit exit{[&] { i++; }};
                 auto& arg = *functionType.getParameters()[origArgI].type;
                 if (!Semantics::isInteger(arg))
@@ -291,7 +292,8 @@ llvm::AttributeList cld::CGLLVM::X64ABI::generateFunctionAttributes(llvm::Attrib
                     attributesIn = attributesIn.addParamAttribute(context, i, llvm::Attribute::ZExt);
                 }
             },
-            [&](X64ABIImpl::OnStack) {
+            [&](X64ABIImpl::OnStack)
+            {
                 cld::ScopeExit exit{[&] { i++; }};
                 auto& arg = *functionType.getParameters()[origArgI].type;
                 attributesIn = attributesIn.addParamAttribute(
@@ -336,18 +338,21 @@ void cld::CGLLVM::X64ABI::generateFunctionEntry(
         auto* operand = llvmFunction->getArg(i);
         cld::match(
             adjustment.arguments[origArgI],
-            [&](X64ABIImpl::Unchanged) {
+            [&](X64ABIImpl::Unchanged)
+            {
                 cld::ScopeExit exit{[&] { i++; }};
                 auto* var = codeGenerator.createAllocaAtTop(operand->getType(), paramDecl->getNameToken()->getText());
                 var->setAlignment(llvm::Align(paramDecl->getType().getAlignOf(codeGenerator.getProgramInterface())));
                 codeGenerator.addLValue(*paramDecl, var);
                 codeGenerator.createStore(operand, var, paramDecl->getType().isVolatile());
             },
-            [&](X64ABIImpl::OnStack) {
+            [&](X64ABIImpl::OnStack)
+            {
                 cld::ScopeExit exit{[&] { i++; }};
                 codeGenerator.addLValue(*paramDecl, Value(operand, operand->getPointerAlignment(m_dataLayout)));
             },
-            [&](X64ABIImpl::MultipleArgs multipleArgs) {
+            [&](X64ABIImpl::MultipleArgs multipleArgs)
+            {
                 cld::ScopeExit exit{[&] { i += multipleArgs.size; }};
                 auto* var = codeGenerator.createAllocaAtTop(codeGenerator.visit(paramDecl->getType()),
                                                             paramDecl->getNameToken()->getText());
@@ -379,14 +384,16 @@ llvm::Value* cld::CGLLVM::X64ABI::generateValueReturn(CodeGenerator& codeGenerat
 {
     return cld::match(
         m_currentFunctionABI->returnType, [=](X64ABIImpl::Unchanged) -> llvm::Value* { return value; },
-        [&](X64ABIImpl::PointerToTemporary) -> llvm::Value* {
+        [&](X64ABIImpl::PointerToTemporary) -> llvm::Value*
+        {
             codeGenerator.createStore(value.value,
                                       codeGenerator.valueOf(codeGenerator.getCurrentFunction()->getArg(0),
                                                             codeGenerator.getCurrentFunction()->getParamAlign(0)),
                                       false);
             return nullptr;
         },
-        [&](X64ABIImpl::Flattened) -> llvm::Value* {
+        [&](X64ABIImpl::Flattened) -> llvm::Value*
+        {
             codeGenerator.createStore(
                 value, codeGenerator.createBitCast(m_returnSlot, value.value->getType()->getPointerTo(0)), false);
             return codeGenerator.createLoad(m_returnSlot, false);
@@ -618,13 +625,15 @@ cld::CGLLVM::Value cld::CGLLVM::X64ABI::generateFunctionCall(CodeGenerator& code
         std::size_t llvmFnI = iter - arguments.begin();
         cld::match(
             adjustments.arguments[i], [&](X64ABIImpl::Unchanged) {},
-            [&](X64ABIImpl::OnStack) {
+            [&](X64ABIImpl::OnStack)
+            {
                 // structs rvalues don't exist in LLVM IR so this should be sound?
                 auto* load = llvm::cast<llvm::LoadInst>(*iter);
                 *iter = load->getPointerOperand();
                 load->eraseFromParent();
             },
-            [&](X64ABIImpl::MultipleArgs multipleArgs) {
+            [&](X64ABIImpl::MultipleArgs multipleArgs)
+            {
                 auto* load = llvm::cast<llvm::LoadInst>(*iter);
                 if (multipleArgs.size == 1)
                 {
@@ -659,11 +668,13 @@ cld::CGLLVM::Value cld::CGLLVM::X64ABI::generateFunctionCall(CodeGenerator& code
     result->setAttributes(std::move(attributes));
     return cld::match(
         adjustments.returnType, [&](X64ABIImpl::Unchanged) { return codeGenerator.valueOf(result); },
-        [&](X64ABIImpl::PointerToTemporary) {
+        [&](X64ABIImpl::PointerToTemporary)
+        {
             CLD_ASSERT(returnSlot);
             return codeGenerator.createLoad(returnSlot, false);
         },
-        [&](X64ABIImpl::Flattened) {
+        [&](X64ABIImpl::Flattened)
+        {
             auto* flattened = codeGenerator.createAllocaAtTop(result->getType());
             flattened->setAlignment(llvm::Align(m_dataLayout.getABITypeAlign(result->getType())));
             codeGenerator.createStore(result, flattened, false);

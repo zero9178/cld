@@ -368,7 +368,8 @@ struct ValueIdentity
 template <class CL>
 void setTargetFeatures(cld::TargetFeatures& targetFeatures, const CL& cli, llvm::raw_ostream* reporter)
 {
-    auto tryApply = [&](auto opt, cld::TargetFeatures::Features feature) {
+    auto tryApply = [&](auto opt, cld::TargetFeatures::Features feature)
+    {
         constexpr auto& Opt = std::decay_t<decltype(opt)>::value;
         if (cli.template pos<Opt>() >= 0)
         {
@@ -560,7 +561,8 @@ std::optional<cld::fs::path> compileCFile(Action action, cld::fs::path cSourceFi
     for (auto& iter : cli.template get<INCLUDES>())
     {
         if (std::none_of(cli.template get<ISYSTEM>().begin(), cli.template get<ISYSTEM>().end(),
-                         [&iter](const cld::fs::path& path) {
+                         [&iter](const cld::fs::path& path)
+                         {
                              std::error_code ec;
                              auto res = cld::fs::equivalent(path, cld::fs::u8path(iter), ec);
                              return res && !ec;

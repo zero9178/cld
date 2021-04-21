@@ -52,7 +52,8 @@ std::optional<cld::Syntax::AssignmentExpression>
         auto conditional = parseConditionalExpression(begin, end, context.withRecoveryTokens(assignmentSet));
         if (conditional)
         {
-            list.push_back({[token]() -> AssignmentExpression::AssignOperator {
+            list.push_back({[token]() -> AssignmentExpression::AssignOperator
+                            {
                                 switch (token->getTokenType())
                                 {
                                     case Lexer::TokenType::Assignment:
@@ -118,7 +119,8 @@ StateVariant parseBinaryOperators(EndState endState, cld::Lexer::CTokenIterator&
 {
     StateVariant state;
     const auto* start = begin;
-    auto firstSet = [endState, &state]() -> cld::Parser::Context::TokenBitSet {
+    auto firstSet = [endState, &state]() -> cld::Parser::Context::TokenBitSet
+    {
         cld::Parser::Context::TokenBitSet result;
         switch (endState)
         {
@@ -197,22 +199,24 @@ StateVariant parseBinaryOperators(EndState endState, cld::Lexer::CTokenIterator&
             default: return result;
         }
     };
-    while ([&state, endState]() -> bool {
-        switch (endState)
+    while (
+        [&state, endState]() -> bool
         {
-            case EndState::Term: return !std::holds_alternative<std::optional<Term>>(state);
-            case EndState::Additive: return !std::holds_alternative<std::optional<AdditiveExpression>>(state);
-            case EndState::Shift: return !std::holds_alternative<std::optional<ShiftExpression>>(state);
-            case EndState::Relational: return !std::holds_alternative<std::optional<RelationalExpression>>(state);
-            case EndState::Equality: return !std::holds_alternative<std::optional<EqualityExpression>>(state);
-            case EndState::BitAnd: return !std::holds_alternative<std::optional<BitAndExpression>>(state);
-            case EndState::BitXor: return !std::holds_alternative<std::optional<BitXorExpression>>(state);
-            case EndState::BitOr: return !std::holds_alternative<std::optional<BitOrExpression>>(state);
-            case EndState::LogicalAnd: return !std::holds_alternative<std::optional<LogicalAndExpression>>(state);
-            case EndState::LogicalOr: return !std::holds_alternative<std::optional<LogicalOrExpression>>(state);
-        }
-        return false;
-    }())
+            switch (endState)
+            {
+                case EndState::Term: return !std::holds_alternative<std::optional<Term>>(state);
+                case EndState::Additive: return !std::holds_alternative<std::optional<AdditiveExpression>>(state);
+                case EndState::Shift: return !std::holds_alternative<std::optional<ShiftExpression>>(state);
+                case EndState::Relational: return !std::holds_alternative<std::optional<RelationalExpression>>(state);
+                case EndState::Equality: return !std::holds_alternative<std::optional<EqualityExpression>>(state);
+                case EndState::BitAnd: return !std::holds_alternative<std::optional<BitAndExpression>>(state);
+                case EndState::BitXor: return !std::holds_alternative<std::optional<BitXorExpression>>(state);
+                case EndState::BitOr: return !std::holds_alternative<std::optional<BitOrExpression>>(state);
+                case EndState::LogicalAnd: return !std::holds_alternative<std::optional<LogicalAndExpression>>(state);
+                case EndState::LogicalOr: return !std::holds_alternative<std::optional<LogicalOrExpression>>(state);
+            }
+            return false;
+        }())
     {
         // We are using an index instead of visit to save on stack space and increase speed
         switch (state.index())
@@ -232,7 +236,8 @@ StateVariant parseBinaryOperators(EndState endState, cld::Lexer::CTokenIterator&
                     auto newCast = parseCastExpression(begin, end, context.withRecoveryTokens(firstSet()));
                     if (newCast)
                     {
-                        list.push_back({[&token] {
+                        list.push_back({[&token]
+                                        {
                                             switch (token->getTokenType())
                                             {
                                                 case cld::Lexer::TokenType::Asterisk:
@@ -336,7 +341,8 @@ StateVariant parseBinaryOperators(EndState endState, cld::Lexer::CTokenIterator&
                     auto newShift = parseShiftExpression(begin, end, context.withRecoveryTokens(firstSet()));
                     if (newShift)
                     {
-                        list.push_back({[token]() -> RelationalExpression::RelationalOperator {
+                        list.push_back({[token]() -> RelationalExpression::RelationalOperator
+                                        {
                                             switch (token->getTokenType())
                                             {
                                                 case cld::Lexer::TokenType::LessThan:
@@ -537,9 +543,11 @@ std::optional<cld::Syntax::ConditionalExpression>
         auto optionalExpression = std::make_unique<Expression>(
             parseExpression(begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::Colon))));
         const auto* colon = begin;
-        if (!expect(Lexer::TokenType::Colon, begin, end, context, [&] {
-                return Notes::TO_MATCH_N_HERE.args(*questionMarkpos, context.getSourceInterface(), *questionMarkpos);
-            }))
+        if (!expect(Lexer::TokenType::Colon, begin, end, context,
+                    [&] {
+                        return Notes::TO_MATCH_N_HERE.args(*questionMarkpos, context.getSourceInterface(),
+                                                           *questionMarkpos);
+                    }))
         {
             context.skipUntil(begin, end, firstExpressionSet);
         }
@@ -710,9 +718,10 @@ void parsePostFixExpressionSuffix(cld::Lexer::CTokenIterator start, cld::Lexer::
             }
 
             const auto* closeParentheses = begin;
-            if (!expect(cld::Lexer::TokenType::CloseParentheses, begin, end, context, [&] {
-                    return cld::Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos);
-                }))
+            if (!expect(cld::Lexer::TokenType::CloseParentheses, begin, end, context,
+                        [&] {
+                            return cld::Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos);
+                        }))
             {
                 context.skipUntil(begin, end, cld::Parser::firstPostfixSet);
             }
@@ -731,9 +740,10 @@ void parsePostFixExpressionSuffix(cld::Lexer::CTokenIterator start, cld::Lexer::
                                               context.withRecoveryTokens(cld::Parser::Context::fromTokenTypes(
                                                   cld::Lexer::TokenType::CloseSquareBracket)));
             const auto* closePpos = begin;
-            if (!expect(cld::Lexer::TokenType::CloseSquareBracket, begin, end, context, [&] {
-                    return cld::Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos);
-                }))
+            if (!expect(cld::Lexer::TokenType::CloseSquareBracket, begin, end, context,
+                        [&] {
+                            return cld::Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos);
+                        }))
             {
                 context.skipUntil(begin, end, cld::Parser::firstPostfixSet);
             }
@@ -847,9 +857,9 @@ std::optional<cld::Syntax::CastExpression> cld::Parser::parseCastExpression(Lexe
     }
     if (openBrace)
     {
-        if (!expect(Lexer::TokenType::CloseBrace, begin, end, context, [&] {
-                return Notes::TO_MATCH_N_HERE.args(**openBrace, context.getSourceInterface(), **openBrace);
-            }))
+        if (!expect(Lexer::TokenType::CloseBrace, begin, end, context,
+                    [&]
+                    { return Notes::TO_MATCH_N_HERE.args(**openBrace, context.getSourceInterface(), **openBrace); }))
         {
             context.skipUntil(begin, end, firstPostfixSet);
         }
@@ -889,9 +899,9 @@ std::optional<cld::Syntax::UnaryExpression>
             begin++;
             auto type = parseTypeName(
                 begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
-            if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context, [&] {
-                    return Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos);
-                }))
+            if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
+                        [&]
+                        { return Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos); }))
             {
                 context.skipUntil(begin, end);
             }
@@ -954,7 +964,8 @@ std::optional<cld::Syntax::UnaryExpression>
     {
         const auto* token = begin;
         begin++;
-        auto op = [&token] {
+        auto op = [&token]
+        {
             switch (token->getTokenType())
             {
                 case Lexer::TokenType::Increment: return UnaryExpressionUnaryOperator::UnaryOperator::Increment;
@@ -1021,10 +1032,11 @@ std::optional<cld::Syntax::PostFixExpression>
                 begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
             if (openParentheses)
             {
-                expect(Lexer::TokenType::CloseParentheses, begin, end, context, [&] {
-                    return Notes::TO_MATCH_N_HERE.args(*openParentheses, context.getSourceInterface(),
-                                                       *openParentheses);
-                });
+                expect(Lexer::TokenType::CloseParentheses, begin, end, context,
+                       [&] {
+                           return Notes::TO_MATCH_N_HERE.args(*openParentheses, context.getSourceInterface(),
+                                                              *openParentheses);
+                       });
             }
             else
             {
@@ -1069,10 +1081,11 @@ std::optional<cld::Syntax::PostFixExpression>
                 {
                     const auto* openSquareBracket = begin++;
                     auto expression = parseExpression(begin, end, context);
-                    expect(Lexer::TokenType::CloseSquareBracket, begin, end, context, [&] {
-                        return Notes::TO_MATCH_N_HERE.args(*openSquareBracket, context.getSourceInterface(),
-                                                           *openSquareBracket);
-                    });
+                    expect(Lexer::TokenType::CloseSquareBracket, begin, end, context,
+                           [&] {
+                               return Notes::TO_MATCH_N_HERE.args(*openSquareBracket, context.getSourceInterface(),
+                                                                  *openSquareBracket);
+                           });
                     suffixes.emplace_back(PrimaryExpressionBuiltinOffsetOf::Subscript{
                         openSquareBracket, std::make_unique<Expression>(std::move(expression)), begin - 1});
                 }
@@ -1080,10 +1093,11 @@ std::optional<cld::Syntax::PostFixExpression>
 
             if (openParentheses)
             {
-                expect(Lexer::TokenType::CloseParentheses, begin, end, context, [&] {
-                    return Notes::TO_MATCH_N_HERE.args(*openParentheses, context.getSourceInterface(),
-                                                       *openParentheses);
-                });
+                expect(Lexer::TokenType::CloseParentheses, begin, end, context,
+                       [&] {
+                           return Notes::TO_MATCH_N_HERE.args(*openParentheses, context.getSourceInterface(),
+                                                              *openParentheses);
+                       });
             }
             else
             {
@@ -1103,17 +1117,20 @@ std::optional<cld::Syntax::PostFixExpression>
         }
         else if (begin < end && begin->getTokenType() == Lexer::TokenType::Literal)
         {
-            auto value = cld::match(begin->getValue(), [](auto&& value) -> typename PrimaryExpressionConstant::Variant {
-                using T = std::decay_t<decltype(value)>;
-                if constexpr (std::is_constructible_v<typename PrimaryExpressionConstant::Variant, T>)
-                {
-                    return {std::forward<decltype(value)>(value)};
-                }
-                else
-                {
-                    CLD_UNREACHABLE;
-                }
-            });
+            auto value =
+                cld::match(begin->getValue(),
+                           [](auto&& value) -> typename PrimaryExpressionConstant::Variant
+                           {
+                               using T = std::decay_t<decltype(value)>;
+                               if constexpr (std::is_constructible_v<typename PrimaryExpressionConstant::Variant, T>)
+                               {
+                                   return {std::forward<decltype(value)>(value)};
+                               }
+                               else
+                               {
+                                   CLD_UNREACHABLE;
+                               }
+                           });
             auto type = begin->getType();
             begin++;
             newPrimary = PrimaryExpression(PrimaryExpressionConstant(start, begin, std::move(value), type));
@@ -1128,9 +1145,9 @@ std::optional<cld::Syntax::PostFixExpression>
             const auto* openPpos = begin++;
             auto expression = parseExpression(
                 begin, end, context.withRecoveryTokens(Context::fromTokenTypes(Lexer::TokenType::CloseParentheses)));
-            if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context, [&] {
-                    return Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos);
-                }))
+            if (!expect(Lexer::TokenType::CloseParentheses, begin, end, context,
+                        [&]
+                        { return Notes::TO_MATCH_N_HERE.args(*openPpos, context.getSourceInterface(), *openPpos); }))
             {
                 context.skipUntil(begin, end);
             }
@@ -1186,9 +1203,10 @@ std::optional<cld::Syntax::PostFixExpression>
         }
         if (openBrace)
         {
-            if (!expect(Lexer::TokenType::CloseBrace, begin, end, context, [&] {
-                    return Notes::TO_MATCH_N_HERE.args(**openBrace, context.getSourceInterface(), **openBrace);
-                }))
+            if (!expect(Lexer::TokenType::CloseBrace, begin, end, context,
+                        [&] {
+                            return Notes::TO_MATCH_N_HERE.args(**openBrace, context.getSourceInterface(), **openBrace);
+                        }))
             {
                 context.skipUntil(begin, end, firstPostfixSet);
             }
@@ -1231,10 +1249,12 @@ cld::Syntax::PrimaryExpressionConstant cld::Parser::parseStringLiteral(Lexer::CT
     {
         literal = match(
             begin->getValue(),
-            [&literal, &context](const std::string& str) -> stringVariant {
+            [&literal, &context](const std::string& str) -> stringVariant
+            {
                 return match(
                     literal, [&str](const std::string& lhs) -> stringVariant { return lhs + str; },
-                    [&str, &context](Lexer::NonCharString lhs) -> stringVariant {
+                    [&str, &context](Lexer::NonCharString lhs) -> stringVariant
+                    {
                         std::uint8_t size = context.getSourceInterface().getLanguageOptions().sizeOf(
                             context.getSourceInterface().getLanguageOptions().wcharUnderlyingType);
                         switch (size)
@@ -1278,10 +1298,12 @@ cld::Syntax::PrimaryExpressionConstant cld::Parser::parseStringLiteral(Lexer::CT
                     },
                     [](const auto&) -> stringVariant { CLD_UNREACHABLE; });
             },
-            [&literal, &context](Lexer::NonCharString str) -> stringVariant {
+            [&literal, &context](Lexer::NonCharString str) -> stringVariant
+            {
                 return match(
                     literal,
-                    [&str, &context](const std::string& lhs) -> stringVariant {
+                    [&str, &context](const std::string& lhs) -> stringVariant
+                    {
                         std::uint8_t size = context.getSourceInterface().getLanguageOptions().sizeOf(
                             context.getSourceInterface().getLanguageOptions().wcharUnderlyingType);
                         switch (size)
@@ -1324,7 +1346,8 @@ cld::Syntax::PrimaryExpressionConstant cld::Parser::parseStringLiteral(Lexer::CT
                             default: CLD_UNREACHABLE;
                         }
                     },
-                    [&str](Lexer::NonCharString lhs) -> stringVariant {
+                    [&str](Lexer::NonCharString lhs) -> stringVariant
+                    {
                         lhs.characters.insert(lhs.characters.end(), str.characters.begin(), str.characters.end());
                         return lhs;
                     },

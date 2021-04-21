@@ -97,7 +97,6 @@ class CodeGenerator final
     std::unordered_map<const Semantics::VariableDeclaration * CLD_NON_NULL, llvm::AllocaInst*> m_stackSaves;
     std::unordered_map<std::string_view, llvm::GlobalVariable*> m_cGlobalVariables;
 
-
     std::optional<llvm::DIBuilder> m_debugInfo;
     std::vector<llvm::DIFile*> m_fileIdToFile;
     llvm::DIScope* m_currentDebugScope = nullptr;
