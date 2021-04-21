@@ -681,7 +681,11 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                                                              *prev->second.identifier));
                     linkage = Linkage::Internal;
                 }
-                // TODO: Check dllimport preconditions again, warn when definition follows
+                if (prevDecl->hasAttribute<DllImportAttribute>() && kind == VariableDeclaration::Definition)
+                {
+                    log(Warnings::Semantics::ATTRIBUTE_DLLIMPORT_IGNORED_AFTER_DEFINITION_OF_VARIABLE_N.args(
+                        *loc, m_sourceInterface, *loc));
+                }
                 *declaration = VariableDeclaration(std::move(composite), linkage, lifetime, loc,
                                                    std::max(prevDecl->getKind(), kind));
                 declaration->tryAddFromOther(*prevDecl);
@@ -693,7 +697,10 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
 
         if (iter.optionalInitializer)
         {
-            // TODO: Error for dllimport
+            if (declaration->hasAttribute<DllImportAttribute>())
+            {
+                log(Errors::Semantics::DLLIMPORT_VARIABLE_N_CANNOT_BE_INITIALIZED.args(*loc, m_sourceInterface, *loc));
+            }
 
             // C99 6.7.5§5:
             // If the declaration of an identifier has block scope, and the identifier has external or

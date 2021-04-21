@@ -5747,5 +5747,15 @@ TEST_CASE("Semantics __attribute__((dllimport))", "[semantics]")
             CHECK(var->getLinkage() == Linkage::External);
             CHECK(var->hasAttribute<DllImportAttribute>());
         }
+        SECTION("dllimport with initializer")
+        {
+            SEMA_PRODUCES_WITH("int __attribute__((dllimport)) foo = 4;",
+                               ProducesError(DLLIMPORT_VARIABLE_N_CANNOT_BE_INITIALIZED, "'foo'"), x64windowsGnu);
+        }
+        SEMA_PRODUCES_WITH("int __attribute__ ((dllimport)) foo;\n"
+                           "\n"
+                           "int foo = 3;",
+                           ProducesWarning(ATTRIBUTE_DLLIMPORT_IGNORED_AFTER_DEFINITION_OF_VARIABLE_N, "'foo'"),
+                           x64windowsGnu);
     }
 }

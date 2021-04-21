@@ -984,6 +984,8 @@ CREATE_ERROR(DLLIMPORT_CANNOT_BE_APPLIED_TO_DEFINITION_OF_FUNCTION_N,
 CREATE_ERROR(DLLIMPORT_CANNOT_BE_APPLIED_TO_VARIABLE_N_WITH_INTERNAL_LINKAGE,
              "'dllimport' cannot be applied to variable %0 with internal linkage", Underline<0>, PointAt<1>);
 
+CREATE_ERROR(DLLIMPORT_VARIABLE_N_CANNOT_BE_INITIALIZED, "'dllimport' variable %0 cannot be initialized", Underline<0>);
+
 } // namespace Semantics
 
 namespace Lexer
@@ -1218,6 +1220,9 @@ CREATE_WARNING(ATTRIBUTE_DLLIMPORT_IGNORED_ON_INLINE_FUNCTION_N, "ignored-attrib
 
 CREATE_WARNING(ATTRIBUTE_DLLIMPORT_IGNORED_AFTER_DEFINITION_OF_FUNCTION_N, "ignored-attributes",
                "Attribute 'dllimport' ignored after definition of function %0", Underline<0>);
+
+CREATE_WARNING(ATTRIBUTE_DLLIMPORT_IGNORED_AFTER_DEFINITION_OF_VARIABLE_N, "ignored-attributes",
+               "Attribute 'dllimport' ignored after definition of variable %0", Underline<0>);
 
 } // namespace Semantics
 namespace Lexer
