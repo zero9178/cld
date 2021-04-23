@@ -62,6 +62,41 @@ public:
     }
 };
 
+template <class T>
+class basic_fixed_string<T, 0>
+{
+public:
+    template <class U, std::size_t M>
+    constexpr basic_fixed_string(const U (&)[M]) noexcept
+    {
+    }
+
+    constexpr std::basic_string_view<T> view() const noexcept
+    {
+        return "";
+    }
+
+    constexpr std::size_t size() const noexcept
+    {
+        return 0;
+    }
+
+    constexpr const T* begin() const noexcept
+    {
+        return nullptr;
+    }
+
+    constexpr const T* end() const noexcept
+    {
+        return nullptr;
+    }
+
+    constexpr T operator[](std::size_t) const noexcept
+    {
+        CLD_UNREACHABLE;
+    }
+};
+
 template <class U, std::size_t M>
 basic_fixed_string(const U (&input)[M]) -> basic_fixed_string<U, M - 1>;
 

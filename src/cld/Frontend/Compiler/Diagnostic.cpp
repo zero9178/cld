@@ -503,13 +503,14 @@ void cld::detail::Diagnostic::DiagnosticBase::evaluateFormatsInMessage(std::stri
         case cld::Severity::Warning: llvm::WithColor(ss, ss.MAGENTA, true) << "warning: "; break;
         case cld::Severity::Note: llvm::WithColor(ss, ss.CYAN, true) << "note: "; break;
     }
-    for (auto& iter : ctre::range<cld::detail::Diagnostic::DIAG_ARG_PATTERN>(message))
+    auto copy = message;
+    const char* last = copy.data();
+    while (auto iter = detail::Diagnostic::nextArg(copy))
     {
-        auto index = iter.get<2>().view().back() - '0';
-        auto mods = iter.get<1>().view();
+        auto index = iter->index;
+        auto mods = iter->modifier;
 
-        ss.write(message.data(), iter.view().data() - message.data());
-        message.remove_prefix(iter.view().data() + iter.view().size() - message.data());
+        ss.write(last, iter->view.data() - last);
         if (mods.empty())
         {
             CLD_ASSERT(arguments[index].inFormatText);
@@ -517,21 +518,11 @@ void cld::detail::Diagnostic::DiagnosticBase::evaluateFormatsInMessage(std::stri
         }
         else
         {
-            std::u32string temp(mods.size(), '\0');
-            const auto* start = mods.data();
-            auto* dest = temp.data();
-            auto ok = llvm::ConvertUTF8toUTF32(
-                reinterpret_cast<const llvm::UTF8**>(&start),
-                reinterpret_cast<const llvm::UTF8*>(mods.data() + mods.size()), reinterpret_cast<llvm::UTF32**>(&dest),
-                reinterpret_cast<llvm::UTF32*>(dest + temp.size()), llvm::strictConversion);
-            (void)ok;
-            CLD_ASSERT(ok == llvm::conversionOK);
-            std::u32string_view view = {temp.data(), static_cast<size_t>(dest - temp.data())};
-            CLD_ASSERT(arguments[index].customModifiers.count(view) != 0);
-            ss << arguments[index].customModifiers[view];
+            ss << arguments[index].customModifiers[iter->modifier];
         }
+        last = iter->view.data() + iter->view.size();
     }
-    ss.write(message.data(), message.size());
+    ss.write(copy.data(), copy.size());
     if (m_severity == Severity::Warning)
     {
         ss << " [" << m_name << "]";

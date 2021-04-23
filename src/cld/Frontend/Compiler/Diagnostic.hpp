@@ -11,8 +11,6 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include <ctre.hpp>
-
 #include "CustomDiag.hpp"
 #include "DiagnosticUtil.hpp"
 #include "Message.hpp"
@@ -38,17 +36,40 @@ struct Underline;
 
 namespace detail::Diagnostic
 {
-constexpr auto DIAG_ARG_PATTERN = ctll::fixed_string{"%([^\\s\\\\]*)(\\d)"};
+struct Arg
+{
+    std::string_view modifier;
+    std::size_t index;
+    std::string_view view;
+};
+
+constexpr std::optional<Arg> nextArg(std::string_view& text)
+{
+    auto result = text.find('%');
+    if (result == text.npos)
+    {
+        return {};
+    }
+    std::size_t modifierEnd = result + 1;
+    for (; modifierEnd != text.size() && !(text[modifierEnd] >= '0' && text[modifierEnd] <= '9'); modifierEnd++)
+        ;
+    CLD_ASSERT(modifierEnd != text.size());
+    auto view = text.substr(result, modifierEnd - result + 1);
+    auto modifier = view;
+    modifier.remove_prefix(1);
+    modifier.remove_suffix(1);
+    auto index = static_cast<std::size_t>(text[modifierEnd] - '0');
+    text.remove_prefix(modifierEnd + 1);
+    return Arg{modifier, index, view};
+}
 
 template <class... Args>
-constexpr std::int64_t getBiggestPercentArg(std::u32string_view text)
+constexpr std::int64_t getBiggestPercentArg(std::string_view text)
 {
     std::int64_t max = -1;
-    while (auto result = ctre::search<DIAG_ARG_PATTERN>(text))
+    while (auto result = nextArg(text))
     {
-        max = std::max<std::int64_t>(max, result.template get<2>().view().back() - '0');
-        const auto end = result.get_end_position();
-        text.remove_prefix(end - text.begin());
+        max = std::max<std::int64_t>(max, result->index);
     }
     std::int64_t sizes[] = {
         max, static_cast<std::int64_t>(*std::max_element(Args::indices.begin(), Args::indices.end()))...};
@@ -56,7 +77,7 @@ constexpr std::int64_t getBiggestPercentArg(std::u32string_view text)
 }
 
 template <std::size_t N, class... Args>
-constexpr bool checkForNoHoles(std::u32string_view text)
+constexpr bool checkForNoHoles(std::string_view text)
 {
     if constexpr (N == 0)
     {
@@ -65,12 +86,9 @@ constexpr bool checkForNoHoles(std::u32string_view text)
     else
     {
         std::array<bool, N> seen = {{false}};
-        while (auto result = ctre::search<DIAG_ARG_PATTERN>(text))
+        while (auto result = nextArg(text))
         {
-            auto index = result.template get<2>().view().back() - '0';
-            seen[index] = true;
-            const auto end = result.get_end_position();
-            text.remove_prefix(end - text.begin());
+            seen[result->index] = true;
         }
         ((
              [&seen](auto&& array)
@@ -205,7 +223,7 @@ protected:
         std::optional<std::pair<diag::PointLocation, diag::PointLocation>> range;
         std::optional<std::string> inFormatText;
         std::optional<std::string> inArgText;
-        std::unordered_map<std::u32string_view, std::string> customModifiers;
+        std::unordered_map<std::string_view, std::string> customModifiers;
     };
 
     Message print(std::pair<diag::PointLocation, diag::PointLocation> location, std::string_view message,
@@ -490,13 +508,9 @@ private:
         {
             std::size_t count = 0;
             auto text = getFormat();
-            while (auto result = ctre::search<detail::Diagnostic::DIAG_ARG_PATTERN>(text))
+            while (auto result = detail::Diagnostic::nextArg(text))
             {
-                const auto end = result.get_end_position();
-                text.remove_prefix(end - text.begin());
-                auto index = result.template get<2>().view().back() - '0';
-                auto mods = result.template get<1>().view();
-                if (index != i || mods.empty())
+                if (result->index != i || result->modifier.empty())
                 {
                     continue;
                 }
@@ -504,20 +518,16 @@ private:
             }
             return count;
         }();
-        std::array<std::u32string_view, amountOfCustomModifiers> result{};
+        std::array<std::string_view, amountOfCustomModifiers> result{};
         std::size_t count = 0;
         auto text = getFormat();
-        while (auto search = ctre::search<detail::Diagnostic::DIAG_ARG_PATTERN>(text))
+        while (auto arg = detail::Diagnostic::nextArg(text))
         {
-            const auto end = search.get_end_position();
-            text.remove_prefix(end - text.begin());
-            auto index = search.template get<2>().view().back() - '0';
-            auto mods = search.template get<1>().view();
-            if (index != i || mods.empty())
+            if (arg->index != i || arg->modifier.empty())
             {
                 continue;
             }
-            result[count++] = mods;
+            result[count++] = arg->modifier;
         }
         return result;
     }
@@ -530,7 +540,7 @@ private:
             [](auto... stringIndices)
             {
                 return std::make_tuple(
-                    std::integral_constant<char32_t,
+                    std::integral_constant<char,
                                            std::get<i1>(allFormatModifiers)[i2][decltype(stringIndices)::value]>{}...);
             },
             Constexpr::integerSequenceToTuple(std::make_index_sequence<std::get<i1>(allFormatModifiers)[i2].size()>{}));
@@ -559,7 +569,7 @@ public:
         return N;
     }
 
-    constexpr static std::u32string_view getFormat()
+    constexpr static std::string_view getFormat()
     {
         return {format.begin(), format.size()};
     }
@@ -607,11 +617,9 @@ Message Diagnostic<N, format, Mods...>::args(const T& location, const SourceInte
     [[maybe_unused]] auto* v = this->checkConstraints<constraints, 0, Args...>; // Instantiate but don't call the
                                                                                 // function to improve debug perf a lil
     static_assert(locationConstraintCheck<T>(), "First argument must denote a location");
-    constexpr auto u32string = getFormat();
-    constexpr auto u8array = Constexpr::utf32ToUtf8<u32string.size() * 4>(u32string);
     auto array = createArgumentArray(&sourceInterface, std::forward_as_tuple(std::forward<Args>(args)...),
                                      std::index_sequence_for<Args...>{});
-    return print(diag::getPointRange(location), {u8array.data(), u8array.size()}, array, modifiers, sourceInterface);
+    return print(diag::getPointRange(location), getFormat(), array, modifiers, sourceInterface);
 }
 
 template <std::size_t N, auto& format, class... Mods>
@@ -621,13 +629,11 @@ Message Diagnostic<N, format, Mods...>::argsCLI(Args&&... args) const
     static_assert(sizeof...(Args) == N, "Not the same amount of argument as needed by the format");
     [[maybe_unused]] auto* v = this->checkConstraints<constraints, 0, Args...>; // Instantiate but don't call the
     // function to improve debug perf a lil
-    constexpr auto u32string = getFormat();
-    constexpr auto u8array = Constexpr::utf32ToUtf8<u32string.size() * 4>(u32string);
     // TODO: Instead of passing nullptr make it so that StringConverter may use const SourceInterface& as a second
     //  argument but make it a compiler error if such a string converter is used when using argsCLI instead of args
     auto array = createArgumentArray(nullptr, std::forward_as_tuple(std::forward<Args>(args)...),
                                      std::index_sequence_for<Args...>{});
-    return print({u8array.data(), u8array.size()}, array);
+    return print(getFormat(), array);
 }
 
 template <std::size_t N, auto& format, class... Mods>
@@ -635,22 +641,16 @@ constexpr auto Diagnostic<N, format, Mods...>::getConstraints() -> std::array<st
 {
     std::array<std::underlying_type_t<Constraint>, N> result{};
     auto text = getFormat();
-    std::uint8_t i = 0;
-    while (auto search = ctre::search<detail::Diagnostic::DIAG_ARG_PATTERN>(text))
+    while (auto search = detail::Diagnostic::nextArg(text))
     {
-        auto index = search.template get<2>().view().back() - '0';
-        auto mods = search.template get<1>().view();
-        if (mods.empty())
+        if (search->modifier.empty())
         {
-            result[index] |= Constraint::StringConstraint;
+            result[search->index] |= Constraint::StringConstraint;
         }
         else
         {
-            result[index] |= Constraint::CustomConstraint;
+            result[search->index] |= Constraint::CustomConstraint;
         }
-        const auto end = search.get_end_position();
-        text.remove_prefix(end - text.begin());
-        i++;
     }
     (
         [&result](auto value)

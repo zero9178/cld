@@ -6,11 +6,11 @@
 
 #include "TestConfig.hpp"
 
-#define CREATE_NOTE_2(variableName, format)                           \
-    namespace detail                                                  \
-    {                                                                 \
-    constexpr auto variableName##Text = ::ctll::fixed_string{format}; \
-    }                                                                 \
+#define CREATE_NOTE_2(variableName, format)                                           \
+    namespace detail                                                                  \
+    {                                                                                 \
+    constexpr auto variableName##Text = ::cld::Constexpr::basic_fixed_string{format}; \
+    }                                                                                 \
     constexpr auto variableName = ::cld::makeDiagnostic<detail::variableName##Text>(::cld::Severity::Note, "")
 
 #define CREATE_NOTE_3(...) CREATE_NOTE_VAARG(__VA_ARGS__)
@@ -22,18 +22,18 @@
 
 #define CREATE_NOTE(...) P99_PASTE2(CREATE_NOTE_, CLD_MACRO_COUNT_ARGUMENTS(__VA_ARGS__))(__VA_ARGS__)
 
-#define CREATE_NOTE_VAARG(variableName, format, ...)                  \
-    namespace detail                                                  \
-    {                                                                 \
-    constexpr auto variableName##Text = ::ctll::fixed_string{format}; \
-    }                                                                 \
-    constexpr auto variableName =                                     \
+#define CREATE_NOTE_VAARG(variableName, format, ...)                                  \
+    namespace detail                                                                  \
+    {                                                                                 \
+    constexpr auto variableName##Text = ::cld::Constexpr::basic_fixed_string{format}; \
+    }                                                                                 \
+    constexpr auto variableName =                                                     \
         ::cld::makeDiagnostic<detail::variableName##Text, __VA_ARGS__>(::cld::Severity::Note, "")
 
 #define CREATE_WARNING_3(variableName, cliName, format)                                        \
     namespace detail                                                                           \
     {                                                                                          \
-    constexpr auto variableName##Text = ::ctll::fixed_string{format};                          \
+    constexpr auto variableName##Text = ::cld::Constexpr::basic_fixed_string{format};          \
     inline auto variableName##Register = ::cld::detail::Diagnostic::WarningRegistrar(cliName); \
     }                                                                                          \
     constexpr auto variableName = ::cld::makeDiagnostic<detail::variableName##Text>(::cld::Severity::Warning, cliName)
@@ -50,17 +50,17 @@
 #define CREATE_WARNING_VAARG(variableName, cliName, format, ...)                               \
     namespace detail                                                                           \
     {                                                                                          \
-    constexpr auto variableName##Text = ::ctll::fixed_string{format};                          \
+    constexpr auto variableName##Text = ::cld::Constexpr::basic_fixed_string{format};          \
     inline auto variableName##Register = ::cld::detail::Diagnostic::WarningRegistrar(cliName); \
     }                                                                                          \
     constexpr auto variableName =                                                              \
         ::cld::makeDiagnostic<detail::variableName##Text, __VA_ARGS__>(::cld::Severity::Warning, cliName)
 
-#define CREATE_ERROR_2(variableName, format)                          \
-    namespace detail                                                  \
-    {                                                                 \
-    constexpr auto variableName##Text = ::ctll::fixed_string{format}; \
-    }                                                                 \
+#define CREATE_ERROR_2(variableName, format)                                          \
+    namespace detail                                                                  \
+    {                                                                                 \
+    constexpr auto variableName##Text = ::cld::Constexpr::basic_fixed_string{format}; \
+    }                                                                                 \
     constexpr auto variableName = ::cld::makeDiagnostic<detail::variableName##Text>(::cld::Severity::Error, "")
 
 #define CREATE_ERROR_3(...) CREATE_ERROR_VAARG(__VA_ARGS__)
@@ -72,12 +72,12 @@
 
 #define CREATE_ERROR(...) P99_PASTE2(CREATE_ERROR_, CLD_MACRO_COUNT_ARGUMENTS(__VA_ARGS__))(__VA_ARGS__)
 
-#define CREATE_ERROR_VAARG(variableName, format, ...)                 \
-    namespace detail                                                  \
-    {                                                                 \
-    constexpr auto variableName##Text = ::ctll::fixed_string{format}; \
-    }                                                                 \
-    constexpr auto variableName =                                     \
+#define CREATE_ERROR_VAARG(variableName, format, ...)                                 \
+    namespace detail                                                                  \
+    {                                                                                 \
+    constexpr auto variableName##Text = ::cld::Constexpr::basic_fixed_string{format}; \
+    }                                                                                 \
+    constexpr auto variableName =                                                     \
         ::cld::makeDiagnostic<detail::variableName##Text, __VA_ARGS__>(::cld::Severity::Error, "")
 
 namespace

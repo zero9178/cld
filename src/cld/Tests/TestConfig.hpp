@@ -26,24 +26,16 @@ std::string args(const Diagnostic&, Args&&... args)
     std::array<std::string, sizeof...(Args)> strArgs = {{cld::to_string(args)...}};
     static_assert(cld::detail::Diagnostic::getBiggestPercentArg(Diagnostic::getFormat()) == sizeof...(Args));
     std::string result;
-    std::u32string_view stringView = Diagnostic::getFormat();
-    for (auto& iter : ctre::range<cld::detail::Diagnostic::DIAG_ARG_PATTERN>(stringView))
+    std::string_view stringView = Diagnostic::getFormat();
+    const char* last = stringView.data();
+    while (auto iter = ::cld::detail::Diagnostic::nextArg(stringView))
     {
-        auto view = iter.view();
-        const char32_t* start = stringView.data();
-        result.resize(result.size() + 4 * (view.data() - stringView.data()));
-        char* resStart = result.data() + result.size() - 4 * (view.data() - stringView.data());
-        auto ret = llvm::ConvertUTF32toUTF8(
-            reinterpret_cast<const llvm::UTF32**>(&start), reinterpret_cast<const llvm::UTF32*>(view.data()),
-            reinterpret_cast<llvm::UTF8**>(&resStart), reinterpret_cast<llvm::UTF8*>(result.data() + result.size()),
-            llvm::strictConversion);
-        (void)ret;
-        CLD_ASSERT(ret == llvm::conversionOK);
-        result.resize(resStart - result.data());
-        stringView.remove_prefix(view.data() + view.size() - stringView.data());
-        auto mod = iter.get<1>().view();
-        auto index = iter.get<2>().view().back() - '0';
-        if (mod != U"s")
+        auto view = iter->view;
+        result += std::string_view(last, view.data() - last);
+        last = view.data() + view.size();
+        auto mod = iter->modifier;
+        auto index = iter->index;
+        if (mod != "s")
         {
             result += strArgs[index];
         }
@@ -55,17 +47,7 @@ std::string args(const Diagnostic&, Args&&... args)
             }
         }
     }
-    const char32_t* start = stringView.data();
-    result.resize(result.size() + 4 * stringView.size());
-    char* resStart = result.data() + result.size() - 4 * stringView.size();
-    auto ret =
-        llvm::ConvertUTF32toUTF8(reinterpret_cast<const llvm::UTF32**>(&start),
-                                 reinterpret_cast<const llvm::UTF32*>(stringView.data() + stringView.size()),
-                                 reinterpret_cast<llvm::UTF8**>(&resStart),
-                                 reinterpret_cast<llvm::UTF8*>(result.data() + result.size()), llvm::strictConversion);
-    (void)ret;
-    CLD_ASSERT(ret == llvm::conversionOK);
-    result.resize(resStart - result.data());
+    result += stringView;
     return result;
 }
 } // namespace detail
