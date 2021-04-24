@@ -93,10 +93,15 @@ struct WeakAttribute
     constexpr static std::size_t count = 0;
 };
 
+struct LeafAttribute
+{
+    constexpr static std::size_t count = 0;
+};
+
 using FunctionAttribute =
     std::variant<AlignedAttribute, DeprecatedAttribute, UsedAttribute, NoinlineAttribute, AlwaysInlineAttribute,
                  GnuInlineAttribute, ArtificialAttribute, DllImportAttribute, NothrowAttribute, ConstAttribute,
-                 NonnullAttribute, NoreturnAttribute, WeakAttribute>;
+                 NonnullAttribute, NoreturnAttribute, WeakAttribute, LeafAttribute>;
 
 using TypeAttribute = std::variant<AlignedAttribute, DeprecatedAttribute>;
 

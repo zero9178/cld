@@ -553,6 +553,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDe
     {
         function->addFnAttr(llvm::Attribute::NoReturn);
     }
+    // TODO: map __attribute__((leaf)) to NoCallback in LLVM 12
     m_lvalues.emplace(&declaration, valueOf(function));
     return valueOf(function);
 }
@@ -775,6 +776,7 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDefinition& func
         {
             function->addFnAttr(llvm::Attribute::NoReturn);
         }
+        // TODO: map __attribute__((leaf)) to NoCallback in LLVM 12
     }
     if (auto* aligned = functionDefinition.getAttributeIf<Semantics::AlignedAttribute>())
     {
