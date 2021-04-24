@@ -212,7 +212,8 @@ bool tryAll(cld::Semantics::SemanticAnalysis& analysis, cld::Semantics::Semantic
     }
     else if constexpr (sizeof...(Args) == 0)
     {
-        static_assert(cld::always_false<Attribute>, "No overload found for Attribute");
+        return tryMatch<cld::Semantics::SemanticAnalysis::SuitableApplicant<Attribute>, Attribute>(
+            analysis, &cld::Semantics::SemanticAnalysis::applyFallback<Attribute>, applicant, attribute, context);
     }
     else
     {
@@ -387,6 +388,7 @@ void cld::Semantics::SemanticAnalysis::createAttributes()
     gnuSpelling("always_inline", &SemanticAnalysis::parseAttribute<AlwaysInlineAttribute>);
     gnuSpelling("gnu_inline", &SemanticAnalysis::parseAttribute<GnuInlineAttribute>);
     gnuSpelling("artificial", &SemanticAnalysis::parseAttribute<ArtificialAttribute>);
+    gnuSpelling("nothrow", &SemanticAnalysis::parseAttribute<NothrowAttribute>);
     if (getLanguageOptions().triple.getPlatform() == Platform::Windows)
     {
         gnuSpelling("dllimport", &SemanticAnalysis::parseAttribute<DllImportAttribute>);
@@ -625,14 +627,8 @@ void cld::Semantics::SemanticAnalysis::apply(AffectsVariableFunction applicant,
     cld::match(applicant, [&](auto holder) { holder->addAttribute(attribute.attribute); });
 }
 
-void cld::Semantics::SemanticAnalysis::apply(AffectsFunction applicant,
-                                             const ParsedAttribute<NoinlineAttribute>& attribute)
-{
-    cld::match(applicant, [&](auto holder) { holder->addAttribute(attribute.attribute); });
-}
-
-void cld::Semantics::SemanticAnalysis::apply(AffectsFunction applicant,
-                                             const ParsedAttribute<AlwaysInlineAttribute>& attribute)
+void cld::Semantics::SemanticAnalysis::apply(AffectsTagVariableFunction applicant,
+                                             const ParsedAttribute<DeprecatedAttribute>& attribute)
 {
     cld::match(applicant, [&](auto holder) { holder->addAttribute(attribute.attribute); });
 }
@@ -653,12 +649,6 @@ void cld::Semantics::SemanticAnalysis::apply(AffectsFunction applicant,
                 *attribute.name, m_sourceInterface, *holder->getNameToken(), *attribute.name));
         });
     cld::match(applicant, [](auto holder) { holder->addAttribute(GnuInlineAttribute{}); });
-}
-
-void cld::Semantics::SemanticAnalysis::apply(AffectsFunction applicant,
-                                             const ParsedAttribute<ArtificialAttribute>& attribute)
-{
-    cld::match(applicant, [&](auto holder) { holder->addAttribute(attribute.attribute); });
 }
 
 void cld::Semantics::SemanticAnalysis::apply(AffectsVariableFunction applicant,
@@ -696,16 +686,4 @@ void cld::Semantics::SemanticAnalysis::apply(AffectsVariableFunction applicant,
             log(Errors::Semantics::DLLIMPORT_CANNOT_BE_APPLIED_TO_DEFINITION_OF_FUNCTION_N.args(
                 *attribute.name, m_sourceInterface, *def->getNameToken(), *attribute.name));
         });
-}
-
-void cld::Semantics::SemanticAnalysis::apply(AffectsTagVariableFunction applicant,
-                                             const ParsedAttribute<DeprecatedAttribute>& attribute)
-{
-    cld::match(applicant, [&](auto holder) { holder->addAttribute(attribute.attribute); });
-}
-
-void cld::Semantics::SemanticAnalysis::apply(AffectsVariable applicant,
-                                             const ParsedAttribute<CleanupAttribute>& attribute)
-{
-    cld::match(applicant, [&](auto holder) { holder->addAttribute(attribute.attribute); });
 }

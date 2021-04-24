@@ -560,6 +560,8 @@ public:
 
     using AffectsTagTypeVariable = VariantUnion<AffectsTag, AffectsType, AffectsVariable>;
 
+    using AffectsTagVariable = VariantUnion<AffectsTag, AffectsType, AffectsVariable>;
+
     using AffectsVariableFunction = VariantUnion<AffectsFunction, AffectsVariable>;
 
     using AffectsTagVariableFunction = VariantUnion<AffectsFunction, AffectsVariable, AffectsTag>;
@@ -577,26 +579,37 @@ public:
                                                                  std::vector<ParsedAttribute<>>&& attributes,
                                                                  const CallingContext& context = {});
 
+    template <class T>
+    using SuitableApplicant = typename std::conditional_t<
+        variantTypesContainV<T, FunctionAttribute>,
+        std::conditional<variantTypesContainV<T, VariableAttribute>,
+                         std::conditional_t<variantTypesContainV<T, TypeAttribute>, AffectsTagVariableFunction,
+                                            AffectsVariableFunction>,
+                         AffectsFunction>,
+        std::conditional<
+            variantTypesContainV<T, VariableAttribute>,
+            std::conditional_t<variantTypesContainV<T, TypeAttribute>, AffectsTagVariable, AffectsVariable>,
+            AffectsTag>>::type;
+
+    template <class T>
+    auto applyFallback(SuitableApplicant<T> applicant, const ParsedAttribute<T>& attribute)
+        -> std::enable_if_t<variantTypesContainV<T, VariantUnion<FunctionAttribute, TypeAttribute, VariableAttribute>>>
+    {
+        cld::match(applicant, [&](auto holder) { holder->addAttribute(attribute.attribute); });
+    }
+
     void apply(AffectsTagVariableFunction applicant, const ParsedAttribute<AlignedAttribute>& attribute);
 
     void apply(AffectsTypeVariable applicant, const ParsedAttribute<VectorSizeAttribute>& attribute);
 
     void apply(AffectsVariableFunction declaration, const ParsedAttribute<UsedAttribute>& attribute);
 
-    void apply(AffectsFunction declaration, const ParsedAttribute<NoinlineAttribute>& attribute);
-
-    void apply(AffectsFunction declaration, const ParsedAttribute<AlwaysInlineAttribute>& attribute);
-
     void apply(AffectsFunction declaration, const ParsedAttribute<GnuInlineAttribute>& attribute,
                const CallingContext& context);
-
-    void apply(AffectsFunction declaration, const ParsedAttribute<ArtificialAttribute>& attribute);
 
     void apply(AffectsVariableFunction declaration, const ParsedAttribute<DllImportAttribute>& attribute);
 
     void apply(AffectsTagVariableFunction declaration, const ParsedAttribute<DeprecatedAttribute>& attribute);
-
-    void apply(AffectsVariable declaration, const ParsedAttribute<CleanupAttribute>& attribute);
 
 private:
     std::unordered_map<std::string,

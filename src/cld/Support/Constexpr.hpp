@@ -250,6 +250,9 @@ template <class... Variants>
 constexpr auto variantTypeUnion(Variants...) -> typename decltype((std::declval<Fold<Variants>>() + ...))::type;
 } // namespace detail
 
+template <class T, class Variant>
+constexpr bool variantTypesContainV = decltype(detail::variantTypesContain<T>(std::declval<Variant>())){};
+
 template <class... Variant>
 using VariantUnion = decltype(detail::variantTypeUnion(std::declval<Variant>()...));
 
