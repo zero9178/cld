@@ -14,8 +14,6 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include <ctre.hpp>
-
 #include "ErrorMessages.hpp"
 #include "SourceObject.hpp"
 
@@ -3016,28 +3014,48 @@ std::string_view cld::Lexer::tokenValue(cld::Lexer::TokenType tokenType)
     CLD_UNREACHABLE;
 }
 
-constexpr static auto pattern = ctll::fixed_string{"(\\?\\?/|\\\\)[\n]|\\?\\?[=()'<!>\\-/]"};
-
 std::string cld::Lexer::normalizeSpelling(std::string_view tokenSpelling)
 {
     std::string result;
     result.reserve(tokenSpelling.size());
-    for (auto& iter : ctre::range<pattern>(tokenSpelling))
+    std::size_t i = 0;
+    while (true)
     {
-        auto view = iter.view();
-        result += tokenSpelling.substr(0, view.data() - tokenSpelling.data());
-        if (!iter.get<1>())
+        for (; i < tokenSpelling.size() && tokenSpelling[i] != '?' && tokenSpelling[i] != '\\'; i++)
+            ;
+        if (i >= tokenSpelling.size())
         {
-            static const std::unordered_map<std::string_view, char> mapping = {
-                {"?\?=", '#'}, {"?\?(", '['}, {"?\?/", '\\'}, {"?\?)", ']'}, {"?\?'", '^'},
-                {"?\?<", '{'}, {"?\?!", '|'}, {"?\?>", '}'},  {"?\?-", '~'}};
-            auto rep = mapping.find(view);
-            CLD_ASSERT(rep != mapping.end());
-            result += rep->second;
+            result += tokenSpelling;
+            break;
         }
-        tokenSpelling.remove_prefix(view.data() + view.size() - tokenSpelling.data());
+        if (tokenSpelling.substr(i, 2) == "\\\n")
+        {
+            result += tokenSpelling.substr(0, i);
+            tokenSpelling = tokenSpelling.substr(i + 2);
+            i += 2;
+            continue;
+        }
+        if (tokenSpelling.substr(i, 4) == "?\?/\n")
+        {
+            result += tokenSpelling.substr(0, i);
+            tokenSpelling = tokenSpelling.substr(i + 4);
+            i += 4;
+            continue;
+        }
+        static const std::unordered_map<std::string_view, char> mapping = {{"?\?=", '#'}, {"?\?(", '['}, {"?\?/", '\\'},
+                                                                           {"?\?)", ']'}, {"?\?'", '^'}, {"?\?<", '{'},
+                                                                           {"?\?!", '|'}, {"?\?>", '}'}, {"?\?-", '~'}};
+        auto rep = mapping.find(tokenSpelling.substr(i, 3));
+        if (rep == mapping.end())
+        {
+            i += 3;
+            continue;
+        }
+        result += tokenSpelling.substr(0, i);
+        result += rep->second;
+        tokenSpelling = tokenSpelling.substr(i + 3);
+        i += 3;
     }
-    result += tokenSpelling;
     return result;
 }
 
