@@ -66,9 +66,14 @@ struct VectorSizeAttribute
     constexpr static std::size_t count = 1;
 };
 
+struct NothrowAttribute
+{
+    constexpr static std::size_t count = 0;
+};
+
 using FunctionAttribute =
     std::variant<AlignedAttribute, DeprecatedAttribute, UsedAttribute, NoinlineAttribute, AlwaysInlineAttribute,
-                 GnuInlineAttribute, ArtificialAttribute, DllImportAttribute>;
+                 GnuInlineAttribute, ArtificialAttribute, DllImportAttribute, NothrowAttribute>;
 
 using TypeAttribute = std::variant<AlignedAttribute, DeprecatedAttribute>;
 

@@ -5759,3 +5759,19 @@ TEST_CASE("Semantics __attribute__((dllimport))", "[semantics]")
                            x64windowsGnu);
     }
 }
+
+TEST_CASE("Semantics __attribute__((nothrow))", "[semantics]")
+{
+    SEMA_PRODUCES("int __attribute__ ((nothrow(8))) foo(void);",
+                  ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N, "'nothrow'", 1));
+    auto program = generateProgram("__attribute__((nothrow)) void foo(void) {\n"
+                                   "    int i = 5;\n"
+                                   "    i;\n"
+                                   "}",
+                                   x64linux);
+    auto& globals = program.getTranslationUnit().getGlobals();
+    REQUIRE(globals.size() == 1);
+    auto& func = globals[0];
+    REQUIRE(func->is<FunctionDefinition>());
+    CHECK(func->as<FunctionDefinition>().hasAttribute<NothrowAttribute>());
+}
