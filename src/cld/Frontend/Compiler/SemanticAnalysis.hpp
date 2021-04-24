@@ -272,6 +272,8 @@ class SemanticAnalysis final : public ProgramInterface
     void checkVectorCompoundAssign(const IntrVarPtr<ExpressionBase>& lhs, const Type& lhsType,
                                    Lexer::CTokenIterator token, const IntrVarPtr<ExpressionBase>& rhs);
 
+    void checkForDeprecatedType(const Type& type);
+
     VectorType vectorCompResultType(const VectorType& vectorType, const LanguageOptions& options);
 
     std::unique_ptr<BinaryOperator> doBitOperators(IntrVarPtr<ExpressionBase>&& lhs, BinaryOperator::Kind kind,

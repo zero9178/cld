@@ -174,6 +174,10 @@ std::vector<cld::IntrVarPtr<cld::Semantics::Useable>>
             {
                 attributes = applyAttributes(ptr.get(), std::move(attributes));
                 reportNotApplicableAttributes(attributes);
+                if (!ptr->hasAttribute<DeprecatedAttribute>())
+                {
+                    checkForDeprecatedType(ptr->getType());
+                }
             }
         },
         &attributes);
@@ -338,6 +342,10 @@ std::vector<cld::IntrVarPtr<cld::Semantics::Useable>>
     }
     attributes = applyAttributes(&ptr, std::move(attributes), FunctionContext{isInline});
     reportNotApplicableAttributes(attributes);
+    if (!ptr.hasAttribute<DeprecatedAttribute>())
+    {
+        checkForDeprecatedType(ptr.getType().getReturnType());
+    }
 
     auto funcType = ArrayType(typeAlloc<PrimitiveType>(PrimitiveType::Char, getLanguageOptions(), flag::isConst = true),
                               loc->getText().size() + 1);
@@ -583,6 +591,10 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                     applyAttributes(cld::get<TypedefInfo*>(prev->second.declared), std::move(thisAttributes));
             }
             reportNotApplicableAttributes(thisAttributes);
+            if (!cld::get<TypedefInfo*>(prev->second.declared)->hasAttribute<DeprecatedAttribute>())
+            {
+                checkForDeprecatedType(result);
+            }
             for (auto& type : RecursiveVisitor(result, TYPE_NEXT_FN))
             {
                 if (auto* valArrayType = type.tryAs<ValArrayType>())
@@ -694,6 +706,11 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
         }
         thisAttributes = applyAttributes(declaration.get(), std::move(thisAttributes));
         reportNotApplicableAttributes(thisAttributes);
+
+        if (!declaration->hasAttribute<DeprecatedAttribute>())
+        {
+            checkForDeprecatedType(declaration->getType());
+        }
 
         if (iter.optionalInitializer)
         {

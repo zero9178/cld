@@ -1775,3 +1775,32 @@ void cld::Semantics::SemanticAnalysis::handleArray(IntrVarValue<Type>& type,
     type = ArrayType(typeAlloc(std::move(*type)), size, flag::isConst = isConst, flag::isVolatile = isVolatile,
                      flag::isRestricted = restricted, flag::isStatic = isStatic);
 }
+
+void cld::Semantics::SemanticAnalysis::checkForDeprecatedType(const cld::Semantics::Type& type)
+{
+    for (auto& iter : RecursiveVisitor(type, TYPE_NEXT_FN))
+    {
+        if (auto* info = iter.getTypedefInfo())
+        {
+            if (auto* deprecatedAttribute = info->getAttributeIf<DeprecatedAttribute>())
+            {
+                if (deprecatedAttribute->optionalMessage)
+                {
+                    // TODO: log warning
+                }
+                else
+                {
+                    // TODO: log warning
+                }
+            }
+            break;
+        }
+        if (auto* func = iter.tryAs<FunctionType>())
+        {
+            for (auto& param : func->getParameters())
+            {
+                checkForDeprecatedType(*param.type);
+            }
+        }
+    }
+}

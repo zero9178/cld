@@ -5797,6 +5797,7 @@ TEST_CASE("Semantics __attribute__((deprecated))", "[semantics]")
                   "return foo;\n"
                   "}",
                   ProducesWarning(VARIABLE_N_IS_DEPRECATED, "'foo'") && ProducesNote(MARKED_DEPRECATED_HERE));
+    /*
     SEMA_PRODUCES("typedef int __attribute__((deprecated)) foo;\n"
                   "\n"
                   "int main(void) {\n"
@@ -5804,6 +5805,7 @@ TEST_CASE("Semantics __attribute__((deprecated))", "[semantics]")
                   "return v;\n"
                   "}",
                   ProducesWarning(TYPE_N_IS_DEPRECATED, "'foo'") && ProducesNote(MARKED_DEPRECATED_HERE));
+    */
     SEMA_PRODUCES("int __attribute__((deprecated(\"Use bar instead\"))) foo(int*);\n"
                   "\n"
                   "int main(void) {\n"
