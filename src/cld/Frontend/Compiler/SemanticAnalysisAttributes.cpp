@@ -434,6 +434,7 @@ void cld::Semantics::SemanticAnalysis::createAttributes()
     gnuSpelling("nothrow", &SemanticAnalysis::parseAttribute<NothrowAttribute>);
     gnuSpelling("const", &SemanticAnalysis::parseAttribute<ConstAttribute>);
     gnuSpelling("nonnull", &SemanticAnalysis::parseAttribute<NonnullAttribute>);
+    gnuSpelling("noreturn", &SemanticAnalysis::parseAttribute<NoreturnAttribute>);
     if (getLanguageOptions().triple.getPlatform() == Platform::Windows)
     {
         gnuSpelling("dllimport", &SemanticAnalysis::parseAttribute<DllImportAttribute>);

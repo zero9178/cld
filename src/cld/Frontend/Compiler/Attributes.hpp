@@ -83,9 +83,15 @@ struct NonnullAttribute
     constexpr static std::size_t count = 1;
 };
 
-using FunctionAttribute = std::variant<AlignedAttribute, DeprecatedAttribute, UsedAttribute, NoinlineAttribute,
-                                       AlwaysInlineAttribute, GnuInlineAttribute, ArtificialAttribute,
-                                       DllImportAttribute, NothrowAttribute, ConstAttribute, NonnullAttribute>;
+struct NoreturnAttribute
+{
+    constexpr static std::size_t count = 0;
+};
+
+using FunctionAttribute =
+    std::variant<AlignedAttribute, DeprecatedAttribute, UsedAttribute, NoinlineAttribute, AlwaysInlineAttribute,
+                 GnuInlineAttribute, ArtificialAttribute, DllImportAttribute, NothrowAttribute, ConstAttribute,
+                 NonnullAttribute, NoreturnAttribute>;
 
 using TypeAttribute = std::variant<AlignedAttribute, DeprecatedAttribute>;
 
