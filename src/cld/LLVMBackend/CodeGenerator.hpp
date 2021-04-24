@@ -14,6 +14,7 @@
 
 #include "ABIImplementation.hpp"
 #include "Codegen.hpp"
+#include "TypeIdentity.hpp"
 
 namespace cld::CGLLVM
 {
@@ -76,7 +77,7 @@ class CodeGenerator final
 
     using TypeVariantKey = std::variant<Semantics::StructType, Semantics::UnionType>;
 
-    std::unordered_map<TypeVariantKey, llvm::Type*> m_types;
+    std::unordered_map<TypeVariantKey, llvm::Type*, TypeHasher<TypeVariantKey>, TypeEqual<TypeVariantKey>> m_types;
     std::unordered_map<std::variant<Semantics::StructType, Semantics::UnionType, Semantics::EnumType>, llvm::DIType*>
         m_debugTypes;
 

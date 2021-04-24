@@ -1100,6 +1100,23 @@ TEST_CASE("LLVM codegen types", "[LLVM]")
             REQUIRE(structType->isStructTy());
             CHECK(structType->getStructNumElements() == 0);
         }
+        SECTION("Const Recursive")
+        {
+            auto program = generateProgram("struct R {\n"
+                                           "const struct R* inner;\n"
+                                           "} foo;");
+            cld::CGLLVM::generateLLVM(module, program);
+            CAPTURE(module);
+            REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
+            CHECK(module.getGlobalList().size() == 1);
+            auto* variable = module.getGlobalVariable("foo");
+            REQUIRE(variable);
+            REQUIRE(variable->getType()->getPointerElementType()->isStructTy());
+            auto* type = variable->getType()->getPointerElementType();
+            REQUIRE(type->getStructNumElements() == 1);
+            REQUIRE(type->getStructElementType(0)->isPointerTy());
+            CHECK(type->getStructElementType(0)->getPointerElementType() == type);
+        }
         SECTION("Bitfields")
         {
             SECTION("Discrete bitfields")

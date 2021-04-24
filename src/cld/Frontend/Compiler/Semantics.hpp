@@ -2693,7 +2693,7 @@ struct hash<cld::Semantics::PrimitiveType>
 {
     std::size_t operator()(const cld::Semantics::PrimitiveType& type) const noexcept
     {
-        return cld::hashCombine(type.getBitCount(), type.isFloatingPoint(), type.isSigned(), type.getKind());
+        return cld::hashCombine(type.getKind());
     }
 };
 

@@ -1,6 +1,7 @@
 #include <unordered_map>
 
 #include "ABIImplementation.hpp"
+#include "TypeIdentity.hpp"
 
 #pragma once
 
@@ -20,7 +21,9 @@ class CommonABIImpl : public ABIImplementation
         std::vector<llvm::Type*> arguments;
     };
 
-    std::unordered_map<Semantics::FunctionType, std::pair<T, Cache>> m_adjustments;
+    std::unordered_map<Semantics::FunctionType, std::pair<T, Cache>, TypeHasher<Semantics::FunctionType>,
+                       TypeEqual<Semantics::FunctionType>>
+        m_adjustments;
 
 protected:
     CommonABIImpl(const llvm::DataLayout& dataLayout) : ABIImplementation(dataLayout) {}
