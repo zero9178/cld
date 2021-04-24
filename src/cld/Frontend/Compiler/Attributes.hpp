@@ -18,7 +18,7 @@ struct AlignedAttribute
 
 struct DeprecatedAttribute
 {
-    std::optional<std::string_view> optionalMessage;
+    std::optional<std::string> optionalMessage;
 
     constexpr static std::size_t count = 1;
 };

@@ -274,9 +274,22 @@ bool cld::Semantics::SemanticAnalysis::parseMember(const Useable*& useable, Lexe
     return true;
 }
 
-bool cld::Semantics::SemanticAnalysis::parseMember(std::string_view& text, Lexer::CTokenIterator attributeName,
+bool cld::Semantics::SemanticAnalysis::parseMember(std::string& text, Lexer::CTokenIterator,
                                                    const Syntax::AssignmentExpression* expression)
 {
+    auto expr = visit(*expression);
+    if (expr->isUndefined())
+    {
+        return false;
+    }
+    if (!isStringLiteralExpr(*expr) || !std::holds_alternative<std::string>(expr->as<Constant>().getValue()))
+    {
+        log(Errors::Semantics::ARGUMENT_TO_DEPRECATED_MUST_BE_A_STRING_LITERAL.args(*expression, m_sourceInterface,
+                                                                                    *expression));
+        return false;
+    }
+
+    text = cld::get<std::string>(expr->as<Constant>().getValue());
     return true;
 }
 
@@ -435,6 +448,7 @@ void cld::Semantics::SemanticAnalysis::createAttributes()
     gnuSpelling("const", &SemanticAnalysis::parseAttribute<ConstAttribute>);
     gnuSpelling("nonnull", &SemanticAnalysis::parseAttribute<NonnullAttribute>);
     gnuSpelling("noreturn", &SemanticAnalysis::parseAttribute<NoreturnAttribute>);
+    gnuSpelling("deprecated", &SemanticAnalysis::parseAttribute<DeprecatedAttribute>);
     if (getLanguageOptions().triple.getPlatform() == Platform::Windows)
     {
         gnuSpelling("dllimport", &SemanticAnalysis::parseAttribute<DllImportAttribute>);

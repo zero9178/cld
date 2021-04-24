@@ -5778,3 +5778,105 @@ TEST_CASE("Semantics __attribute__((nonnull))", "[semantics]")
     REQUIRE(nonNull);
     CHECK_THAT(nonNull->indices, Catch::Matchers::Equals(std::vector<std::uint64_t>{1, 3}));
 }
+
+TEST_CASE("Semantics __attribute__((deprecated))", "[semantics]")
+{
+    SEMA_PRODUCES("int __attribute__((deprecated)) foo(int*);", ProducesNoErrors());
+    SEMA_PRODUCES("int __attribute__((deprecated(5))) foo(int*);",
+                  ProducesError(ARGUMENT_TO_DEPRECATED_MUST_BE_A_STRING_LITERAL));
+    SEMA_PRODUCES("int __attribute__((deprecated(\"Much bar\"))) foo(int*);", ProducesNoErrors());
+    SEMA_PRODUCES("int __attribute__((deprecated)) foo(int*);\n"
+                  "\n"
+                  "int main(void) {\n"
+                  "return foo(0);\n"
+                  "}",
+                  ProducesWarning(FUNCTION_N_IS_DEPRECATED, "'foo'") && ProducesNote(MARKED_DEPRECATED_HERE));
+    SEMA_PRODUCES("int __attribute__((deprecated)) foo;\n"
+                  "\n"
+                  "int main(void) {\n"
+                  "return foo;\n"
+                  "}",
+                  ProducesWarning(VARIABLE_N_IS_DEPRECATED, "'foo'") && ProducesNote(MARKED_DEPRECATED_HERE));
+    SEMA_PRODUCES("typedef int __attribute__((deprecated)) foo;\n"
+                  "\n"
+                  "int main(void) {\n"
+                  "foo v = 3;\n"
+                  "return v;\n"
+                  "}",
+                  ProducesWarning(TYPE_N_IS_DEPRECATED, "'foo'") && ProducesNote(MARKED_DEPRECATED_HERE));
+    SEMA_PRODUCES("int __attribute__((deprecated(\"Use bar instead\"))) foo(int*);\n"
+                  "\n"
+                  "int main(void) {\n"
+                  "return foo(0);\n"
+                  "}",
+                  ProducesWarning(FUNCTION_N_IS_DEPRECATED_N, "'foo'", "Use bar instead")
+                      && ProducesNote(MARKED_DEPRECATED_HERE));
+    SEMA_PRODUCES("int __attribute__((deprecated(\"Use bar instead\"))) foo;\n"
+                  "\n"
+                  "int main(void) {\n"
+                  "return foo;\n"
+                  "}",
+                  ProducesWarning(VARIABLE_N_IS_DEPRECATED_N, "'foo'", "Use bar instead")
+                      && ProducesNote(MARKED_DEPRECATED_HERE));
+
+    /*
+
+    SEMA_PRODUCES("typedef int __attribute__((deprecated(\"Use bar instead\"))) foo;\n"
+                  "\n"
+                  "int main(void) {\n"
+                  "foo v = 3;\n"
+                  "return v;\n"
+                  "}",
+                  ProducesWarning(TYPE_N_IS_DEPRECATED_N, "'foo'", "Use bar instead")
+                      && ProducesNote(MARKED_DEPRECATED_HERE));
+    SEMA_PRODUCES("struct __attribute__((deprecated)) foo;\n"
+                  "\n"
+                  "int main(void) {\n"
+                  "struct foo* v;\n"
+                  "return 0;\n"
+                  "}",
+                  ProducesWarning(TYPE_N_IS_DEPRECATED, "'foo'") && ProducesNote(MARKED_DEPRECATED_HERE));
+    SEMA_PRODUCES("union __attribute__((deprecated)) foo;\n"
+                  "\n"
+                  "int main(void) {\n"
+                  "union foo* v;\n"
+                  "return 0;\n"
+                  "}",
+                  ProducesWarning(TYPE_N_IS_DEPRECATED, "'foo'") && ProducesNote(MARKED_DEPRECATED_HERE));
+    SEMA_PRODUCES("enum __attribute__((deprecated)) foo {\n"
+                  "Value = 3,\n"
+                  "};\n"
+                  "\n"
+                  "int main(void) {\n"
+                  "enum foo v;\n"
+                  "return 0;\n"
+                  "}",
+                  ProducesWarning(TYPE_N_IS_DEPRECATED, "'foo'") && ProducesNote(MARKED_DEPRECATED_HERE));
+    SEMA_PRODUCES("struct __attribute__((deprecated(\"Use bar instead\"))) foo;\n"
+                  "\n"
+                  "int main(void) {\n"
+                  "struct foo* v;\n"
+                  "return 0;\n"
+                  "}",
+                  ProducesWarning(TYPE_N_IS_DEPRECATED_N, "'foo'", "Use bar instead")
+                      && ProducesNote(MARKED_DEPRECATED_HERE));
+    SEMA_PRODUCES("union __attribute__((deprecated(\"Use bar instead\"))) foo;\n"
+                  "\n"
+                  "int main(void) {\n"
+                  "union foo* v;\n"
+                  "return 0;\n"
+                  "}",
+                  ProducesWarning(TYPE_N_IS_DEPRECATED_N, "'foo'", "Use bar instead")
+                      && ProducesNote(MARKED_DEPRECATED_HERE));
+    SEMA_PRODUCES("enum __attribute__((deprecated(\"Use bar instead\"))) foo {\n"
+                  "Value = 3,\n"
+                  "};\n"
+                  "\n"
+                  "int main(void) {\n"
+                  "enum foo v;\n"
+                  "return 0;\n"
+                  "}",
+                  ProducesWarning(TYPE_N_IS_DEPRECATED_N, "'foo'", "Use bar instead")
+                      && ProducesNote(MARKED_DEPRECATED_HERE));
+    */
+}

@@ -990,6 +990,11 @@ CREATE_ERROR(DLLIMPORT_VARIABLE_N_CANNOT_BE_INITIALIZED, "'dllimport' variable %
 
 CREATE_ERROR(NONNULL_INDEX_N_OUT_OF_BOUNDS, "'nonnull' index %0 out of bounds", Underline<1>);
 
+// __attribute__((deprecated))
+
+CREATE_ERROR(ARGUMENT_TO_DEPRECATED_MUST_BE_A_STRING_LITERAL, "Argument to 'deprecated' must be a string literal",
+             Underline<0>);
+
 } // namespace Semantics
 
 namespace Lexer
@@ -1236,6 +1241,20 @@ CREATE_WARNING(ARGUMENT_N_OF_NONNULL_PARAMETER_IS_OF_NON_POINTER_TYPE_N, "ignore
 CREATE_WARNING(FUNCTION_N_WITH_NONNULL_ATTRIBUTE_DOES_NOT_HAVE_ANY_POINTER_PARAMETERS, "ignored-attributes",
                "Function %0 with 'nonnull' attribute does not have any pointer parameters", Underline<0>, Underline<1>);
 
+// __attribute__((deprecated))
+
+CREATE_WARNING(FUNCTION_N_IS_DEPRECATED, "deprecated", "Function %0 is deprecated", Underline<0>);
+
+CREATE_WARNING(FUNCTION_N_IS_DEPRECATED_N, "deprecated", "Function %0 is deprecated: %1", Underline<0>);
+
+CREATE_WARNING(VARIABLE_N_IS_DEPRECATED, "deprecated", "Variable %0 is deprecated", Underline<0>);
+
+CREATE_WARNING(VARIABLE_N_IS_DEPRECATED_N, "deprecated", "Variable %0 is deprecated: %1", Underline<0>);
+
+CREATE_WARNING(TYPE_N_IS_DEPRECATED, "deprecated", "Type %0 is deprecated", Underline<1>);
+
+CREATE_WARNING(TYPE_N_IS_DEPRECATED_N, "deprecated", "Type %0 is deprecated: %1", Underline<2>);
+
 } // namespace Semantics
 namespace Lexer
 {
@@ -1284,6 +1303,8 @@ CREATE_NOTE(LABEL_N_HERE, "Label %0 here:", Underline<0>);
 CREATE_NOTE(PREVIOUS_CASE_HERE, "Previous case here:", Annotate<0, 1>);
 
 CREATE_NOTE(PREVIOUS_DEFAULT_HERE, "Previous default here:", Underline<0>);
+
+CREATE_NOTE(MARKED_DEPRECATED_HERE, "Marked deprecated here:", Underline<0>);
 
 } // namespace Semantics
 

@@ -630,7 +630,7 @@ private:
     bool parseMember(const Useable*& useable, Lexer::CTokenIterator attributeName,
                      const Syntax::AssignmentExpression* expression);
 
-    bool parseMember(std::string_view& text, Lexer::CTokenIterator attributeName,
+    bool parseMember(std::string& text, Lexer::CTokenIterator attributeName,
                      const Syntax::AssignmentExpression* expression);
 
     template <class T>

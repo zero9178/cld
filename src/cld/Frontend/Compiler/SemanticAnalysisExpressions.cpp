@@ -568,6 +568,55 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                                    CLD_UNREACHABLE;
                                });
     useable.incrementUsage();
+    if (auto* deprecatedAttribute = useable.match(
+            [](const auto& value) -> const DeprecatedAttribute* {
+                return value.template getAttributeIf<DeprecatedAttribute>();
+            },
+            [](const BuiltinFunction&) -> const DeprecatedAttribute* { return nullptr; }))
+    {
+        auto* nameToken = useable.match([](const auto& value) -> Lexer::CTokenIterator { return value.getNameToken(); },
+                                        [](const BuiltinFunction&) -> Lexer::CTokenIterator { CLD_UNREACHABLE; });
+        if (deprecatedAttribute->optionalMessage)
+        {
+            if (useable.is<FunctionDeclaration>() || useable.is<FunctionDefinition>())
+            {
+                if (log(Warnings::Semantics::FUNCTION_N_IS_DEPRECATED_N.args(*node.getIdentifier(), m_sourceInterface,
+                                                                             *node.getIdentifier(),
+                                                                             *deprecatedAttribute->optionalMessage)))
+                {
+                    log(Notes::Semantics::MARKED_DEPRECATED_HERE.args(*nameToken, m_sourceInterface, *nameToken));
+                }
+            }
+            else if (useable.is<VariableDeclaration>())
+            {
+                if (log(Warnings::Semantics::VARIABLE_N_IS_DEPRECATED_N.args(*node.getIdentifier(), m_sourceInterface,
+                                                                             *node.getIdentifier(),
+                                                                             *deprecatedAttribute->optionalMessage)))
+                {
+                    log(Notes::Semantics::MARKED_DEPRECATED_HERE.args(*nameToken, m_sourceInterface, *nameToken));
+                }
+            }
+        }
+        else
+        {
+            if (useable.is<FunctionDeclaration>() || useable.is<FunctionDefinition>())
+            {
+                if (log(Warnings::Semantics::FUNCTION_N_IS_DEPRECATED.args(*node.getIdentifier(), m_sourceInterface,
+                                                                           *node.getIdentifier())))
+                {
+                    log(Notes::Semantics::MARKED_DEPRECATED_HERE.args(*nameToken, m_sourceInterface, *nameToken));
+                }
+            }
+            else if (useable.is<VariableDeclaration>())
+            {
+                if (log(Warnings::Semantics::VARIABLE_N_IS_DEPRECATED.args(*node.getIdentifier(), m_sourceInterface,
+                                                                           *node.getIdentifier())))
+                {
+                    log(Notes::Semantics::MARKED_DEPRECATED_HERE.args(*nameToken, m_sourceInterface, *nameToken));
+                }
+            }
+        }
+    }
     return std::make_unique<DeclarationRead>(type, useable, node.getIdentifier());
 }
 
