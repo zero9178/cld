@@ -5636,37 +5636,6 @@ TEST_CASE("Semantics __attribute__((aligned))", "[semantics]")
     }
 }
 
-TEST_CASE("Semantics __attribute__((noinline))", "[semantics]")
-{
-    SEMA_PRODUCES("int __attribute__ ((noinline(8))) foo(void);",
-                  ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N, "'noinline'", 1));
-    auto program = generateProgram("__attribute__((noinline)) void foo(void) {\n"
-                                   "    int i = 5;\n"
-                                   "    i;\n"
-                                   "}",
-                                   x64linux);
-    auto& globals = program.getTranslationUnit().getGlobals();
-    REQUIRE(globals.size() == 1);
-    auto& func = globals[0];
-    REQUIRE(func->is<FunctionDefinition>());
-    CHECK(func->as<FunctionDefinition>().hasAttribute<NoinlineAttribute>());
-}
-
-TEST_CASE("Semantics __attribute__((always_inline))", "[semantics]")
-{
-    SEMA_PRODUCES("int __attribute__ ((always_inline(8))) foo(void);",
-                  ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N, "'always_inline'", 1));
-    auto program = generateProgram("__attribute__((always_inline)) void foo(void) {\n"
-                                   "    int i = 5;\n"
-                                   "    i;\n"
-                                   "}",
-                                   x64linux);
-    auto& globals = program.getTranslationUnit().getGlobals();
-    REQUIRE(globals.size() == 1);
-    auto& func = globals[0];
-    REQUIRE(func->is<FunctionDefinition>());
-    CHECK(func->as<FunctionDefinition>().hasAttribute<AlwaysInlineAttribute>());
-}
 
 TEST_CASE("Semantics __attribute__((gnu_inline))", "[semantics]")
 {
@@ -5692,22 +5661,6 @@ TEST_CASE("Semantics __attribute__((gnu_inline))", "[semantics]")
     auto& func = globals[0];
     REQUIRE(func->is<FunctionDefinition>());
     CHECK(func->as<FunctionDefinition>().hasAttribute<GnuInlineAttribute>());
-}
-
-TEST_CASE("Semantics __attribute__((artificial))", "[semantics]")
-{
-    SEMA_PRODUCES("int __attribute__ ((artificial(8))) foo(void);",
-                  ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N, "'artificial'", 1));
-    auto program = generateProgram("__attribute__((artificial)) void foo(void) {\n"
-                                   "    int i = 5;\n"
-                                   "    i;\n"
-                                   "}",
-                                   x64linux);
-    auto& globals = program.getTranslationUnit().getGlobals();
-    REQUIRE(globals.size() == 1);
-    auto& func = globals[0];
-    REQUIRE(func->is<FunctionDefinition>());
-    CHECK(func->as<FunctionDefinition>().hasAttribute<ArtificialAttribute>());
 }
 
 TEST_CASE("Semantics __attribute__((dllimport))", "[semantics]")
@@ -5760,18 +5713,44 @@ TEST_CASE("Semantics __attribute__((dllimport))", "[semantics]")
     }
 }
 
-TEST_CASE("Semantics __attribute__((nothrow))", "[semantics]")
+TEMPLATE_TEST_CASE("Semantics __attribute__((T)) markers", "[semantics][template]", NoinlineAttribute,
+                   AlwaysInlineAttribute, ArtificialAttribute, NothrowAttribute, ConstAttribute)
 {
-    SEMA_PRODUCES("int __attribute__ ((nothrow(8))) foo(void);",
-                  ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N, "'nothrow'", 1));
-    auto program = generateProgram("__attribute__((nothrow)) void foo(void) {\n"
-                                   "    int i = 5;\n"
-                                   "    i;\n"
-                                   "}",
+    std::string name = []
+    {
+        if constexpr (std::is_same_v<TestType, NoinlineAttribute>)
+        {
+            return "noinline";
+        }
+        if constexpr (std::is_same_v<TestType, AlwaysInlineAttribute>)
+        {
+            return "always_inline";
+        }
+        if constexpr (std::is_same_v<TestType, ArtificialAttribute>)
+        {
+            return "artificial";
+        }
+        if constexpr (std::is_same_v<TestType, NothrowAttribute>)
+        {
+            return "nothrow";
+        }
+        if constexpr (std::is_same_v<TestType, ConstAttribute>)
+        {
+            return "const";
+        }
+        CLD_UNREACHABLE;
+    }();
+    SEMA_PRODUCES("int __attribute__ ((" + name + "(8))) foo(void);",
+                  ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N, "'" + name + "'", 1));
+    auto program = generateProgram("__attribute__((" + name
+                                       + ")) void foo(void) {\n"
+                                         "    int i = 5;\n"
+                                         "    i;\n"
+                                         "}",
                                    x64linux);
     auto& globals = program.getTranslationUnit().getGlobals();
     REQUIRE(globals.size() == 1);
     auto& func = globals[0];
     REQUIRE(func->is<FunctionDefinition>());
-    CHECK(func->as<FunctionDefinition>().hasAttribute<NothrowAttribute>());
+    CHECK(func->as<FunctionDefinition>().hasAttribute<TestType>());
 }

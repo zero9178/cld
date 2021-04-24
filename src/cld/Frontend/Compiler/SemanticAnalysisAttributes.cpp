@@ -389,6 +389,7 @@ void cld::Semantics::SemanticAnalysis::createAttributes()
     gnuSpelling("gnu_inline", &SemanticAnalysis::parseAttribute<GnuInlineAttribute>);
     gnuSpelling("artificial", &SemanticAnalysis::parseAttribute<ArtificialAttribute>);
     gnuSpelling("nothrow", &SemanticAnalysis::parseAttribute<NothrowAttribute>);
+    gnuSpelling("const", &SemanticAnalysis::parseAttribute<ConstAttribute>);
     if (getLanguageOptions().triple.getPlatform() == Platform::Windows)
     {
         gnuSpelling("dllimport", &SemanticAnalysis::parseAttribute<DllImportAttribute>);

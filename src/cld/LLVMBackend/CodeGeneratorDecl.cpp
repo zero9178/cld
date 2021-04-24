@@ -545,6 +545,10 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDe
     {
         function->addFnAttr(llvm::Attribute::NoUnwind);
     }
+    if (declaration.hasAttribute<Semantics::ConstAttribute>())
+    {
+        function->addFnAttr(llvm::Attribute::ReadNone);
+    }
     m_lvalues.emplace(&declaration, valueOf(function));
     return valueOf(function);
 }
@@ -758,6 +762,10 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDefinition& func
         if (functionDefinition.hasAttribute<Semantics::NothrowAttribute>())
         {
             function->addFnAttr(llvm::Attribute::NoUnwind);
+        }
+        if (functionDefinition.hasAttribute<Semantics::ConstAttribute>())
+        {
+            function->addFnAttr(llvm::Attribute::ReadNone);
         }
     }
     if (auto* aligned = functionDefinition.getAttributeIf<Semantics::AlignedAttribute>())

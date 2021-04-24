@@ -71,9 +71,14 @@ struct NothrowAttribute
     constexpr static std::size_t count = 0;
 };
 
+struct ConstAttribute
+{
+    constexpr static std::size_t count = 0;
+};
+
 using FunctionAttribute =
     std::variant<AlignedAttribute, DeprecatedAttribute, UsedAttribute, NoinlineAttribute, AlwaysInlineAttribute,
-                 GnuInlineAttribute, ArtificialAttribute, DllImportAttribute, NothrowAttribute>;
+                 GnuInlineAttribute, ArtificialAttribute, DllImportAttribute, NothrowAttribute, ConstAttribute>;
 
 using TypeAttribute = std::variant<AlignedAttribute, DeprecatedAttribute>;
 
