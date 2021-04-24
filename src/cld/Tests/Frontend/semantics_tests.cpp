@@ -5714,7 +5714,7 @@ TEST_CASE("Semantics __attribute__((dllimport))", "[semantics]")
 }
 
 TEMPLATE_TEST_CASE("Semantics __attribute__((T)) markers", "[semantics][template]", NoinlineAttribute,
-                   AlwaysInlineAttribute, ArtificialAttribute, NothrowAttribute, ConstAttribute,NoreturnAttribute)
+                   AlwaysInlineAttribute, ArtificialAttribute, NothrowAttribute, ConstAttribute,NoreturnAttribute,WeakAttribute)
 {
     std::string name = []
     {
@@ -5742,21 +5742,41 @@ TEMPLATE_TEST_CASE("Semantics __attribute__((T)) markers", "[semantics][template
         {
             return "noreturn";
         }
+        if constexpr (std::is_same_v<TestType,WeakAttribute>)
+        {
+            return "weak";
+        }
         CLD_UNREACHABLE;
     }();
-    SEMA_PRODUCES("int __attribute__ ((" + name + "(8))) foo(void);",
-                  ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N, "'" + name + "'", 1));
-    auto program = generateProgram("__attribute__((" + name
+    if constexpr (cld::variantTypesContainV<TestType,FunctionAttribute>)
+    {
+        SEMA_PRODUCES("int __attribute__ ((" + name + "(8))) foo(void);",
+                      ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N, "'" + name + "'", 1));
+        auto program = generateProgram("__attribute__((" + name
                                        + ")) void foo(void) {\n"
                                          "    int i = 5;\n"
                                          "    i;\n"
                                          "}",
-                                   x64linux);
-    auto& globals = program.getTranslationUnit().getGlobals();
-    REQUIRE(globals.size() == 1);
-    auto& func = globals[0];
-    REQUIRE(func->is<FunctionDefinition>());
-    CHECK(func->as<FunctionDefinition>().hasAttribute<TestType>());
+                                       x64linux);
+        auto& globals = program.getTranslationUnit().getGlobals();
+        REQUIRE(globals.size() == 1);
+        auto& func = globals[0];
+        REQUIRE(func->is<FunctionDefinition>());
+        CHECK(func->as<FunctionDefinition>().hasAttribute<TestType>());
+    }
+    if constexpr (cld::variantTypesContainV<TestType,VariableAttribute>)
+    {
+        SEMA_PRODUCES("int __attribute__ ((" + name + "(8))) foo;",
+                      ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N, "'" + name + "'", 1));
+        auto program = generateProgram("__attribute__((" + name
+                                       + ")) int foo;",
+                                       x64linux);
+        auto& globals = program.getTranslationUnit().getGlobals();
+        REQUIRE(globals.size() == 1);
+        auto& func = globals[0];
+        REQUIRE(func->is<VariableDeclaration>());
+        CHECK(func->as<VariableDeclaration>().hasAttribute<TestType>());
+    }
 }
 
 TEST_CASE("Semantics __attribute__((nonnull))", "[semantics]")

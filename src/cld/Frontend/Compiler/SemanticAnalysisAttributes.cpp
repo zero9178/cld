@@ -449,6 +449,7 @@ void cld::Semantics::SemanticAnalysis::createAttributes()
     gnuSpelling("nonnull", &SemanticAnalysis::parseAttribute<NonnullAttribute>);
     gnuSpelling("noreturn", &SemanticAnalysis::parseAttribute<NoreturnAttribute>);
     gnuSpelling("deprecated", &SemanticAnalysis::parseAttribute<DeprecatedAttribute>);
+    gnuSpelling("weak", &SemanticAnalysis::parseAttribute<WeakAttribute>);
     if (getLanguageOptions().triple.getPlatform() == Platform::Windows)
     {
         gnuSpelling("dllimport", &SemanticAnalysis::parseAttribute<DllImportAttribute>);
