@@ -986,6 +986,10 @@ CREATE_ERROR(DLLIMPORT_CANNOT_BE_APPLIED_TO_VARIABLE_N_WITH_INTERNAL_LINKAGE,
 
 CREATE_ERROR(DLLIMPORT_VARIABLE_N_CANNOT_BE_INITIALIZED, "'dllimport' variable %0 cannot be initialized", Underline<0>);
 
+// __attribute__((nonnull))
+
+CREATE_ERROR(NONNULL_INDEX_N_OUT_OF_BOUNDS, "'nonnull' index %0 out of bounds", Underline<1>);
+
 } // namespace Semantics
 
 namespace Lexer
@@ -1223,6 +1227,14 @@ CREATE_WARNING(ATTRIBUTE_DLLIMPORT_IGNORED_AFTER_DEFINITION_OF_FUNCTION_N, "igno
 
 CREATE_WARNING(ATTRIBUTE_DLLIMPORT_IGNORED_AFTER_DEFINITION_OF_VARIABLE_N, "ignored-attributes",
                "Attribute 'dllimport' ignored after definition of variable %0", Underline<0>);
+
+// __attribute__((nonnull))
+
+CREATE_WARNING(ARGUMENT_N_OF_NONNULL_PARAMETER_IS_OF_NON_POINTER_TYPE_N, "ignored-attributes",
+               "Argument %0 of 'nonnull' parameter is of non pointer type %1", Underline<2>);
+
+CREATE_WARNING(FUNCTION_N_WITH_NONNULL_ATTRIBUTE_DOES_NOT_HAVE_ANY_POINTER_PARAMETERS, "ignored-attributes",
+               "Function %0 with 'nonnull' attribute does not have any pointer parameters", Underline<0>, Underline<1>);
 
 } // namespace Semantics
 namespace Lexer

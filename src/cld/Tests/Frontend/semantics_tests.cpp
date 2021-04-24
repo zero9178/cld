@@ -5754,3 +5754,23 @@ TEMPLATE_TEST_CASE("Semantics __attribute__((T)) markers", "[semantics][template
     REQUIRE(func->is<FunctionDefinition>());
     CHECK(func->as<FunctionDefinition>().hasAttribute<TestType>());
 }
+
+TEST_CASE("Semantics __attribute__((nonnull))", "[semantics]")
+{
+    SEMA_PRODUCES("int __attribute__((nonnull)) foo(int*);", ProducesNoErrors());
+    SEMA_PRODUCES("int __attribute__((nonnull())) foo(int*);", ProducesNoErrors());
+    SEMA_PRODUCES("int __attribute__((nonnull(1))) foo(int*);", ProducesNoErrors());
+    SEMA_PRODUCES("int __attribute__((nonnull(0))) foo(int*);", ProducesError(NONNULL_INDEX_N_OUT_OF_BOUNDS, 0));
+    SEMA_PRODUCES("int __attribute__((nonnull(1))) foo(int);",
+                  ProducesWarning(ARGUMENT_N_OF_NONNULL_PARAMETER_IS_OF_NON_POINTER_TYPE_N, 1, "'int'"));
+    SEMA_PRODUCES("int __attribute__((nonnull())) foo(int);",
+                  ProducesWarning(FUNCTION_N_WITH_NONNULL_ATTRIBUTE_DOES_NOT_HAVE_ANY_POINTER_PARAMETERS, "'foo'"));
+    auto program = generateProgram("__attribute__((nonnull(1,3))) int foo(int*,float,float*);", x64linux);
+    auto& globals = program.getTranslationUnit().getGlobals();
+    REQUIRE(globals.size() == 1);
+    auto& func = globals[0];
+    REQUIRE(func->is<FunctionDeclaration>());
+    auto* nonNull = func->as<FunctionDeclaration>().getAttributeIf<NonnullAttribute>();
+    REQUIRE(nonNull);
+    CHECK_THAT(nonNull->indices, Catch::Matchers::Equals(std::vector<std::uint64_t>{1, 3}));
+}

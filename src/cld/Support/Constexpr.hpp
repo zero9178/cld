@@ -172,6 +172,16 @@ struct IsOptional<std::optional<T>> : std::true_type
 };
 
 template <class T>
+struct IsVector : std::false_type
+{
+};
+
+template <class T>
+struct IsVector<std::vector<T>> : std::true_type
+{
+};
+
+template <class T>
 struct IsSharedPtr : std::false_type
 {
 };

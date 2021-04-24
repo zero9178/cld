@@ -611,6 +611,8 @@ public:
 
     void apply(AffectsTagVariableFunction declaration, const ParsedAttribute<DeprecatedAttribute>& attribute);
 
+    void apply(AffectsFunction declaration, const ParsedAttribute<NonnullAttribute>& attribute);
+
 private:
     std::unordered_map<std::string,
                        std::optional<AllAttributes> (SemanticAnalysis::*)(const Syntax::GNUAttributes::GNUAttribute&)>

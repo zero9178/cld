@@ -1,5 +1,6 @@
 #include "SemanticAnalysis.hpp"
 
+#include <numeric>
 #include <optional>
 #include <vector>
 
@@ -141,6 +142,9 @@ auto to_tuple(T& object) noexcept
 template <class... Args>
 auto tupleWithoutRef(std::tuple<Args...>) -> std::tuple<std::decay_t<Args>...>;
 
+template <class... Args>
+auto toTypePtrTuple(std::tuple<Args...>) -> std::tuple<std::decay_t<Args>*...>;
+
 template <bool found = false, class First, class... Args>
 constexpr bool checkValidStruct(std::tuple<First, Args...>*)
 {
@@ -154,6 +158,10 @@ constexpr bool checkValidStruct(std::tuple<First, Args...>*)
         {
             return checkValidStruct<true>(static_cast<std::tuple<Args...>*>(nullptr));
         }
+    }
+    else if constexpr (cld::IsVector<First>{})
+    {
+        return sizeof...(Args) == 0;
     }
     else if constexpr (found)
     {
@@ -292,14 +300,14 @@ std::optional<cld::Semantics::AllAttributes>
     T result;
     auto tuple = to_tuple(result);
     constexpr std::size_t minExpressions = std::apply(
-        [&](auto&&... refs) -> std::size_t
+        [&](auto... refs) -> std::size_t
         {
             std::size_t count = 0;
             (void)(
                 [&](auto&& value) -> bool
                                          {
                                              using U = std::decay_t<decltype(*value)>;
-                                             if constexpr (cld::IsOptional<U>{})
+                                             if constexpr (cld::IsOptional<U>{} || cld::IsVector<U>{})
                                              {
                                                  return true;
                                              }
@@ -308,12 +316,25 @@ std::optional<cld::Semantics::AllAttributes>
                                                  count++;
                                                  return false;
                                              }
-                                         }(static_cast<typename std::decay_t<decltype(refs)>*>(nullptr))
+                                         }(static_cast<typename std::decay_t<decltype(refs)>>(nullptr))
                                          || ...);
             return count;
         },
-        decltype(tupleWithoutRef(std::declval<decltype(tuple)>())){});
-    constexpr std::size_t maxExpressions = std::tuple_size_v<decltype(tuple)>;
+        decltype(toTypePtrTuple(std::declval<decltype(tuple)>())){});
+    constexpr bool lastIsVector = []
+    {
+        if constexpr (std::tuple_size_v<decltype(tuple)> != 0)
+        {
+            return cld::IsVector<
+                std::decay_t<std::tuple_element_t<std::tuple_size_v<decltype(tuple)> - 1, decltype(tuple)>>>{};
+        }
+        else
+        {
+            return false;
+        }
+    }();
+    constexpr std::size_t maxExpressions =
+        lastIsVector ? static_cast<std::size_t>(-1) : std::tuple_size_v<decltype(tuple)>;
     if constexpr (maxExpressions > 0)
     {
         static_assert(
@@ -359,17 +380,39 @@ std::optional<cld::Semantics::AllAttributes>
         return {};
     }
 
-    auto begin = attribute.arguments.begin();
-    if (!std::apply(
-            [&](auto&... refs) -> bool
-            {
-                return (true & ...
-                        & parseMember(refs, attribute.nameToken,
-                                      begin == attribute.arguments.end() ? nullptr : &*(begin++)));
-            },
-            tuple))
+    if constexpr (lastIsVector)
     {
-        return {};
+        auto begin = attribute.arguments.begin();
+        if (!std::apply(
+                [&](auto&... refs, auto& last) -> bool
+                {
+                    auto result = (true & ...
+                                   & parseMember(refs, attribute.nameToken,
+                                                 begin == attribute.arguments.end() ? nullptr : &*(begin++)));
+                    return std::accumulate(
+                        begin, attribute.arguments.end(), result,
+                        [&](bool result, const auto& value)
+                        { return result & parseMember(last.emplace_back(), attribute.nameToken, &value); });
+                },
+                tuple))
+        {
+            return {};
+        }
+    }
+    else
+    {
+        auto begin = attribute.arguments.begin();
+        if (!std::apply(
+                [&](auto&... refs) -> bool
+                {
+                    return (true & ...
+                            & parseMember(refs, attribute.nameToken,
+                                          begin == attribute.arguments.end() ? nullptr : &*(begin++)));
+                },
+                tuple))
+        {
+            return {};
+        }
     }
     return result;
 }
@@ -390,6 +433,7 @@ void cld::Semantics::SemanticAnalysis::createAttributes()
     gnuSpelling("artificial", &SemanticAnalysis::parseAttribute<ArtificialAttribute>);
     gnuSpelling("nothrow", &SemanticAnalysis::parseAttribute<NothrowAttribute>);
     gnuSpelling("const", &SemanticAnalysis::parseAttribute<ConstAttribute>);
+    gnuSpelling("nonnull", &SemanticAnalysis::parseAttribute<NonnullAttribute>);
     if (getLanguageOptions().triple.getPlatform() == Platform::Windows)
     {
         gnuSpelling("dllimport", &SemanticAnalysis::parseAttribute<DllImportAttribute>);
@@ -687,4 +731,38 @@ void cld::Semantics::SemanticAnalysis::apply(AffectsVariableFunction applicant,
             log(Errors::Semantics::DLLIMPORT_CANNOT_BE_APPLIED_TO_DEFINITION_OF_FUNCTION_N.args(
                 *attribute.name, m_sourceInterface, *def->getNameToken(), *attribute.name));
         });
+}
+
+void cld::Semantics::SemanticAnalysis::apply(AffectsFunction applicant,
+                                             const ParsedAttribute<NonnullAttribute>& attribute)
+{
+    auto& ft = cld::match(applicant, [](auto holder) -> const FunctionType& { return holder->getType(); });
+    for (auto iter = attribute.attribute.indices.begin(); iter != attribute.attribute.indices.end(); iter++)
+    {
+        if (*iter == 0 || (*iter - 1) >= ft.getParameters().size())
+        {
+            log(Errors::Semantics::NONNULL_INDEX_N_OUT_OF_BOUNDS.args(
+                attribute.expressionRanges[iter - attribute.attribute.indices.begin()], m_sourceInterface, *iter,
+                attribute.expressionRanges[iter - attribute.attribute.indices.begin()]));
+            continue;
+        }
+        if (!ft.getParameters()[*iter - 1].type->is<PointerType>())
+        {
+            // TODO: Better source locations
+
+            log(Warnings::Semantics::ARGUMENT_N_OF_NONNULL_PARAMETER_IS_OF_NON_POINTER_TYPE_N.args(
+                attribute.expressionRanges[iter - attribute.attribute.indices.begin()], m_sourceInterface, *iter,
+                *ft.getParameters()[*iter - 1].type,
+                attribute.expressionRanges[iter - attribute.attribute.indices.begin()]));
+        }
+    }
+    if (attribute.attribute.indices.empty()
+        && std::none_of(ft.getParameters().begin(), ft.getParameters().end(),
+                        [](const FunctionType::Parameter& param) { return param.type->is<PointerType>(); }))
+    {
+        log(Warnings::Semantics::FUNCTION_N_WITH_NONNULL_ATTRIBUTE_DOES_NOT_HAVE_ANY_POINTER_PARAMETERS.args(
+            *attribute.name, m_sourceInterface,
+            *cld::match(applicant, [](auto holder) { return holder->getNameToken(); }), *attribute.name));
+    }
+    cld::match(applicant, [&](auto holder) { holder->addAttribute(attribute.attribute); });
 }
