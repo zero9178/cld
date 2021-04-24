@@ -75,7 +75,7 @@ llvm::Type* cld::CGLLVM::CodeGenerator::visit(const Semantics::Type& type)
         },
         [&](const Semantics::StructType& structType) -> llvm::Type*
         {
-            auto result = m_types.find(structType);
+            auto result = m_types.find(Semantics::removeQualifiers(structType)->as<Semantics::StructType>());
             if (result != m_types.end())
             {
                 return result->second;
@@ -83,7 +83,7 @@ llvm::Type* cld::CGLLVM::CodeGenerator::visit(const Semantics::Type& type)
             auto* structDef = std::get_if<Semantics::StructDefinition>(&structType.getInfo().type);
             auto* type = llvm::StructType::create(
                 m_module.getContext(), structType.isAnonymous() ? "struct.anon" : structType.getStructName());
-            m_types.insert({structType, type});
+            m_types.insert({Semantics::removeQualifiers(structType)->as<Semantics::StructType>(), type});
             if (!structDef)
             {
                 return type;
@@ -99,7 +99,7 @@ llvm::Type* cld::CGLLVM::CodeGenerator::visit(const Semantics::Type& type)
         },
         [&](const Semantics::UnionType& unionType) -> llvm::Type*
         {
-            auto result = m_types.find(unionType);
+            auto result = m_types.find(Semantics::removeQualifiers(unionType)->as<Semantics::UnionType>());
             if (result != m_types.end())
             {
                 return result->second;
@@ -109,7 +109,7 @@ llvm::Type* cld::CGLLVM::CodeGenerator::visit(const Semantics::Type& type)
             {
                 auto* type = llvm::StructType::create(
                     m_module.getContext(), unionType.isAnonymous() ? "union.anon" : unionType.getUnionName());
-                m_types.insert({unionType, type});
+                m_types.insert({Semantics::removeQualifiers(unionType)->as<Semantics::UnionType>(), type});
                 return type;
             }
             const Semantics::Type* largestAlignment = nullptr;
@@ -138,7 +138,7 @@ llvm::Type* cld::CGLLVM::CodeGenerator::visit(const Semantics::Type& type)
                                                        largestSize - largestAlignment->getSizeOf(m_programInterface)));
             }
             type->setBody(body);
-            m_types.insert({unionType, type});
+            m_types.insert({Semantics::removeQualifiers(unionType)->as<Semantics::UnionType>(), type});
             return type;
         },
         [&](const Semantics::AbstractArrayType& arrayType) -> llvm::Type*

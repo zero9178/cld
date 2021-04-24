@@ -2794,14 +2794,13 @@ struct hash<cld::Semantics::ErrorType>
 
 inline std::size_t std::hash<cld::Semantics::Type>::operator()(const cld::Semantics::Type& type) const noexcept
 {
-    return cld::rawHashCombine(
-        type.match(
-            [](const auto& type) -> std::size_t
-            {
-                using T = std::decay_t<decltype(type)>;
-                return std::hash<T>{}(type);
-            }),
-        cld::hashCombine(type.getTypedefName(), type.isConst(), type.isVolatile(), type.index()));
+    return cld::rawHashCombine(type.match(
+                                   [](const auto& type) -> std::size_t
+                                   {
+                                       using T = std::decay_t<decltype(type)>;
+                                       return std::hash<T>{}(type);
+                                   }),
+                               cld::hashCombine(type.isConst(), type.isVolatile(), type.index()));
 }
 } // namespace std
 
