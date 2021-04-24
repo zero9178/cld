@@ -7,22 +7,22 @@
 #include "CodeGenerator.hpp"
 
 std::unique_ptr<llvm::TargetMachine> cld::CGLLVM::generateLLVM(llvm::Module& module, const Semantics::Program& program,
-                                                               Triple triple, const Options& options)
+                                                               const Options& options)
 {
     llvm::Triple llvmTriple;
-    switch (triple.getArchitecture())
+    switch (program.getLanguageOptions().triple.getArchitecture())
     {
         case cld::Architecture::x86: llvmTriple.setArch(llvm::Triple::ArchType::x86); break;
         case cld::Architecture::x86_64: llvmTriple.setArch(llvm::Triple::ArchType::x86_64); break;
         case cld::Architecture::Unknown: llvmTriple.setArch(llvm::Triple::ArchType::UnknownArch); break;
     }
-    switch (triple.getPlatform())
+    switch (program.getLanguageOptions().triple.getPlatform())
     {
         case cld::Platform::Windows: llvmTriple.setOS(llvm::Triple::OSType::Win32); break;
         case cld::Platform::Linux: llvmTriple.setOS(llvm::Triple::OSType::Linux); break;
         case cld::Platform::Unknown: llvmTriple.setOS(llvm::Triple::OSType::UnknownOS); break;
     }
-    switch (triple.getEnvironment())
+    switch (program.getLanguageOptions().triple.getEnvironment())
     {
         case cld::Environment::GNU: llvmTriple.setEnvironment(llvm::Triple::GNU); break;
         case cld::Environment::MSVC: llvmTriple.setEnvironment(llvm::Triple::MSVC); break;
@@ -39,7 +39,7 @@ std::unique_ptr<llvm::TargetMachine> cld::CGLLVM::generateLLVM(llvm::Module& mod
     auto machine = std::unique_ptr<llvm::TargetMachine>(
         targetM->createTargetMachine(module.getTargetTriple(), "generic", "", {}, options.reloc, {}, options.ol));
     module.setDataLayout(machine->createDataLayout());
-    CodeGenerator codeGenerator(module, program, program.getSourceObject(), triple, options);
+    CodeGenerator codeGenerator(module, program, program.getSourceObject(), options);
     codeGenerator.visit(program.getTranslationUnit());
     return machine;
 }

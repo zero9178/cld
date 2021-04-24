@@ -71,7 +71,6 @@ class CodeGenerator final
     const Semantics::ProgramInterface& m_programInterface;
     const SourceInterface& m_sourceInterface;
     const CGLLVM::Options& m_options;
-    Triple m_triple;
 
     std::unordered_map<const Semantics::Useable*, Value> m_lvalues;
 
@@ -107,8 +106,7 @@ class CodeGenerator final
 
 public:
     explicit CodeGenerator(llvm::Module& module, const Semantics::ProgramInterface& programInterface,
-                           const cld::SourceInterface& sourceInterface, cld::Triple triple,
-                           const cld::CGLLVM::Options& options);
+                           const cld::SourceInterface& sourceInterface, const cld::CGLLVM::Options& options);
 
     ~CodeGenerator()
     {

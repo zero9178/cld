@@ -32,6 +32,6 @@ struct Options
 };
 
 std::unique_ptr<llvm::TargetMachine> generateLLVM(llvm::Module& module, const Semantics::Program& program,
-                                                  Triple triple = Triple::native(), const Options& options = {});
+                                                  const Options& options = {});
 } // namespace CGLLVM
 } // namespace cld

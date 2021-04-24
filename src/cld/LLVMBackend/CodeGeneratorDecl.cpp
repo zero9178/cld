@@ -622,8 +622,9 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::VariableDe
             if (Semantics::isCompleteType(declType) || Semantics::isAbstractArray(declType))
             {
                 std::uint64_t alignment = declType.getAlignOf(m_programInterface);
-                if (m_triple.getArchitecture() == cld::Architecture::x86_64 && Semantics::isArray(declType)
-                    && !Semantics::isAbstractArray(declType) && declType.getSizeOf(m_programInterface) >= 16)
+                if (getSourceInterface().getLanguageOptions().triple.getArchitecture() == cld::Architecture::x86_64
+                    && Semantics::isArray(declType) && !Semantics::isAbstractArray(declType)
+                    && declType.getSizeOf(m_programInterface) >= 16)
                 {
                     alignment = std::max<std::uint64_t>(16, alignment);
                 }
@@ -704,8 +705,8 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::VariableDe
     {
         var = createAllocaAtTop(type, declaration.getNameToken()->getText());
         std::uint64_t alignment = declaration.getType().getAlignOf(m_programInterface);
-        if (m_triple.getArchitecture() == cld::Architecture::x86_64 && Semantics::isArray(declaration.getType())
-            && declaration.getType().getSizeOf(m_programInterface) >= 16)
+        if (getSourceInterface().getLanguageOptions().triple.getArchitecture() == cld::Architecture::x86_64
+            && Semantics::isArray(declaration.getType()) && declaration.getType().getSizeOf(m_programInterface) >= 16)
         {
             alignment = std::max<std::uint64_t>(alignment, 16);
         }

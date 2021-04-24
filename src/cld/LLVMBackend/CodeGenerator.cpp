@@ -17,19 +17,16 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::boolToi1(Value value)
 
 cld::CGLLVM::CodeGenerator::CodeGenerator(llvm::Module& module,
                                           const cld::Semantics::ProgramInterface& programInterface,
-                                          const cld::SourceInterface& sourceInterface, cld::Triple triple,
+                                          const cld::SourceInterface& sourceInterface,
                                           const cld::CGLLVM::Options& options)
-    : m_module(module),
-      m_programInterface(programInterface),
-      m_sourceInterface(sourceInterface),
-      m_options(options),
-      m_triple(triple)
+    : m_module(module), m_programInterface(programInterface), m_sourceInterface(sourceInterface), m_options(options)
 {
-    if (triple.getArchitecture() == Architecture::x86_64 && triple.getPlatform() == Platform::Windows)
+    if (m_programInterface.getLanguageOptions().triple.getArchitecture() == Architecture::x86_64
+        && m_programInterface.getLanguageOptions().triple.getPlatform() == Platform::Windows)
     {
         m_abi = std::make_unique<WinX64ABI>(m_module.getDataLayout());
     }
-    else if (triple.getArchitecture() == Architecture::x86_64)
+    else if (m_programInterface.getLanguageOptions().triple.getArchitecture() == Architecture::x86_64)
     {
         m_abi = std::make_unique<X64ABI>(m_module.getDataLayout());
     }

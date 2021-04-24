@@ -28,7 +28,7 @@ TEST_CASE("LLVM codegen functions", "[LLVM]")
     SECTION("Normal function")
     {
         auto program = generateProgram("void foo(void);");
-        cld::CGLLVM::generateLLVM(module, program, cld::Triple::native(), emitAllDecls);
+        cld::CGLLVM::generateLLVM(module, program, emitAllDecls);
         CAPTURE(module);
         REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
         auto* function = module.getFunction("foo");
@@ -72,7 +72,7 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                                                           "};\n"
                                                           "void foo(struct R);",
                                                           x64windowsGnu);
-                cld::CGLLVM::generateLLVM(*module, program, x64windowsGnu, emitAllDecls);
+                cld::CGLLVM::generateLLVM(*module, program, emitAllDecls);
                 CAPTURE(*module);
                 REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
                 auto* function = module->getFunction("foo");
@@ -87,7 +87,7 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                                                           "};\n"
                                                           "void foo(struct R);",
                                                           x64windowsGnu);
-                cld::CGLLVM::generateLLVM(*module, program, x64windowsGnu, emitAllDecls);
+                cld::CGLLVM::generateLLVM(*module, program, emitAllDecls);
                 CAPTURE(*module);
                 REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
                 auto* function = module->getFunction("foo");
@@ -102,7 +102,7 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                                                           "};\n"
                                                           "void foo(struct R);",
                                                           x64windowsGnu);
-                cld::CGLLVM::generateLLVM(*module, program, x64windowsGnu, emitAllDecls);
+                cld::CGLLVM::generateLLVM(*module, program, emitAllDecls);
                 CAPTURE(*module);
                 REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
                 auto* function = module->getFunction("foo");
@@ -118,7 +118,7 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                                                           "};\n"
                                                           "void foo(struct R);",
                                                           x64windowsGnu);
-                cld::CGLLVM::generateLLVM(*module, program, x64windowsGnu, emitAllDecls);
+                cld::CGLLVM::generateLLVM(*module, program, emitAllDecls);
                 CAPTURE(*module);
                 REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
                 auto* function = module->getFunction("foo");
@@ -133,7 +133,7 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                                                           "};\n"
                                                           "void foo(struct R);",
                                                           x64windowsGnu);
-                cld::CGLLVM::generateLLVM(*module, program, x64windowsGnu, emitAllDecls);
+                cld::CGLLVM::generateLLVM(*module, program, emitAllDecls);
                 CAPTURE(*module);
                 REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
                 auto* function = module->getFunction("foo");
@@ -149,7 +149,7 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                                                           "};\n"
                                                           "void foo(struct R);",
                                                           x64windowsGnu);
-                cld::CGLLVM::generateLLVM(*module, program, x64windowsGnu, emitAllDecls);
+                cld::CGLLVM::generateLLVM(*module, program, emitAllDecls);
                 CAPTURE(*module);
                 REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
                 auto* function = module->getFunction("foo");
@@ -163,7 +163,7 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                 SECTION("GNU")
                 {
                     auto program = generateProgramWithOptions("void foo(long double);", x64windowsGnu);
-                    cld::CGLLVM::generateLLVM(*module, program, x64windowsGnu, emitAllDecls);
+                    cld::CGLLVM::generateLLVM(*module, program, emitAllDecls);
                     CAPTURE(*module);
                     REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
                     auto* function = module->getFunction("foo");
@@ -175,7 +175,7 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                 SECTION("MSVC")
                 {
                     auto program = generateProgramWithOptions("void foo(long double);", x64windowsMsvc);
-                    cld::CGLLVM::generateLLVM(*module, program, x64windowsMsvc, emitAllDecls);
+                    cld::CGLLVM::generateLLVM(*module, program, emitAllDecls);
                     CAPTURE(*module);
                     REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
                     auto* function = module->getFunction("foo");
@@ -194,7 +194,7 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                                                           "};\n"
                                                           "struct R foo(void);",
                                                           x64windowsGnu);
-                cld::CGLLVM::generateLLVM(*module, program, x64windowsGnu, emitAllDecls);
+                cld::CGLLVM::generateLLVM(*module, program, emitAllDecls);
                 CAPTURE(*module);
                 REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
                 auto* function = module->getFunction("foo");
@@ -210,7 +210,7 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                                                           "};\n"
                                                           "struct R foo(void);",
                                                           x64windowsGnu);
-                cld::CGLLVM::generateLLVM(*module, program, x64windowsGnu, emitAllDecls);
+                cld::CGLLVM::generateLLVM(*module, program, emitAllDecls);
                 CAPTURE(*module);
                 REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
                 auto* function = module->getFunction("foo");
@@ -225,7 +225,7 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                                                           "};\n"
                                                           "struct R foo(void);",
                                                           x64windowsGnu);
-                cld::CGLLVM::generateLLVM(*module, program, x64windowsGnu, emitAllDecls);
+                cld::CGLLVM::generateLLVM(*module, program, emitAllDecls);
                 CAPTURE(*module);
                 REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
                 auto* function = module->getFunction("foo");
@@ -242,7 +242,7 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                                                           "};\n"
                                                           "struct R foo(void);",
                                                           x64windowsGnu);
-                cld::CGLLVM::generateLLVM(*module, program, x64windowsGnu, emitAllDecls);
+                cld::CGLLVM::generateLLVM(*module, program, emitAllDecls);
                 CAPTURE(*module);
                 REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
                 auto* function = module->getFunction("foo");
@@ -253,7 +253,7 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
             SECTION("> 64")
             {
                 auto program = generateProgramWithOptions("long double foo(void);", x64windowsGnu);
-                cld::CGLLVM::generateLLVM(*module, program, x64windowsGnu, emitAllDecls);
+                cld::CGLLVM::generateLLVM(*module, program, emitAllDecls);
                 CAPTURE(*module);
                 REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
                 auto* function = module->getFunction("foo");
@@ -272,7 +272,7 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                                                           "};\n"
                                                           "struct R foo(void);",
                                                           x64windowsGnu);
-                cld::CGLLVM::generateLLVM(*module, program, x64windowsGnu, emitAllDecls);
+                cld::CGLLVM::generateLLVM(*module, program, emitAllDecls);
                 CAPTURE(*module);
                 REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
                 auto* function = module->getFunction("foo");
@@ -333,7 +333,7 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                                                           "};\n"
                                                           "void foo(struct R);",
                                                           x64linux);
-                cld::CGLLVM::generateLLVM(*module, program, x64linux, emitAllDecls);
+                cld::CGLLVM::generateLLVM(*module, program, emitAllDecls);
                 CAPTURE(*module);
                 REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
                 auto* function = module->getFunction("foo");
@@ -355,7 +355,7 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                                                               "};\n"
                                                               "void foo(struct R);",
                                                               x64linux);
-                    cld::CGLLVM::generateLLVM(*module, program, x64linux, emitAllDecls);
+                    cld::CGLLVM::generateLLVM(*module, program, emitAllDecls);
                     CAPTURE(*module);
                     REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
                     auto* function = module->getFunction("foo");
@@ -371,7 +371,7 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                                                               "};\n"
                                                               "void foo(struct R);",
                                                               x64linux);
-                    cld::CGLLVM::generateLLVM(*module, program, x64linux, emitAllDecls);
+                    cld::CGLLVM::generateLLVM(*module, program, emitAllDecls);
                     CAPTURE(*module);
                     REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
                     auto* function = module->getFunction("foo");
@@ -385,7 +385,7 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
             SECTION("fp80")
             {
                 auto program = generateProgramWithOptions("void foo(long double r);", x64linux);
-                cld::CGLLVM::generateLLVM(*module, program, x64linux, emitAllDecls);
+                cld::CGLLVM::generateLLVM(*module, program, emitAllDecls);
                 CAPTURE(*module);
                 REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
                 auto* function = module->getFunction("foo");
@@ -401,7 +401,7 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                                                           "};\n"
                                                           "void foo(struct R);",
                                                           x64linux);
-                cld::CGLLVM::generateLLVM(*module, program, x64linux, emitAllDecls);
+                cld::CGLLVM::generateLLVM(*module, program, emitAllDecls);
                 CAPTURE(*module);
                 REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
                 auto* function = module->getFunction("foo");
@@ -422,7 +422,7 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                                                           "};\n"
                                                           "void foo(struct R);",
                                                           x64linux);
-                cld::CGLLVM::generateLLVM(*module, program, x64linux, emitAllDecls);
+                cld::CGLLVM::generateLLVM(*module, program, emitAllDecls);
                 CAPTURE(*module);
                 REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
                 auto* function = module->getFunction("foo");
@@ -439,7 +439,7 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                                                           "};\n"
                                                           "void foo(struct R);",
                                                           x64linux);
-                cld::CGLLVM::generateLLVM(*module, program, x64linux, emitAllDecls);
+                cld::CGLLVM::generateLLVM(*module, program, emitAllDecls);
                 CAPTURE(*module);
                 REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
                 auto* function = module->getFunction("foo");
@@ -459,7 +459,7 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                                                           "};\n"
                                                           "void foo(struct R);",
                                                           x64linux);
-                cld::CGLLVM::generateLLVM(*module, program, x64linux, emitAllDecls);
+                cld::CGLLVM::generateLLVM(*module, program, emitAllDecls);
                 CAPTURE(*module);
                 REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
                 auto* function = module->getFunction("foo");
@@ -476,7 +476,7 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                                                           "};\n"
                                                           "void foo(struct R,struct R,long,struct R,float,long);",
                                                           x64linux);
-                cld::CGLLVM::generateLLVM(*module, program, x64linux, emitAllDecls);
+                cld::CGLLVM::generateLLVM(*module, program, emitAllDecls);
                 CAPTURE(*module);
                 REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
                 auto* function = module->getFunction("foo");
@@ -503,7 +503,7 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                                                           "\n"
                                                           "void foo(struct R);",
                                                           x64linux);
-                cld::CGLLVM::generateLLVM(*module, program, x64linux, emitAllDecls);
+                cld::CGLLVM::generateLLVM(*module, program, emitAllDecls);
                 CAPTURE(*module);
                 REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
                 auto* function = module->getFunction("foo");
@@ -524,7 +524,7 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                                                           "};\n"
                                                           "struct R foo(void);",
                                                           x64linux);
-                cld::CGLLVM::generateLLVM(*module, program, x64linux, emitAllDecls);
+                cld::CGLLVM::generateLLVM(*module, program, emitAllDecls);
                 CAPTURE(*module);
                 REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
                 auto* function = module->getFunction("foo");
@@ -543,7 +543,7 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                                                           "};\n"
                                                           "struct R foo(void);",
                                                           x64linux);
-                cld::CGLLVM::generateLLVM(*module, program, x64linux, emitAllDecls);
+                cld::CGLLVM::generateLLVM(*module, program, emitAllDecls);
                 CAPTURE(*module);
                 REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
                 auto* function = module->getFunction("foo");
@@ -561,7 +561,7 @@ TEST_CASE("LLVM codegen cdecl", "[LLVM]")
                                                           "};\n"
                                                           "struct R foo(void);",
                                                           x64linux);
-                cld::CGLLVM::generateLLVM(*module, program, x64linux, emitAllDecls);
+                cld::CGLLVM::generateLLVM(*module, program, emitAllDecls);
                 CAPTURE(*module);
                 REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
                 auto* function = module->getFunction("foo");
@@ -690,7 +690,7 @@ TEST_CASE("LLVM codegen global variables", "[LLVM]")
             SECTION("Single")
             {
                 auto program = generateProgram("static int foo;");
-                cld::CGLLVM::generateLLVM(*module, program, cld::Triple::native(), emitAllDecls);
+                cld::CGLLVM::generateLLVM(*module, program, emitAllDecls);
                 CAPTURE(*module);
                 REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
                 CHECK(module->getGlobalList().size() == 1);
@@ -706,7 +706,7 @@ TEST_CASE("LLVM codegen global variables", "[LLVM]")
             {
                 auto program = generateProgram("static int foo;\n"
                                                "static int foo;");
-                cld::CGLLVM::generateLLVM(*module, program, cld::Triple::native(), emitAllDecls);
+                cld::CGLLVM::generateLLVM(*module, program, emitAllDecls);
                 CAPTURE(*module);
                 REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
                 CHECK(module->getGlobalList().size() == 1);
@@ -794,7 +794,7 @@ TEST_CASE("LLVM codegen global variables", "[LLVM]")
             SECTION("Single")
             {
                 auto program = generateProgram("static int foo = 5;");
-                cld::CGLLVM::generateLLVM(*module, program, cld::Triple::native(), emitAllDecls);
+                cld::CGLLVM::generateLLVM(*module, program, emitAllDecls);
                 CAPTURE(*module);
                 REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
                 CHECK(module->getGlobalList().size() == 1);
@@ -810,7 +810,7 @@ TEST_CASE("LLVM codegen global variables", "[LLVM]")
             {
                 auto program = generateProgram("static int foo;\n"
                                                "static int foo = 3;");
-                cld::CGLLVM::generateLLVM(*module, program, cld::Triple::native(), emitAllDecls);
+                cld::CGLLVM::generateLLVM(*module, program, emitAllDecls);
                 CAPTURE(*module);
                 REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
                 CHECK(module->getGlobalList().size() == 1);
@@ -2140,7 +2140,7 @@ TEST_CASE("LLVM codegen binary expressions", "[LLVM]")
                                                       "return i % 5u;\n"
                                                       "}",
                                                       x64windowsGnu);
-            cld::CGLLVM::generateLLVM(*module, program, x64windowsGnu);
+            cld::CGLLVM::generateLLVM(*module, program);
             CAPTURE(*module);
             REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
             CHECK_THAT(*module, ContainsIR("urem"));
@@ -5347,7 +5347,7 @@ TEST_CASE("LLVM codegen inline functions", "[LLVM]")
         auto program = generateProgram("inline static int foo(void) {\n"
                                        "return 5;\n"
                                        "}");
-        cld::CGLLVM::generateLLVM(*module, program, cld::Triple::native(), emitAllDecls);
+        cld::CGLLVM::generateLLVM(*module, program, emitAllDecls);
         CAPTURE(*module);
         auto* function = module->getFunction("foo");
         REQUIRE(function);
@@ -5893,7 +5893,7 @@ TEST_CASE("LLVM codegen __attribute__((used))", "[LLVM]")
     SECTION("Function")
     {
         auto program = generateProgram("static void foo(void) __attribute__((used)) {}");
-        cld::CGLLVM::generateLLVM(module, program, cld::Triple::native());
+        cld::CGLLVM::generateLLVM(module, program);
         CAPTURE(module);
         REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
         auto* function = module.getFunction("foo");
@@ -5902,7 +5902,7 @@ TEST_CASE("LLVM codegen __attribute__((used))", "[LLVM]")
     SECTION("Function")
     {
         auto program = generateProgram("static int i __attribute__((used));");
-        cld::CGLLVM::generateLLVM(module, program, cld::Triple::native());
+        cld::CGLLVM::generateLLVM(module, program);
         CAPTURE(module);
         REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
         auto* global = module.getGlobalVariable("i", true);
@@ -6295,7 +6295,7 @@ TEST_CASE("LLVM codegen __attribute__((aligned))", "[LLVM]")
                                                       "\n"
                                                       "INTEGER i;",
                                                       x64linux);
-            cld::CGLLVM::generateLLVM(module, program, x64linux);
+            cld::CGLLVM::generateLLVM(module, program);
             CAPTURE(module);
             REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
             auto* global = module.getGlobalVariable("i");
@@ -6311,7 +6311,7 @@ TEST_CASE("LLVM codegen __attribute__((aligned))", "[LLVM]")
                                                       "return i;\n"
                                                       "}",
                                                       x64linux);
-            cld::CGLLVM::generateLLVM(module, program, x64linux);
+            cld::CGLLVM::generateLLVM(module, program);
             CAPTURE(module);
             REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
             CHECK_THAT(module, ContainsIR("alloca i32, align 8"));
@@ -6322,7 +6322,7 @@ TEST_CASE("LLVM codegen __attribute__((aligned))", "[LLVM]")
         SECTION("Global")
         {
             auto program = generateProgramWithOptions("int __attribute__((aligned(8))) i;", x64linux);
-            cld::CGLLVM::generateLLVM(module, program, x64linux);
+            cld::CGLLVM::generateLLVM(module, program);
             CAPTURE(module);
             REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
             auto* global = module.getGlobalVariable("i");
@@ -6336,7 +6336,7 @@ TEST_CASE("LLVM codegen __attribute__((aligned))", "[LLVM]")
                                                       "return i;\n"
                                                       "}",
                                                       x64linux);
-            cld::CGLLVM::generateLLVM(module, program, x64linux);
+            cld::CGLLVM::generateLLVM(module, program);
             CAPTURE(module);
             REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
             CHECK_THAT(module, ContainsIR("alloca i32, align 8"));
@@ -6349,7 +6349,7 @@ TEST_CASE("LLVM codegen __attribute__((aligned))", "[LLVM]")
                                                           "\n"
                                                           "INTEGER __attribute__((aligned(1))) i;",
                                                           x64linux);
-                cld::CGLLVM::generateLLVM(module, program, x64linux);
+                cld::CGLLVM::generateLLVM(module, program);
                 CAPTURE(module);
                 REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
                 auto* global = module.getGlobalVariable("i");
@@ -6365,7 +6365,7 @@ TEST_CASE("LLVM codegen __attribute__((aligned))", "[LLVM]")
                                                           "return i;\n"
                                                           "}",
                                                           x64linux);
-                cld::CGLLVM::generateLLVM(module, program, x64linux);
+                cld::CGLLVM::generateLLVM(module, program);
                 CAPTURE(module);
                 REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
                 CHECK_THAT(module, ContainsIR("alloca i32, align 1"));
@@ -6378,7 +6378,7 @@ TEST_CASE("LLVM codegen __attribute__((aligned))", "[LLVM]")
         {
             auto program =
                 generateProgramWithOptions("int __attribute__((aligned(8))) foo(void) { return 5; }", x64linux);
-            cld::CGLLVM::generateLLVM(module, program, x64linux);
+            cld::CGLLVM::generateLLVM(module, program);
             CAPTURE(module);
             REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
             auto* global = module.getFunction("foo");
@@ -6391,7 +6391,7 @@ TEST_CASE("LLVM codegen __attribute__((aligned))", "[LLVM]")
                                                       "\n"
                                                       "int __attribute__((aligned(2))) foo(void) { return 5; }",
                                                       x64linux);
-            cld::CGLLVM::generateLLVM(module, program, x64linux);
+            cld::CGLLVM::generateLLVM(module, program);
             CAPTURE(module);
             REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
             auto* global = module.getFunction("foo");
@@ -6406,7 +6406,7 @@ TEST_CASE("LLVM codegen __attribute__((noinline))", "[LLVM]")
     llvm::LLVMContext context;
     llvm::Module module("", context);
     auto program = generateProgramWithOptions("int __attribute__((noinline)) foo(void) { return 5; }", x64linux);
-    cld::CGLLVM::generateLLVM(module, program, x64linux);
+    cld::CGLLVM::generateLLVM(module, program);
     CAPTURE(module);
     REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
     auto* global = module.getFunction("foo");
@@ -6419,7 +6419,7 @@ TEST_CASE("LLVM codegen __attribute__((always_inline))", "[LLVM]")
     llvm::LLVMContext context;
     llvm::Module module("", context);
     auto program = generateProgramWithOptions("int __attribute__((always_inline)) foo(void) { return 5; }", x64linux);
-    cld::CGLLVM::generateLLVM(module, program, x64linux);
+    cld::CGLLVM::generateLLVM(module, program);
     CAPTURE(module);
     REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
     auto* global = module.getFunction("foo");
@@ -6447,7 +6447,7 @@ TEST_CASE("LLVM codegen __attribute__((gnu_inline))", "[LLVM]")
         auto program = generateProgram("__attribute__((gnu_inline)) inline static int foo(void) {\n"
                                        "return 5;\n"
                                        "}");
-        cld::CGLLVM::generateLLVM(*module, program, cld::Triple::native(), emitAllDecls);
+        cld::CGLLVM::generateLLVM(*module, program, emitAllDecls);
         CAPTURE(*module);
         auto* function = module->getFunction("foo");
         REQUIRE(function);
@@ -6489,7 +6489,7 @@ TEST_CASE("LLVM codegen __attribute__((artificial))", "[LLVM]")
     auto program = generateProgramWithOptions("int __attribute__((artificial)) foo(void) { return 5; }", x64linux);
     cld::CGLLVM::Options options;
     options.debugEmission = cld::CGLLVM::DebugEmission::Default;
-    cld::CGLLVM::generateLLVM(module, program, x64linux, options);
+    cld::CGLLVM::generateLLVM(module, program, options);
     CAPTURE(module);
     REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
     auto* global = module.getFunction("foo");
@@ -6509,7 +6509,7 @@ TEST_CASE("LLVM codegen __attribute__((dllimport))", "[LLVM]")
                                                   "\n"
                                                   "int main(void) { return foo(); }",
                                                   x64windowsGnu);
-        cld::CGLLVM::generateLLVM(module, program, x64windowsGnu);
+        cld::CGLLVM::generateLLVM(module, program);
         CAPTURE(module);
         REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
         auto* global = module.getFunction("foo");
@@ -6523,7 +6523,7 @@ TEST_CASE("LLVM codegen __attribute__((nothrow))", "[LLVM]")
     llvm::LLVMContext context;
     llvm::Module module("", context);
     auto program = generateProgramWithOptions("int __attribute__((nothrow)) foo(void) { return 5; }", x64linux);
-    cld::CGLLVM::generateLLVM(module, program, x64linux);
+    cld::CGLLVM::generateLLVM(module, program);
     CAPTURE(module);
     REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
     auto* global = module.getFunction("foo");
@@ -6536,7 +6536,7 @@ TEST_CASE("LLVM codegen __attribute__((const))", "[LLVM]")
     llvm::LLVMContext context;
     llvm::Module module("", context);
     auto program = generateProgramWithOptions("int __attribute__((const)) foo(void) { return 5; }", x64linux);
-    cld::CGLLVM::generateLLVM(module, program, x64linux);
+    cld::CGLLVM::generateLLVM(module, program);
     CAPTURE(module);
     REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
     auto* global = module.getFunction("foo");
@@ -6549,7 +6549,7 @@ TEST_CASE("LLVM codegen __attribute__((noreturn))", "[LLVM]")
     llvm::LLVMContext context;
     llvm::Module module("", context);
     auto program = generateProgramWithOptions("int __attribute__((noreturn)) foo(void) { return 5; }", x64linux);
-    cld::CGLLVM::generateLLVM(module, program, x64linux);
+    cld::CGLLVM::generateLLVM(module, program);
     CAPTURE(module);
     REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
     auto* global = module.getFunction("foo");

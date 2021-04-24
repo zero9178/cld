@@ -710,7 +710,7 @@ std::optional<cld::fs::path> compileCFile(Action action, cld::fs::path cSourceFi
         codegenOptions.debugEmission = cld::CGLLVM::DebugEmission::Extended;
     }
 
-    auto targetMachine = cld::CGLLVM::generateLLVM(module, program, triple, codegenOptions);
+    auto targetMachine = cld::CGLLVM::generateLLVM(module, program, codegenOptions);
     codegenTimeRegion.reset();
 #ifndef NDEBUG
     if (llvm::verifyModule(module, &llvm::errs()))
