@@ -743,7 +743,11 @@ constexpr auto Diagnostic<N, format, Mods...>::getModifiers(std::index_sequence<
         [&result](auto value)
         {
             constexpr std::size_t i = decltype(value)::value;
+#if __has_builtin(__type_pack_element)
+            using T = __type_pack_element<i, Mods...>;
+#else
             using T = std::tuple_element_t<i, std::tuple<Mods...>>;
+#endif
             if constexpr (detail::Diagnostic::IsUnderline<T>{})
             {
                 result[i] = Modifiers{DiagnosticBase::Underline{T::getIndex(), T::getCharacter(), T::isContinuous()}};
