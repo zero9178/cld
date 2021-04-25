@@ -869,6 +869,7 @@ std::unique_ptr<cld::Semantics::FunctionDeclaration> cld::Semantics::SemanticAna
     }
 
     auto declaration = std::make_unique<FunctionDeclaration>(std::move(type), linkage, loc, inlineKind);
+    auto copy = attributes;
     attributes = applyAttributes(declaration.get(), std::move(attributes));
     reportNotApplicableAttributes(attributes);
 
@@ -939,9 +940,20 @@ std::unique_ptr<cld::Semantics::FunctionDeclaration> cld::Semantics::SemanticAna
                                                          *prev->second.identifier));
             }
             mergeInline(fd, inlineKind);
-            fd.tryAddFromOther(*declaration);
             fd.setNext(declaration.get());
             declaration->setPrevious(&fd);
+            if (!declaration->getAttributes().empty())
+            {
+                for (auto& iter : copy)
+                {
+                    if (log(Warnings::Semantics::ATTRIBUTE_N_ON_DECLARATION_OF_FUNCTION_N_MUST_PRECEDE_ITS_DEFINITION
+                                .args(*iter.name, m_sourceInterface, *iter.name, *loc)))
+                    {
+                        log(Notes::Semantics::FUNCTION_DEFINITION_HERE.args(*fd.getNameToken(), m_sourceInterface,
+                                                                            *fd.getNameToken()));
+                    }
+                }
+            }
             return declaration;
         }
     }

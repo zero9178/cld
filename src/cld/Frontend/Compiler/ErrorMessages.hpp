@@ -1208,6 +1208,9 @@ CREATE_WARNING(UNKNOWN_ATTRIBUTE_N_IGNORED, "unknown-attributes", "Unknown attri
 CREATE_WARNING(ATTRIBUTE_N_IGNORED_WHILE_PARSING_TYPE, "ignored-attributes", "Attribute %0 ignored while parsing type",
                Underline<0>);
 
+CREATE_WARNING(ATTRIBUTE_N_ON_DECLARATION_OF_FUNCTION_N_MUST_PRECEDE_ITS_DEFINITION, "ignored-attributes",
+               "Attribute %0 on declaration of function %1 must precede its defintion", Underline<0>, Underline<1>);
+
 // __attribute__((used))
 
 CREATE_WARNING(ATTRIBUTE_USED_ONLY_APPLIES_TO_FUNCTIONS_WITH_INTERNAL_LINKAGE, "ignored-attributes",
@@ -1305,6 +1308,8 @@ CREATE_NOTE(PREVIOUS_CASE_HERE, "Previous case here:", Annotate<0, 1>);
 CREATE_NOTE(PREVIOUS_DEFAULT_HERE, "Previous default here:", Underline<0>);
 
 CREATE_NOTE(MARKED_DEPRECATED_HERE, "Marked deprecated here:", Underline<0>);
+
+CREATE_NOTE(FUNCTION_DEFINITION_HERE, "Function definition here:", Underline<0>);
 
 } // namespace Semantics
 

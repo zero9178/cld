@@ -4953,6 +4953,10 @@ TEST_CASE("Semantics __attribute__", "[semantics]")
                               && ProducesWarning(UNUSED_FUNCTION_N, "'foo'"));
         }
     }
+    SEMA_PRODUCES(
+        "int foo(void) { return 5; } int __attribute__((weak)) foo(void);",
+        ProducesWarning(ATTRIBUTE_N_ON_DECLARATION_OF_FUNCTION_N_MUST_PRECEDE_ITS_DEFINITION, "'weak'", "'foo'")
+            && ProducesNote(FUNCTION_DEFINITION_HERE));
 }
 
 TEST_CASE("Semantics __attribute__((used))", "[semantics]")
