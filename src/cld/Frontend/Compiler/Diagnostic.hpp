@@ -501,25 +501,9 @@ private:
     static std::array<Argument, N> createArgumentArray(const SourceInterface* sourceInterface, Tuple&& args,
                                                        std::index_sequence<ints...>);
 
-    template <std::size_t i>
-    constexpr static auto customModifiersFor()
+    constexpr static cld::MaxVector<std::string_view, N> customModifiersFor(std::size_t i)
     {
-        constexpr std::size_t amountOfCustomModifiers = []
-        {
-            std::size_t count = 0;
-            auto text = getFormat();
-            while (auto result = detail::Diagnostic::nextArg(text))
-            {
-                if (result->index != i || result->modifier.empty())
-                {
-                    continue;
-                }
-                count++;
-            }
-            return count;
-        }();
-        std::array<std::string_view, amountOfCustomModifiers> result{};
-        std::size_t count = 0;
+        cld::MaxVector<std::string_view, N> result{};
         auto text = getFormat();
         while (auto arg = detail::Diagnostic::nextArg(text))
         {
@@ -527,9 +511,16 @@ private:
             {
                 continue;
             }
-            result[count++] = arg->modifier;
+            result.push_back(arg->modifier);
         }
         return result;
+    }
+
+    template <std::size_t i, class Tuple, std::size_t... ints>
+    constexpr static void convertAllCustomModifier(std::array<Argument, N>& result, Tuple& args,
+                                                   std::index_sequence<ints...>)
+    {
+        (convertCustomModifier<i, ints>(result, args), ...);
     }
 
     template <std::size_t i1, std::size_t i2, class Tuple>
@@ -540,11 +531,10 @@ private:
             [](auto... stringIndices)
             {
                 return std::make_tuple(
-                    std::integral_constant<char,
-                                           std::get<i1>(allFormatModifiers)[i2][decltype(stringIndices)::value]>{}...);
+                    std::integral_constant<char, allFormatModifiers[i1][i2][decltype(stringIndices)::value]>{}...);
             },
-            Constexpr::integerSequenceToTuple(std::make_index_sequence<std::get<i1>(allFormatModifiers)[i2].size()>{}));
-        result[i1].customModifiers[std::get<i1>(allFormatModifiers)[i2]] = std::apply(
+            Constexpr::integerSequenceToTuple(std::make_index_sequence<allFormatModifiers[i1][i2].size()>{}));
+        result[i1].customModifiers[allFormatModifiers[i1][i2]] = std::apply(
             [&args](auto... chars) -> std::string
             {
                 static_assert(
@@ -585,9 +575,24 @@ public:
 private:
     constexpr static auto modifiers = getModifiers(std::index_sequence_for<Mods...>{});
 
-    constexpr static auto allFormatModifiers =
-        std::apply([](auto... indices) { return std::make_tuple(customModifiersFor<decltype(indices)::value>()...); },
-                   Constexpr::integerSequenceToTuple(std::make_index_sequence<N>{}));
+    constexpr static auto getAllFormatModifiers()
+    {
+        if constexpr (N != 0)
+        {
+            std::array<cld::MaxVector<std::string_view, N>, N> result;
+            for (std::size_t i = 0; i < N; i++)
+            {
+                result[i] = customModifiersFor(i);
+            }
+            return result;
+        }
+        else
+        {
+            return 0;
+        }
+    }
+
+    constexpr static auto allFormatModifiers = getAllFormatModifiers();
 };
 
 namespace diag
@@ -722,11 +727,8 @@ auto Diagnostic<N, format, Mods...>::createArgumentArray(const SourceInterface* 
             }
             if constexpr ((bool)(constraints[IntegerTy::value] & Constraint::CustomConstraint))
             {
-                auto apply = [&result, &args](auto... values)
-                { (convertCustomModifier<IntegerTy::value, decltype(values)::value>(result, args), ...); };
-                std::apply(apply,
-                           Constexpr::integerSequenceToTuple(
-                               std::make_index_sequence<std::get<IntegerTy::value>(allFormatModifiers).size()>{}));
+                convertAllCustomModifier<IntegerTy::value>(
+                    result, args, std::make_index_sequence<allFormatModifiers[IntegerTy::value].size()>{});
             }
         }(std::integral_constant<std::size_t, ints>{}),
         ...);

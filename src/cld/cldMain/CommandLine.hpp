@@ -890,64 +890,67 @@ std::optional<Failure> checkAlternative(llvm::MutableArrayRef<std::string_view>&
     return failure;
 }
 
+template <auto* cliOption, class Storage, std::size_t... indices>
+bool checkAllAlternativesImpl(llvm::raw_ostream* reporter, llvm::MutableArrayRef<std::string_view>& commandLine,
+                              Storage& storage, std::index_sequence<indices...>)
+{
+    using AllAlternatives = std::decay_t<decltype(cliOption->getAlternatives())>;
+    MaxVector<Failure, std::tuple_size_v<AllAlternatives>> failures;
+    auto success = ([&](auto index) -> bool {
+      using Index = decltype(index);
+      constexpr std::size_t i = Index::value;
+      constexpr auto alternative = std::get<i>(cliOption->getAlternatives());
+      using Tuple = std::decay_t<decltype(alternative)>;
+      if (commandLine.front() == std::get<0>(alternative).value)
+      {
+          auto opt = checkAlternative<cliOption, i>(commandLine, storage);
+          if (!opt)
+          {
+              return true;
+          }
+          failures.push_back(std::move(*opt));
+          return false;
+      }
+      if constexpr (std::tuple_size_v<Tuple> >= 2)
+      {
+          if constexpr (!std::is_same_v<std::tuple_element_t<1, Tuple>, detail::CommandLine::Whitespace>)
+          {
+              if (commandLine.front().substr(0, std::get<0>(alternative).value.size())
+                  == std::get<0>(alternative).value)
+              {
+                  auto opt = checkAlternative<cliOption, i>(commandLine, storage);
+                  if (!opt)
+                  {
+                      return true;
+                  }
+                  failures.push_back(std::move(*opt));
+                  return false;
+              }
+          }
+      }
+      return false;
+    }(std::integral_constant<std::size_t,indices>{}) || ...);
+    if (success)
+    {
+        return true;
+    }
+    auto furthest =
+        std::max_element(failures.begin(), failures.end(),
+                         [](const Failure& lhs, const Failure& rhs) { return lhs.failedIndex < rhs.failedIndex; });
+    if (furthest != failures.end() && reporter)
+    {
+        (*reporter) << (*furthest->message)();
+    }
+    return false;
+}
+
 template <auto* cliOption, class Storage>
 bool checkAllAlternatives(llvm::raw_ostream* reporter, llvm::MutableArrayRef<std::string_view>& commandLine,
                           Storage& storage)
 {
     using AllAlternatives = std::decay_t<decltype(cliOption->getAlternatives())>;
-    return std::apply(
-        [&](auto&&... indices) -> bool
-        {
-            MaxVector<Failure, std::tuple_size_v<AllAlternatives>> failures;
-            auto success = ([&](auto index) -> bool {
-                using Index = decltype(index);
-                constexpr std::size_t i = Index::value;
-                constexpr auto alternative = std::get<i>(cliOption->getAlternatives());
-                using Tuple = std::decay_t<decltype(alternative)>;
-                if (commandLine.front() == std::get<0>(alternative).value)
-                {
-                    auto opt = checkAlternative<cliOption, i>(commandLine, storage);
-                    if (!opt)
-                    {
-                        return true;
-                    }
-                    failures.push_back(std::move(*opt));
-                    return false;
-                }
-                if constexpr (std::tuple_size_v<Tuple> >= 2)
-                {
-                    if constexpr (!std::is_same_v<std::tuple_element_t<1, Tuple>, detail::CommandLine::Whitespace>)
-                    {
-                        if (commandLine.front().substr(0, std::get<0>(alternative).value.size())
-                            == std::get<0>(alternative).value)
-                        {
-                            auto opt = checkAlternative<cliOption, i>(commandLine, storage);
-                            if (!opt)
-                            {
-                                return true;
-                            }
-                            failures.push_back(std::move(*opt));
-                            return false;
-                        }
-                    }
-                }
-                return false;
-            }(indices) || ...);
-            if (success)
-            {
-                return true;
-            }
-            auto furthest = std::max_element(failures.begin(), failures.end(),
-                                             [](const Failure& lhs, const Failure& rhs)
-
-                                             { return lhs.failedIndex < rhs.failedIndex; });
-            if (furthest != failures.end() && reporter)
-            {
-                (*reporter) << (*furthest->message)();
-            }
-            return false;
-        },
-        Constexpr::integerSequenceToTuple(std::make_index_sequence<std::tuple_size_v<AllAlternatives>>{}));
+    return checkAllAlternativesImpl<cliOption, Storage>(reporter, commandLine, storage,
+                                                        std::make_index_sequence<std::tuple_size_v<AllAlternatives>>{});
 }
 
 template <auto& option>
