@@ -1835,6 +1835,11 @@ public:
         return m_linkage;
     }
 
+    void setLinkage(Linkage linkage)
+    {
+        m_linkage = linkage;
+    }
+
     [[nodiscard]] Lexer::CTokenIterator getNameToken() const
     {
         return m_nameToken;
@@ -2345,6 +2350,11 @@ public:
         return m_type;
     }
 
+    void setType(FunctionType type) noexcept
+    {
+        m_type = std::move(type);
+    }
+
     [[nodiscard]] bool isInline() const noexcept
     {
         return m_inlineKind != InlineKind::None;
@@ -2353,6 +2363,11 @@ public:
     [[nodiscard]] InlineKind getInlineKind() const noexcept
     {
         return m_inlineKind;
+    }
+
+    void setInlineKind(InlineKind inlineKind) noexcept
+    {
+        m_inlineKind = inlineKind;
     }
 };
 
@@ -2396,6 +2411,11 @@ public:
         return *m_type;
     }
 
+    void setType(IntrVarValue<Type> type) noexcept
+    {
+        m_type = std::move(type);
+    }
+
     [[nodiscard]] Lifetime getLifetime() const
     {
         return m_lifetime;
@@ -2406,14 +2426,19 @@ public:
         return m_kind;
     }
 
-    [[nodiscard]] const std::optional<Initializer>& getInitializer() const&
+    void setKind(Kind kind)
+    {
+        m_kind = kind;
+    }
+
+    [[nodiscard]] const std::optional<Initializer>& getInitializer() const noexcept
     {
         return m_initializer;
     }
 
-    [[nodiscard]] std::optional<Initializer>&& getInitializer() &&
+    void setInitializer(std::optional<Initializer> initializer)
     {
-        return std::move(m_initializer);
+        m_initializer = std::move(initializer);
     }
 };
 
@@ -2470,6 +2495,11 @@ public:
         return m_linkage;
     }
 
+    void setLinkage(Linkage linkage)
+    {
+        m_linkage = linkage;
+    }
+
     [[nodiscard]] const CompoundStatement& getCompoundStatement() const&
     {
         return m_compoundStatement;
@@ -2493,6 +2523,11 @@ public:
     [[nodiscard]] InlineKind getInlineKind() const noexcept
     {
         return m_inlineKind;
+    }
+
+    void setInlineKind(InlineKind kind) noexcept
+    {
+        m_inlineKind = kind;
     }
 };
 

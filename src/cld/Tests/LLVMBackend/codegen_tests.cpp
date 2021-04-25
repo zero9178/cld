@@ -6468,16 +6468,32 @@ TEST_CASE("LLVM codegen __attribute__((gnu_inline))", "[LLVM]")
         }
         SECTION("extern in declaration")
         {
-            auto program = generateProgram("__attribute__((gnu_inline)) inline int foo(void) {\n"
-                                           "return 5;\n"
-                                           "}\n"
-                                           "\n"
-                                           "extern __attribute__((gnu_inline)) inline int foo(void);\n");
-            cld::CGLLVM::generateLLVM(*module, program);
-            CAPTURE(*module);
-            auto* function = module->getFunction("foo");
-            REQUIRE(function);
-            CHECK_FALSE(function->isDeclaration());
+            SECTION("After")
+            {
+                auto program = generateProgram("__attribute__((gnu_inline)) inline int foo(void) {\n"
+                                               "return 5;\n"
+                                               "}\n"
+                                               "\n"
+                                               "extern __attribute__((gnu_inline)) inline int foo(void);\n");
+                cld::CGLLVM::generateLLVM(*module, program);
+                CAPTURE(*module);
+                auto* function = module->getFunction("foo");
+                REQUIRE(function);
+                CHECK_FALSE(function->isDeclaration());
+            }
+            SECTION("Before")
+            {
+                auto program = generateProgram("extern __attribute__((gnu_inline)) inline int foo(void);\n"
+                                               "\n"
+                                               "__attribute__((gnu_inline)) inline int foo(void) {\n"
+                                               "return 5;\n"
+                                               "}\n");
+                cld::CGLLVM::generateLLVM(*module, program);
+                CAPTURE(*module);
+                auto* function = module->getFunction("foo");
+                REQUIRE(function);
+                CHECK_FALSE(function->isDeclaration());
+            }
         }
     }
 }

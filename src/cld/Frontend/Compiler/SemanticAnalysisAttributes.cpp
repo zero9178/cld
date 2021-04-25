@@ -641,10 +641,7 @@ void cld::Semantics::SemanticAnalysis::apply(AffectsTypeVariable applicant,
         {
             auto newType = VectorType(typeAlloc(*removeQualifiers(std::move(baseType))), multiple,
                                       flag::useFlags = baseType.getFlags());
-            *variableDeclaration =
-                VariableDeclaration(newType, variableDeclaration->getLinkage(), variableDeclaration->getLifetime(),
-                                    variableDeclaration->getNameToken(), variableDeclaration->getKind(),
-                                    std::move(*variableDeclaration).getInitializer());
+            variableDeclaration->setType(std::move(newType));
         });
 }
 
@@ -726,11 +723,7 @@ void cld::Semantics::SemanticAnalysis::apply(AffectsVariableFunction applicant,
                     *attribute.name, m_sourceInterface, *var->getNameToken(), *attribute.name));
                 return;
             }
-            auto attributes = std::move(*var).getAttributes();
-            *var = VariableDeclaration(var->getType(), Linkage::External, Lifetime::Static, var->getNameToken(),
-                                       var->getKind(), std::move(*var).getInitializer());
-            std::for_each(std::move_iterator(attributes.begin()), std::move_iterator(attributes.end()),
-                          cld::bind_front(&VariableDeclaration::addAttribute, var));
+            var->setLinkage(Linkage::External);
             var->addAttribute(DllImportAttribute{});
         },
         [&](not_null<FunctionDeclaration> decl)
