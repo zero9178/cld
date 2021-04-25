@@ -51,7 +51,7 @@ public:
 
 } // namespace
 
-TEST_CASE("IntrusiveVariantAllocator non trivial", "[IVA]")
+TEST_CASE("IntrVarAllocator non trivial", "[IVA]")
 {
     SECTION("Simple allocation")
     {
@@ -372,7 +372,7 @@ public:
 
 } // namespace
 
-TEST_CASE("IntrusiveVariantAllocator trivial", "[IVA]")
+TEST_CASE("IntrVarAllocator trivial", "[IVA]")
 {
     SECTION("Simple allocation")
     {

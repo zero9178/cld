@@ -56,14 +56,14 @@ protected:
     void destruct() {}
 
 public:
-    IntrusiveVariantStorageDestruct() = default;
+    IntrusiveVariantStorageDestruct() noexcept = default;
 
-    ~IntrusiveVariantStorageDestruct() = default;
+    ~IntrusiveVariantStorageDestruct() noexcept = default;
 
-    IntrusiveVariantStorageDestruct(const IntrusiveVariantStorageDestruct&) = default;
-    IntrusiveVariantStorageDestruct& operator=(const IntrusiveVariantStorageDestruct&) = default;
-    IntrusiveVariantStorageDestruct(IntrusiveVariantStorageDestruct&&) = default;
-    IntrusiveVariantStorageDestruct& operator=(IntrusiveVariantStorageDestruct&&) = default;
+    IntrusiveVariantStorageDestruct(const IntrusiveVariantStorageDestruct&) noexcept = default;
+    IntrusiveVariantStorageDestruct& operator=(const IntrusiveVariantStorageDestruct&) noexcept = default;
+    IntrusiveVariantStorageDestruct(IntrusiveVariantStorageDestruct&&) noexcept = default;
+    IntrusiveVariantStorageDestruct& operator=(IntrusiveVariantStorageDestruct&&) noexcept = default;
 };
 
 template <class Base, class... SubClasses>
@@ -75,7 +75,7 @@ protected:
     {
         constexpr std::array<void (*)(Base*), sizeof...(SubClasses)> destructorFuncs = {
             {+[](Base* ptr) { std::destroy_at(static_cast<SubClasses*>(ptr)); }...}};
-        destructorFuncs[this->get().index()](&this->get());
+        destructorFuncs[this->m_index](&this->get());
     }
 
 public:
@@ -86,10 +86,10 @@ public:
         destruct();
     }
 
-    IntrusiveVariantStorageDestruct(const IntrusiveVariantStorageDestruct&) = default;
-    IntrusiveVariantStorageDestruct& operator=(const IntrusiveVariantStorageDestruct&) = default;
-    IntrusiveVariantStorageDestruct(IntrusiveVariantStorageDestruct&&) = default;
-    IntrusiveVariantStorageDestruct& operator=(IntrusiveVariantStorageDestruct&&) = default;
+    IntrusiveVariantStorageDestruct(const IntrusiveVariantStorageDestruct&) noexcept = default;
+    IntrusiveVariantStorageDestruct& operator=(const IntrusiveVariantStorageDestruct&) noexcept = default;
+    IntrusiveVariantStorageDestruct(IntrusiveVariantStorageDestruct&&) noexcept = default;
+    IntrusiveVariantStorageDestruct& operator=(IntrusiveVariantStorageDestruct&&) noexcept = default;
 };
 
 template <class T>
@@ -110,18 +110,18 @@ protected:
     {
         constexpr std::array<void (*)(std::byte*, Base*), sizeof...(SubClasses)> copyFuncs = {
             {+[](std::byte* storage, Base* ptr) { new (storage) SubClasses(*static_cast<SubClasses*>(ptr)); }...}};
-        copyFuncs[rhs.get().index()](this->m_storage, &rhs.get());
-        this->m_storage = rhs.get().index();
+        copyFuncs[rhs.m_index](this->m_storage, &rhs.get());
+        this->m_storage = rhs.m_index;
     }
 
 public:
-    IntrusiveVariantStorageCopy() = default;
+    IntrusiveVariantStorageCopy() noexcept = default;
 
-    IntrusiveVariantStorageCopy(const IntrusiveVariantStorageCopy&) = default;
+    IntrusiveVariantStorageCopy(const IntrusiveVariantStorageCopy&) noexcept = default;
 
-    IntrusiveVariantStorageCopy& operator=(const IntrusiveVariantStorageCopy&) = default;
-    IntrusiveVariantStorageCopy(IntrusiveVariantStorageCopy&&) = default;
-    IntrusiveVariantStorageCopy& operator=(IntrusiveVariantStorageCopy&&) = default;
+    IntrusiveVariantStorageCopy& operator=(const IntrusiveVariantStorageCopy&) noexcept = default;
+    IntrusiveVariantStorageCopy(IntrusiveVariantStorageCopy&&) noexcept = default;
+    IntrusiveVariantStorageCopy& operator=(IntrusiveVariantStorageCopy&&) noexcept = default;
 };
 
 template <class Base, class... SubClasses>
@@ -132,13 +132,13 @@ protected:
     void copyConstruct(const IntrusiveVariantStorageCopy&) {}
 
 public:
-    IntrusiveVariantStorageCopy() = default;
+    IntrusiveVariantStorageCopy() noexcept = default;
 
     IntrusiveVariantStorageCopy(const IntrusiveVariantStorageCopy&) = delete;
 
-    IntrusiveVariantStorageCopy& operator=(const IntrusiveVariantStorageCopy&) = default;
-    IntrusiveVariantStorageCopy(IntrusiveVariantStorageCopy&&) = default;
-    IntrusiveVariantStorageCopy& operator=(IntrusiveVariantStorageCopy&&) = default;
+    IntrusiveVariantStorageCopy& operator=(const IntrusiveVariantStorageCopy&) noexcept = default;
+    IntrusiveVariantStorageCopy(IntrusiveVariantStorageCopy&&) noexcept = default;
+    IntrusiveVariantStorageCopy& operator=(IntrusiveVariantStorageCopy&&) noexcept = default;
 };
 
 template <class Base, class... SubClasses>
@@ -151,22 +151,23 @@ protected:
         constexpr std::array<void (*)(std::byte*, const Base*), sizeof...(SubClasses)> copyFuncs = {
             {+[](std::byte* storage, const Base* ptr)
              { new (storage) SubClasses(*static_cast<const SubClasses*>(ptr)); }...}};
-        copyFuncs[rhs.get().index()](this->m_storage, &rhs.get());
-        this->m_index = rhs.get().index();
+        copyFuncs[rhs.m_index](this->m_storage, &rhs.get());
+        this->m_index = rhs.m_index;
     }
 
 public:
     IntrusiveVariantStorageCopy() = default;
 
-    IntrusiveVariantStorageCopy(const IntrusiveVariantStorageCopy& rhs)
+    IntrusiveVariantStorageCopy(const IntrusiveVariantStorageCopy& rhs) noexcept(
+        (std::is_nothrow_copy_constructible_v<SubClasses> && ...))
     {
         copyConstruct(rhs);
     }
 
-    IntrusiveVariantStorageCopy& operator=(const IntrusiveVariantStorageCopy&) = default;
+    IntrusiveVariantStorageCopy& operator=(const IntrusiveVariantStorageCopy&) noexcept = default;
 
-    IntrusiveVariantStorageCopy(IntrusiveVariantStorageCopy&&) = default;
-    IntrusiveVariantStorageCopy& operator=(IntrusiveVariantStorageCopy&&) = default;
+    IntrusiveVariantStorageCopy(IntrusiveVariantStorageCopy&&) noexcept = default;
+    IntrusiveVariantStorageCopy& operator=(IntrusiveVariantStorageCopy&&) noexcept = default;
 };
 
 template <class T>
@@ -190,30 +191,46 @@ template <class Base, class... SubClasses>
 struct IntrusiveVariantStorageCopyAss<Base, SpecialMem::Deleted, SubClasses...>
     : IntrusiveVariantStorageCopy<Base, std::max({copyCtor<SubClasses>()...}), SubClasses...>
 {
-    IntrusiveVariantStorageCopyAss() = default;
+    IntrusiveVariantStorageCopyAss() noexcept = default;
 
     IntrusiveVariantStorageCopyAss& operator=(const IntrusiveVariantStorageCopyAss&) = delete;
 
     ~IntrusiveVariantStorageCopyAss() = default;
-    IntrusiveVariantStorageCopyAss(const IntrusiveVariantStorageCopyAss&) = default;
-    IntrusiveVariantStorageCopyAss(IntrusiveVariantStorageCopyAss&&) = default;
-    IntrusiveVariantStorageCopyAss& operator=(IntrusiveVariantStorageCopyAss&&) = default;
+    IntrusiveVariantStorageCopyAss(const IntrusiveVariantStorageCopyAss&) noexcept = default;
+    IntrusiveVariantStorageCopyAss(IntrusiveVariantStorageCopyAss&&) noexcept = default;
+    IntrusiveVariantStorageCopyAss& operator=(IntrusiveVariantStorageCopyAss&&) noexcept = default;
+};
+
+template <class Base, class... SubClasses>
+struct IntrusiveVariantStorageCopyAss<Base, SpecialMem::Trivial, SubClasses...>
+    : IntrusiveVariantStorageCopy<Base, std::max({copyCtor<SubClasses>()...}), SubClasses...>
+{
+    IntrusiveVariantStorageCopyAss() noexcept = default;
+
+    IntrusiveVariantStorageCopyAss& operator=(const IntrusiveVariantStorageCopyAss&) noexcept = default;
+
+    ~IntrusiveVariantStorageCopyAss() = default;
+    IntrusiveVariantStorageCopyAss(const IntrusiveVariantStorageCopyAss&) noexcept = default;
+    IntrusiveVariantStorageCopyAss(IntrusiveVariantStorageCopyAss&&) noexcept = default;
+    IntrusiveVariantStorageCopyAss& operator=(IntrusiveVariantStorageCopyAss&&) noexcept = default;
 };
 
 template <class Base, class... SubClasses>
 struct IntrusiveVariantStorageCopyAss<Base, SpecialMem::Exists, SubClasses...>
     : IntrusiveVariantStorageCopy<Base, std::max({copyCtor<SubClasses>()...}), SubClasses...>
 {
-    IntrusiveVariantStorageCopyAss() = default;
+    IntrusiveVariantStorageCopyAss() noexcept = default;
 
-    IntrusiveVariantStorageCopyAss& operator=(const IntrusiveVariantStorageCopyAss& rhs)
+    IntrusiveVariantStorageCopyAss& operator=(const IntrusiveVariantStorageCopyAss& rhs) noexcept(
+        (std::is_nothrow_copy_constructible_v<SubClasses> && ...)
+        && (std::is_nothrow_copy_assignable_v<SubClasses> && ...))
     {
-        if (this->get().index() == rhs.get().index())
+        if (this->m_index == rhs.m_index)
         {
             constexpr std::array<void (*)(Base*, const Base*), sizeof...(SubClasses)> copyFuncs = {
                 {+[](Base* storage, const Base* ptr)
                  { *static_cast<SubClasses*>(storage) = *static_cast<const SubClasses*>(ptr); }...}};
-            copyFuncs[rhs.get().index()](&this->get(), &rhs.get());
+            copyFuncs[rhs.m_index](&this->get(), &rhs.get());
         }
         else
         {
@@ -223,16 +240,20 @@ struct IntrusiveVariantStorageCopyAss<Base, SpecialMem::Exists, SubClasses...>
         return *this;
     }
 
-    ~IntrusiveVariantStorageCopyAss() = default;
-    IntrusiveVariantStorageCopyAss(const IntrusiveVariantStorageCopyAss&) = default;
-    IntrusiveVariantStorageCopyAss(IntrusiveVariantStorageCopyAss&&) = default;
-    IntrusiveVariantStorageCopyAss& operator=(IntrusiveVariantStorageCopyAss&&) = default;
+    ~IntrusiveVariantStorageCopyAss() noexcept = default;
+    IntrusiveVariantStorageCopyAss(const IntrusiveVariantStorageCopyAss&) noexcept = default;
+    IntrusiveVariantStorageCopyAss(IntrusiveVariantStorageCopyAss&&) noexcept = default;
+    IntrusiveVariantStorageCopyAss& operator=(IntrusiveVariantStorageCopyAss&&) noexcept = default;
 };
 
 template <class T>
 constexpr SpecialMem copyAss()
 {
-    if constexpr (!std::is_copy_assignable_v<T> || !std::is_copy_constructible_v<T>)
+    if constexpr (std::is_trivially_copy_assignable_v<T> && std::is_trivially_destructible_v<T>)
+    {
+        return SpecialMem::Trivial;
+    }
+    else if constexpr (!std::is_copy_assignable_v<T> || !std::is_copy_constructible_v<T>)
     {
         return SpecialMem::Deleted;
     }
@@ -252,17 +273,17 @@ protected:
         constexpr std::array<void (*)(std::byte*, Base*), sizeof...(SubClasses)> moveFuncs = {
             {+[](std::byte* storage, Base* ptr)
              { new (storage) SubClasses(std::move(*static_cast<SubClasses*>(ptr))); }...}};
-        moveFuncs[rhs.get().index()](this->m_storage, &rhs.get());
-        this->m_index = rhs.get().index();
+        moveFuncs[rhs.m_index](this->m_storage, &rhs.get());
+        this->m_index = rhs.m_index;
     }
 
 public:
-    IntrusiveVariantStorageMove() = default;
+    IntrusiveVariantStorageMove() noexcept = default;
 
-    IntrusiveVariantStorageMove(const IntrusiveVariantStorageMove&) = default;
-    IntrusiveVariantStorageMove& operator=(const IntrusiveVariantStorageMove&) = default;
-    IntrusiveVariantStorageMove(IntrusiveVariantStorageMove&&) = default;
-    IntrusiveVariantStorageMove& operator=(IntrusiveVariantStorageMove&&) = default;
+    IntrusiveVariantStorageMove(const IntrusiveVariantStorageMove&) noexcept = default;
+    IntrusiveVariantStorageMove& operator=(const IntrusiveVariantStorageMove&) noexcept = default;
+    IntrusiveVariantStorageMove(IntrusiveVariantStorageMove&&) noexcept = default;
+    IntrusiveVariantStorageMove& operator=(IntrusiveVariantStorageMove&&) noexcept = default;
 };
 
 template <class Base, class... SubClasses>
@@ -273,13 +294,13 @@ protected:
     void moveConstruct(IntrusiveVariantStorageMove&&) {}
 
 public:
-    IntrusiveVariantStorageMove() = default;
+    IntrusiveVariantStorageMove() noexcept = default;
 
-    IntrusiveVariantStorageMove(IntrusiveVariantStorageMove&&) = default;
+    IntrusiveVariantStorageMove(IntrusiveVariantStorageMove&&) = delete;
 
-    IntrusiveVariantStorageMove& operator=(const IntrusiveVariantStorageMove&) = default;
-    IntrusiveVariantStorageMove(const IntrusiveVariantStorageMove&) = default;
-    IntrusiveVariantStorageMove& operator=(IntrusiveVariantStorageMove&&) = default;
+    IntrusiveVariantStorageMove& operator=(const IntrusiveVariantStorageMove&) noexcept = default;
+    IntrusiveVariantStorageMove(const IntrusiveVariantStorageMove&) noexcept = default;
+    IntrusiveVariantStorageMove& operator=(IntrusiveVariantStorageMove&&) noexcept = default;
 };
 
 template <class Base, class... SubClasses>
@@ -292,24 +313,22 @@ protected:
         constexpr std::array<void (*)(std::byte*, Base*), sizeof...(SubClasses)> moveFuncs = {
             {+[](std::byte* storage, Base* ptr)
              { new (storage) SubClasses(std::move(*static_cast<SubClasses*>(ptr))); }...}};
-        moveFuncs[rhs.get().index()](this->m_storage, &rhs.get());
-        this->m_index = rhs.get().index();
+        moveFuncs[rhs.m_index](this->m_storage, &rhs.get());
+        this->m_index = rhs.m_index;
     }
 
 public:
     IntrusiveVariantStorageMove() = default;
 
-    IntrusiveVariantStorageMove(IntrusiveVariantStorageMove&& rhs)
-#if !defined(_MSC_VER) || defined(__clang__) || _MSC_VER >= 1928
-        noexcept((std::is_nothrow_move_constructible_v<SubClasses> && ...))
-#endif
+    IntrusiveVariantStorageMove(IntrusiveVariantStorageMove&& rhs) noexcept(
+        (std::is_nothrow_move_constructible_v<SubClasses> && ...))
     {
         moveConstruct(std::move(rhs));
     }
 
-    IntrusiveVariantStorageMove(const IntrusiveVariantStorageMove&) = default;
-    IntrusiveVariantStorageMove& operator=(const IntrusiveVariantStorageMove&) = default;
-    IntrusiveVariantStorageMove& operator=(IntrusiveVariantStorageMove&&) = default;
+    IntrusiveVariantStorageMove(const IntrusiveVariantStorageMove&) noexcept = default;
+    IntrusiveVariantStorageMove& operator=(const IntrusiveVariantStorageMove&) noexcept = default;
+    IntrusiveVariantStorageMove& operator=(IntrusiveVariantStorageMove&&) noexcept = default;
 };
 
 template <class T>
@@ -333,30 +352,47 @@ template <class Base, class... SubClasses>
 struct IntrusiveVariantStorageMoveAss<Base, SpecialMem::Deleted, SubClasses...>
     : IntrusiveVariantStorageMove<Base, std::max({moveCtor<SubClasses>()...}), SubClasses...>
 {
-    IntrusiveVariantStorageMoveAss() = default;
-
-    IntrusiveVariantStorageMoveAss& operator=(const IntrusiveVariantStorageMoveAss&) = delete;
+    IntrusiveVariantStorageMoveAss() noexcept = default;
 
     ~IntrusiveVariantStorageMoveAss() = default;
-    IntrusiveVariantStorageMoveAss(const IntrusiveVariantStorageMoveAss&) = default;
-    IntrusiveVariantStorageMoveAss(IntrusiveVariantStorageMoveAss&&) = default;
-    IntrusiveVariantStorageMoveAss& operator=(IntrusiveVariantStorageMoveAss&&) = default;
+
+    IntrusiveVariantStorageMoveAss& operator=(IntrusiveVariantStorageMoveAss&&) = delete;
+
+    IntrusiveVariantStorageMoveAss(const IntrusiveVariantStorageMoveAss&) noexcept = default;
+    IntrusiveVariantStorageMoveAss& operator=(const IntrusiveVariantStorageMoveAss&) noexcept = default;
+    IntrusiveVariantStorageMoveAss(IntrusiveVariantStorageMoveAss&&) noexcept = default;
+};
+
+template <class Base, class... SubClasses>
+struct IntrusiveVariantStorageMoveAss<Base, SpecialMem::Trivial, SubClasses...>
+    : IntrusiveVariantStorageMove<Base, std::max({moveCtor<SubClasses>()...}), SubClasses...>
+{
+    IntrusiveVariantStorageMoveAss() noexcept = default;
+
+    IntrusiveVariantStorageMoveAss& operator=(IntrusiveVariantStorageMoveAss&&) noexcept = default;
+
+    ~IntrusiveVariantStorageMoveAss() = default;
+    IntrusiveVariantStorageMoveAss(const IntrusiveVariantStorageMoveAss&) noexcept = default;
+    IntrusiveVariantStorageMoveAss& operator=(const IntrusiveVariantStorageMoveAss&) noexcept = default;
+    IntrusiveVariantStorageMoveAss(IntrusiveVariantStorageMoveAss&&) noexcept = default;
 };
 
 template <class Base, class... SubClasses>
 struct IntrusiveVariantStorageMoveAss<Base, SpecialMem::Exists, SubClasses...>
     : IntrusiveVariantStorageMove<Base, std::max({moveCtor<SubClasses>()...}), SubClasses...>
 {
-    IntrusiveVariantStorageMoveAss() = default;
+    IntrusiveVariantStorageMoveAss() noexcept = default;
 
-    IntrusiveVariantStorageMoveAss& operator=(IntrusiveVariantStorageMoveAss&& rhs)
+    IntrusiveVariantStorageMoveAss& operator=(IntrusiveVariantStorageMoveAss&& rhs) noexcept(
+        (std::is_nothrow_move_constructible_v<SubClasses> && ...)
+        && (std::is_nothrow_move_assignable_v<SubClasses> && ...))
     {
-        if (this->get().index() == rhs.get().index())
+        if (this->m_index == rhs.m_index)
         {
             constexpr std::array<void (*)(Base*, Base*), sizeof...(SubClasses)> moveFuncs = {
                 {+[](Base* storage, Base* ptr)
                  { *static_cast<SubClasses*>(storage) = std::move(*static_cast<SubClasses*>(ptr)); }...}};
-            moveFuncs[rhs.get().index()](&this->get(), &rhs.get());
+            moveFuncs[rhs.m_index](&this->get(), &rhs.get());
         }
         else
         {
@@ -366,16 +402,20 @@ struct IntrusiveVariantStorageMoveAss<Base, SpecialMem::Exists, SubClasses...>
         return *this;
     }
 
-    ~IntrusiveVariantStorageMoveAss() = default;
-    IntrusiveVariantStorageMoveAss(const IntrusiveVariantStorageMoveAss&) = default;
-    IntrusiveVariantStorageMoveAss(IntrusiveVariantStorageMoveAss&&) = default;
-    IntrusiveVariantStorageMoveAss& operator=(const IntrusiveVariantStorageMoveAss&) = default;
+    ~IntrusiveVariantStorageMoveAss() noexcept = default;
+    IntrusiveVariantStorageMoveAss(const IntrusiveVariantStorageMoveAss&) noexcept = default;
+    IntrusiveVariantStorageMoveAss(IntrusiveVariantStorageMoveAss&&) noexcept = default;
+    IntrusiveVariantStorageMoveAss& operator=(const IntrusiveVariantStorageMoveAss&) noexcept = default;
 };
 
 template <class T>
 constexpr SpecialMem moveAss()
 {
-    if constexpr (!std::is_move_assignable_v<T> || !std::is_move_constructible_v<T>)
+    if constexpr (std::is_trivially_move_assignable_v<T> && std::is_trivially_destructible_v<T>)
+    {
+        return SpecialMem::Trivial;
+    }
+    else if constexpr (!std::is_move_assignable_v<T> || !std::is_move_constructible_v<T>)
     {
         return SpecialMem::Deleted;
     }
@@ -404,6 +444,12 @@ public:
     {
         CLD_UNREACHABLE;
     }
+
+    template <class V, class... Args>
+    IntrVarValue(std::in_place_type_t<V>, Args&&...) noexcept
+    {
+        CLD_UNREACHABLE;
+    }
 };
 
 template <class V>
@@ -411,6 +457,9 @@ IntrVarValue(const V&) -> IntrVarValue<typename V::base_type>;
 
 template <class V>
 IntrVarValue(V&&) -> IntrVarValue<typename V::base_type>;
+
+template <class V, class... Args>
+IntrVarValue(std::in_place_type_t<V>, Args&&...) -> IntrVarValue<typename V::base_type>;
 
 template <class Base, class... SubClasses>
 class IntrVarValue<Base, AbstractIntrusiveVariant<Base, SubClasses...>>
@@ -420,31 +469,70 @@ class IntrVarValue<Base, AbstractIntrusiveVariant<Base, SubClasses...>>
     using detail::IntrusiveVariantStorage::IntrusiveVariantStorageBase<Base, SubClasses...>::get;
 
 public:
-    template <class T, std::enable_if_t<(std::is_same_v<std::decay_t<T>, SubClasses> || ...)>* = nullptr>
-    IntrVarValue(T&& value) noexcept(std::is_nothrow_constructible_v<std::decay_t<T>, T>)
+    template <class T, class... Args, std::enable_if_t<std::disjunction_v<std::is_same<T, SubClasses>...>>* = nullptr>
+    IntrVarValue(std::in_place_type_t<T>, Args&&... args)
     {
-        static_assert((std::is_same_v<std::decay_t<T>, SubClasses> || ...));
-        auto* object = new (this->m_storage) std::decay_t<T>(std::forward<T>(value));
-        this->m_index = object->index();
+        new (this->m_storage) T(std::forward<Args>(args)...);
+        constexpr auto var = Base::template indexOf<T>();
+        this->m_index = var;
     }
 
-    template <class T, std::enable_if_t<(std::is_same_v<std::decay_t<T>, SubClasses> || ...)>* = nullptr>
-    IntrVarValue& operator=(T&& value) noexcept(std::is_nothrow_constructible_v<std::decay_t<T>, T>)
+    template <class T, std::enable_if_t<std::disjunction_v<std::is_same<T, SubClasses>...>>* = nullptr>
+    IntrVarValue(T&& value) noexcept(std::is_nothrow_move_constructible_v<T>)
     {
-        *this = IntrVarValue(std::forward<T>(value));
+        new (this->m_storage) T(std::move(value));
+        constexpr auto var = Base::template indexOf<T>();
+        this->m_index = var;
+    }
+
+    template <class T, std::enable_if_t<std::disjunction_v<std::is_same<T, SubClasses>...>>* = nullptr>
+    IntrVarValue&
+        operator=(T&& value) noexcept(std::is_nothrow_move_assignable_v<T>&& std::is_nothrow_move_constructible_v<T>)
+    {
+        constexpr auto var = Base::template indexOf<T>();
+        if (this->m_index == var)
+        {
+            this->get().template as<T>() = std::move(value);
+        }
+        else
+        {
+            this->destruct();
+            new (this->m_storage) T(std::move(value));
+            this->m_index = var;
+        }
         return *this;
     }
 
-    template <class T, class... Args, std::enable_if_t<(std::is_same_v<T, SubClasses> || ...)>* = nullptr>
-    IntrVarValue(std::in_place_type_t<T>, Args&&... args)
+    template <class T, std::enable_if_t<std::disjunction_v<std::is_same<T, SubClasses>...>>* = nullptr>
+    IntrVarValue(const T& value) noexcept(std::is_nothrow_copy_constructible_v<T>)
     {
-        auto* object = new (this->m_storage) T(std::forward<Args>(args)...);
-        this->m_index = object->index();
+        new (this->m_storage) T(value);
+        constexpr auto var = Base::template indexOf<T>();
+        this->m_index = var;
+    }
+
+    template <class T, std::enable_if_t<std::disjunction_v<std::is_same<T, SubClasses>...>>* = nullptr>
+    IntrVarValue& operator=(const T& value) noexcept(
+        std::is_nothrow_copy_assignable_v<T>&& std::is_nothrow_copy_constructible_v<T>)
+    {
+        constexpr auto var = Base::template indexOf<T>();
+        if (this->m_index == var)
+        {
+            this->get().template as<T>() = value;
+        }
+        else
+        {
+            this->destruct();
+            new (this->m_storage) T(value);
+            this->m_index = var;
+        }
+        return *this;
     }
 
     template <class U = Base,
-              std::enable_if_t<std::conjunction_v<std::is_copy_constructible<SubClasses>...>>* = nullptr>
-    IntrVarValue(const Base& value) noexcept((std::is_nothrow_copy_constructible_v<SubClasses> && ...))
+              std::enable_if_t<
+                  std::is_same_v<U, Base> && std::conjunction_v<std::is_copy_constructible<SubClasses>...>>* = nullptr>
+    IntrVarValue(const U& value) noexcept((std::is_nothrow_copy_constructible_v<SubClasses> && ...))
     {
         this->m_index = value.index();
         constexpr std::array<void (*)(std::byte*, const Base&), sizeof...(SubClasses)> copyConstructors = {
@@ -454,8 +542,9 @@ public:
     }
 
     template <class U = Base,
-              std::enable_if_t<std::conjunction_v<std::is_move_constructible<SubClasses>...>>* = nullptr>
-    IntrVarValue(Base&& value) noexcept((std::is_nothrow_move_constructible_v<SubClasses> && ...))
+              std::enable_if_t<
+                  std::is_same_v<U, Base> && std::conjunction_v<std::is_move_constructible<SubClasses>...>>* = nullptr>
+    IntrVarValue(U&& value) noexcept((std::is_nothrow_move_constructible_v<SubClasses> && ...))
     {
         this->m_index = value.index();
         constexpr std::array<void (*)(std::byte*, Base &&), sizeof...(SubClasses)> moveConstructors = {
@@ -466,8 +555,11 @@ public:
     template <class T, class... Args, std::enable_if_t<(std::is_same_v<T, SubClasses> || ...)>* = nullptr>
     T& emplace(Args&&... args)
     {
-        *this = IntrVarValue(std::in_place_type<T>, std::forward<Args>(args)...);
-        return this->get().template as<T>();
+        this->destruct();
+        auto* object = new (this->m_storage) T(std::forward<Args>(args)...);
+        constexpr auto var = Base::template indexOf<T>();
+        this->m_index = var;
+        return *object;
     }
 
     Base* CLD_NON_NULL operator->()

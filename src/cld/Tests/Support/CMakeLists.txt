@@ -1,5 +1,5 @@
 
-add_executable(SupportTests main.cpp intrusivevariantallocator_tests.cpp)
+add_executable(SupportTests main.cpp intrusivevariantallocator_tests.cpp intrusivevariantvalue_tests.cpp)
 target_link_libraries(SupportTests testCommon)
 set_source_files_properties(main.cpp PROPERTIES COMPILE_DEFINITIONS CATCH_CONFIG_RUNNER SKIP_PRECOMPILE_HEADERS ON)
 

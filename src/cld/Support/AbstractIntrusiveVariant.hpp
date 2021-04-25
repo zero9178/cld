@@ -43,14 +43,19 @@ class AbstractIntrusiveVariant
 public:
     template <class T>
     constexpr AbstractIntrusiveVariant(std::in_place_type_t<T>)
-        // Forces constant evaluation
-        : m_index(std::integral_constant<std::uint8_t, detail::getIndex<T, 0, Args...>()>::value)
+        : m_index(std::integral_constant<index_type, indexOf<T>()>::value)
     {
         static_assert((std::is_same_v<T, Args> || ...), "T must be one of the subclasses specified in Args...");
     }
 
     using index_type = decltype(m_index);
     using base_type = Base;
+
+    template <class T>
+    constexpr static index_type indexOf() noexcept
+    {
+        return detail::getIndex<T, 0, Args...>();
+    }
 
     [[nodiscard]] constexpr index_type index() const noexcept
     {
@@ -60,28 +65,28 @@ public:
     template <class T>
     [[nodiscard]] constexpr bool is() const noexcept
     {
-        constexpr auto var = detail::getIndex<T, 0, Args...>();
+        constexpr auto var = indexOf<T>();
         return index() == var;
     }
 
     template <class T>
     [[nodiscard]] constexpr const T& as() const noexcept
     {
-        CLD_ASSERT(index() == detail::getIndex<T, 0, Args...>());
+        CLD_ASSERT(index() == std::integral_constant<index_type, indexOf<T>()>::value);
         return *static_cast<const T*>(this);
     }
 
     template <class T>
     [[nodiscard]] constexpr T& as() noexcept
     {
-        CLD_ASSERT(index() == detail::getIndex<T, 0, Args...>());
+        CLD_ASSERT(index() == std::integral_constant<index_type, indexOf<T>()>::value);
         return *static_cast<T*>(this);
     }
 
     template <class T>
     [[nodiscard]] constexpr const T* tryAs() const noexcept
     {
-        constexpr auto var = detail::getIndex<T, 0, Args...>();
+        constexpr auto var = indexOf<T>();
         if (index() != var)
         {
             return nullptr;
@@ -92,7 +97,7 @@ public:
     template <class T>
     [[nodiscard]] constexpr T* tryAs() noexcept
     {
-        constexpr auto var = detail::getIndex<T, 0, Args...>();
+        constexpr auto var = indexOf<T>();
         if (index() != var)
         {
             return nullptr;
