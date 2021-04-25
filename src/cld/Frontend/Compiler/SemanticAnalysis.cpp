@@ -354,6 +354,8 @@ std::vector<cld::IntrVarPtr<cld::Semantics::Useable>>
             ptr.setLinkage(linkage);
             ptr.setUses(prevDecl->getUses());
             ptr.tryAddFromOther(*prevDecl);
+            ptr.setPrevious(prevDecl);
+            prevDecl->setNext(&ptr);
             prev.value() = DeclarationInScope{loc, &ptr};
         }
     }
@@ -721,6 +723,8 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                 declaration->setLinkage(linkage);
                 declaration->tryAddFromOther(*prevDecl);
                 declaration->setUses(prevDecl->getUses());
+                declaration->setPrevious(prevDecl);
+                prevDecl->setNext(declaration.get());
                 prev.value().declared = declaration.get();
             }
         }
@@ -882,8 +886,9 @@ std::unique_ptr<cld::Semantics::FunctionDeclaration> cld::Semantics::SemanticAna
             log(Errors::REDEFINITION_OF_SYMBOL_N.args(*loc, m_sourceInterface, *loc));
             log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
                                                      *prev->second.identifier));
+            return {};
         }
-        else if (std::holds_alternative<FunctionDeclaration*>(prev->second.declared))
+        if (std::holds_alternative<FunctionDeclaration*>(prev->second.declared))
         {
             auto& prevDecl = *cld::get<FunctionDeclaration*>(prev->second.declared);
             auto& otherType = prevDecl.getType();
@@ -914,10 +919,12 @@ std::unique_ptr<cld::Semantics::FunctionDeclaration> cld::Semantics::SemanticAna
             mergeInline(*declaration, prevDecl.getInlineKind());
             declaration->setUses(prevDecl.getUses());
             declaration->tryAddFromOther(prevDecl);
+            declaration->setPrevious(&prevDecl);
+            prevDecl.setNext(declaration.get());
             prev.value().declared = declaration.get();
             return declaration;
         }
-        else if (std::holds_alternative<FunctionDefinition*>(prev->second.declared))
+        if (std::holds_alternative<FunctionDefinition*>(prev->second.declared))
         {
             auto& fd = *cld::get<FunctionDefinition*>(prev->second.declared);
 
@@ -931,11 +938,12 @@ std::unique_ptr<cld::Semantics::FunctionDeclaration> cld::Semantics::SemanticAna
                 log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
                                                          *prev->second.identifier));
             }
-
             mergeInline(fd, inlineKind);
             fd.tryAddFromOther(*declaration);
+            fd.setNext(declaration.get());
+            declaration->setPrevious(&fd);
+            return declaration;
         }
-        return {};
     }
     return declaration;
 }

@@ -2336,6 +2336,8 @@ class FunctionDeclaration final : public Declaration, public AttributeHolder<Fun
 {
     FunctionType m_type;
     InlineKind m_inlineKind;
+    Useable* m_next = nullptr;
+    Useable* m_previous = nullptr;
 
 public:
     FunctionDeclaration(FunctionType type, Linkage linkage, Lexer::CTokenIterator nameToken, InlineKind inlineKind)
@@ -2369,6 +2371,26 @@ public:
     {
         m_inlineKind = inlineKind;
     }
+
+    Useable* getNext() const
+    {
+        return m_next;
+    }
+
+    Useable* getPrevious() const
+    {
+        return m_previous;
+    }
+
+    void setNext(Useable* next)
+    {
+        m_next = next;
+    }
+
+    void setPrevious(Useable* previous)
+    {
+        m_previous = previous;
+    }
 };
 
 enum class Lifetime : std::uint8_t
@@ -2394,6 +2416,8 @@ private:
     std::optional<Initializer> m_initializer;
     Lifetime m_lifetime;
     Kind m_kind;
+    VariableDeclaration* m_previous = nullptr;
+    VariableDeclaration* m_next = nullptr;
 
 public:
     VariableDeclaration(IntrVarValue<Type> type, Linkage linkage, Lifetime lifetime, Lexer::CTokenIterator nameToken,
@@ -2440,6 +2464,26 @@ public:
     {
         m_initializer = std::move(initializer);
     }
+
+    VariableDeclaration* getNext() const
+    {
+        return m_next;
+    }
+
+    VariableDeclaration* getPrevious() const
+    {
+        return m_previous;
+    }
+
+    void setNext(VariableDeclaration* next)
+    {
+        m_next = next;
+    }
+
+    void setPrevious(VariableDeclaration* previous)
+    {
+        m_previous = previous;
+    }
 };
 
 class FunctionDefinition final : public Useable, public AttributeHolder<FunctionAttribute>
@@ -2450,6 +2494,8 @@ class FunctionDefinition final : public Useable, public AttributeHolder<Function
     Linkage m_linkage;
     InlineKind m_inlineKind;
     CompoundStatement m_compoundStatement;
+    Useable* m_next = nullptr;
+    Useable* m_previous = nullptr;
 
 public:
     FunctionDefinition(FunctionType type, Lexer::CTokenIterator nameToken,
@@ -2528,6 +2574,26 @@ public:
     void setInlineKind(InlineKind kind) noexcept
     {
         m_inlineKind = kind;
+    }
+
+    Useable* getNext() const
+    {
+        return m_next;
+    }
+
+    Useable* getPrevious() const
+    {
+        return m_previous;
+    }
+
+    void setNext(Useable* next)
+    {
+        m_next = next;
+    }
+
+    void setPrevious(Useable* previous)
+    {
+        m_previous = previous;
     }
 };
 
