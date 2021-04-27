@@ -1788,15 +1788,15 @@ protected:
     {
     }
 
+    void setUses(std::uint64_t uses) noexcept
+    {
+        m_uses = uses;
+    }
+
 public:
     [[nodiscard]] std::uint64_t getUses() const noexcept
     {
         return m_uses;
-    }
-
-    void setUses(std::uint64_t uses) noexcept
-    {
-        m_uses = uses;
     }
 
     void incrementUsage() noexcept
@@ -1833,11 +1833,6 @@ public:
     [[nodiscard]] Linkage getLinkage() const
     {
         return m_linkage;
-    }
-
-    void setLinkage(Linkage linkage)
-    {
-        m_linkage = linkage;
     }
 
     [[nodiscard]] Lexer::CTokenIterator getNameToken() const
@@ -2336,25 +2331,18 @@ class FunctionDeclaration final : public Declaration, public AttributeHolder<Fun
 {
     FunctionType m_type;
     InlineKind m_inlineKind;
-    Useable* m_next = nullptr;
-    Useable* m_previous = nullptr;
+    const Useable* m_next = nullptr;
+    const Useable* m_first = nullptr;
+
+    friend class FunctionDefinition;
 
 public:
-    FunctionDeclaration(FunctionType type, Linkage linkage, Lexer::CTokenIterator nameToken, InlineKind inlineKind)
-        : Declaration(std::in_place_type<FunctionDeclaration>, linkage, nameToken),
-          m_type(std::move(type)),
-          m_inlineKind(inlineKind)
-    {
-    }
+    FunctionDeclaration(FunctionType type, Linkage linkage, Lexer::CTokenIterator nameToken, InlineKind inlineKind,
+                        Useable* previous);
 
     [[nodiscard]] const FunctionType& getType() const noexcept
     {
         return m_type;
-    }
-
-    void setType(FunctionType type) noexcept
-    {
-        m_type = std::move(type);
     }
 
     [[nodiscard]] bool isInline() const noexcept
@@ -2367,29 +2355,14 @@ public:
         return m_inlineKind;
     }
 
-    void setInlineKind(InlineKind inlineKind) noexcept
-    {
-        m_inlineKind = inlineKind;
-    }
-
-    Useable* getNext() const
+    const Useable* getNext() const
     {
         return m_next;
     }
 
-    Useable* getPrevious() const
+    const Useable& getFirst() const
     {
-        return m_previous;
-    }
-
-    void setNext(Useable* next)
-    {
-        m_next = next;
-    }
-
-    void setPrevious(Useable* previous)
-    {
-        m_previous = previous;
+        return m_first ? *m_first : *this;
     }
 };
 
@@ -2416,18 +2389,24 @@ private:
     std::optional<Initializer> m_initializer;
     Lifetime m_lifetime;
     Kind m_kind;
-    VariableDeclaration* m_previous = nullptr;
-    VariableDeclaration* m_next = nullptr;
+    const VariableDeclaration* m_next = nullptr;
+    const VariableDeclaration* m_first = nullptr;
 
 public:
     VariableDeclaration(IntrVarValue<Type> type, Linkage linkage, Lifetime lifetime, Lexer::CTokenIterator nameToken,
-                        Kind kind, std::optional<Initializer> initializer = {})
+                        Kind kind, std::optional<Initializer> initializer = {}, VariableDeclaration* previous = nullptr)
         : Declaration(std::in_place_type<VariableDeclaration>, linkage, nameToken),
           m_type(std::move(type)),
           m_initializer(std::move(initializer)),
           m_lifetime(lifetime),
-          m_kind(kind)
+          m_kind(kind),
+          m_first(previous ? &previous->getFirst() : nullptr)
     {
+        if (previous)
+        {
+            previous->m_next = this;
+            setUses(previous->getUses());
+        }
     }
 
     [[nodiscard]] const Type& getType() const noexcept
@@ -2450,11 +2429,6 @@ public:
         return m_kind;
     }
 
-    void setKind(Kind kind)
-    {
-        m_kind = kind;
-    }
-
     [[nodiscard]] const std::optional<Initializer>& getInitializer() const noexcept
     {
         return m_initializer;
@@ -2465,24 +2439,14 @@ public:
         m_initializer = std::move(initializer);
     }
 
-    VariableDeclaration* getNext() const
+    const VariableDeclaration* getNext() const
     {
         return m_next;
     }
 
-    VariableDeclaration* getPrevious() const
+    const VariableDeclaration& getFirst() const
     {
-        return m_previous;
-    }
-
-    void setNext(VariableDeclaration* next)
-    {
-        m_next = next;
-    }
-
-    void setPrevious(VariableDeclaration* previous)
-    {
-        m_previous = previous;
+        return m_first ? *m_first : *this;
     }
 };
 
@@ -2494,21 +2458,29 @@ class FunctionDefinition final : public Useable, public AttributeHolder<Function
     Linkage m_linkage;
     InlineKind m_inlineKind;
     CompoundStatement m_compoundStatement;
-    Useable* m_next = nullptr;
-    Useable* m_previous = nullptr;
+    const FunctionDeclaration* m_next = nullptr;
+    const FunctionDeclaration* m_first = nullptr;
+
+    friend class FunctionDeclaration;
 
 public:
     FunctionDefinition(FunctionType type, Lexer::CTokenIterator nameToken,
                        std::vector<std::unique_ptr<VariableDeclaration>> parameterDeclarations, Linkage linkage,
-                       InlineKind inlineKind, CompoundStatement compoundStatement)
+                       InlineKind inlineKind, CompoundStatement compoundStatement, FunctionDeclaration* previous)
         : Useable(std::in_place_type<FunctionDefinition>),
           m_type(std::move(type)),
           m_nameToken(nameToken),
           m_parameterDeclarations(std::move(parameterDeclarations)),
           m_linkage(linkage),
           m_inlineKind(inlineKind),
-          m_compoundStatement(std::move(compoundStatement))
+          m_compoundStatement(std::move(compoundStatement)),
+          m_first(previous ? &previous->getFirst().as<FunctionDeclaration>() : nullptr)
     {
+        if (previous)
+        {
+            previous->m_next = this;
+            setUses(previous->getUses());
+        }
     }
 
     [[nodiscard]] Lexer::CTokenIterator getNameToken() const
@@ -2541,19 +2513,9 @@ public:
         return m_linkage;
     }
 
-    void setLinkage(Linkage linkage)
-    {
-        m_linkage = linkage;
-    }
-
-    [[nodiscard]] const CompoundStatement& getCompoundStatement() const&
+    [[nodiscard]] const CompoundStatement& getCompoundStatement() const
     {
         return m_compoundStatement;
-    }
-
-    [[nodiscard]] CompoundStatement&& getCompoundStatement() &&
-    {
-        return std::move(m_compoundStatement);
     }
 
     void setCompoundStatement(CompoundStatement&& compoundStatement)
@@ -2571,29 +2533,14 @@ public:
         return m_inlineKind;
     }
 
-    void setInlineKind(InlineKind kind) noexcept
-    {
-        m_inlineKind = kind;
-    }
-
-    Useable* getNext() const
+    const FunctionDeclaration* getNext() const
     {
         return m_next;
     }
 
-    Useable* getPrevious() const
+    const Useable& getFirst() const
     {
-        return m_previous;
-    }
-
-    void setNext(Useable* next)
-    {
-        m_next = next;
-    }
-
-    void setPrevious(Useable* previous)
-    {
-        m_previous = previous;
+        return m_first ? static_cast<const Useable&>(*m_first) : static_cast<const Useable&>(*this);
     }
 };
 

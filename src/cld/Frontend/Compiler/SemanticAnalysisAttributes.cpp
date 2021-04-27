@@ -723,7 +723,6 @@ void cld::Semantics::SemanticAnalysis::apply(AffectsVariableFunction applicant,
                     *attribute.name, m_sourceInterface, *var->getNameToken(), *attribute.name));
                 return;
             }
-            var->setLinkage(Linkage::External);
             var->addAttribute(DllImportAttribute{});
         },
         [&](not_null<FunctionDeclaration> decl)

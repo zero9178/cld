@@ -815,8 +815,17 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDefinition& func
     else
     {
         // C99 semantics
-        if (functionDefinition.getInlineKind() == Semantics::InlineKind::InlineDefinition
-            && functionDefinition.getLinkage() == Semantics::Linkage::External)
+        auto visitor = Semantics::RecursiveVisitor(functionDefinition.getFirst(), Semantics::DECL_NEXT_FN);
+        if (functionDefinition.getLinkage() == Semantics::Linkage::External
+            && std::all_of(visitor.begin(), visitor.end(),
+                           [](const Semantics::Useable& useable)
+                           {
+                               return useable.match(
+                                   [](const Semantics::BuiltinFunction&) -> bool { CLD_UNREACHABLE; },
+                                   [](const Semantics::VariableDeclaration&) -> bool { CLD_UNREACHABLE; },
+                                   [](const auto& func)
+                                   { return func.getInlineKind() == Semantics::InlineKind::InlineDefinition; });
+                           }))
         {
             return;
         }

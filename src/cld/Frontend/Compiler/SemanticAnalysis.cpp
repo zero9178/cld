@@ -15,21 +15,6 @@
 #include "SemanticUtil.hpp"
 #include "SourceObject.hpp"
 
-namespace
-{
-template <class T>
-void mergeInline(T& applicant, cld::Semantics::InlineKind prevKind)
-{
-    // gnu_inline does not care about the inline_kind of subsequent or even previous function declarations,
-    // but only about its own
-    if (applicant.template hasAttribute<cld::Semantics::GnuInlineAttribute>())
-    {
-        return;
-    }
-    applicant.setInlineKind(std::max(applicant.getInlineKind(), prevKind));
-}
-} // namespace
-
 bool cld::Semantics::SemanticAnalysis::log(const Message& message)
 {
     if (m_reporter)
@@ -83,11 +68,24 @@ cld::Semantics::TranslationUnit cld::Semantics::SemanticAnalysis::visit(const Sy
         (void)name;
         if (auto* decl = std::get_if<FunctionDeclaration*>(&declared.declared))
         {
+            bool isInline = false;
+            bool defined = false;
+            for (auto& iter : RecursiveVisitor((*decl)->getFirst(), DECL_NEXT_FN))
+            {
+                if (iter.is<FunctionDefinition>())
+                {
+                    defined = true;
+                }
+                iter.match([&](const FunctionDefinition& def) { isInline = isInline || def.isInline(); },
+                           [&](const FunctionDeclaration& def) { isInline = isInline || def.isInline(); },
+                           [](const auto&) { CLD_UNREACHABLE; });
+            }
+
             // C99 6.7.4§6:
             // For a function with external linkage, the following restrictions apply:
             // If a function is declared with an inline function specifier, then it shall also be defined in the
             // same translation unitprogram.
-            if ((*decl)->isInline() && (*decl)->getLinkage() == Linkage::External)
+            if (isInline && (*decl)->getLinkage() == Linkage::External && !defined)
             {
                 log(Errors::Semantics::NO_DEFINITION_FOR_INLINE_FUNCTION_N_FOUND.args(
                     *(*decl)->getNameToken(), m_sourceInterface, *(*decl)->getNameToken()));
@@ -315,27 +313,21 @@ std::unique_ptr<cld::Semantics::FunctionDefinition>
     {
         linkage = Linkage::Internal;
     }
-    auto ptr = std::make_unique<FunctionDefinition>(std::move(ft), loc, std::move(parameterDeclarations), linkage,
-                                                    inlineKind, CompoundStatement(m_currentScope, loc, {}, loc));
-    attributes = applyAttributes(ptr.get(), std::move(attributes), FunctionContext{isInline});
-    reportNotApplicableAttributes(attributes);
 
-    // We are currently in block scope. Functions are always at file scope though so we can't use getCurrentScope
-    auto [prev, notRedefinition] =
-        m_scopes[0].declarations.insert({loc->getText(), DeclarationInScope{loc, ptr.get()}});
-    if (!notRedefinition)
+    FunctionDeclaration* prevDecl = nullptr;
+    if (auto result = m_scopes[GLOBAL_SCOPE].declarations.find(loc->getText());
+        result != m_scopes[GLOBAL_SCOPE].declarations.end())
     {
-        if (!std::holds_alternative<FunctionDeclaration*>(prev->second.declared)
-            || !typesAreCompatible(ptr->getType(), cld::get<FunctionDeclaration*>(prev->second.declared)->getType(),
-                                   true))
+        if (!std::holds_alternative<FunctionDeclaration*>(result->second.declared)
+            || !typesAreCompatible(ft, cld::get<FunctionDeclaration*>(result->second.declared)->getType(), true))
         {
             log(Errors::REDEFINITION_OF_SYMBOL_N.args(*loc, m_sourceInterface, *loc));
-            log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
-                                                     *prev->second.identifier));
+            log(Notes::PREVIOUSLY_DECLARED_HERE.args(*result->second.identifier, m_sourceInterface,
+                                                     *result->second.identifier));
         }
         else
         {
-            auto& prevDecl = cld::get<FunctionDeclaration*>(prev->second.declared);
+            prevDecl = cld::get<FunctionDeclaration*>(result->second.declared);
             if (prevDecl->getLinkage() == Linkage::Internal)
             {
                 linkage = Linkage::Internal;
@@ -344,23 +336,28 @@ std::unique_ptr<cld::Semantics::FunctionDefinition>
             {
                 log(Errors::Semantics::REDEFINITION_OF_FUNCTION_N_WITH_INTERNAL_LINKAGE.args(*loc, m_sourceInterface,
                                                                                              *loc));
-                log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
-                                                         *prev->second.identifier));
+                log(Notes::PREVIOUSLY_DECLARED_HERE.args(*result->second.identifier, m_sourceInterface,
+                                                         *result->second.identifier));
             }
             if (prevDecl->removeAttribute<DllImportAttribute>())
             {
                 log(Warnings::Semantics::ATTRIBUTE_DLLIMPORT_IGNORED_AFTER_DEFINITION_OF_FUNCTION_N.args(
                     *loc, m_sourceInterface, *loc));
             }
-            mergeInline(*ptr, prevDecl->getInlineKind());
-            ptr->setLinkage(linkage);
-            ptr->setUses(prevDecl->getUses());
-            ptr->tryAddFromOther(*prevDecl);
-            ptr->setPrevious(prevDecl);
-            prevDecl->setNext(ptr.get());
-            prev.value() = DeclarationInScope{loc, ptr.get()};
         }
     }
+
+    auto ptr =
+        std::make_unique<FunctionDefinition>(std::move(ft), loc, std::move(parameterDeclarations), linkage, inlineKind,
+                                             CompoundStatement(m_currentScope, loc, {}, loc), prevDecl);
+    attributes = applyAttributes(ptr.get(), std::move(attributes), FunctionContext{isInline});
+    reportNotApplicableAttributes(attributes);
+    if (prevDecl)
+    {
+        ptr->tryAddFromOther(*prevDecl);
+    }
+    m_scopes[GLOBAL_SCOPE].declarations.insert_or_assign(loc->getText(), DeclarationInScope{loc, ptr.get()});
+
     if (!ptr->hasAttribute<DeprecatedAttribute>())
     {
         checkForDeprecatedType(ptr->getType().getReturnType());
@@ -655,13 +652,9 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
             kind = VariableDeclaration::Definition;
         }
 
-        auto declaration = std::make_unique<VariableDeclaration>(std::move(result), linkage, lifetime, loc, kind);
-        thisAttributes = applyAttributes(declaration.get(), std::move(thisAttributes));
-        reportNotApplicableAttributes(thisAttributes);
-
-        auto [prev, notRedefinition] =
-            getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, declaration.get()}});
-        if (!notRedefinition)
+        VariableDeclaration* prevDecl = nullptr;
+        if (auto prev = getCurrentScope().declarations.find(loc->getText());
+            prev != getCurrentScope().declarations.end())
         {
             if (!std::holds_alternative<VariableDeclaration*>(prev->second.declared)
                 // C99 6.7§3:
@@ -669,12 +662,11 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                 // (in a declarator or type specifier) with the same scope and in the same name space, except
                 // for tags as specified in 6.7.2.3.
                 || cld::get<VariableDeclaration*>(prev->second.declared)->getLinkage() == Linkage::None
-                || declaration->getLinkage() == Linkage::None
+                || linkage == Linkage::None
                 // C99 6.7§2:
                 // All declarations in the same scope that refer to the same object or function shall specify
                 // compatible types.
-                || !typesAreCompatible(declaration->getType(),
-                                       cld::get<VariableDeclaration*>(prev->second.declared)->getType())
+                || !typesAreCompatible(result, cld::get<VariableDeclaration*>(prev->second.declared)->getType())
                 // C99 6.9§3:
                 // There shall be no more than one external definition for each identifier declared with
                 // internal linkage in a translation unit.
@@ -689,8 +681,8 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
             }
             else
             {
-                auto& prevDecl = cld::get<VariableDeclaration*>(prev->second.declared);
-                auto composite = compositeType(prevDecl->getType(), declaration->getType());
+                prevDecl = cld::get<VariableDeclaration*>(prev->second.declared);
+                result = compositeType(prevDecl->getType(), result);
                 // C99 6.2.2§4:
                 // For an identifier declared with the storage-class specifier extern in a scope in which a
                 // prior declaration of that identifier is visible, if the prior declaration specifies internal or
@@ -720,16 +712,19 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                     log(Warnings::Semantics::ATTRIBUTE_DLLIMPORT_IGNORED_AFTER_DEFINITION_OF_VARIABLE_N.args(
                         *loc, m_sourceInterface, *loc));
                 }
-                declaration->setType(std::move(composite));
-                declaration->setKind(std::max(prevDecl->getKind(), kind));
-                declaration->setLinkage(linkage);
-                declaration->tryAddFromOther(*prevDecl);
-                declaration->setUses(prevDecl->getUses());
-                declaration->setPrevious(prevDecl);
-                prevDecl->setNext(declaration.get());
-                prev.value().declared = declaration.get();
+                kind = std::max(kind, prevDecl->getKind());
             }
         }
+
+        auto declaration = std::make_unique<VariableDeclaration>(std::move(result), linkage, lifetime, loc, kind,
+                                                                 std::nullopt, prevDecl);
+        thisAttributes = applyAttributes(declaration.get(), std::move(thisAttributes));
+        reportNotApplicableAttributes(thisAttributes);
+        if (prevDecl)
+        {
+            declaration->tryAddFromOther(*prevDecl);
+        }
+        getCurrentScope().declarations.insert_or_assign(loc->getText(), DeclarationInScope{loc, declaration.get()});
 
         if (!declaration->hasAttribute<DeprecatedAttribute>())
         {
@@ -870,39 +865,30 @@ std::unique_ptr<cld::Semantics::FunctionDeclaration> cld::Semantics::SemanticAna
         inlineKind = InlineKind::InlineDefinition;
     }
 
-    auto declaration = std::make_unique<FunctionDeclaration>(std::move(type), linkage, loc, inlineKind);
-    auto copy = attributes;
-    attributes = applyAttributes(declaration.get(), std::move(attributes));
-    reportNotApplicableAttributes(attributes);
-
-    auto [prev, notRedefinition] =
-        getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, declaration.get()}});
-    if (!notRedefinition)
+    Useable* previous = nullptr;
+    if (auto prev = getCurrentScope().declarations.find(loc->getText()); prev != getCurrentScope().declarations.end())
     {
         if ((!std::holds_alternative<FunctionDeclaration*>(prev->second.declared)
-             || !typesAreCompatible(declaration->getType(),
-                                    cld::get<FunctionDeclaration*>(prev->second.declared)->getType()))
+             || !typesAreCompatible(type, cld::get<FunctionDeclaration*>(prev->second.declared)->getType()))
             && (!std::holds_alternative<FunctionDefinition*>(prev->second.declared)
-                || !typesAreCompatible(declaration->getType(),
-                                       cld::get<FunctionDefinition*>(prev->second.declared)->getType())))
+                || !typesAreCompatible(type, cld::get<FunctionDefinition*>(prev->second.declared)->getType())))
         {
             log(Errors::REDEFINITION_OF_SYMBOL_N.args(*loc, m_sourceInterface, *loc));
             log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
                                                      *prev->second.identifier));
             return {};
         }
-        if (std::holds_alternative<FunctionDeclaration*>(prev->second.declared))
+        if (auto* prevDecl = std::get_if<FunctionDeclaration*>(&prev->second.declared))
         {
-            auto& prevDecl = *cld::get<FunctionDeclaration*>(prev->second.declared);
-            auto& otherType = prevDecl.getType();
-            auto composite = compositeType(otherType, declaration->getType());
+            previous = *prevDecl;
+            type = compositeType(type, (*prevDecl)->getType())->as<FunctionType>();
             // C99 6.2.2§4:
             // For an identifier declared with the storage-class specifier extern in a scope in which a
             // prior declaration of that identifier is visible, if the prior declaration specifies internal or
             // external linkage, the linkage of the identifier at the later declaration is the same as the
             // linkage specified at the prior declaration. If no prior declaration is visible, or if the prior
             // declaration specifies no linkage, then the identifier has external linkage.
-            if (prevDecl.getLinkage() == Linkage::Internal)
+            if ((*prevDecl)->getLinkage() == Linkage::Internal)
             {
                 linkage = Linkage::Internal;
             }
@@ -916,49 +902,57 @@ std::unique_ptr<cld::Semantics::FunctionDeclaration> cld::Semantics::SemanticAna
                 log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
                                                          *prev->second.identifier));
             }
-            declaration->setType(std::move(composite->as<FunctionType>()));
-            declaration->setLinkage(linkage);
-
-            mergeInline(*declaration, prevDecl.getInlineKind());
-            declaration->setUses(prevDecl.getUses());
-            declaration->tryAddFromOther(prevDecl);
-            declaration->setPrevious(&prevDecl);
-            prevDecl.setNext(declaration.get());
-            prev.value().declared = declaration.get();
-            return declaration;
         }
-        if (std::holds_alternative<FunctionDefinition*>(prev->second.declared))
+        if (auto* fd = std::get_if<FunctionDefinition*>(&prev->second.declared))
         {
-            auto& fd = *cld::get<FunctionDefinition*>(prev->second.declared);
-
+            previous = *fd;
             // C99 6.2.2§7:
             // If, within a translation unit, the same identifier appears with both internal and external
             // linkage, the behavior is undefined.
-            if (linkage == Linkage::Internal && fd.getLinkage() == Linkage::External)
+            if (linkage == Linkage::Internal && (*fd)->getLinkage() == Linkage::External)
             {
                 log(Errors::Semantics::REDECLARATION_OF_FUNCTION_N_WITH_INTERNAL_LINKAGE.args(*loc, m_sourceInterface,
                                                                                               *loc));
                 log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
                                                          *prev->second.identifier));
             }
-            mergeInline(fd, inlineKind);
-            fd.setNext(declaration.get());
-            declaration->setPrevious(&fd);
-            if (!declaration->getAttributes().empty())
-            {
-                for (auto& iter : copy)
-                {
-                    if (log(Warnings::Semantics::ATTRIBUTE_N_ON_DECLARATION_OF_FUNCTION_N_MUST_PRECEDE_ITS_DEFINITION
-                                .args(*iter.name, m_sourceInterface, *iter.name, *loc)))
-                    {
-                        log(Notes::Semantics::FUNCTION_DEFINITION_HERE.args(*fd.getNameToken(), m_sourceInterface,
-                                                                            *fd.getNameToken()));
-                    }
-                }
-            }
-            return declaration;
         }
     }
+
+    auto declaration = std::make_unique<FunctionDeclaration>(std::move(type), linkage, loc, inlineKind, previous);
+    if (previous && previous->is<FunctionDefinition>())
+    {
+        for (auto& iter : attributes)
+        {
+            if (log(Warnings::Semantics::ATTRIBUTE_N_ON_DECLARATION_OF_FUNCTION_N_MUST_PRECEDE_ITS_DEFINITION.args(
+                    *iter.name, m_sourceInterface, *iter.name, *loc)))
+            {
+                auto& fd = previous->as<FunctionDefinition>();
+                log(Notes::Semantics::FUNCTION_DEFINITION_HERE.args(*fd.getNameToken(), m_sourceInterface,
+                                                                    *fd.getNameToken()));
+            }
+        }
+    }
+    attributes = applyAttributes(declaration.get(), std::move(attributes));
+    reportNotApplicableAttributes(attributes);
+
+    if (previous)
+    {
+        declaration->tryAddFromOther(previous->match(
+            [](auto&& value) -> AttributeHolder<FunctionAttribute>&
+            {
+                using T = std::decay_t<decltype(value)>;
+                if constexpr (std::is_base_of_v<AttributeHolder<FunctionAttribute>, T>)
+                {
+                    return value;
+                }
+                else
+                {
+                    CLD_UNREACHABLE;
+                }
+            }));
+    }
+    getCurrentScope().declarations.insert_or_assign(loc->getText(), DeclarationInScope{loc, declaration.get()});
     return declaration;
 }
 

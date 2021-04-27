@@ -4626,6 +4626,12 @@ TEST_CASE("Semantics inline functions", "[semantics]")
                       "i;\n"
                       "}",
                       ProducesNoErrors());
+        SEMA_PRODUCES("inline int foo(void) {\n"
+                      "return 5;\n"
+                      "}\n"
+                      "\n"
+                      "extern inline int foo(void);\n",
+                      ProducesNoErrors());
     }
     SECTION("External linkage inline function")
     {
