@@ -432,7 +432,7 @@ public:
 
     TranslationUnit visit(const Syntax::TranslationUnit& node);
 
-    std::vector<IntrVarPtr<Useable>> visit(const Syntax::FunctionDefinition& node);
+    std::unique_ptr<FunctionDefinition> visit(const Syntax::FunctionDefinition& node);
 
     using DeclRetVariant = std::variant<IntrVarPtr<Declaration>, std::shared_ptr<const ExpressionBase>>;
 

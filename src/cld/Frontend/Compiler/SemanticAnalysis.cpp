@@ -50,7 +50,12 @@ cld::Semantics::TranslationUnit cld::Semantics::SemanticAnalysis::visit(const Sy
     {
         auto result = cld::match(
             iter,
-            [&](const Syntax::FunctionDefinition& value) -> std::vector<IntrVarPtr<Useable>> { return visit(value); },
+            [&](const Syntax::FunctionDefinition& value) -> std::vector<IntrVarPtr<Useable>>
+            {
+                std::vector<IntrVarPtr<Useable>> result;
+                result.emplace_back(visit(value));
+                return result;
+            },
             [&](const Syntax::Declaration& declaration) -> std::vector<IntrVarPtr<Useable>>
             {
                 auto value = visit(declaration);
@@ -120,7 +125,7 @@ cld::Semantics::TranslationUnit cld::Semantics::SemanticAnalysis::visit(const Sy
     return TranslationUnit(std::move(globals));
 }
 
-std::vector<cld::IntrVarPtr<cld::Semantics::Useable>>
+std::unique_ptr<cld::Semantics::FunctionDefinition>
     cld::Semantics::SemanticAnalysis::visit(const cld::Syntax::FunctionDefinition& node)
 {
     bool isInline = false;
@@ -310,21 +315,18 @@ std::vector<cld::IntrVarPtr<cld::Semantics::Useable>>
     {
         linkage = Linkage::Internal;
     }
-    std::vector<IntrVarPtr<Useable>> result;
-    auto& ptr = result
-                    .emplace_back(std::make_unique<FunctionDefinition>(
-                        std::move(ft), loc, std::move(parameterDeclarations), linkage, inlineKind,
-                        CompoundStatement(m_currentScope, loc, {}, loc)))
-                    ->as<FunctionDefinition>();
-    attributes = applyAttributes(&ptr, std::move(attributes), FunctionContext{isInline});
+    auto ptr = std::make_unique<FunctionDefinition>(std::move(ft), loc, std::move(parameterDeclarations), linkage,
+                                                    inlineKind, CompoundStatement(m_currentScope, loc, {}, loc));
+    attributes = applyAttributes(ptr.get(), std::move(attributes), FunctionContext{isInline});
     reportNotApplicableAttributes(attributes);
 
     // We are currently in block scope. Functions are always at file scope though so we can't use getCurrentScope
-    auto [prev, notRedefinition] = m_scopes[0].declarations.insert({loc->getText(), DeclarationInScope{loc, &ptr}});
+    auto [prev, notRedefinition] =
+        m_scopes[0].declarations.insert({loc->getText(), DeclarationInScope{loc, ptr.get()}});
     if (!notRedefinition)
     {
         if (!std::holds_alternative<FunctionDeclaration*>(prev->second.declared)
-            || !typesAreCompatible(ptr.getType(), cld::get<FunctionDeclaration*>(prev->second.declared)->getType(),
+            || !typesAreCompatible(ptr->getType(), cld::get<FunctionDeclaration*>(prev->second.declared)->getType(),
                                    true))
         {
             log(Errors::REDEFINITION_OF_SYMBOL_N.args(*loc, m_sourceInterface, *loc));
@@ -350,18 +352,18 @@ std::vector<cld::IntrVarPtr<cld::Semantics::Useable>>
                 log(Warnings::Semantics::ATTRIBUTE_DLLIMPORT_IGNORED_AFTER_DEFINITION_OF_FUNCTION_N.args(
                     *loc, m_sourceInterface, *loc));
             }
-            mergeInline(ptr, prevDecl->getInlineKind());
-            ptr.setLinkage(linkage);
-            ptr.setUses(prevDecl->getUses());
-            ptr.tryAddFromOther(*prevDecl);
-            ptr.setPrevious(prevDecl);
-            prevDecl->setNext(&ptr);
-            prev.value() = DeclarationInScope{loc, &ptr};
+            mergeInline(*ptr, prevDecl->getInlineKind());
+            ptr->setLinkage(linkage);
+            ptr->setUses(prevDecl->getUses());
+            ptr->tryAddFromOther(*prevDecl);
+            ptr->setPrevious(prevDecl);
+            prevDecl->setNext(ptr.get());
+            prev.value() = DeclarationInScope{loc, ptr.get()};
         }
     }
-    if (!ptr.hasAttribute<DeprecatedAttribute>())
+    if (!ptr->hasAttribute<DeprecatedAttribute>())
     {
-        checkForDeprecatedType(ptr.getType().getReturnType());
+        checkForDeprecatedType(ptr->getType().getReturnType());
     }
 
     auto funcType = ArrayType(typeAlloc<PrimitiveType>(PrimitiveType::Char, getLanguageOptions(), flag::isConst = true),
@@ -376,12 +378,12 @@ std::vector<cld::IntrVarPtr<cld::Semantics::Useable>>
     getCurrentScope().declarations.insert({"__FUNCTION__", DeclarationInScope{nullptr, funcName.get()}});
     getCurrentScope().declarations.insert({"__PRETTY_FUNCTION__", DeclarationInScope{nullptr, funcName.get()}});
 
-    auto functionScope = pushFunctionScope(ptr);
+    auto functionScope = pushFunctionScope(*ptr);
 
     auto comp = visit(node.getCompoundStatement(), false);
     comp->prependItem(std::move(funcName));
-    ptr.setCompoundStatement(std::move(*comp));
-    return result;
+    ptr->setCompoundStatement(std::move(*comp));
+    return ptr;
 }
 
 std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
