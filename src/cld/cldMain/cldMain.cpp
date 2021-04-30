@@ -511,7 +511,7 @@ std::optional<cld::fs::path> compileCFile(Action action, cld::fs::path cSourceFi
     std::optional<llvm::TimerGroup> timer;
     if (cli.template get<TIME>())
     {
-        timer.emplace("Compilation", "Time it took for the whole compilation of " + cSourceFile.u8string());
+        timer.emplace("Compilation", "Time it took for the whole compilation of " + cld::to_string(cSourceFile));
     }
     cld::fs::ifstream file(cSourceFile, std::ios_base::binary | std::ios_base::ate | std::ios_base::in);
     if (!file.is_open())
@@ -537,12 +537,13 @@ std::optional<cld::fs::path> compileCFile(Action action, cld::fs::path cSourceFi
     if (timer)
     {
         ppTokenTimer.emplace("Lexing preprocessor tokens",
-                             "Time it took to lex all preprocessor tokens in " + cSourceFile.u8string(), *timer);
+                             "Time it took to lex all preprocessor tokens in " + cld::to_string(cSourceFile), *timer);
         ppTokenTimeRegion.emplace(*ppTokenTimer);
     }
 
     bool errors = false;
-    auto pptokens = cld::Lexer::tokenize(std::move(input), &languageOptions, reporter, &errors, cSourceFile.u8string());
+    auto pptokens =
+        cld::Lexer::tokenize(std::move(input), &languageOptions, reporter, &errors, cld::to_string(cSourceFile));
     if (errors)
     {
         return {};
@@ -553,7 +554,7 @@ std::optional<cld::fs::path> compileCFile(Action action, cld::fs::path cSourceFi
     std::optional<llvm::TimeRegion> ppTimeRegion;
     if (timer)
     {
-        ppTimer.emplace("Preprocessor", "Time it took to preprocess " + cSourceFile.u8string(), *timer);
+        ppTimer.emplace("Preprocessor", "Time it took to preprocess " + cld::to_string(cSourceFile), *timer);
         ppTimeRegion.emplace(*ppTimer);
     }
 
@@ -564,7 +565,7 @@ std::optional<cld::fs::path> compileCFile(Action action, cld::fs::path cSourceFi
                          [&iter](const cld::fs::path& path)
                          {
                              std::error_code ec;
-                             auto res = cld::fs::equivalent(path, cld::fs::u8path(iter), ec);
+                             auto res = cld::fs::equivalent(path, cld::to_u8string(iter), ec);
                              return res && !ec;
                          }))
         {
@@ -605,14 +606,15 @@ std::optional<cld::fs::path> compileCFile(Action action, cld::fs::path cSourceFi
         }
         outputFile << reconstruction;
         outputFile.close();
-        return cld::fs::u8path(*cli.template get<OUTPUT_FILE>());
+        return cld::to_u8string(*cli.template get<OUTPUT_FILE>());
     }
 
     std::optional<llvm::Timer> cTokenTimer;
     std::optional<llvm::TimeRegion> cTokenTimeRegion;
     if (timer)
     {
-        cTokenTimer.emplace("C Token", "Time it took turn PP Tokens into C Tokens " + cSourceFile.u8string(), *timer);
+        cTokenTimer.emplace("C Token", "Time it took turn PP Tokens into C Tokens " + cld::to_string(cSourceFile),
+                            *timer);
         cTokenTimeRegion.emplace(*cTokenTimer);
     }
 
@@ -627,7 +629,7 @@ std::optional<cld::fs::path> compileCFile(Action action, cld::fs::path cSourceFi
     std::optional<llvm::TimeRegion> parserTimeRegion;
     if (timer)
     {
-        parserTimer.emplace("Parser", "Time it took to parse " + cSourceFile.u8string(), *timer);
+        parserTimer.emplace("Parser", "Time it took to parse " + cld::to_string(cSourceFile), *timer);
         parserTimeRegion.emplace(*parserTimer);
     }
 
@@ -642,7 +644,8 @@ std::optional<cld::fs::path> compileCFile(Action action, cld::fs::path cSourceFi
     std::optional<llvm::TimeRegion> semanticsTimeRegion;
     if (timer)
     {
-        semanticsTimer.emplace("Semantics", "Time it took to semantically analyze " + cSourceFile.u8string(), *timer);
+        semanticsTimer.emplace("Semantics", "Time it took to semantically analyze " + cld::to_string(cSourceFile),
+                               *timer);
         semanticsTimeRegion.emplace(*semanticsTimer);
     }
 
@@ -662,7 +665,7 @@ std::optional<cld::fs::path> compileCFile(Action action, cld::fs::path cSourceFi
     std::optional<llvm::TimeRegion> codegenTimeRegion;
     if (timer)
     {
-        codegenTimer.emplace("Codegen", "Time it took to generate LLVM IR for " + cSourceFile.u8string(), *timer);
+        codegenTimer.emplace("Codegen", "Time it took to generate LLVM IR for " + cld::to_string(cSourceFile), *timer);
         codegenTimeRegion.emplace(*codegenTimer);
     }
 
@@ -750,7 +753,7 @@ std::optional<cld::fs::path> compileCFile(Action action, cld::fs::path cSourceFi
                 path.replace_extension("o");
             }
         }
-        outputFile = path.u8string();
+        outputFile = cld::to_string(path);
     }
 
     std::error_code ec;
@@ -768,8 +771,8 @@ std::optional<cld::fs::path> compileCFile(Action action, cld::fs::path cSourceFi
     std::optional<llvm::TimeRegion> compileTimeRegion;
     if (timer)
     {
-        compileTimer.emplace("Compile",
-                             "Time it took for LLVM to generate native object code " + cSourceFile.u8string(), *timer);
+        compileTimer.emplace(
+            "Compile", "Time it took for LLVM to generate native object code " + cld::to_string(cSourceFile), *timer);
         compileTimeRegion.emplace(*compileTimer);
     }
     llvm::PassManagerBuilder builder;
@@ -801,7 +804,7 @@ std::optional<cld::fs::path> compileCFile(Action action, cld::fs::path cSourceFi
     compileTimeRegion.reset();
     os.flush();
 
-    return cld::fs::u8path(outputFile);
+    return cld::to_u8string(outputFile);
 }
 
 template <class CL>
@@ -811,7 +814,7 @@ int doActionOnAllFiles(Action action, const cld::LanguageOptions& languageOption
     std::vector<cld::fs::path> linkableFiles;
     for (auto& iter : files)
     {
-        auto path = cld::fs::u8path(iter);
+        cld::fs::path path = cld::to_u8string(iter);
         auto extension = path.extension();
         if (extension == ".c")
         {

@@ -169,8 +169,22 @@ std::string to_string(T value)
     return std::to_string(value);
 }
 
+inline std::string to_string(std::u8string_view u8string)
+{
+    std::string result(u8string.size(), '\0');
+    std::copy(u8string.begin(), u8string.end(), result.begin());
+    return result;
+}
+
 std::string to_string(const llvm::APSInt& apsInt);
 
 std::string to_string(const llvm::APFloat& apFloat);
+
+inline std::u8string to_u8string(std::string_view view)
+{
+    std::u8string string(view.size(), u8'\0');
+    std::copy(view.begin(), view.end(), string.begin());
+    return string;
+}
 
 } // namespace cld

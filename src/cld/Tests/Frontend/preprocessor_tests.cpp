@@ -1084,7 +1084,7 @@ TEST_CASE("PP C Preprocessor tricks", "[PP]")
 TEST_CASE("PP includes UTF8", "[PP]")
 {
     auto scope = createInclude("貓🍌.h", "#define MACRO 1\n");
-    CHECK(cld::fs::exists(cld::fs::u8path("貓🍌.h")));
+    CHECK(cld::fs::exists(u8"貓🍌.h"));
     auto ret = preprocessResult("#include \"貓🍌.h\"\n"
                                 "MACRO");
     CHECK_THAT(ret, ProducesPP("1"));

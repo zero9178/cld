@@ -41,7 +41,7 @@ int main(int argc, char** argv)
     std::string input(size, '\0');
     file.read(input.data(), size);
 
-    filename = (cld::fs::current_path() / filename).u8string();
+    filename = cld::to_string(cld::fs::current_path() / filename);
 
     llvm::Timer timer(mode, "Time it took for the " + mode + " to finish");
     llvm::TimeRegion region(timer);

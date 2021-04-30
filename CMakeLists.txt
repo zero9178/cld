@@ -16,7 +16,7 @@ endif ()
 
 
 project(cld LANGUAGES CXX VERSION 1.0.0)
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 option(CLD_BUILD_TESTS "Build tests" ON)
 option(CLD_FUZZER "Build compiler with libfuzzer instrumentation and fuzzers" OFF)
 option(CLD_ENABLE_ASSERTS "Enable asserts in Release mode" ${CLD_FUZZER})

@@ -81,8 +81,8 @@ Additionally cld currently unconditionally depends on LLVM 12. If your LLVM inst
 for cmake to find you might need to append the path to CMAKE_PREFIX_PATH.
 
 Supported Compilers are newer versions of Clang, GCC and MSVC. The compiler needs C++17 supports and good constexpr
-support. The source code was tested and written using Clang 9 to 11, GCC 9 to 11 and MSVC 19.24 to 19.27 on Windows and
-Linux. It should theoretically also compile on Mac OS
+support. The source code was tested and written using Clang 12, GCC 11 on Windows and Linux. It should theoretically
+also compile on Mac OS
 
 ## Using cld with your own projects
 
