@@ -107,14 +107,14 @@ basic_fixed_string(const U (&input)[M]) -> basic_fixed_string<U, M - 1>;
 
 template <std::size_t max>
 using suitableUInt =
-    typename std::conditional_t<max <= std::numeric_limits<std::uint8_t>::max(), type_identity<std::uint8_t>,
+    typename std::conditional_t<max <= std::numeric_limits<std::uint8_t>::max(), std::type_identity<std::uint8_t>,
                                 std::conditional<max <= std::numeric_limits<std::uint16_t>::max(), std::uint16_t,
                                                  std::conditional_t<max <= std::numeric_limits<std::uint32_t>::max(),
                                                                     std::uint32_t, std::uint64_t>>>::type;
 
 template <std::size_t max>
 using suitableInt =
-    typename std::conditional_t<max <= std::numeric_limits<std::int8_t>::max(), type_identity<std::int8_t>,
+    typename std::conditional_t<max <= std::numeric_limits<std::int8_t>::max(), std::type_identity<std::int8_t>,
                                 std::conditional<max <= std::numeric_limits<std::int16_t>::max(), std::int16_t,
                                                  std::conditional_t<max <= std::numeric_limits<std::int32_t>::max(),
                                                                     std::int32_t, std::int64_t>>>::type;

@@ -39,7 +39,7 @@ class CommandLineOption : public CommandLineOptionBase
     CLIMultiArg m_multiArg;
 
 public:
-    constexpr CommandLineOption(type_identity<ReturnType>, std::string_view firstOptionString,
+    constexpr CommandLineOption(std::type_identity<ReturnType>, std::string_view firstOptionString,
                                 std::tuple<Alternatives...> alternatives,
                                 std::array<std::string_view, args> argNameToRetTypePos, std::string_view description,
                                 CLIMultiArg multiArg)
@@ -380,7 +380,7 @@ struct Pack
 };
 
 template <class T>
-type_identity<T> unpack(const std::in_place_type_t<T>&)
+std::type_identity<T> unpack(const std::in_place_type_t<T>&)
 {
     return {};
 }
@@ -430,11 +430,11 @@ constexpr auto parseOptions(std::string_view description, CLIMultiArg multiArg =
                                    typename decltype(unpack(values.second))::type>...>;
             if constexpr (std::tuple_size_v<Tuple> == 1)
             {
-                return type_identity<std::tuple_element_t<0, Tuple>>{};
+                return std::type_identity<std::tuple_element_t<0, Tuple>>{};
             }
             else
             {
-                return type_identity<Tuple>{};
+                return std::type_identity<Tuple>{};
             }
         },
         tuple);
@@ -649,8 +649,8 @@ public:
         using ArgTypeT = typename std::conditional_t<
             isTupleVector, std::tuple_element<storageIndex, std::decay_t<typename ValueType<Storage>::type>>,
             std::decay<typename ValueType<Storage>::type>>::type;
-        using ArgType =
-            typename std::conditional_t<IsOptional<ArgTypeT>{}, ValueType<ArgTypeT>, type_identity<ArgTypeT>>::type;
+        using ArgType = typename std::conditional_t<IsOptional<ArgTypeT>{}, ValueType<ArgTypeT>,
+                                                    std::type_identity<ArgTypeT>>::type;
 
         std::string_view text;
         if constexpr (std::is_same_v<cli::Char, ArgType>)

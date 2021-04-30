@@ -152,12 +152,6 @@ struct YComb
 template <typename G>
 YComb(G) -> YComb<G>;
 
-template <class T>
-struct type_identity
-{
-    using type = T;
-};
-
 namespace detail
 {
 template <class... Ts>
@@ -185,11 +179,11 @@ struct YWithRet
     }
 
     G g;
-    type_identity<Ret> id;
+    std::type_identity<Ret> id;
 };
 
 template <typename G, class T>
-YWithRet(G, type_identity<T>) -> YWithRet<G, T>;
+YWithRet(G, std::type_identity<T>) -> YWithRet<G, T>;
 
 template <std::size_t i, class Callable, class Variant>
 constexpr decltype(auto) visitImpl(Callable&& callable, Variant&& variant,
@@ -440,7 +434,7 @@ template <class Ret, typename Variant, typename... Matchers>
 constexpr Ret matchWithSelf(Variant&& variant, Matchers&&... matchers)
 {
     static_assert(std::is_void_v<Ret>, "Only explicit return type of void allowed");
-    detail::visit(detail::YWithRet{detail::overload{std::forward<Matchers>(matchers)...}, type_identity<Ret>{}},
+    detail::visit(detail::YWithRet{detail::overload{std::forward<Matchers>(matchers)...}, std::type_identity<Ret>{}},
                   std::forward<Variant>(variant));
 }
 
@@ -492,6 +486,8 @@ constexpr T1 roundUpTo(T1 number, T2 multiple)
 
     return number + multiple - remainder;
 }
+
+#ifndef __cpp_lib_bind_front
 
 namespace detail
 {
@@ -550,11 +546,17 @@ public:
 
 } // namespace detail
 
+#endif
+
 template <class F, class... Args>
 auto bind_front(F&& f, Args&&... args)
 {
+#ifndef __cpp_lib_bind_front
     return detail::BindFrontImpl<std::decay_t<F>, std::decay_t<Args>...>(std::forward<F>(f),
                                                                          std::forward<Args>(args)...);
+#else
+    return std::bind_front(std::forward<F>(f), std::forward<Args>(args)...);
+#endif
 }
 
 template <class T>
