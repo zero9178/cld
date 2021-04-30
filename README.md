@@ -13,8 +13,9 @@ each other but builds on top of the previous phase.
 As an example, checking if C source code is valid and emit errors to stderr is simply:
 
 ```cpp
+auto options = cld::LanguageOptions::native();
 bool errors = false;
-auto pptokens = cld::Lexer::tokenize(std::move(input),options,&llvm::errs(),&errors);
+auto pptokens = cld::Lexer::tokenize(std::move(input),&options,&llvm::errs(),&errors);
 if (errors)
 {
     return -1;    
@@ -76,7 +77,7 @@ Additional options are:
 * `CLD_COVERAGE` (default OFF): Compile with Coverage
 * `CLD_DEFAULT_TARGET` (default empty): String of the default target
 
-Additionally cld currently unconditionally depends on LLVM 11. If your LLVM installation is not in a default location
+Additionally cld currently unconditionally depends on LLVM 12. If your LLVM installation is not in a default location
 for cmake to find you might need to append the path to CMAKE_PREFIX_PATH.
 
 Supported Compilers are newer versions of Clang, GCC and MSVC. The compiler needs C++17 supports and good constexpr
@@ -89,7 +90,7 @@ Simply add the following to your CMakeLists.txt:
 
 ```cmake
 find_package(Threads::Threads REQUIRED)
-find_package(LLVM REQUIRED 11)
+find_package(LLVM REQUIRED 12)
 find_package(cld REQUIRED)
 ```
 

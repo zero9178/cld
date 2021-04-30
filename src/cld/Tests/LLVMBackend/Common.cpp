@@ -40,18 +40,18 @@ void cld::Tests::detail::computeAndGet(std::unique_ptr<llvm::Module>&& module, s
 #ifdef _WIN64
     #ifdef __MINGW32__
         llvm::orc::SymbolStringPtr pointer = jit->getExecutionSession().intern("___chkstk_ms");
-        llvm::cantFail(
-            jit->define(llvm::orc::absoluteSymbols({{pointer, llvm::JITEvaluatedSymbol::fromPointer(___chkstk_ms)}})));
+        llvm::cantFail(jit->getMainJITDylib().define(
+            llvm::orc::absoluteSymbols({{pointer, llvm::JITEvaluatedSymbol::fromPointer(___chkstk_ms)}})));
     #else
         llvm::orc::SymbolStringPtr pointer2 = jit->getExecutionSession().intern("__chkstk");
-        llvm::cantFail(
-            jit->define(llvm::orc::absoluteSymbols({{pointer2, llvm::JITEvaluatedSymbol::fromPointer(__chkstk)}})));
+        llvm::cantFail(jit->getMainJITDylib().define(
+            llvm::orc::absoluteSymbols({{pointer2, llvm::JITEvaluatedSymbol::fromPointer(__chkstk)}})));
     #endif
 #endif
     }
     llvm::orc::SymbolStringPtr pointer = jit->getExecutionSession().intern("printf");
-    llvm::cantFail(
-        jit->define(llvm::orc::absoluteSymbols({{pointer, llvm::JITEvaluatedSymbol::fromPointer(debugging_printf)}})));
+    llvm::cantFail(jit->getMainJITDylib().define(
+        llvm::orc::absoluteSymbols({{pointer, llvm::JITEvaluatedSymbol::fromPointer(debugging_printf)}})));
 
     llvm::orc::ThreadSafeContext ctx(std::make_unique<llvm::LLVMContext>());
     llvm::cantFail(jit->addIRModule(llvm::orc::ThreadSafeModule{std::move(module), ctx}));

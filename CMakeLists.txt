@@ -71,7 +71,7 @@ if (WIN32)
 endif ()
 
 
-find_package(LLVM REQUIRED 11)
+find_package(LLVM REQUIRED 12)
 
 include_directories(SYSTEM 3rdParty)
 include_directories(src)
