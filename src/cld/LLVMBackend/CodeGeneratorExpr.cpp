@@ -627,7 +627,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::SizeofOper
         [](const Semantics::SizeofOperator::TypeVariant& typeVariant) -> const Semantics::Type& {
             return *typeVariant.type;
         },
-        [](const cld::IntrVarPtr<Semantics::ExpressionBase>& expression) -> const Semantics::Type& {
+        [](const std::unique_ptr<Semantics::ExpressionBase>& expression) -> const Semantics::Type& {
             return expression->getType();
         });
     auto& elementType = [&]() -> decltype(auto)
@@ -1581,7 +1581,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::Initialize
 {
     return cld::match(
         initializer,
-        [&](const cld::IntrVarPtr<Semantics::ExpressionBase>& expression) -> Value
+        [&](const std::unique_ptr<Semantics::ExpressionBase>& expression) -> Value
         {
             if (std::holds_alternative<Value>(pointer))
             {

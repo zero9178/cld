@@ -236,19 +236,19 @@ class SemanticAnalysis final : public ProgramInterface
 
     IntrVarValue<Type> compositeType(const Type& lhs, const Type& rhs);
 
-    IntrVarPtr<ExpressionBase> lvalueConversion(IntrVarPtr<ExpressionBase>&& expression);
+    std::unique_ptr<ExpressionBase> lvalueConversion(std::unique_ptr<ExpressionBase>&& expression);
 
     IntrVarValue<Type> lvalueConversion(IntrVarValue<Type> type);
 
-    IntrVarPtr<ExpressionBase> defaultArgumentPromotion(IntrVarPtr<ExpressionBase>&& type);
+    std::unique_ptr<ExpressionBase> defaultArgumentPromotion(std::unique_ptr<ExpressionBase>&& type);
 
-    IntrVarPtr<ExpressionBase> integerPromotion(IntrVarPtr<ExpressionBase>&& expression);
+    std::unique_ptr<ExpressionBase> integerPromotion(std::unique_ptr<ExpressionBase>&& expression);
 
-    std::unique_ptr<Conversion> toBool(IntrVarPtr<ExpressionBase>&& expression);
+    std::unique_ptr<Conversion> toBool(std::unique_ptr<ExpressionBase>&& expression);
 
     void arithmeticConversion(
-        std::variant<IntrVarPtr<ExpressionBase> * CLD_NON_NULL, IntrVarValue<Type> * CLD_NON_NULL> lhs,
-        IntrVarPtr<ExpressionBase>& rhs);
+        std::variant<std::unique_ptr<ExpressionBase> * CLD_NON_NULL, IntrVarValue<Type> * CLD_NON_NULL> lhs,
+        std::unique_ptr<ExpressionBase>& rhs);
 
     bool isModifiableLValue(const ExpressionBase& expression) const;
 
@@ -262,25 +262,26 @@ class SemanticAnalysis final : public ProgramInterface
         checkMemberAccess(const Type& recordType, const Syntax::PostFixExpression& postFixExpr,
                           const Lexer::CToken& identifier);
 
-    IntrVarPtr<ExpressionBase> checkIncrementAndDecrement(const Syntax::Node& node, UnaryOperator::Kind kind,
-                                                          IntrVarPtr<ExpressionBase>&& value,
-                                                          Lexer::CTokenIterator opToken);
+    std::unique_ptr<ExpressionBase> checkIncrementAndDecrement(const Syntax::Node& node, UnaryOperator::Kind kind,
+                                                               std::unique_ptr<ExpressionBase>&& value,
+                                                               Lexer::CTokenIterator opToken);
 
-    bool checkVectorBinaryOp(const IntrVarPtr<ExpressionBase>& lhs, Lexer::CTokenIterator token,
-                             const IntrVarPtr<ExpressionBase>& rhs);
+    bool checkVectorBinaryOp(const std::unique_ptr<ExpressionBase>& lhs, Lexer::CTokenIterator token,
+                             const std::unique_ptr<ExpressionBase>& rhs);
 
-    void checkVectorCompoundAssign(const IntrVarPtr<ExpressionBase>& lhs, const Type& lhsType,
-                                   Lexer::CTokenIterator token, const IntrVarPtr<ExpressionBase>& rhs);
+    void checkVectorCompoundAssign(const std::unique_ptr<ExpressionBase>& lhs, const Type& lhsType,
+                                   Lexer::CTokenIterator token, const std::unique_ptr<ExpressionBase>& rhs);
 
     void checkForDeprecatedType(const Type& type);
 
     VectorType vectorCompResultType(const VectorType& vectorType, const LanguageOptions& options);
 
-    std::unique_ptr<BinaryOperator> doBitOperators(IntrVarPtr<ExpressionBase>&& lhs, BinaryOperator::Kind kind,
-                                                   Lexer::CTokenIterator token, IntrVarPtr<ExpressionBase>&& rhs);
+    std::unique_ptr<BinaryOperator> doBitOperators(std::unique_ptr<ExpressionBase>&& lhs, BinaryOperator::Kind kind,
+                                                   Lexer::CTokenIterator token, std::unique_ptr<ExpressionBase>&& rhs);
 
-    std::unique_ptr<BinaryOperator> doLogicOperators(IntrVarPtr<ExpressionBase>&& lhs, BinaryOperator::Kind kind,
-                                                     Lexer::CTokenIterator token, IntrVarPtr<ExpressionBase>&& rhs);
+    std::unique_ptr<BinaryOperator> doLogicOperators(std::unique_ptr<ExpressionBase>&& lhs, BinaryOperator::Kind kind,
+                                                     Lexer::CTokenIterator token,
+                                                     std::unique_ptr<ExpressionBase>&& rhs);
 
 public:
     enum Mode
@@ -360,7 +361,7 @@ private:
         return applyDeclaratorsImpl(std::move(type), &declarator, declarations, std::move(paramCallback), attributes);
     }
 
-    bool doAssignmentLikeConstraints(const Type& lhsTyp, IntrVarPtr<ExpressionBase>& rhsValue,
+    bool doAssignmentLikeConstraints(const Type& lhsTyp, std::unique_ptr<ExpressionBase>& rhsValue,
                                      cld::function_ref<void()> mustBeArithmetic,
                                      cld::function_ref<void()> mustBeArithmeticOrPointer,
                                      cld::function_ref<void()> incompleteType,
@@ -369,9 +370,9 @@ private:
                                      cld::function_ref<void()> mustBePointer,
                                      cld::function_ref<void()> voidFunctionPointers);
 
-    IntrVarPtr<ExpressionBase> doSingleElementInitialization(const Syntax::Node& node, const Type& type,
-                                                             IntrVarPtr<ExpressionBase>&& expression,
-                                                             bool staticLifetime, std::size_t* size);
+    std::unique_ptr<ExpressionBase> doSingleElementInitialization(const Syntax::Node& node, const Type& type,
+                                                                  std::unique_ptr<ExpressionBase>&& expression,
+                                                                  bool staticLifetime, std::size_t* size);
 
     void checkForIllegalSwitchJumps(std::tuple<const Lexer::CToken&, const Lexer::CToken&> loc,
                                     const SwitchStatement& switchStatement, bool isCaseOrDefault);
@@ -388,19 +389,19 @@ private:
     [[nodiscard]] bool extensionsEnabled(const Lexer::CToken* token = nullptr);
 
     std::unique_ptr<CallExpression> visitVAStart(const Syntax::PostFixExpressionFunctionCall& node,
-                                                 IntrVarPtr<ExpressionBase>&& function);
+                                                 std::unique_ptr<ExpressionBase>&& function);
 
     std::unique_ptr<CallExpression> visitPrefetch(const Syntax::PostFixExpressionFunctionCall& node,
-                                                  IntrVarPtr<ExpressionBase>&& function);
+                                                  std::unique_ptr<ExpressionBase>&& function);
 
     std::unique_ptr<CallExpression> visitExpectWithProbability(const Syntax::PostFixExpressionFunctionCall& node,
-                                                               IntrVarPtr<ExpressionBase>&& function);
+                                                               std::unique_ptr<ExpressionBase>&& function);
 
     std::unique_ptr<CallExpression> visitSyncBuiltinWithT(const Syntax::PostFixExpressionFunctionCall& node,
-                                                          IntrVarPtr<ExpressionBase>&& function);
+                                                          std::unique_ptr<ExpressionBase>&& function);
 
-    IntrVarPtr<ExpressionBase> checkFunctionArg(std::size_t i, IntrVarValue<Type> paramType,
-                                                IntrVarPtr<ExpressionBase>&& expression);
+    std::unique_ptr<ExpressionBase> checkFunctionArg(std::size_t i, IntrVarValue<Type> paramType,
+                                                     std::unique_ptr<ExpressionBase>&& expression);
 
     bool checkFunctionCount(const ExpressionBase& function, const FunctionType& ft,
                             const Syntax::PostFixExpressionFunctionCall& node);
@@ -434,79 +435,79 @@ public:
 
     std::unique_ptr<FunctionDefinition> visit(const Syntax::FunctionDefinition& node);
 
-    using DeclRetVariant = std::variant<IntrVarPtr<Declaration>, std::shared_ptr<const ExpressionBase>>;
+    using DeclRetVariant = std::variant<std::unique_ptr<Declaration>, std::shared_ptr<const ExpressionBase>>;
 
     std::vector<DeclRetVariant> visit(const Syntax::Declaration& node);
 
-    IntrVarPtr<Statement> visit(const Syntax::Statement& node);
+    std::unique_ptr<Statement> visit(const Syntax::Statement& node);
 
-    IntrVarPtr<ExpressionBase> visit(const Syntax::Expression& node);
+    std::unique_ptr<ExpressionBase> visit(const Syntax::Expression& node);
 
-    IntrVarPtr<ExpressionBase> visit(const Syntax::AssignmentExpression& node);
+    std::unique_ptr<ExpressionBase> visit(const Syntax::AssignmentExpression& node);
 
-    IntrVarPtr<ExpressionBase> visit(const Syntax::PrimaryExpression& node);
+    std::unique_ptr<ExpressionBase> visit(const Syntax::PrimaryExpression& node);
 
-    IntrVarPtr<ExpressionBase> visit(const Syntax::PrimaryExpressionIdentifier& node);
+    std::unique_ptr<ExpressionBase> visit(const Syntax::PrimaryExpressionIdentifier& node);
 
     std::unique_ptr<Constant> visit(const Syntax::PrimaryExpressionConstant& node);
 
-    IntrVarPtr<ExpressionBase> visit(const Syntax::PrimaryExpressionParentheses& node);
+    std::unique_ptr<ExpressionBase> visit(const Syntax::PrimaryExpressionParentheses& node);
 
-    IntrVarPtr<ExpressionBase> visit(const Syntax::PrimaryExpressionBuiltinVAArg& node);
+    std::unique_ptr<ExpressionBase> visit(const Syntax::PrimaryExpressionBuiltinVAArg& node);
 
-    IntrVarPtr<ExpressionBase> visit(const Syntax::PrimaryExpressionBuiltinOffsetOf& node);
+    std::unique_ptr<ExpressionBase> visit(const Syntax::PrimaryExpressionBuiltinOffsetOf& node);
 
-    IntrVarPtr<ExpressionBase> visit(const Syntax::PostFixExpression& node);
+    std::unique_ptr<ExpressionBase> visit(const Syntax::PostFixExpression& node);
 
-    IntrVarPtr<ExpressionBase> visit(const Syntax::PostFixExpressionPrimaryExpression& node);
+    std::unique_ptr<ExpressionBase> visit(const Syntax::PostFixExpressionPrimaryExpression& node);
 
-    IntrVarPtr<ExpressionBase> visit(const Syntax::PostFixExpressionSubscript& node);
+    std::unique_ptr<ExpressionBase> visit(const Syntax::PostFixExpressionSubscript& node);
 
-    IntrVarPtr<ExpressionBase> visit(const Syntax::PostFixExpressionDot& node);
+    std::unique_ptr<ExpressionBase> visit(const Syntax::PostFixExpressionDot& node);
 
-    IntrVarPtr<ExpressionBase> visit(const Syntax::PostFixExpressionArrow& node);
+    std::unique_ptr<ExpressionBase> visit(const Syntax::PostFixExpressionArrow& node);
 
-    IntrVarPtr<ExpressionBase> visit(const Syntax::PostFixExpressionFunctionCall& node);
+    std::unique_ptr<ExpressionBase> visit(const Syntax::PostFixExpressionFunctionCall& node);
 
-    IntrVarPtr<ExpressionBase> visit(const Syntax::PostFixExpressionIncrement& node);
+    std::unique_ptr<ExpressionBase> visit(const Syntax::PostFixExpressionIncrement& node);
 
-    IntrVarPtr<ExpressionBase> visit(const Syntax::PostFixExpressionDecrement& node);
+    std::unique_ptr<ExpressionBase> visit(const Syntax::PostFixExpressionDecrement& node);
 
-    IntrVarPtr<ExpressionBase> visit(const Syntax::PostFixExpressionTypeInitializer& node);
+    std::unique_ptr<ExpressionBase> visit(const Syntax::PostFixExpressionTypeInitializer& node);
 
-    IntrVarPtr<ExpressionBase> visit(const Syntax::UnaryExpression& node);
+    std::unique_ptr<ExpressionBase> visit(const Syntax::UnaryExpression& node);
 
-    IntrVarPtr<ExpressionBase> visit(const Syntax::UnaryExpressionPostFixExpression& node);
+    std::unique_ptr<ExpressionBase> visit(const Syntax::UnaryExpressionPostFixExpression& node);
 
-    IntrVarPtr<ExpressionBase> visit(const Syntax::UnaryExpressionUnaryOperator& node);
+    std::unique_ptr<ExpressionBase> visit(const Syntax::UnaryExpressionUnaryOperator& node);
 
-    IntrVarPtr<ExpressionBase> visit(const Syntax::UnaryExpressionSizeOf& node);
+    std::unique_ptr<ExpressionBase> visit(const Syntax::UnaryExpressionSizeOf& node);
 
     std::unique_ptr<Constant> visit(const Syntax::UnaryExpressionDefined& node);
 
-    IntrVarPtr<ExpressionBase> visit(const Syntax::CastExpression& node);
+    std::unique_ptr<ExpressionBase> visit(const Syntax::CastExpression& node);
 
-    IntrVarPtr<ExpressionBase> visit(const Syntax::Term& node);
+    std::unique_ptr<ExpressionBase> visit(const Syntax::Term& node);
 
-    IntrVarPtr<ExpressionBase> visit(const Syntax::AdditiveExpression& node);
+    std::unique_ptr<ExpressionBase> visit(const Syntax::AdditiveExpression& node);
 
-    IntrVarPtr<ExpressionBase> visit(const Syntax::ShiftExpression& node);
+    std::unique_ptr<ExpressionBase> visit(const Syntax::ShiftExpression& node);
 
-    IntrVarPtr<ExpressionBase> visit(const Syntax::RelationalExpression& node);
+    std::unique_ptr<ExpressionBase> visit(const Syntax::RelationalExpression& node);
 
-    IntrVarPtr<ExpressionBase> visit(const Syntax::EqualityExpression& node);
+    std::unique_ptr<ExpressionBase> visit(const Syntax::EqualityExpression& node);
 
-    IntrVarPtr<ExpressionBase> visit(const Syntax::BitAndExpression& node);
+    std::unique_ptr<ExpressionBase> visit(const Syntax::BitAndExpression& node);
 
-    IntrVarPtr<ExpressionBase> visit(const Syntax::BitXorExpression& node);
+    std::unique_ptr<ExpressionBase> visit(const Syntax::BitXorExpression& node);
 
-    IntrVarPtr<ExpressionBase> visit(const Syntax::BitOrExpression& node);
+    std::unique_ptr<ExpressionBase> visit(const Syntax::BitOrExpression& node);
 
-    IntrVarPtr<ExpressionBase> visit(const Syntax::LogicalAndExpression& node);
+    std::unique_ptr<ExpressionBase> visit(const Syntax::LogicalAndExpression& node);
 
-    IntrVarPtr<ExpressionBase> visit(const Syntax::LogicalOrExpression& node);
+    std::unique_ptr<ExpressionBase> visit(const Syntax::LogicalOrExpression& node);
 
-    IntrVarPtr<ExpressionBase> visit(const Syntax::ConditionalExpression& node);
+    std::unique_ptr<ExpressionBase> visit(const Syntax::ConditionalExpression& node);
 
     Initializer visit(const Syntax::Initializer& node, const Type& type, bool staticLifetime = false,
                       std::size_t* size = nullptr);

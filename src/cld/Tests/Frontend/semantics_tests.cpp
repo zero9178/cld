@@ -234,8 +234,8 @@ TEST_CASE("Semantics declarations", "[semantics]")
                 auto& func = translationUnit->getGlobals()[0]->as<FunctionDefinition>();
                 REQUIRE(func.getCompoundStatement().getCompoundItems().size() >= 1);
                 auto& var = func.getCompoundStatement().getCompoundItems().back();
-                REQUIRE(std::holds_alternative<cld::IntrVarPtr<Declaration>>(var));
-                auto& decl = *cld::get<cld::IntrVarPtr<Declaration>>(var);
+                REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(var));
+                auto& decl = *cld::get<std::unique_ptr<Declaration>>(var);
                 CHECK(decl.getLinkage() == Linkage::None);
             }
             SECTION("extern")
@@ -250,8 +250,8 @@ TEST_CASE("Semantics declarations", "[semantics]")
                 auto& func = translationUnit->getGlobals()[0]->as<FunctionDefinition>();
                 REQUIRE(func.getCompoundStatement().getCompoundItems().size() >= 1);
                 auto& var = func.getCompoundStatement().getCompoundItems().back();
-                REQUIRE(std::holds_alternative<cld::IntrVarPtr<Declaration>>(var));
-                auto& decl = *cld::get<cld::IntrVarPtr<Declaration>>(var);
+                REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(var));
+                auto& decl = *cld::get<std::unique_ptr<Declaration>>(var);
                 CHECK(decl.getLinkage() == Linkage::External);
             }
         }
@@ -305,8 +305,8 @@ TEST_CASE("Semantics declarations", "[semantics]")
                 auto& func = translationUnit->getGlobals()[0]->as<FunctionDefinition>();
                 REQUIRE(func.getCompoundStatement().getCompoundItems().size() >= 1);
                 auto& var = func.getCompoundStatement().getCompoundItems().back();
-                REQUIRE(std::holds_alternative<cld::IntrVarPtr<Declaration>>(var));
-                auto& decl = *cld::get<cld::IntrVarPtr<Declaration>>(var);
+                REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(var));
+                auto& decl = *cld::get<std::unique_ptr<Declaration>>(var);
                 auto* varDecl = decl.tryAs<VariableDeclaration>();
                 REQUIRE(varDecl);
                 CHECK(varDecl->getLifetime() == Lifetime::Automatic);
@@ -323,8 +323,8 @@ TEST_CASE("Semantics declarations", "[semantics]")
                 auto& func = translationUnit->getGlobals()[0]->as<FunctionDefinition>();
                 REQUIRE(func.getCompoundStatement().getCompoundItems().size() >= 1);
                 auto& var = func.getCompoundStatement().getCompoundItems().back();
-                REQUIRE(std::holds_alternative<cld::IntrVarPtr<Declaration>>(var));
-                auto& decl = *cld::get<cld::IntrVarPtr<Declaration>>(var);
+                REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(var));
+                auto& decl = *cld::get<std::unique_ptr<Declaration>>(var);
                 auto* varDecl = decl.tryAs<VariableDeclaration>();
                 REQUIRE(varDecl);
                 CHECK(varDecl->getLifetime() == Lifetime::Automatic);
@@ -341,8 +341,8 @@ TEST_CASE("Semantics declarations", "[semantics]")
                 auto& func = translationUnit->getGlobals()[0]->as<FunctionDefinition>();
                 REQUIRE(func.getCompoundStatement().getCompoundItems().size() >= 1);
                 auto& var = func.getCompoundStatement().getCompoundItems().back();
-                REQUIRE(std::holds_alternative<cld::IntrVarPtr<Declaration>>(var));
-                auto& decl = *cld::get<cld::IntrVarPtr<Declaration>>(var);
+                REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(var));
+                auto& decl = *cld::get<std::unique_ptr<Declaration>>(var);
                 auto* varDecl = decl.tryAs<VariableDeclaration>();
                 REQUIRE(varDecl);
                 CHECK(varDecl->getLifetime() == Lifetime::Static);
@@ -359,8 +359,8 @@ TEST_CASE("Semantics declarations", "[semantics]")
                 auto& func = translationUnit->getGlobals()[0]->as<FunctionDefinition>();
                 REQUIRE(func.getCompoundStatement().getCompoundItems().size() >= 1);
                 auto& var = func.getCompoundStatement().getCompoundItems().back();
-                REQUIRE(std::holds_alternative<cld::IntrVarPtr<Declaration>>(var));
-                auto& decl = *cld::get<cld::IntrVarPtr<Declaration>>(var);
+                REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(var));
+                auto& decl = *cld::get<std::unique_ptr<Declaration>>(var);
                 auto* varDecl = decl.tryAs<VariableDeclaration>();
                 REQUIRE(varDecl);
                 CHECK(varDecl->getLifetime() == Lifetime::Static);
@@ -481,8 +481,8 @@ TEST_CASE("Semantics declarations", "[semantics]")
             auto& secondExpr = *cld::get<std::shared_ptr<const ExpressionBase>>(second);
             CHECK(secondExpr.is<UnaryOperator>());
             auto& third = def.getCompoundStatement().getCompoundItems()[3];
-            REQUIRE(std::holds_alternative<cld::IntrVarPtr<Declaration>>(third));
-            auto& thirdDecl = *cld::get<cld::IntrVarPtr<Declaration>>(third);
+            REQUIRE(std::holds_alternative<std::unique_ptr<Declaration>>(third));
+            auto& thirdDecl = *cld::get<std::unique_ptr<Declaration>>(third);
             REQUIRE(thirdDecl.is<VariableDeclaration>());
             CHECK(thirdDecl.as<VariableDeclaration>().getType().is<ValArrayType>());
             SEMA_PRODUCES("extern int i;\n"
@@ -1613,8 +1613,8 @@ const ExpressionBase& generateExpression(std::string source,
     REQUIRE(translationUnit->getGlobals().back()->is<FunctionDefinition>());
     auto& funcDef = translationUnit->getGlobals().back()->as<FunctionDefinition>();
     REQUIRE(
-        std::holds_alternative<cld::IntrVarPtr<Statement>>(funcDef.getCompoundStatement().getCompoundItems().back()));
-    auto& statement = *cld::get<cld::IntrVarPtr<Statement>>(funcDef.getCompoundStatement().getCompoundItems().back());
+        std::holds_alternative<std::unique_ptr<Statement>>(funcDef.getCompoundStatement().getCompoundItems().back()));
+    auto& statement = *cld::get<std::unique_ptr<Statement>>(funcDef.getCompoundStatement().getCompoundItems().back());
     REQUIRE(statement.is<ExpressionStatement>());
     auto* expr = static_cast<ExpressionStatement&>(statement).getExpression();
     REQUIRE(expr);
@@ -4162,9 +4162,9 @@ TEST_CASE("Semantics __func__", "[semantics]")
     REQUIRE(declarationRead.getDeclRead().is<VariableDeclaration>());
     auto& decl = declarationRead.getDeclRead().as<VariableDeclaration>();
     REQUIRE(decl.getInitializer());
-    REQUIRE(std::holds_alternative<cld::IntrVarPtr<ExpressionBase>>(*decl.getInitializer()));
-    REQUIRE(cld::get<cld::IntrVarPtr<ExpressionBase>>(*decl.getInitializer())->is<Constant>());
-    auto& constant = cld::get<cld::IntrVarPtr<ExpressionBase>>(*decl.getInitializer())->as<Constant>();
+    REQUIRE(std::holds_alternative<std::unique_ptr<ExpressionBase>>(*decl.getInitializer()));
+    REQUIRE(cld::get<std::unique_ptr<ExpressionBase>>(*decl.getInitializer())->is<Constant>());
+    auto& constant = cld::get<std::unique_ptr<ExpressionBase>>(*decl.getInitializer())->as<Constant>();
     CHECK(cld::get<std::string>(constant.getValue()) == "foo");
     SEMA_PRODUCES("void __func__(void) {}",
                   ProducesError(DEFINING_FUNCTIONS_WITH_THE_NAME_FUNC_IS_UNDEFINED_BEHAVIOUR));
@@ -5646,7 +5646,6 @@ TEST_CASE("Semantics __attribute__((aligned))", "[semantics]")
     }
 }
 
-
 TEST_CASE("Semantics __attribute__((gnu_inline))", "[semantics]")
 {
     SEMA_PRODUCES("int __attribute__ ((gnu_inline(8))) foo(void);",
@@ -5724,7 +5723,8 @@ TEST_CASE("Semantics __attribute__((dllimport))", "[semantics]")
 }
 
 TEMPLATE_TEST_CASE("Semantics __attribute__((T)) markers", "[semantics][template]", NoinlineAttribute,
-                   AlwaysInlineAttribute, ArtificialAttribute, NothrowAttribute, ConstAttribute,NoreturnAttribute,WeakAttribute,LeafAttribute)
+                   AlwaysInlineAttribute, ArtificialAttribute, NothrowAttribute, ConstAttribute, NoreturnAttribute,
+                   WeakAttribute, LeafAttribute)
 {
     std::string name = []
     {
@@ -5752,25 +5752,26 @@ TEMPLATE_TEST_CASE("Semantics __attribute__((T)) markers", "[semantics][template
         {
             return "noreturn";
         }
-        if constexpr (std::is_same_v<TestType,WeakAttribute>)
+        if constexpr (std::is_same_v<TestType, WeakAttribute>)
         {
             return "weak";
         }
-        if constexpr (std::is_same_v<TestType,LeafAttribute>)
+        if constexpr (std::is_same_v<TestType, LeafAttribute>)
         {
             return "leaf";
         }
         CLD_UNREACHABLE;
     }();
-    if constexpr (cld::variantTypesContainV<TestType,FunctionAttribute>)
+    if constexpr (cld::variantTypesContainV<TestType, FunctionAttribute>)
     {
-        SEMA_PRODUCES("int __attribute__ ((" + name + "(8))) foo(void);",
-                      ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N, "'" + name + "'", 1));
+        SEMA_PRODUCES(
+            "int __attribute__ ((" + name + "(8))) foo(void);",
+            ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N, "'" + name + "'", 1));
         auto program = generateProgram("__attribute__((" + name
-                                       + ")) void foo(void) {\n"
-                                         "    int i = 5;\n"
-                                         "    i;\n"
-                                         "}",
+                                           + ")) void foo(void) {\n"
+                                             "    int i = 5;\n"
+                                             "    i;\n"
+                                             "}",
                                        x64linux);
         auto& globals = program.getTranslationUnit().getGlobals();
         REQUIRE(globals.size() == 1);
@@ -5778,13 +5779,12 @@ TEMPLATE_TEST_CASE("Semantics __attribute__((T)) markers", "[semantics][template
         REQUIRE(func->is<FunctionDefinition>());
         CHECK(func->as<FunctionDefinition>().hasAttribute<TestType>());
     }
-    if constexpr (cld::variantTypesContainV<TestType,VariableAttribute>)
+    if constexpr (cld::variantTypesContainV<TestType, VariableAttribute>)
     {
-        SEMA_PRODUCES("int __attribute__ ((" + name + "(8))) foo;",
-                      ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N, "'" + name + "'", 1));
-        auto program = generateProgram("__attribute__((" + name
-                                       + ")) int foo;",
-                                       x64linux);
+        SEMA_PRODUCES(
+            "int __attribute__ ((" + name + "(8))) foo;",
+            ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N, "'" + name + "'", 1));
+        auto program = generateProgram("__attribute__((" + name + ")) int foo;", x64linux);
         auto& globals = program.getTranslationUnit().getGlobals();
         REQUIRE(globals.size() == 1);
         auto& func = globals[0];

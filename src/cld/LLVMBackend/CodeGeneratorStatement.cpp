@@ -28,7 +28,7 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::CompoundStatement& compo
                 (void)result;
                 CLD_ASSERT(result.second);
             },
-            [&](const cld::IntrVarPtr<Semantics::Declaration>& decl)
+            [&](const std::unique_ptr<Semantics::Declaration>& decl)
             {
                 if (auto* varDecl = decl->tryAs<Semantics::VariableDeclaration>())
                 {
@@ -39,7 +39,7 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::CompoundStatement& compo
                     visit(*funcDecl);
                 }
             },
-            [&](const cld::IntrVarPtr<Semantics::Statement>& statement) { visit(*statement); });
+            [&](const std::unique_ptr<Semantics::Statement>& statement) { visit(*statement); });
     }
     if (m_builder.GetInsertBlock())
     {
@@ -94,7 +94,7 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::ForStatement& forStateme
     std::optional<cld::ValueReset<llvm::DIScope*>> reset;
     cld::match(
         forStatement.getInitial(), [](std::monostate) {},
-        [&](const std::vector<cld::IntrVarPtr<Semantics::Declaration>>& declaration)
+        [&](const std::vector<std::unique_ptr<Semantics::Declaration>>& declaration)
         {
             if (m_options.debugEmission != cld::CGLLVM::DebugEmission::None)
             {
@@ -122,7 +122,7 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::ForStatement& forStateme
                 }
             }
         },
-        [&](const cld::IntrVarPtr<Semantics::ExpressionBase>& expression) { visitVoidExpression(*expression); });
+        [&](const std::unique_ptr<Semantics::ExpressionBase>& expression) { visitVoidExpression(*expression); });
     auto* controlling = llvm::BasicBlock::Create(m_module.getContext(), "for.controlling", m_currentFunction);
     if (m_builder.GetInsertBlock())
     {
@@ -159,7 +159,7 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::ForStatement& forStateme
         m_builder.CreateBr(controlling);
     }
     m_builder.SetInsertPoint(contBlock);
-    if (std::holds_alternative<std::vector<cld::IntrVarPtr<Semantics::Declaration>>>(forStatement.getInitial()))
+    if (std::holds_alternative<std::vector<std::unique_ptr<Semantics::Declaration>>>(forStatement.getInitial()))
     {
         // If the for statement held declarations we must run the destructors for those declarations as soon as we
         // leave the statement

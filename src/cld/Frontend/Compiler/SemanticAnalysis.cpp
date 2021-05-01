@@ -30,33 +30,33 @@ bool cld::Semantics::SemanticAnalysis::log(const Message& message)
 
 cld::Semantics::TranslationUnit cld::Semantics::SemanticAnalysis::visit(const Syntax::TranslationUnit& node)
 {
-    std::vector<IntrVarPtr<Useable>> globals;
+    std::vector<std::unique_ptr<Useable>> globals;
     for (auto& iter : node.getGlobals())
     {
         auto result = cld::match(
             iter,
-            [&](const Syntax::FunctionDefinition& value) -> std::vector<IntrVarPtr<Useable>>
+            [&](const Syntax::FunctionDefinition& value) -> std::vector<std::unique_ptr<Useable>>
             {
-                std::vector<IntrVarPtr<Useable>> result;
+                std::vector<std::unique_ptr<Useable>> result;
                 result.emplace_back(visit(value));
                 return result;
             },
-            [&](const Syntax::Declaration& declaration) -> std::vector<IntrVarPtr<Useable>>
+            [&](const Syntax::Declaration& declaration) -> std::vector<std::unique_ptr<Useable>>
             {
                 auto value = visit(declaration);
-                std::vector<IntrVarPtr<Useable>> ret(value.size());
+                std::vector<std::unique_ptr<Useable>> ret(value.size());
                 std::transform(
                     std::move_iterator(value.begin()), std::move_iterator(value.end()), ret.begin(),
-                    [](DeclRetVariant&& variant) -> IntrVarPtr<Useable>
+                    [](DeclRetVariant&& variant) -> std::unique_ptr<Useable>
                     {
                         return cld::match(
                             std::move(variant),
-                            [](std::shared_ptr<const ExpressionBase>&&) -> IntrVarPtr<Useable> { CLD_UNREACHABLE; },
-                            [](auto&& value) -> IntrVarPtr<Useable> { return std::move(value); });
+                            [](std::shared_ptr<const ExpressionBase>&&) -> std::unique_ptr<Useable> { CLD_UNREACHABLE; },
+                            [](auto&& value) -> std::unique_ptr<Useable> { return std::move(value); });
                     });
                 return ret;
             },
-            [&](const Syntax::GNUSimpleASM&) -> std::vector<IntrVarPtr<Useable>>
+            [&](const Syntax::GNUSimpleASM&) -> std::vector<std::unique_ptr<Useable>>
             {
                 // TODO:
                 return {};
@@ -995,11 +995,11 @@ std::vector<cld::Semantics::CompoundStatement::Variant>
     return result;
 }
 
-cld::IntrVarPtr<cld::Semantics::Statement> cld::Semantics::SemanticAnalysis::visit(const Syntax::Statement& node)
+std::unique_ptr<cld::Semantics::Statement> cld::Semantics::SemanticAnalysis::visit(const Syntax::Statement& node)
 {
     return cld::match(
-        node, [&](const auto& node) -> cld::IntrVarPtr<Statement> { return visit(node); },
-        [&](const Syntax::ExpressionStatement& node) -> cld::IntrVarPtr<Statement>
+        node, [&](const auto& node) -> std::unique_ptr<Statement> { return visit(node); },
+        [&](const Syntax::ExpressionStatement& node) -> std::unique_ptr<Statement>
         {
             if (!node.getOptionalExpression())
             {

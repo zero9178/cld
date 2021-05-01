@@ -724,7 +724,7 @@ cld::Lexer::CTokenIterator cld::Semantics::UnaryOperator::end() const
 cld::Lexer::CTokenIterator cld::Semantics::SizeofOperator::end() const
 {
     return cld::match(
-        m_variant, [](const IntrVarPtr<ExpressionBase>& expression) { return expression->end(); },
+        m_variant, [](const std::unique_ptr<ExpressionBase>& expression) { return expression->end(); },
         [](const TypeVariant& typeVariant) { return typeVariant.closeParentheses + 1; });
 }
 

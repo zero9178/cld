@@ -2,13 +2,13 @@
 
 #include "ErrorMessages.hpp"
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase> cld::Semantics::SemanticAnalysis::visit(const Syntax::Expression& node)
+std::unique_ptr<cld::Semantics::ExpressionBase> cld::Semantics::SemanticAnalysis::visit(const Syntax::Expression& node)
 {
     if (node.getOptionalAssignmentExpressions().empty())
     {
         return visit(node.getAssignmentExpression());
     }
-    std::vector<std::pair<IntrVarPtr<ExpressionBase>, Lexer::CTokenIterator>> expressions;
+    std::vector<std::pair<std::unique_ptr<ExpressionBase>, Lexer::CTokenIterator>> expressions;
     expressions.emplace_back(visit(node.getAssignmentExpression()),
                              node.getOptionalAssignmentExpressions().front().first);
     auto ref = llvm::ArrayRef(node.getOptionalAssignmentExpressions()).drop_back();
@@ -53,7 +53,7 @@ bool cld::Semantics::SemanticAnalysis::isConst(const Type& type) const
 }
 
 bool cld::Semantics::SemanticAnalysis::doAssignmentLikeConstraints(
-    const Type& lhsType, IntrVarPtr<ExpressionBase>& rhsValue, cld::function_ref<void()> mustBeArithmetic,
+    const Type& lhsType, std::unique_ptr<ExpressionBase>& rhsValue, cld::function_ref<void()> mustBeArithmetic,
     cld::function_ref<void()> mustBeArithmeticOrPointer, cld::function_ref<void()> incompleteType,
     cld::function_ref<void()> incompatibleTypes, cld::function_ref<void()> notICE,
     cld::function_ref<void(const ConstValue&)> notNull, cld::function_ref<void()> mustBePointer,
@@ -186,9 +186,9 @@ bool cld::Semantics::SemanticAnalysis::doAssignmentLikeConstraints(
     return true;
 }
 
-void cld::Semantics::SemanticAnalysis::checkVectorCompoundAssign(const IntrVarPtr<ExpressionBase>& lhs,
+void cld::Semantics::SemanticAnalysis::checkVectorCompoundAssign(const std::unique_ptr<ExpressionBase>& lhs,
                                                                  const Type& lhsType, Lexer::CTokenIterator token,
-                                                                 const IntrVarPtr<ExpressionBase>& rhs)
+                                                                 const std::unique_ptr<ExpressionBase>& rhs)
 {
     if (isVector(lhsType) && isVector(rhs->getType()))
     {
@@ -209,7 +209,7 @@ void cld::Semantics::SemanticAnalysis::checkVectorCompoundAssign(const IntrVarPt
     }
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
+std::unique_ptr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::AssignmentExpression& node)
 {
     if (node.getOptionalConditionalExpressions().empty())
@@ -440,10 +440,10 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     return rhsValue;
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
+std::unique_ptr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::PrimaryExpression& node)
 {
-    return cld::match(node, [&](auto&& value) -> IntrVarPtr<ExpressionBase> { return visit(value); });
+    return cld::match(node, [&](auto&& value) -> std::unique_ptr<ExpressionBase> { return visit(value); });
 }
 
 std::unique_ptr<cld::Semantics::Constant>
@@ -507,7 +507,7 @@ std::unique_ptr<cld::Semantics::Constant>
     CLD_UNREACHABLE;
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
+std::unique_ptr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::PrimaryExpressionIdentifier& node)
 {
     auto* result = lookupDecl(node.getIdentifier()->getText());
@@ -620,13 +620,13 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     return std::make_unique<DeclarationRead>(type, useable, node.getIdentifier());
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
+std::unique_ptr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::PrimaryExpressionParentheses& node)
 {
     return visit(node.getExpression());
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
+std::unique_ptr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::PrimaryExpressionBuiltinVAArg& vaArg)
 {
     auto expression = visit(vaArg.getAssignmentExpression());
@@ -652,7 +652,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                                           std::move(expression), vaArg.getCloseParentheses());
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
+std::unique_ptr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::PrimaryExpressionBuiltinOffsetOf& node)
 {
     auto retType = PrimitiveType(getLanguageOptions().sizeTType, getLanguageOptions());
@@ -778,19 +778,19 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                                              currentOffset, node.getCloseParentheses());
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
+std::unique_ptr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::PostFixExpression& node)
 {
     return cld::match(node, [&](auto&& value) { return visit(value); });
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
+std::unique_ptr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::PostFixExpressionPrimaryExpression& node)
 {
     return visit(node.getPrimaryExpression());
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
+std::unique_ptr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::PostFixExpressionSubscript& node)
 {
     auto first = lvalueConversion(visit(node.getPostFixExpression()));
@@ -921,7 +921,7 @@ std::optional<std::pair<cld::IntrVarValue<cld::Semantics::Type>, const cld::Sema
     return std::pair(std::move(type), &result->second);
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
+std::unique_ptr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::PostFixExpressionDot& node)
 {
     auto structOrUnion = visit(node.getPostFixExpression());
@@ -949,7 +949,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     return std::make_unique<MemberAccess>(type, category, std::move(structOrUnion), *field, node.getIdentifier());
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
+std::unique_ptr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::PostFixExpressionArrow& node)
 {
     auto structOrUnionPtr = lvalueConversion(visit(node.getPostFixExpression()));
@@ -1048,9 +1048,9 @@ bool isBuiltinFunction(const cld::Semantics::ExpressionBase& expression)
 
 std::unique_ptr<cld::Semantics::CallExpression>
     cld::Semantics::SemanticAnalysis::visitVAStart(const Syntax::PostFixExpressionFunctionCall& node,
-                                                   IntrVarPtr<ExpressionBase>&& function)
+                                                   std::unique_ptr<ExpressionBase>&& function)
 {
-    std::vector<IntrVarPtr<ExpressionBase>> arguments;
+    std::vector<std::unique_ptr<ExpressionBase>> arguments;
     if (node.getOptionalAssignmentExpressions().size() < 2)
     {
         log(Errors::Semantics::NOT_ENOUGH_ARGUMENTS_FOR_CALLING_FUNCTION_VA_START_EXPECTED_N_GOT_N.args(
@@ -1111,9 +1111,9 @@ std::unique_ptr<cld::Semantics::CallExpression>
 
 std::unique_ptr<cld::Semantics::CallExpression>
     cld::Semantics::SemanticAnalysis::visitPrefetch(const Syntax::PostFixExpressionFunctionCall& node,
-                                                    IntrVarPtr<ExpressionBase>&& function)
+                                                    std::unique_ptr<ExpressionBase>&& function)
 {
-    std::vector<IntrVarPtr<ExpressionBase>> arguments;
+    std::vector<std::unique_ptr<ExpressionBase>> arguments;
     auto& ft = function->getType().as<FunctionType>();
     if (node.getOptionalAssignmentExpressions().size() == 0)
     {
@@ -1179,9 +1179,9 @@ std::unique_ptr<cld::Semantics::CallExpression>
 
 std::unique_ptr<cld::Semantics::CallExpression>
     cld::Semantics::SemanticAnalysis::visitExpectWithProbability(const Syntax::PostFixExpressionFunctionCall& node,
-                                                                 IntrVarPtr<ExpressionBase>&& function)
+                                                                 std::unique_ptr<ExpressionBase>&& function)
 {
-    std::vector<IntrVarPtr<ExpressionBase>> arguments;
+    std::vector<std::unique_ptr<ExpressionBase>> arguments;
     auto& ft = function->getType().as<FunctionType>();
     if (node.getOptionalAssignmentExpressions().size() < 3)
     {
@@ -1229,14 +1229,14 @@ std::unique_ptr<cld::Semantics::CallExpression>
 
 std::unique_ptr<cld::Semantics::CallExpression>
     cld::Semantics::SemanticAnalysis::visitSyncBuiltinWithT(const Syntax::PostFixExpressionFunctionCall& node,
-                                                            IntrVarPtr<ExpressionBase>&& function)
+                                                            std::unique_ptr<ExpressionBase>&& function)
 {
     auto& type = function->getType();
     function = std::make_unique<Conversion>(PointerType(&type), Conversion::LValue, std::move(function));
     auto& ft = getPointerElementType(function->getType()).as<FunctionType>();
 
     IntrVarValue placeholder = ErrorType{};
-    std::vector<IntrVarPtr<ExpressionBase>> arguments;
+    std::vector<std::unique_ptr<ExpressionBase>> arguments;
     if (checkFunctionCount(*function, ft, node))
     {
         auto& decl = function->as<Conversion>().getExpression().as<DeclarationRead>();
@@ -1299,9 +1299,9 @@ std::unique_ptr<cld::Semantics::CallExpression>
                                             std::move(arguments), node.getCloseParentheses());
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
+std::unique_ptr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::checkFunctionArg(std::size_t i, IntrVarValue<Type> paramType,
-                                                       IntrVarPtr<ExpressionBase>&& expression)
+                                                       std::unique_ptr<ExpressionBase>&& expression)
 {
     paramType = removeQualifiers(adjustParameterType(paramType));
     if (paramType->isUndefined())
@@ -1446,7 +1446,7 @@ bool cld::Semantics::SemanticAnalysis::checkFunctionCount(const ExpressionBase& 
     return true;
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
+std::unique_ptr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::PostFixExpressionFunctionCall& node)
 {
     auto function = visit(node.getPostFixExpression());
@@ -1489,7 +1489,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         function = std::make_unique<Conversion>(PointerType(&type), Conversion::LValue, std::move(function));
     }
     auto& ft = getPointerElementType(function->getType()).as<FunctionType>();
-    std::vector<IntrVarPtr<ExpressionBase>> arguments;
+    std::vector<std::unique_ptr<ExpressionBase>> arguments;
     if (ft.isKandR())
     {
         for (auto& iter : node.getOptionalAssignmentExpressions())
@@ -1518,9 +1518,9 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                                             std::move(arguments), node.getCloseParentheses());
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
+std::unique_ptr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::checkIncrementAndDecrement(const Syntax::Node& node, UnaryOperator::Kind kind,
-                                                                 IntrVarPtr<ExpressionBase>&& value,
+                                                                 std::unique_ptr<ExpressionBase>&& value,
                                                                  Lexer::CTokenIterator opToken)
 {
     if (value->isUndefined())
@@ -1559,21 +1559,21 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     return std::make_unique<UnaryOperator>(std::move(type), ValueCategory::Rvalue, kind, opToken, std::move(value));
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
+std::unique_ptr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::PostFixExpressionIncrement& node)
 {
     return checkIncrementAndDecrement(node, UnaryOperator::PostIncrement, visit(node.getPostFixExpression()),
                                       node.getIncrementToken());
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
+std::unique_ptr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::PostFixExpressionDecrement& node)
 {
     return checkIncrementAndDecrement(node, UnaryOperator::PostDecrement, visit(node.getPostFixExpression()),
                                       node.getDecrementToken());
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
+std::unique_ptr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::PostFixExpressionTypeInitializer& node)
 {
     std::vector<ParsedAttribute<>> attributes;
@@ -1617,19 +1617,19 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                                              m_inStaticInitializer);
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
+std::unique_ptr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::UnaryExpression& node)
 {
-    return cld::match(node, [&](auto&& value) -> IntrVarPtr<ExpressionBase> { return visit(value); });
+    return cld::match(node, [&](auto&& value) -> std::unique_ptr<ExpressionBase> { return visit(value); });
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
+std::unique_ptr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::UnaryExpressionPostFixExpression& node)
 {
     return visit(node.getPostFixExpression());
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
+std::unique_ptr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::UnaryExpressionUnaryOperator& node)
 {
     auto value = visit(node.getCastExpression());
@@ -1744,12 +1744,12 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     CLD_UNREACHABLE;
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
+std::unique_ptr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::UnaryExpressionSizeOf& node)
 {
     return cld::match(
         node.getVariant(),
-        [&](const std::unique_ptr<Syntax::UnaryExpression>& unaryExpression) -> IntrVarPtr<ExpressionBase>
+        [&](const std::unique_ptr<Syntax::UnaryExpression>& unaryExpression) -> std::unique_ptr<ExpressionBase>
         {
             auto exp = visit(*unaryExpression);
             if (exp->isUndefined())
@@ -1781,7 +1781,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             return std::make_unique<SizeofOperator>(getLanguageOptions(), node.getSizeOfToken(), std::nullopt,
                                                     std::move(exp));
         },
-        [&](const std::unique_ptr<Syntax::TypeName>& typeName) -> IntrVarPtr<ExpressionBase>
+        [&](const std::unique_ptr<Syntax::TypeName>& typeName) -> std::unique_ptr<ExpressionBase>
         {
             std::vector<ParsedAttribute<>> attributes;
             auto type =
@@ -1831,15 +1831,15 @@ std::unique_ptr<cld::Semantics::Constant>
                                       llvm::APSInt(64, false), node.begin(), node.end());
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
+std::unique_ptr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::CastExpression& node)
 {
     return cld::match(
         node.getVariant(),
-        [&](const Syntax::UnaryExpression& unaryExpression) -> IntrVarPtr<ExpressionBase> {
+        [&](const Syntax::UnaryExpression& unaryExpression) -> std::unique_ptr<ExpressionBase> {
             return visit(unaryExpression);
         },
-        [&](const Syntax::CastExpression::CastVariant& cast) -> IntrVarPtr<ExpressionBase>
+        [&](const Syntax::CastExpression::CastVariant& cast) -> std::unique_ptr<ExpressionBase>
         {
             std::vector<ParsedAttribute<>> attributes;
             auto type = declaratorsToType(cast.typeName.getSpecifierQualifiers(), cast.typeName.getAbstractDeclarator(),
@@ -1939,9 +1939,9 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         });
 }
 
-bool cld::Semantics::SemanticAnalysis::checkVectorBinaryOp(const IntrVarPtr<ExpressionBase>& lhs,
+bool cld::Semantics::SemanticAnalysis::checkVectorBinaryOp(const std::unique_ptr<ExpressionBase>& lhs,
                                                            Lexer::CTokenIterator token,
-                                                           const IntrVarPtr<ExpressionBase>& rhs)
+                                                           const std::unique_ptr<ExpressionBase>& rhs)
 {
     if (isVector(lhs->getType()) || isVector(rhs->getType()))
     {
@@ -1964,7 +1964,7 @@ bool cld::Semantics::SemanticAnalysis::checkVectorBinaryOp(const IntrVarPtr<Expr
     return false;
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase> cld::Semantics::SemanticAnalysis::visit(const Syntax::Term& node)
+std::unique_ptr<cld::Semantics::ExpressionBase> cld::Semantics::SemanticAnalysis::visit(const Syntax::Term& node)
 {
     auto value = visit(node.getCastExpression());
     if (node.getOptionalCastExpressions().empty())
@@ -2040,7 +2040,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase> cld::Semantics::SemanticAnalysis
     return value;
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
+std::unique_ptr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::AdditiveExpression& node)
 {
     auto value = visit(node.getTerm());
@@ -2209,7 +2209,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     return value;
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
+std::unique_ptr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::ShiftExpression& node)
 {
     auto value = visit(node.getAdditiveExpression());
@@ -2307,7 +2307,7 @@ cld::Semantics::VectorType cld::Semantics::SemanticAnalysis::vectorCompResultTyp
     CLD_UNREACHABLE;
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
+std::unique_ptr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::RelationalExpression& node)
 {
     auto value = visit(node.getShiftExpression());
@@ -2405,7 +2405,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     return value;
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
+std::unique_ptr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::EqualityExpression& node)
 {
     auto value = visit(node.getRelationalExpression());
@@ -2518,8 +2518,8 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
 }
 
 std::unique_ptr<cld::Semantics::BinaryOperator>
-    cld::Semantics::SemanticAnalysis::doBitOperators(IntrVarPtr<ExpressionBase>&& lhs, BinaryOperator::Kind kind,
-                                                     Lexer::CTokenIterator token, IntrVarPtr<ExpressionBase>&& rhs)
+    cld::Semantics::SemanticAnalysis::doBitOperators(std::unique_ptr<ExpressionBase>&& lhs, BinaryOperator::Kind kind,
+                                                     Lexer::CTokenIterator token, std::unique_ptr<ExpressionBase>&& rhs)
 {
     if ((isArithmetic(lhs->getType()) && isArithmetic(rhs->getType())) || isVector(lhs->getType())
         || isVector(rhs->getType()))
@@ -2550,7 +2550,7 @@ std::unique_ptr<cld::Semantics::BinaryOperator>
     return std::make_unique<BinaryOperator>(std::move(type), std::move(lhs), kind, token, std::move(rhs));
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
+std::unique_ptr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::BitAndExpression& node)
 {
     auto value = visit(node.getEqualityExpression());
@@ -2565,7 +2565,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     return value;
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
+std::unique_ptr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::BitXorExpression& node)
 {
     auto value = visit(node.getBitAndExpression());
@@ -2580,7 +2580,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     return value;
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
+std::unique_ptr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::BitOrExpression& node)
 {
     auto value = visit(node.getBitXorExpression());
@@ -2596,8 +2596,9 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
 }
 
 std::unique_ptr<cld::Semantics::BinaryOperator>
-    cld::Semantics::SemanticAnalysis::doLogicOperators(IntrVarPtr<ExpressionBase>&& lhs, BinaryOperator::Kind kind,
-                                                       Lexer::CTokenIterator token, IntrVarPtr<ExpressionBase>&& rhs)
+    cld::Semantics::SemanticAnalysis::doLogicOperators(std::unique_ptr<ExpressionBase>&& lhs, BinaryOperator::Kind kind,
+                                                       Lexer::CTokenIterator token,
+                                                       std::unique_ptr<ExpressionBase>&& rhs)
 {
     lhs = lvalueConversion(std::move(lhs));
     rhs = lvalueConversion(std::move(rhs));
@@ -2617,7 +2618,7 @@ std::unique_ptr<cld::Semantics::BinaryOperator>
                                             kind, token, std::move(rhs));
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
+std::unique_ptr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::LogicalAndExpression& node)
 {
     auto value = visit(node.getBitOrExpression());
@@ -2632,7 +2633,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     return value;
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
+std::unique_ptr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::LogicalOrExpression& node)
 {
     auto value = visit(node.getAndExpression());
@@ -2647,7 +2648,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     return value;
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
+std::unique_ptr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::ConditionalExpression& node)
 {
     auto condition = visit(node.getLogicalOrExpression());
@@ -2792,8 +2793,8 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                                          std::move(second), node.getOptionalColon(), std::move(third));
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
-    cld::Semantics::SemanticAnalysis::lvalueConversion(IntrVarPtr<ExpressionBase>&& expression)
+std::unique_ptr<cld::Semantics::ExpressionBase>
+    cld::Semantics::SemanticAnalysis::lvalueConversion(std::unique_ptr<ExpressionBase>&& expression)
 {
     if (expression->getValueCategory() != ValueCategory::Lvalue)
     {
@@ -2863,8 +2864,8 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::lvalue
     return type;
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
-    cld::Semantics::SemanticAnalysis::defaultArgumentPromotion(IntrVarPtr<ExpressionBase>&& expression)
+std::unique_ptr<cld::Semantics::ExpressionBase>
+    cld::Semantics::SemanticAnalysis::defaultArgumentPromotion(std::unique_ptr<ExpressionBase>&& expression)
 {
     expression = integerPromotion(std::move(expression));
     if (!isArithmetic(expression->getType()))
@@ -2880,8 +2881,8 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                                         Conversion::DefaultArgumentPromotion, std::move(expression));
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
-    cld::Semantics::SemanticAnalysis::integerPromotion(IntrVarPtr<ExpressionBase>&& expression)
+std::unique_ptr<cld::Semantics::ExpressionBase>
+    cld::Semantics::SemanticAnalysis::integerPromotion(std::unique_ptr<ExpressionBase>&& expression)
 {
     expression = lvalueConversion(std::move(expression));
     if (auto* enumType = expression->getType().tryAs<EnumType>())
@@ -2903,21 +2904,21 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
 }
 
 std::unique_ptr<cld::Semantics::Conversion>
-    cld::Semantics::SemanticAnalysis::toBool(IntrVarPtr<ExpressionBase>&& expression)
+    cld::Semantics::SemanticAnalysis::toBool(std::unique_ptr<ExpressionBase>&& expression)
 {
     return std::make_unique<Conversion>(PrimitiveType(PrimitiveType::Bool, getLanguageOptions()), Conversion::Implicit,
                                         std::move(expression));
 }
 
 void cld::Semantics::SemanticAnalysis::arithmeticConversion(
-    std::variant<IntrVarPtr<ExpressionBase> * CLD_NON_NULL, IntrVarValue<Type> * CLD_NON_NULL> lhs,
-    IntrVarPtr<ExpressionBase>& rhs)
+    std::variant<std::unique_ptr<ExpressionBase> * CLD_NON_NULL, IntrVarValue<Type> * CLD_NON_NULL> lhs,
+    std::unique_ptr<ExpressionBase>& rhs)
 {
     auto getLhsType = [](auto&& value) -> const Type&
     {
         return cld::match(
             value, [](IntrVarValue<Type>* type) -> const Type& { return *type; },
-            [](IntrVarPtr<ExpressionBase>* ptr) -> const Type& { return (*ptr)->getType(); });
+            [](std::unique_ptr<ExpressionBase>* ptr) -> const Type& { return (*ptr)->getType(); });
     };
     if (isVector(getLhsType(lhs)) || isVector(rhs->getType()))
     {
@@ -2962,7 +2963,7 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(
             {
                 cld::match(
                     lhs, [&](IntrVarValue<Type>* lhs) { *lhs = rhs->getType(); },
-                    [&](IntrVarPtr<ExpressionBase>* lhs) {
+                    [&](std::unique_ptr<ExpressionBase>* lhs) {
                         *lhs = std::make_unique<Conversion>(rhs->getType(), Conversion::ArithmeticConversion,
                                                             std::move(*lhs));
                     });
@@ -3010,7 +3011,7 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(
         {
             cld::match(
                 scalar, [&](IntrVarValue<Type>* type) { *type = vectorType; },
-                [&](IntrVarPtr<ExpressionBase>* expr)
+                [&](std::unique_ptr<ExpressionBase>* expr)
                 {
                     *expr = std::make_unique<Conversion>(vectorType, Conversion::ArithmeticConversion,
                                                          integerPromotion(std::move(*expr)));
@@ -3022,7 +3023,7 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(
         {
             cld::match(
                 scalar, [&](IntrVarValue<Type>* type) { *type = integerPromotion(*type); },
-                [&](IntrVarPtr<ExpressionBase>* expr)
+                [&](std::unique_ptr<ExpressionBase>* expr)
                 {
                     *expr = std::make_unique<Conversion>(vectorType, Conversion::ArithmeticConversion,
                                                          integerPromotion(std::move(*expr)));
@@ -3038,7 +3039,7 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(
         // if the type of something is theoretically larger than the element type of a vector that leads to an error.
         // Exception to that however is if the scalar is a constant that would fit into the element type of the vector
         // aka can be safely downcast.
-        auto* expr = std::get_if<IntrVarPtr<ExpressionBase>*>(&scalar);
+        auto* expr = std::get_if<std::unique_ptr<ExpressionBase>*>(&scalar);
         if (!expr)
         {
             return;
@@ -3147,14 +3148,14 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(
     }
     cld::match(
         lhs, [&](IntrVarValue<Type>* lhs) { *lhs = type; },
-        [&](IntrVarPtr<ExpressionBase>* lhs)
+        [&](std::unique_ptr<ExpressionBase>* lhs)
         { *lhs = std::make_unique<Conversion>(type, Conversion::ArithmeticConversion, std::move(*lhs)); });
     rhs = std::make_unique<Conversion>(std::move(type), Conversion::ArithmeticConversion, std::move(rhs));
 }
 
-cld::IntrVarPtr<cld::Semantics::ExpressionBase>
+std::unique_ptr<cld::Semantics::ExpressionBase>
     cld::Semantics::SemanticAnalysis::doSingleElementInitialization(const Syntax::Node& node, const Type& type,
-                                                                    IntrVarPtr<ExpressionBase>&& expression,
+                                                                    std::unique_ptr<ExpressionBase>&& expression,
                                                                     bool staticLifetime, std::size_t* size)
 {
     CLD_ASSERT(!type.isUndefined() && !expression->isUndefined());
@@ -3777,7 +3778,7 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const Syntax
             }
             else
             {
-                auto& expr = cld::get<IntrVarPtr<ExpressionBase>>(merge);
+                auto& expr = cld::get<std::unique_ptr<ExpressionBase>>(merge);
                 initializations.push_back({{path.rbegin(), path.rend()}, std::move(expr)});
             }
         }

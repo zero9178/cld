@@ -112,12 +112,12 @@ std::unique_ptr<cld::Semantics::ForStatement> cld::Semantics::SemanticAnalysis::
             }
         }
         auto result = visit(declarations);
-        auto& vector = initial.emplace<std::vector<IntrVarPtr<Declaration>>>();
+        auto& vector = initial.emplace<std::vector<std::unique_ptr<Declaration>>>();
         for (auto& iter : result)
         {
-            if (std::holds_alternative<IntrVarPtr<Declaration>>(iter))
+            if (std::holds_alternative<std::unique_ptr<Declaration>>(iter))
             {
-                vector.push_back(cld::get<IntrVarPtr<Declaration>>(std::move(iter)));
+                vector.push_back(cld::get<std::unique_ptr<Declaration>>(std::move(iter)));
             }
         }
     }
@@ -130,7 +130,7 @@ std::unique_ptr<cld::Semantics::ForStatement> cld::Semantics::SemanticAnalysis::
         }
     }
 
-    IntrVarPtr<ExpressionBase> controlling;
+    std::unique_ptr<ExpressionBase> controlling;
     if (node.getControlling())
     {
         auto result = lvalueConversion(visit(*node.getControlling()));
@@ -142,7 +142,7 @@ std::unique_ptr<cld::Semantics::ForStatement> cld::Semantics::SemanticAnalysis::
         controlling = toBool(std::move(result));
     }
 
-    IntrVarPtr<ExpressionBase> iteration;
+    std::unique_ptr<ExpressionBase> iteration;
     if (node.getPost())
     {
         iteration = visit(*node.getPost());

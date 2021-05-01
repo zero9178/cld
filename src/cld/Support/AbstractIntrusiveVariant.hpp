@@ -51,6 +51,13 @@ public:
     using index_type = decltype(m_index);
     using base_type = Base;
 
+    void operator delete(AbstractIntrusiveVariant* ptr, std::destroying_delete_t)
+    {
+        constexpr std::array<void (*)(AbstractIntrusiveVariant*), sizeof...(Args)> deleteFuncs = {
+            {+[](AbstractIntrusiveVariant* ptr) { std::destroy_at(static_cast<Args*>(ptr)); }...}};
+        deleteFuncs[ptr->index()](ptr);
+    }
+
     template <class T>
     constexpr static index_type indexOf() noexcept
     {
@@ -157,48 +164,5 @@ namespace detail::AbstractIntrusiveVariant
 template <class Base, class... Args>
 auto deduceArgs(::cld::AbstractIntrusiveVariant<Base, Args...>*) -> ::cld::AbstractIntrusiveVariant<Base, Args...>;
 } // namespace detail::AbstractIntrusiveVariant
-
-template <class T, class U = decltype(detail::AbstractIntrusiveVariant::deduceArgs(std::declval<T*>()))>
-class IntrusiveVariantDeleter
-{
-    static_assert(always_false<T>, "Can't delete pointer that isn't a subclass of AbstractIntrusiveVariant");
-};
-
-template <class Base, class Top, class... SubClasses>
-class IntrusiveVariantDeleter<Base, AbstractIntrusiveVariant<Top, SubClasses...>>
-{
-public:
-    IntrusiveVariantDeleter() = default;
-
-    template <class T, std::enable_if_t<std::disjunction_v<std::is_same<T, SubClasses>...>>* = nullptr>
-    IntrusiveVariantDeleter(std::default_delete<T>&&) noexcept
-    {
-    }
-
-    template <class U, std::enable_if_t<std::is_base_of_v<Base, U>>* = nullptr>
-    IntrusiveVariantDeleter(IntrusiveVariantDeleter<U>&&) noexcept
-    {
-    }
-
-    void operator()(Base* pointer) const noexcept
-    {
-        constexpr std::array<void (*)(Base*), sizeof...(SubClasses)> deleteFuncs = {
-            {+[](Base* ptr)
-             {
-                 if constexpr (std::is_base_of_v<Base, SubClasses>)
-                 {
-                     delete static_cast<SubClasses*>(ptr);
-                 }
-                 else
-                 {
-                     CLD_UNREACHABLE;
-                 }
-             }...}};
-        deleteFuncs[pointer->index()](pointer);
-    }
-};
-
-template <class T>
-using IntrVarPtr = std::unique_ptr<T, ::cld::IntrusiveVariantDeleter<T>>;
 
 } // namespace cld
