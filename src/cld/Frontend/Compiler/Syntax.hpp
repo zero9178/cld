@@ -1318,27 +1318,12 @@ public:
     StorageClassSpecifier(Lexer::CTokenIterator begin, Lexer::CTokenIterator end, Specifiers specifier);
 
     [[nodiscard]] Specifiers getSpecifier() const;
+
+    bool operator==(StorageClassSpecifier::Specifiers rhs) const
+    {
+        return m_specifier == rhs;
+    }
 };
-
-inline bool operator==(const StorageClassSpecifier& storageClassSpecifier, StorageClassSpecifier::Specifiers specifier)
-{
-    return specifier == storageClassSpecifier.getSpecifier();
-}
-
-inline bool operator!=(const StorageClassSpecifier& storageClassSpecifier, StorageClassSpecifier::Specifiers specifier)
-{
-    return !(specifier == storageClassSpecifier.getSpecifier());
-}
-
-inline bool operator==(StorageClassSpecifier::Specifiers specifier, const StorageClassSpecifier& storageClassSpecifier)
-{
-    return specifier == storageClassSpecifier.getSpecifier();
-}
-
-inline bool operator!=(StorageClassSpecifier::Specifiers specifier, const StorageClassSpecifier& storageClassSpecifier)
-{
-    return !(specifier == storageClassSpecifier.getSpecifier());
-}
 
 /**
  * <FunctionSpecifier> ::= <TokenType::InlineKeyword>

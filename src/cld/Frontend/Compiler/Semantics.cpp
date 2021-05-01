@@ -117,11 +117,6 @@ bool cld::Semantics::Type::operator==(const cld::Semantics::Type& rhs) const
         });
 }
 
-bool cld::Semantics::Type::operator!=(const cld::Semantics::Type& rhs) const
-{
-    return !(rhs == *this);
-}
-
 std::uint64_t cld::Semantics::Type::getSizeOf(const ProgramInterface& program) const
 {
     return match(
