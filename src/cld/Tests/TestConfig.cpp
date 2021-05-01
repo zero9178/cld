@@ -9,13 +9,13 @@ cld::Tests::FileScope::~FileScope()
 
 cld::Tests::FileScope cld::Tests::createInclude(std::string_view path, std::string_view content)
 {
-    cld::fs::path dir = cld::to_u8string(path.data());
+    auto dir = cld::fs::u8path(path.data());
     dir.remove_filename();
     if (!dir.empty())
     {
         cld::fs::create_directories(dir);
     }
-    cld::fs::path utf8path = cld::to_u8string(path);
+    auto utf8path = cld::fs::u8path(path);
     cld::fs::ofstream file(utf8path, std::ios_base::out | std::ios_base::trunc | std::ios_base::binary);
     REQUIRE(file.is_open());
     file.write(content.data(), content.size());

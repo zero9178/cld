@@ -1153,7 +1153,7 @@ public:
     {
         auto scope = cld::ScopeExit([prev = m_currentFile, this] { m_currentFile = prev; });
         CLD_ASSERT(sourceObject.getFiles().size() == 1);
-        auto path = cld::to_u8string(sourceObject.getFiles()[0].path);
+        auto path = cld::fs::u8path(sourceObject.getFiles()[0].path);
         for (auto& iter2 : sourceObject.data())
         {
             iter2.setFileId(m_files.size());
@@ -1177,7 +1177,7 @@ public:
         }
         if (auto ifSections = isOnlyIfSections(tree))
         {
-            if (cld::fs::exists(path) && m_includeGuardOptCache.count(cld::to_string(path)) == 0)
+            if (cld::fs::exists(path) && m_includeGuardOptCache.count(path.u8string()) == 0)
             {
                 bool allSimpleIfs = true;
                 std::vector<std::pair<std::string_view, bool>> neededMacros;
@@ -1202,7 +1202,7 @@ public:
                 }
                 if (allSimpleIfs)
                 {
-                    m_includeGuardOptCache[cld::to_string(path)] = {std::move(neededMacros)};
+                    m_includeGuardOptCache[path.u8string()] = {std::move(neededMacros)};
                 }
             }
         }
@@ -1373,11 +1373,11 @@ public:
         bool systemHeader = false;
         cld::fs::ifstream result;
         cld::fs::path resultPath;
-        std::vector<cld::fs::path> candidates;
-        if (cld::fs::to_path(path).is_absolute())
+        std::vector<std::string> candidates;
+        if (cld::fs::u8path(path).is_absolute())
         {
-            result.open(cld::fs::to_path(path), std::ios_base::in | std::ios_base::binary | std::ios_base::ate);
-            resultPath = cld::to_u8string(path);
+            result.open(cld::fs::u8path(path), std::ios_base::in | std::ios_base::binary | std::ios_base::ate);
+            resultPath = cld::fs::u8path(path);
         }
         else
         {
@@ -1385,17 +1385,17 @@ public:
             {
                 if (includeTag.includeToken->getValue() != "include_next")
                 {
-                    auto dir = cld::fs::to_path(m_files[m_currentFile].path);
+                    auto dir = cld::fs::u8path(m_files[m_currentFile].path);
                     dir.remove_filename();
                     if (cld::fs::exists(dir))
                     {
-                        candidates.push_back(dir);
+                        candidates.push_back(dir.string());
                     }
                     else
                     {
                         // If we are not in a current file it's probably due to it being stdin or similar.
                         // For those cases add the current working directory to the include candidates
-                        candidates.emplace_back(cld::fs::current_path());
+                        candidates.emplace_back(cld::fs::current_path().string());
                     }
                 }
                 candidates.insert(candidates.end(), m_ppOptions.includeQuoteDirectories.begin(),
@@ -1407,13 +1407,13 @@ public:
                               m_ppOptions.systemDirectories.end());
             if (includeTag.includeToken->getValue() == "include_next")
             {
-                auto dir = cld::fs::to_path(m_files[m_currentFile].path);
+                auto dir = cld::fs::u8path(m_files[m_currentFile].path);
                 dir.remove_filename();
                 auto thisDir = std::find_if(candidates.begin(), candidates.end(),
-                                            [&](const cld::fs::path& value)
+                                            [&](const std::string& value)
                                             {
                                                 std::error_code ec;
-                                                return cld::fs::equivalent(value, dir, ec);
+                                                return cld::fs::equivalent(cld::fs::u8path(value), dir, ec);
                                             });
                 if (thisDir != candidates.end())
                 {
@@ -1422,8 +1422,8 @@ public:
             }
             for (auto iter = candidates.begin(); iter != candidates.end(); iter++)
             {
-                auto filename = *iter;
-                filename /= cld::to_u8string(path);
+                auto filename = cld::fs::u8path(*iter);
+                filename /= cld::fs::u8path(path);
                 result.open(filename, std::ios_base::in | std::ios_base::binary | std::ios_base::ate);
                 if (!result.is_open())
                 {
@@ -1434,13 +1434,13 @@ public:
                                            [iter](std::string_view path1)
                                            {
                                                std::error_code ec1;
-                                               return cld::fs::equivalent(cld::to_u8string(path1), *iter, ec1);
+                                               return cld::fs::equivalent(cld::fs::u8path(path1), *iter, ec1);
                                            });
                 if (!systemHeader && isQuoted && m_files[m_currentFile].systemHeader)
                 {
-                    auto dir1 = cld::fs::to_path(m_files[m_currentFile].path);
+                    auto dir1 = cld::fs::u8path(m_files[m_currentFile].path);
                     dir1.remove_filename();
-                    systemHeader = *iter == dir1;
+                    systemHeader = *iter == dir1.u8string();
                 }
                 break;
             }
@@ -1454,7 +1454,7 @@ public:
         }
         resultPath = cld::fs::absolute(resultPath);
         resultPath = resultPath.lexically_normal();
-        auto cachedResult = m_includeGuardOptCache.find(cld::to_string(resultPath));
+        auto cachedResult = m_includeGuardOptCache.find(resultPath.u8string());
         if (cachedResult != m_includeGuardOptCache.end()
             && std::all_of(cachedResult->second.neededMacroValues.begin(), cachedResult->second.neededMacroValues.end(),
                            [&](auto&& pair) { return m_defines.count(pair.first) != pair.second; }))
@@ -1470,7 +1470,7 @@ public:
 
         bool errors = false;
         auto newFile =
-            cld::Lexer::tokenize(std::move(text), &m_languageOptions, m_reporter, &errors, cld::to_string(resultPath));
+            cld::Lexer::tokenize(std::move(text), &m_languageOptions, m_reporter, &errors, resultPath.u8string());
         if (errors)
         {
             m_errorsOccurred = true;

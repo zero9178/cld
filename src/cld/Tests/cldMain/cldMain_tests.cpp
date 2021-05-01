@@ -31,14 +31,14 @@ TEST_CASE("Commandline options", "[cld]")
             std::vector<std::string_view> vector = {"-c", "main.c"};
             auto ret = cld::main(vector);
             CHECK(ret == 0);
-            CHECK(cld::fs::exists(u8"main.o"));
+            CHECK(cld::fs::exists(cld::fs::u8path("main.o")));
         }
         SECTION("LLVM")
         {
             std::vector<std::string_view> vector = {"-c", "main.c", "-emit-llvm"};
             auto ret = cld::main(vector);
             CHECK(ret == 0);
-            CHECK(cld::fs::exists(u8"main.bc"));
+            CHECK(cld::fs::exists(cld::fs::u8path("main.bc")));
         }
         CLD_MAIN_PRODUCES(ProducesError(CANNOT_COMPILE_TO_OBJECT_FILE_AND_ASSEMBLY_AT_THE_SAME_TIME),
                           {"-c", "main.c", "-S"});
@@ -53,14 +53,14 @@ TEST_CASE("Commandline options", "[cld]")
             std::vector<std::string_view> vector = {"-S", "main.c"};
             auto ret = cld::main(vector);
             CHECK(ret == 0);
-            CHECK(cld::fs::exists(u8"main.s"));
+            CHECK(cld::fs::exists(cld::fs::u8path("main.s")));
         }
         SECTION("LLVM")
         {
             std::vector<std::string_view> vector = {"-S", "main.c", "-emit-llvm"};
             auto ret = cld::main(vector);
             CHECK(ret == 0);
-            CHECK(cld::fs::exists(u8"main.ll"));
+            CHECK(cld::fs::exists(cld::fs::u8path("main.ll")));
         }
         CLD_MAIN_PRODUCES(ProducesError(CANNOT_COMPILE_TO_ASSEMBLY_AND_PREPROCESS_AT_THE_SAME_TIME),
                           {"-S", "main.c", "-E"});
@@ -77,10 +77,10 @@ TEST_CASE("Commandline options", "[cld]")
     SECTION("output file")
     {
         auto dummyFile = createInclude("main.c", "int main(void) { return 0; }");
-        cld::fs::remove(u8"test.o");
+        cld::fs::remove(cld::fs::u8path("test.o"));
         std::vector<std::string_view> vector = {"-c", "main.c", "-o", "test.o"};
         CHECK(cld::main(vector) == 0);
-        CHECK(cld::fs::exists(u8"test.o"));
+        CHECK(cld::fs::exists(cld::fs::u8path("test.o")));
     }
     SECTION("disabling warnings")
     {

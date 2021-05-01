@@ -35,8 +35,8 @@ cld::CGLLVM::CodeGenerator::CodeGenerator(llvm::Module& module,
         llvm::errs() << "ABI for this platform has not yet been implemented. Sorry";
         std::terminate();
     }
-    auto fullPath = cld::fs::to_path(m_sourceInterface.getFiles()[1].path);
-    module.setSourceFileName(cld::to_string(fullPath.filename()));
+    auto fullPath = cld::fs::u8path(m_sourceInterface.getFiles()[1].path);
+    module.setSourceFileName(fullPath.filename().u8string());
     if (m_options.debugEmission == cld::CGLLVM::DebugEmission::None)
     {
         return;
@@ -45,10 +45,10 @@ cld::CGLLVM::CodeGenerator::CodeGenerator(llvm::Module& module,
     llvm::DIFile* mainFile = nullptr;
     for (auto& iter : m_sourceInterface.getFiles())
     {
-        auto path = cld::fs::to_path(iter.path);
+        auto path = cld::fs::u8path(iter.path);
         auto dir = path;
         dir.remove_filename();
-        auto* file = m_debugInfo->createFile(cld::to_string(path.filename()), cld::to_string(dir));
+        auto* file = m_debugInfo->createFile(path.filename().u8string(), dir.u8string());
         if (path == fullPath)
         {
             mainFile = file;

@@ -83,7 +83,7 @@ int main()
         options.enabledWarnings.erase("macro-redefined");
         bool errors = false;
         auto pptokens = cld::Lexer::tokenize(std::move(input), &options, &llvm::errs(), &errors,
-                                             cld::to_string(cld::fs::current_path() / "test.c"));
+                                             (cld::fs::current_path() / "test.c").u8string());
         if (errors)
         {
             std::cerr << "Lexer failed";
