@@ -55,7 +55,16 @@ public:
 
     static Triple native();
 
-    bool operator==(const Triple& rhs) const = default;
+    bool operator==(const Triple& rhs) const
+    {
+        return m_architecture == rhs.m_architecture && m_operatingSystem == rhs.m_operatingSystem
+               && m_environment == rhs.m_environment;
+    }
+
+    bool operator!=(const Triple& rhs) const
+    {
+        return !(rhs == *this);
+    }
 };
 
 } // namespace cld

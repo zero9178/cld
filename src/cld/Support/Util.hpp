@@ -612,19 +612,43 @@ public:
     not_null& operator+=(std::ptrdiff_t) = delete;
     not_null& operator-=(std::ptrdiff_t) = delete;
     void operator[](std::ptrdiff_t) const = delete;
-
-    template <class U>
-    constexpr auto operator<=>(not_null<U> other) const
-    {
-        return m_ptr <=> other.m_ptr;
-    }
-
-    template <class U>
-    constexpr bool operator==(not_null<U> other) const
-    {
-        return m_ptr == other.m_ptr;
-    }
 };
+
+template <class T, class U>
+bool operator==(not_null<T> lhs, not_null<U> rhs)
+{
+    return lhs.get() == rhs.get();
+}
+
+template <class T, class U>
+bool operator!=(not_null<T> lhs, not_null<U> rhs)
+{
+    return !(rhs == lhs);
+}
+
+template <class T, class U>
+bool operator<(not_null<T> lhs, not_null<U> rhs)
+{
+    return lhs.get() < rhs.get();
+}
+
+template <class T, class U>
+bool operator>(not_null<T> lhs, not_null<U> rhs)
+{
+    return rhs < lhs;
+}
+
+template <class T, class U>
+bool operator<=(not_null<T> lhs, not_null<U> rhs)
+{
+    return !(rhs < lhs);
+}
+
+template <class T, class U>
+bool operator>=(not_null<T> lhs, not_null<U> rhs)
+{
+    return !(lhs < rhs);
+}
 
 template <class T, class U>
 std::ptrdiff_t operator-(not_null<T>, not_null<U>) = delete;

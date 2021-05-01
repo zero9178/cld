@@ -126,6 +126,8 @@ public:
 
     [[nodiscard]] bool operator==(const Type& rhs) const;
 
+    [[nodiscard]] bool operator!=(const Type& rhs) const;
+
     [[nodiscard]] std::uint64_t getSizeOf(const ProgramInterface& program) const;
 
     [[nodiscard]] std::uint64_t getAlignOf(const ProgramInterface& program) const;

@@ -33,7 +33,15 @@ class RecursiveVisitor
 
         Iterator(const ValueType* curr, const Callable* nextFunc) : m_curr(curr), m_nextFunc(nextFunc) {}
 
-        bool operator==(const Iterator& rhs) const noexcept = default;
+        bool operator==(const Iterator& rhs) const noexcept
+        {
+            return m_curr == rhs.m_curr;
+        }
+
+        bool operator!=(const Iterator& rhs) const noexcept
+        {
+            return !(*this == rhs);
+        }
 
         const ValueType& operator*() const noexcept
         {

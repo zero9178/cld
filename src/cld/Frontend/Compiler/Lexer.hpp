@@ -289,7 +289,14 @@ struct NonCharString
         return std::equal(characters.begin(), characters.end(), wideString.begin(), wideString.end());
     }
 
-    auto operator<=>(const NonCharString& other) const = default;
+    bool operator==(const NonCharString& other) const
+    {
+        if (type != other.type)
+        {
+            return false;
+        }
+        return std::equal(characters.begin(), characters.end(), other.characters.begin(), other.characters.end());
+    }
 };
 
 class CToken final : public TokenBase
