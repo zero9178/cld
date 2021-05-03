@@ -154,8 +154,4 @@ constexpr auto TYPE_NEXT_FN = [](const Type& type) -> const Type*
         [](const FunctionType& functionType) -> const Type* { return &functionType.getReturnType(); });
 };
 
-constexpr auto DECL_NEXT_FN = [](const Useable& useable) -> const Useable* {
-    return useable.match([](const auto& value) -> const Useable* { return value.getNext(); },
-                         [](const BuiltinFunction&) -> const Useable* { CLD_UNREACHABLE; });
-};
 } // namespace cld::Semantics

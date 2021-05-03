@@ -2327,6 +2327,8 @@ enum class InlineKind : std::uint8_t
     None,
 };
 
+class FunctionGroup;
+
 class FunctionDeclaration final : public Declaration, public AttributeHolder<FunctionAttribute>
 {
     FunctionType m_type;
@@ -2345,15 +2347,12 @@ public:
         return m_type;
     }
 
-    [[nodiscard]] bool isInline() const noexcept
-    {
-        return m_inlineKind != InlineKind::None;
-    }
-
     [[nodiscard]] InlineKind getInlineKind() const noexcept
     {
         return m_inlineKind;
     }
+
+    FunctionGroup getFunctionGroup() const noexcept;
 
     const Useable* getNext() const
     {
@@ -2523,15 +2522,12 @@ public:
         m_compoundStatement = std::move(compoundStatement);
     }
 
-    [[nodiscard]] bool isInline() const noexcept
-    {
-        return m_inlineKind != InlineKind::None;
-    }
-
     [[nodiscard]] InlineKind getInlineKind() const noexcept
     {
         return m_inlineKind;
     }
+
+    FunctionGroup getFunctionGroup() const noexcept;
 
     const FunctionDeclaration* getNext() const
     {
@@ -2612,6 +2608,141 @@ public:
     [[nodiscard]] Kind getKind() const noexcept
     {
         return m_kind;
+    }
+};
+
+class FunctionGroup
+{
+    const Useable* m_first;
+
+    class Iterator
+    {
+        const Useable* m_curr;
+
+    public:
+        using value_type = const Useable;
+        using reference = const Useable&;
+        using pointer = const Useable*;
+        using iterator_category = std::forward_iterator_tag;
+        using difference_type = void;
+
+        Iterator() : m_curr(nullptr) {}
+
+        explicit Iterator(const Useable* curr) : m_curr(curr) {}
+
+        bool operator==(const Iterator& rhs) const noexcept
+        {
+            return m_curr == rhs.m_curr;
+        }
+
+        bool operator!=(const Iterator& rhs) const noexcept
+        {
+            return !(*this == rhs);
+        }
+
+        reference operator*() const noexcept
+        {
+            CLD_ASSERT(m_curr);
+            return *m_curr;
+        }
+
+        pointer operator->() const noexcept
+        {
+            return m_curr;
+        }
+
+        Iterator& operator++(int) noexcept
+        {
+            CLD_ASSERT(m_curr);
+            m_curr = m_curr->match([](const FunctionDefinition& def) -> const Useable* { return def.getNext(); },
+                                   [](const FunctionDeclaration& decl) -> const Useable* { return decl.getNext(); },
+                                   [](const auto&) -> const Useable* { CLD_UNREACHABLE; });
+            return *this;
+        }
+
+        Iterator operator++() noexcept
+        {
+            auto before = *this;
+            this->operator++(0);
+            return before;
+        }
+    };
+
+public:
+    explicit FunctionGroup(cld::not_null<const FunctionDeclaration> decl) : m_first(&decl->getFirst()) {}
+
+    explicit FunctionGroup(cld::not_null<const FunctionDefinition> decl) : m_first(&decl->getFirst()) {}
+
+    using value_type = const Useable;
+    using reference = const Useable&;
+    using const_reference = const Useable&;
+    using iterator = Iterator;
+    using const_iterator = iterator;
+
+    [[nodiscard]] const_iterator begin() const
+    {
+        return Iterator(m_first);
+    }
+
+    [[nodiscard]] const_iterator end() const
+    {
+        return Iterator{};
+    }
+
+    [[nodiscard]] const_iterator cbegin() const
+    {
+        return begin();
+    }
+
+    [[nodiscard]] const_iterator cend() const
+    {
+        return end();
+    }
+
+    [[nodiscard]] bool isInline() const
+    {
+        return std::none_of(
+            begin(), end(),
+            [](const Useable& useable)
+            {
+                return useable.match([](const FunctionDefinition& def) -> InlineKind { return def.getInlineKind(); },
+                                     [](const FunctionDeclaration& decl) -> InlineKind { return decl.getInlineKind(); },
+                                     [](const auto&) -> InlineKind { CLD_UNREACHABLE; })
+                       == InlineKind::None;
+            });
+    }
+
+    [[nodiscard]] bool isExternInline() const
+    {
+        for (auto& useable : *this)
+        {
+            auto kind =
+                useable.match([](const FunctionDefinition& def) -> InlineKind { return def.getInlineKind(); },
+                              [](const FunctionDeclaration& decl) -> InlineKind { return decl.getInlineKind(); },
+                              [](const auto&) -> InlineKind { CLD_UNREACHABLE; });
+            switch (kind)
+            {
+                case InlineKind::None: return false;
+                case InlineKind::Inline: return true;
+                default: continue;
+            }
+        }
+        return false;
+    }
+
+    [[nodiscard]] bool isDefined() const
+    {
+        return getDefinition();
+    }
+
+    [[nodiscard]] const FunctionDefinition* getDefinition() const
+    {
+        auto result = std::find_if(begin(), end(), std::mem_fn(&Useable::is<FunctionDefinition>));
+        if (result == end())
+        {
+            return nullptr;
+        }
+        return &result->as<FunctionDefinition>();
     }
 };
 

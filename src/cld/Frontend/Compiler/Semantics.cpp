@@ -957,3 +957,13 @@ cld::Semantics::FunctionDeclaration::FunctionDeclaration(FunctionType type, cld:
         setUses(previous->getUses());
     }
 }
+
+cld::Semantics::FunctionGroup cld::Semantics::FunctionDeclaration::getFunctionGroup() const noexcept
+{
+    return FunctionGroup(this);
+}
+
+cld::Semantics::FunctionGroup cld::Semantics::FunctionDefinition::getFunctionGroup() const noexcept
+{
+    return FunctionGroup(this);
+}

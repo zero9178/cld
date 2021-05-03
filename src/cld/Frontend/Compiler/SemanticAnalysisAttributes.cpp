@@ -727,7 +727,7 @@ void cld::Semantics::SemanticAnalysis::apply(AffectsVariableFunction applicant,
         },
         [&](not_null<FunctionDeclaration> decl)
         {
-            if (!decl->isInline())
+            if (!decl->getFunctionGroup().isInline())
             {
                 decl->addAttribute(DllImportAttribute{});
                 return;

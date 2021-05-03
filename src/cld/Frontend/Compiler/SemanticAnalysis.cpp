@@ -68,24 +68,12 @@ cld::Semantics::TranslationUnit cld::Semantics::SemanticAnalysis::visit(const Sy
         (void)name;
         if (auto* decl = std::get_if<FunctionDeclaration*>(&declared.declared))
         {
-            bool isInline = false;
-            bool defined = false;
-            for (auto& iter : RecursiveVisitor((*decl)->getFirst(), DECL_NEXT_FN))
-            {
-                if (iter.is<FunctionDefinition>())
-                {
-                    defined = true;
-                }
-                iter.match([&](const FunctionDefinition& def) { isInline = isInline || def.isInline(); },
-                           [&](const FunctionDeclaration& def) { isInline = isInline || def.isInline(); },
-                           [](const auto&) { CLD_UNREACHABLE; });
-            }
-
             // C99 6.7.4§6:
             // For a function with external linkage, the following restrictions apply:
             // If a function is declared with an inline function specifier, then it shall also be defined in the
             // same translation unitprogram.
-            if (isInline && (*decl)->getLinkage() == Linkage::External && !defined)
+            if ((*decl)->getLinkage() == Linkage::External && (*decl)->getFunctionGroup().isInline()
+                && !(*decl)->getFunctionGroup().isDefined())
             {
                 log(Errors::Semantics::NO_DEFINITION_FOR_INLINE_FUNCTION_N_FOUND.args(
                     *(*decl)->getNameToken(), m_sourceInterface, *(*decl)->getNameToken()));
@@ -801,7 +789,8 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
         // An inline definition of a function with external linkage shall not contain a definition of a
         // modifiable object with static storage duration, and shall not contain a reference to an
         // identifier with internal linkage.
-        if (getCurrentFunctionScope() && getCurrentFunctionScope()->currentFunction->isInline()
+        if (getCurrentFunctionScope()
+            && getCurrentFunctionScope()->currentFunction->getInlineKind() == InlineKind::InlineDefinition
             && getCurrentFunctionScope()->currentFunction->getLinkage() == Linkage::External
             && declaration->getKind() == VariableDeclaration::Definition
             && declaration->getLifetime() == Lifetime::Static && !declaration->getType().isConst())

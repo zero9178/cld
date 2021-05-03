@@ -546,7 +546,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         [](const BuiltinFunction* builtinFunction) -> const Type& { return builtinFunction->getType(); },
         [&](const auto* ptr) -> const Type&
         {
-            if (getCurrentFunctionScope() && getCurrentFunctionScope()->currentFunction->isInline()
+            if (getCurrentFunctionScope() && getCurrentFunctionScope()->currentFunction->getFunctionGroup().isInline()
                 && getCurrentFunctionScope()->currentFunction->getLinkage() == Linkage::External
                 && ptr->getLinkage() == Linkage::Internal)
             {
