@@ -1161,7 +1161,7 @@ std::pair<StateMachine, bool> CharacterLiteral::advance(char c, Context& context
 std::pair<StateMachine, bool> StringLiteral::advance(char c, Context& context)
 {
     if (c == '"'
-        && (std::find_if_not(characters.rbegin(), characters.rend(), [](char c) { return c == '\\'; })
+        && (std::find_if_not(characters.rbegin(), characters.rend(), cld::bind_front(std::equal_to<>{}, '\\'))
             - characters.rbegin())
                    % 2
                == 0)
@@ -1693,8 +1693,9 @@ cld::PPSourceObject cld::Lexer::tokenize(std::string source, not_null<const Lang
                                                                                        {"?\?!", '|'},
                                                                                        {"?\?>", '}'},
                                                                                        {"?\?-", '~'}}};
-                const auto result = std::find_if(mapping.begin(), mapping.end(),
-                                                 [&view](const auto& pair) { return pair.first == view; });
+                const auto result = std::find_if(
+                    mapping.begin(), mapping.end(),
+                    cld::compose(cld::bind_front(std::equal_to<>{}, view), &decltype(mapping)::value_type::first));
                 CLD_ASSERT(result != mapping.end());
                 characterToSourceSpace.emplace_back(charactersSpace.size(), pos, pos + view.size());
                 charactersSpace += result->second;
@@ -2311,7 +2312,7 @@ std::optional<std::pair<CToken::ValueType, CToken::Type>>
             isFloat = true;
             return false;
         }
-        return std::none_of(legalValues.begin(), legalValues.end(), [c](char allowed) { return allowed == c; });
+        return std::find(legalValues.begin(), legalValues.end(), c) == legalValues.end();
     };
     const auto* suffixBegin = std::find_if(begin + (isHex ? 2 : 0), end, searchFunction);
     // If it's a float it might still have an exponent part. If it's non hex this is e [optional + or -] then
@@ -2354,14 +2355,14 @@ std::optional<std::pair<CToken::ValueType, CToken::Type>>
     if (!isHex && !isFloat && *begin == '0')
     {
         isHexOrOctal = true;
-        const auto* result = std::find_if(begin, suffixBegin, [](char c) { return c >= '8'; });
+        const auto* result = std::find_if(begin, suffixBegin, cld::bind_front(std::less_equal<>{}, '8'));
         while (result != suffixBegin)
         {
             errorsOccurred = true;
             auto arrowBegin = beginLocation + std::distance(begin, result);
             context.report(cld::Errors::Lexer::INVALID_OCTAL_CHARACTER, arrowBegin, std::string(1, *result),
                            std::forward_as_tuple(context.token, arrowBegin));
-            result = std::find_if(result + 1, suffixBegin, [](char c) { return c >= '8'; });
+            result = std::find_if(result + 1, suffixBegin, cld::bind_front(std::less_equal<>{}, '8'));
         }
     }
 
@@ -2371,12 +2372,12 @@ std::optional<std::pair<CToken::ValueType, CToken::Type>>
     {
         constexpr std::array variants = {"u",  "U",  "ul",  "Ul",  "uL",  "UL",  "uLL", "ULL", "ull", "Ull", "lu", "lU",
                                          "Lu", "LU", "LLu", "LLU", "llu", "llU", "l",   "L",   "ll",  "LL",  ""};
-        valid = std::any_of(variants.begin(), variants.end(), cld::bind_front(std::equal_to{}, suffix));
+        valid = std::find(variants.begin(), variants.end(), suffix) != variants.end();
     }
     else
     {
         constexpr std::array variants = {"f", "l", "F", "L", ""};
-        valid = std::any_of(variants.begin(), variants.end(), cld::bind_front(std::equal_to{}, suffix));
+        valid = std::find(variants.begin(), variants.end(), suffix) != variants.end();
     }
     if (!valid)
     {

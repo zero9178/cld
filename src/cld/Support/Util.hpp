@@ -557,6 +557,19 @@ auto bind_front(F&& f, Args&&... args)
                                                                          std::forward<Args>(args)...);
 }
 
+template <class F, class G>
+constexpr auto compose(F&& f, G&& g)
+{
+    return [f = std::forward<F>(f), g = std::forward<G>(g)](auto&& value)
+    {
+        static_assert(std::is_invocable_v<std::decay_t<G>, std::decay_t<decltype(value)>>);
+        static_assert(
+            std::is_invocable_v<std::decay_t<F>, decltype(std::invoke(std::declval<std::decay_t<G>>(),
+                                                                      std::forward<decltype(value)>(value)))>);
+        return std::invoke(f, std::invoke(g, std::forward<decltype(value)>(value)));
+    };
+}
+
 template <class T>
 class not_null
 {
