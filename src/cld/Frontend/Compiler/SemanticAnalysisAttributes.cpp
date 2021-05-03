@@ -767,7 +767,7 @@ void cld::Semantics::SemanticAnalysis::apply(AffectsFunction applicant,
     }
     if (attribute.attribute.indices.empty()
         && std::none_of(ft.getParameters().begin(), ft.getParameters().end(),
-                        [](const FunctionType::Parameter& param) { return param.type->is<PointerType>(); }))
+                        cld::compose(&Type::is<PointerType>, &FunctionType::Parameter::type)))
     {
         log(Warnings::Semantics::FUNCTION_N_WITH_NONNULL_ATTRIBUTE_DOES_NOT_HAVE_ANY_POINTER_PARAMETERS.args(
             *attribute.name, m_sourceInterface,

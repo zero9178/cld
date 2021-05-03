@@ -33,8 +33,8 @@ bool expect(cld::Lexer::TokenType tokenType, cld::Lexer::PPTokenIterator& begin,
 cld::Lexer::PPTokenIterator findNewline(cld::Lexer::PPTokenIterator begin, cld::Lexer::PPTokenIterator end)
 {
     return std::find_if(begin, end,
-                        [](const cld::Lexer::PPToken& token)
-                        { return token.getTokenType() == cld::Lexer::TokenType::Newline; });
+                        cld::compose(cld::bind_front(std::equal_to<>{}, cld::Lexer::TokenType::Newline),
+                                     &cld::Lexer::PPToken::getTokenType));
 }
 
 void skipLine(cld::Lexer::PPTokenIterator& begin, cld::Lexer::PPTokenIterator end)
@@ -51,7 +51,7 @@ void skipUntil(cld::Lexer::PPTokenIterator& begin, cld::Lexer::PPTokenIterator e
                          [&tokens](const cld::Lexer::PPToken& token)
                          {
                              return std::any_of(tokens.begin(), tokens.end(),
-                                                [&token](auto&& value) { return token.getTokenType() == value; });
+                                                cld::bind_front(std::equal_to<>{}, token.getTokenType()));
                          });
 }
 

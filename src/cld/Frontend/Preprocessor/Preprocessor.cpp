@@ -368,10 +368,10 @@ class Preprocessor final : private cld::PPSourceInterface
             if (closeParenthesesOrComma == end)
             {
                 // There can be infinitely many newlines in between the name and the (
-                auto* openParentheses =
-                    std::find_if(&namePos, end,
-                                 [](const cld::Lexer::PPToken& token)
-                                 { return token.getTokenType() == cld::Lexer::TokenType::OpenParentheses; });
+                auto* openParentheses = std::find_if(
+                    &namePos, end,
+                    cld::compose(cld::bind_front(std::equal_to<>{}, cld::Lexer::TokenType::OpenParentheses),
+                                 &cld::Lexer::PPToken::getTokenType));
                 log(cld::Errors::Parser::EXPECTED_N.args(*(closeParenthesesOrComma - 1), *this,
                                                          cld::Lexer::TokenType::CloseParentheses,
                                                          *(closeParenthesesOrComma - 1)));
@@ -600,10 +600,10 @@ class Preprocessor final : private cld::PPSourceInterface
             }
             if (result->second.argumentList)
             {
-                auto* maybeOpenParenth = std::find_if(iter + 1, tokens.data() + tokens.size(),
-                                                      [](const cld::Lexer::PPToken& token) {
-                                                          return token.getTokenType() != cld::Lexer::TokenType::Newline;
-                                                      });
+                auto* maybeOpenParenth =
+                    std::find_if(iter + 1, tokens.data() + tokens.size(),
+                                 cld::compose(cld::bind_front(std::not_equal_to<>{}, cld::Lexer::TokenType::Newline),
+                                              &cld::Lexer::PPToken::getTokenType));
                 if (maybeOpenParenth == tokens.data() + tokens.size()
                     || maybeOpenParenth->getTokenType() != cld::Lexer::TokenType::OpenParentheses)
                 {
@@ -685,7 +685,7 @@ class Preprocessor final : private cld::PPSourceInterface
 
             auto argumentsInReplacement =
                 filterTokens(result->second.replacement, cld::Lexer::TokenType::Identifier,
-                             [&nameToIndex](std::string_view value) { return nameToIndex.count(value); });
+                             cld::bind_front(&decltype(nameToIndex)::count, std::ref(nameToIndex)));
             m_substitutions[i] = cld::Source::Substitution{*result->second.identifierPos, *namePos, *iter, false};
 
             auto concatOps = filterTokens(result->second.replacement, cld::Lexer::TokenType::DoublePound,
@@ -842,7 +842,7 @@ class Preprocessor final : private cld::PPSourceInterface
             auto string = curr->getValue();
             auto result =
                 std::find_if(argumentList.begin(), argumentList.end(),
-                             [string](const cld::Lexer::PPToken& token) { return string == token.getValue(); });
+                             cld::compose(cld::bind_front(std::equal_to<>{}, string), &cld::Lexer::PPToken::getValue));
             if (result == argumentList.end())
             {
                 argumentList.push_back(*(curr++));
@@ -984,10 +984,7 @@ class Preprocessor final : private cld::PPSourceInterface
         auto value = analysis.evaluateConstantExpression(*exp);
         if (!value)
         {
-            for (auto& iter : value.error())
-            {
-                log(iter);
-            }
+            std::for_each(value.error().begin(), value.error().end(), cld::bind_front(&Preprocessor::log, this));
             return {};
         }
         return static_cast<bool>(*value);
@@ -1620,19 +1617,20 @@ public:
         {
             for (const auto* iter = macro->replacement.begin(); iter != macro->replacement.end(); iter++)
             {
-                if (iter->getTokenType() == cld::Lexer::TokenType::Pound)
+                if (iter->getTokenType() != cld::Lexer::TokenType::Pound)
                 {
-                    iter++;
-                    if (iter == macro->replacement.end() || iter->getTokenType() != cld::Lexer::TokenType::Identifier
-                        || (std::none_of(macro->argumentList->begin(),
-                                         macro->argumentList->end() - (macro->hasEllipse ? 1 : 0),
-                                         [&iter](const cld::Lexer::PPToken& token)
-                                         { return token.getValue() == iter->getValue(); })
-                            && (!macro->hasEllipse || iter->getValue() != "__VA_ARGS__")))
-                    {
-                        log(cld::Errors::PP::EXPECTED_AN_ARGUMENT_AFTER_POUND.args(*iter, *this, *(iter - 1), *iter));
-                        errors = true;
-                    }
+                    continue;
+                }
+                iter++;
+                if (iter == macro->replacement.end() || iter->getTokenType() != cld::Lexer::TokenType::Identifier
+                    || (std::none_of(macro->argumentList->begin(),
+                                     macro->argumentList->end() - (macro->hasEllipse ? 1 : 0),
+                                     cld::compose(cld::bind_front(std::equal_to<>{}, iter->getValue()),
+                                                  &cld::Lexer::PPToken::getValue))
+                        && (!macro->hasEllipse || iter->getValue() != "__VA_ARGS__")))
+                {
+                    log(cld::Errors::PP::EXPECTED_AN_ARGUMENT_AFTER_POUND.args(*iter, *this, *(iter - 1), *iter));
+                    errors = true;
                 }
             }
         }
@@ -1660,8 +1658,8 @@ public:
             errors = true;
         }
         if (!m_visitingScratchPad
-            && std::any_of(PREDEFINED_MACRO_NAMES.begin(), PREDEFINED_MACRO_NAMES.end(),
-                           cld::bind_front(std::equal_to{}, name)))
+            && std::find(PREDEFINED_MACRO_NAMES.begin(), PREDEFINED_MACRO_NAMES.end(), name)
+                   != PREDEFINED_MACRO_NAMES.end())
         {
             log(cld::Errors::PP::DEFINING_BUILTIN_MACRO_N_IS_NOT_ALLOWED.args(*macro->identifierPos, *this,
                                                                               *macro->identifierPos));

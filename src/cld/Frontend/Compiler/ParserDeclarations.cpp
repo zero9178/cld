@@ -74,8 +74,8 @@ TranslationUnit cld::Parser::parseTranslationUnit(Lexer::CTokenIterator& begin, 
             // I'd love to make this a GNU only extension but MinGW headers have this defect and I don't want to
             // to switch to gnu99 just to use MinGW
             begin = std::find_if_not(begin, end,
-                                     [](const Lexer::CToken& token)
-                                     { return token.getTokenType() == Lexer::TokenType ::SemiColon; });
+                                     cld::compose(cld::bind_front(std::equal_to<>{}, Lexer::TokenType::SemiColon),
+                                                  &Lexer::CToken::getTokenType));
             auto result = parseExternalDeclaration(begin, end, context.withRecoveryTokens(firstExternalDeclarationSet));
             if (result)
             {
@@ -635,7 +635,8 @@ std::optional<cld::Syntax::StructOrUnionSpecifier>
     const auto* start = begin;
     const auto* temp = begin;
     begin = std::find_if_not(
-        begin, end, [](const Lexer::CToken& token) { return token.getTokenType() == Lexer::TokenType::GNUExtension; });
+        begin, end,
+        cld::compose(cld::bind_front(std::equal_to<>{}, Lexer::TokenType::GNUExtension), &Lexer::CToken::getTokenType));
     bool hadExtension = temp != begin;
     auto extensionReset = context.enableExtensions(hadExtension);
 

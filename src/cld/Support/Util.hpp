@@ -502,10 +502,7 @@ class BindFrontImpl
     std::tuple<Args...> front;
 
 public:
-    template <class F2, class... Args2>
-    explicit BindFrontImpl(F2&& f2, Args2&&... args2) : f(std::forward<F2>(f2)), front(std::forward<Args2>(args2)...)
-    {
-    }
+    explicit BindFrontImpl(F f, std::tuple<Args...> args) : f(std::move(f)), front(std::move(args)) {}
 
     template <class... Last>
     decltype(auto) operator()(Last&&... last) & noexcept(std::is_nothrow_invocable_v<F, Args..., Last...>)
@@ -553,8 +550,7 @@ public:
 template <class F, class... Args>
 auto bind_front(F&& f, Args&&... args)
 {
-    return detail::BindFrontImpl<std::decay_t<F>, std::decay_t<Args>...>(std::forward<F>(f),
-                                                                         std::forward<Args>(args)...);
+    return detail::BindFrontImpl(std::forward<F>(f), std::make_tuple(std::forward<Args>(args)...));
 }
 
 template <class F, class G>
