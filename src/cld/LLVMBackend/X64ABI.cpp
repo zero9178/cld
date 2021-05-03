@@ -245,8 +245,10 @@ llvm::AttributeList cld::CGLLVM::X64ABI::generateFunctionAttributes(llvm::Attrib
     llvm::LLVMContext& context = llvmFunctionType->getContext();
     if (std::holds_alternative<X64ABIImpl::PointerToTemporary>(adjustment.returnType))
     {
-        attributesIn = attributesIn.addAttribute(context, 1, llvm::Attribute::StructRet);
-        attributesIn = attributesIn.addAttribute(context, 1, llvm::Attribute::NoAlias);
+        attributesIn = attributesIn.addAttributes(llvmFunctionType->getContext(), 1,
+                                                  llvm::AttrBuilder()
+                                                      .addStructRetAttr(llvmFunctionType->getParamType(0))
+                                                      .addAttribute(llvm::Attribute::NoAlias));
         argStart = 1;
     }
     else if (std::holds_alternative<X64ABIImpl::Unchanged>(adjustment.returnType)

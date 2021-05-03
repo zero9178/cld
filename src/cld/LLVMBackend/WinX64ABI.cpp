@@ -54,8 +54,10 @@ llvm::AttributeList cld::CGLLVM::WinX64ABI::generateFunctionAttributes(llvm::Att
     auto& adjustments = getAdjustment(functionType);
     if (adjustments.returnType == WinX64Impl::PointerToTemporary)
     {
-        attributesIn = attributesIn.addAttribute(llvmFunctionType->getContext(), 1, llvm::Attribute::StructRet);
-        attributesIn = attributesIn.addAttribute(llvmFunctionType->getContext(), 1, llvm::Attribute::NoAlias);
+        attributesIn = attributesIn.addAttributes(llvmFunctionType->getContext(), 1,
+                                                  llvm::AttrBuilder()
+                                                      .addStructRetAttr(llvmFunctionType->getParamType(0))
+                                                      .addAttribute(llvm::Attribute::NoAlias));
     }
     return attributesIn;
 }
