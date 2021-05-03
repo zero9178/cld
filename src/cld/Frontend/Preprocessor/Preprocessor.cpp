@@ -685,7 +685,7 @@ class Preprocessor final : private cld::PPSourceInterface
 
             auto argumentsInReplacement =
                 filterTokens(result->second.replacement, cld::Lexer::TokenType::Identifier,
-                             cld::bind_front(&decltype(nameToIndex)::count, std::ref(nameToIndex)));
+                             [&nameToIndex](std::string_view value) { return nameToIndex.count(value); });
             m_substitutions[i] = cld::Source::Substitution{*result->second.identifierPos, *namePos, *iter, false};
 
             auto concatOps = filterTokens(result->second.replacement, cld::Lexer::TokenType::DoublePound,
