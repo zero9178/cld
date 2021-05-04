@@ -839,6 +839,9 @@ CREATE_ERROR(CANNOT_CAST_TO_NON_ARITHMETIC_TYPE_IN_ARITHMETIC_CONSTANT_EXPRESSIO
 CREATE_ERROR(INTEGER_MUST_EVALUATE_TO_NULL_TO_BE_COMPARABLE_WITH_POINTER,
              "Integer must evaluate to null to be comparable with pointer", Underline<0>);
 
+CREATE_ERROR(EXPRESSION_IN_OFFSETOF_IS_NOT_A_VALID_CONSTANT_EXPRESSION,
+             "Expression in 'offsetof' is not a valid constant expression", Underline<0>);
+
 // Return statement
 
 CREATE_ERROR(CANNOT_RETURN_NO_VALUE_FROM_FUNCTION_N_WITH_RETURN_TYPE_N,

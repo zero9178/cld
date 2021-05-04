@@ -13,6 +13,7 @@
 #include <tsl/ordered_map.h>
 
 #include "Attributes.hpp"
+#include "DiagnosticUtil.hpp"
 #include "LanguageOptions.hpp"
 #include "Lexer.hpp"
 
@@ -1530,22 +1531,24 @@ class BuiltinOffsetOf final : public ExpressionBase
     Lexer::CTokenIterator m_openParentheses;
 
 public:
-    using OffsetType =
-        std::variant<std::uint64_t, std::vector<std::variant<IntrVarPtr<ExpressionBase>, Lexer::CTokenIterator>>>;
+    using OffsetType = std::variant<std::uint64_t, std::vector<std::variant<IntrVarPtr<ExpressionBase>, const Field*>>>;
 
 private:
     OffsetType m_offset;
     Lexer::CTokenIterator m_closeParentheses;
+    std::optional<diag::PointRange> m_failedConstExpr;
 
 public:
     BuiltinOffsetOf(const LanguageOptions& options, Lexer::CTokenIterator builtinToken,
-                    Lexer::CTokenIterator openParentheses, OffsetType offset, Lexer::CTokenIterator closeParentheses)
+                    Lexer::CTokenIterator openParentheses, OffsetType offset, Lexer::CTokenIterator closeParentheses,
+                    std::optional<diag::PointRange> failedConstExpr = std::nullopt)
         : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, PrimitiveType(options.sizeTType, options),
                          ValueCategory::Rvalue),
           m_builtinToken(builtinToken),
           m_openParentheses(openParentheses),
           m_offset(std::move(offset)),
-          m_closeParentheses(closeParentheses)
+          m_closeParentheses(closeParentheses),
+          m_failedConstExpr(std::move(failedConstExpr))
     {
     }
 
@@ -1567,6 +1570,11 @@ public:
     [[nodiscard]] Lexer::CTokenIterator getCloseParentheses() const
     {
         return m_closeParentheses;
+    }
+
+    [[nodiscard]] std::optional<diag::PointRange> getFailedConstExpr() const
+    {
+        return m_failedConstExpr;
     }
 
     [[nodiscard]] Lexer::CTokenIterator begin() const

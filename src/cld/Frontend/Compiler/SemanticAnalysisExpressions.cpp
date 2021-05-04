@@ -696,6 +696,10 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         currentOffset += memLayout[iter].offset;
         currentType = memLayout[iter].type;
     }
+    bool runtimeEvaluated = false;
+    std::vector<std::variant<IntrVarPtr<ExpressionBase>, const Field*>> runtimeVariant;
+    runtimeVariant.emplace_back(&result->second);
+    std::optional<diag::PointRange> failedConstExpr;
     for (auto& iter : node.getMemberSuffix())
     {
         if (std::holds_alternative<Lexer::CTokenIterator>(iter))
@@ -719,6 +723,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                     *cld::get<Lexer::CTokenIterator>(iter), m_sourceInterface, *cld::get<Lexer::CTokenIterator>(iter)));
                 return std::make_unique<ErrorExpression>(std::move(retType), node);
             }
+            runtimeVariant.emplace_back(&subResult->second);
             range = llvm::ArrayRef(node.getMemberName(), cld::get<Lexer::CTokenIterator>(iter) + 1);
             for (auto& index : subResult->second.indices)
             {
@@ -741,26 +746,34 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                     range, m_sourceInterface, range, *currentType));
                 return std::make_unique<ErrorExpression>(std::move(retType), node);
             }
+            currentType = &getArrayElementType(*currentType);
             auto& subscript = cld::get<Syntax::PrimaryExpressionBuiltinOffsetOf::Subscript>(iter);
+            cld::ScopeExit exit{[&] { range = llvm::ArrayRef(node.getMemberName(), subscript.closeBracket + 1); }};
             auto expression = visit(*subscript.expression);
             if (expression->isUndefined())
             {
                 return std::make_unique<ErrorExpression>(std::move(retType), node);
             }
-            auto constant = evaluateConstantExpression(*expression);
-            if (!constant)
-            {
-                std::for_each(constant.error().begin(), constant.error().end(),
-                              cld::bind_front(&SemanticAnalysis::log, this));
-                return std::make_unique<ErrorExpression>(std::move(retType), node);
-            }
             if (!isInteger(expression->getType()))
             {
-                log(Errors::Semantics::ONLY_INTEGERS_ALLOWED_IN_INTEGER_CONSTANT_EXPRESSIONS.args(
-                    *expression, m_sourceInterface, *expression));
+                log(Errors::Semantics::EXPECTED_OTHER_OPERAND_TO_BE_OF_INTEGER_TYPE.args(*expression, m_sourceInterface,
+                                                                                         *expression));
                 return std::make_unique<ErrorExpression>(std::move(retType), node);
             }
-            auto size = getArrayElementType(*currentType).getSizeOf(*this);
+            if (runtimeEvaluated)
+            {
+                runtimeVariant.emplace_back(std::move(expression));
+                continue;
+            }
+            auto constant = evaluateConstantExpression(*expression);
+            runtimeVariant.emplace_back(std::move(expression));
+            if (!constant)
+            {
+                failedConstExpr = diag::getPointRange(*cld::get<IntrVarPtr<ExpressionBase>>(runtimeVariant.back()));
+                runtimeEvaluated = true;
+                continue;
+            }
+            auto size = currentType->getSizeOf(*this);
             if (constant->getInteger().isSigned())
             {
                 currentOffset += size * constant->getInteger().getSExtValue();
@@ -769,8 +782,13 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             {
                 currentOffset += size * constant->getInteger().getZExtValue();
             }
-            range = llvm::ArrayRef(node.getMemberName(), subscript.closeBracket + 1);
         }
+    }
+    if (runtimeEvaluated)
+    {
+        return std::make_unique<BuiltinOffsetOf>(getLanguageOptions(), node.getBuiltinToken(),
+                                                 node.getOpenParentheses(), std::move(runtimeVariant),
+                                                 node.getCloseParentheses(), std::move(failedConstExpr));
     }
     return std::make_unique<BuiltinOffsetOf>(getLanguageOptions(), node.getBuiltinToken(), node.getOpenParentheses(),
                                              currentOffset, node.getCloseParentheses());

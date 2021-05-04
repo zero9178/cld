@@ -4835,82 +4835,6 @@ TEST_CASE("Semantics flexible array member", "[semantics]")
 
 TEST_CASE("Semantics offsetof", "[semantics]")
 {
-    SECTION("Anonymous unions and structs")
-    {
-        auto& expr = generateExpression("__extension__ struct __pthread_cond_s {\n"
-                                        "    union {\n"
-                                        "        unsigned long long int __wsed;\n"
-                                        "        struct {\n"
-                                        "            unsigned int __low;\n"
-                                        "            unsigned int __high;\n"
-                                        "        };\n"
-                                        "    };\n"
-                                        "};\n"
-                                        "\n"
-                                        "int main(void) {\n"
-                                        "__builtin_offsetof(struct __pthread_cond_s,__high);\n"
-                                        "}",
-                                        cld::LanguageOptions::fromTriple(x64linux));
-        REQUIRE(expr.is<BuiltinOffsetOf>());
-        CHECK(expr.as<BuiltinOffsetOf>().getOffset()
-              == BuiltinOffsetOf::OffsetType(std::in_place_type<std::uint64_t>, 4));
-    }
-    SECTION("Union")
-    {
-        auto& expr = generateExpression("\n"
-                                        "struct A {\n"
-                                        "   float x;\n"
-                                        "   int a;\n"
-                                        "};\n"
-                                        "\n"
-                                        "struct B {\n"
-                                        "   int a;\n"
-                                        "};\n"
-                                        "\n"
-                                        "union x {"
-                                        "  struct A a;\n"
-                                        "  struct B b;\n"
-                                        "};\n"
-                                        "\n"
-                                        "int main(void) {\n"
-                                        "__builtin_offsetof(union x,b.a);\n"
-                                        "}",
-                                        cld::LanguageOptions::fromTriple(x64linux));
-        REQUIRE(expr.is<BuiltinOffsetOf>());
-        CHECK(expr.as<BuiltinOffsetOf>().getOffset()
-              == BuiltinOffsetOf::OffsetType(std::in_place_type<std::uint64_t>, 0));
-    }
-    SEMA_PRODUCES("struct T {\n"
-                  "int i;\n"
-                  "int f : 3;\n"
-                  "};\n"
-                  "\n"
-                  "int main(void) { \n"
-                  "__builtin_offsetof(struct T,f);\n"
-                  "}",
-                  ProducesError(BITFIELD_NOT_ALLOWED_IN_OFFSET_OF));
-    SEMA_PRODUCES("int main(void) { \n"
-                  "__builtin_offsetof(int,f);\n"
-                  "}",
-                  ProducesError(TYPE_N_IN_OFFSETOF_MUST_BE_A_STRUCT_OR_UNION_TYPE, "'int'"));
-    SEMA_PRODUCES("struct T {\n"
-                  "int i;\n"
-                  "int f : 3;\n"
-                  "};\n"
-                  "\n"
-                  "int main(void) { \n"
-                  "__builtin_offsetof(struct T,i.m);\n"
-                  "}",
-                  ProducesError(EXPECTED_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_THE_DOT_OPERATOR_2));
-    SEMA_PRODUCES("struct T {\n"
-                  "int* i;\n"
-                  "int f : 3;\n"
-                  "};\n"
-                  "\n"
-                  "int main(void) { \n"
-                  "__builtin_offsetof(struct T,i[0]);\n"
-                  "}",
-                  ProducesError(EXPECTED_ARRAY_TYPE_ON_THE_LEFT_SIDE_OF_THE_SUBSCRIPT_OPERATOR));
     SECTION("Struct")
     {
         auto& expr = generateExpression(
@@ -4956,7 +4880,138 @@ TEST_CASE("Semantics offsetof", "[semantics]")
         REQUIRE(expr.is<BuiltinOffsetOf>());
         CHECK(expr.as<BuiltinOffsetOf>().getOffset()
               == BuiltinOffsetOf::OffsetType(std::in_place_type<std::uint64_t>, 104));
+        SEMA_PRODUCES("struct T {\n"
+                      "int i;\n"
+                      "int f : 3;\n"
+                      "};\n"
+                      "\n"
+                      "int main(void) { \n"
+                      "__builtin_offsetof(struct T,f);\n"
+                      "}",
+                      ProducesError(BITFIELD_NOT_ALLOWED_IN_OFFSET_OF));
     }
+    SECTION("Anonymous unions and structs")
+    {
+        auto& expr = generateExpression("__extension__ struct __pthread_cond_s {\n"
+                                        "    union {\n"
+                                        "        unsigned long long int __wsed;\n"
+                                        "        struct {\n"
+                                        "            unsigned int __low;\n"
+                                        "            unsigned int __high;\n"
+                                        "        };\n"
+                                        "    };\n"
+                                        "};\n"
+                                        "\n"
+                                        "int main(void) {\n"
+                                        "__builtin_offsetof(struct __pthread_cond_s,__high);\n"
+                                        "}",
+                                        cld::LanguageOptions::fromTriple(x64linux));
+        REQUIRE(expr.is<BuiltinOffsetOf>());
+        CHECK(expr.as<BuiltinOffsetOf>().getOffset()
+              == BuiltinOffsetOf::OffsetType(std::in_place_type<std::uint64_t>, 4));
+    }
+    SECTION("Union")
+    {
+        auto& expr = generateExpression("\n"
+                                        "struct A {\n"
+                                        "   float x;\n"
+                                        "   int a;\n"
+                                        "};\n"
+                                        "\n"
+                                        "struct B {\n"
+                                        "   int a;\n"
+                                        "};\n"
+                                        "\n"
+                                        "union x {"
+                                        "  struct A a;\n"
+                                        "  struct B b;\n"
+                                        "};\n"
+                                        "\n"
+                                        "int main(void) {\n"
+                                        "__builtin_offsetof(union x,b.a);\n"
+                                        "}",
+                                        cld::LanguageOptions::fromTriple(x64linux));
+        REQUIRE(expr.is<BuiltinOffsetOf>());
+        CHECK(expr.as<BuiltinOffsetOf>().getOffset()
+              == BuiltinOffsetOf::OffsetType(std::in_place_type<std::uint64_t>, 0));
+    }
+    SECTION("Array")
+    {
+        auto& expr = generateExpression("\n"
+                                        "struct A {\n"
+                                        "   float x;\n"
+                                        "   int a;\n"
+                                        "};\n"
+                                        "\n"
+                                        "struct B {\n"
+                                        "   struct A a[10];\n"
+                                        "};\n"
+                                        "\n"
+                                        "int main(void) {\n"
+                                        "__builtin_offsetof(struct B,a[3].a);\n"
+                                        "}",
+                                        cld::LanguageOptions::fromTriple(x64linux));
+        REQUIRE(expr.is<BuiltinOffsetOf>());
+        CHECK(expr.as<BuiltinOffsetOf>().getOffset()
+              == BuiltinOffsetOf::OffsetType(std::in_place_type<std::uint64_t>, 28));
+
+        SEMA_PRODUCES("struct T {\n"
+                      "int* i;\n"
+                      "int f : 3;\n"
+                      "};\n"
+                      "\n"
+                      "int main(void) { \n"
+                      "__builtin_offsetof(struct T,i[0]);\n"
+                      "}",
+                      ProducesError(EXPECTED_ARRAY_TYPE_ON_THE_LEFT_SIDE_OF_THE_SUBSCRIPT_OPERATOR));
+    }
+    SECTION("Non constant")
+    {
+        auto& expr = generateExpression("\n"
+                                        "struct A {\n"
+                                        "   float x;\n"
+                                        "   int a;\n"
+                                        "};\n"
+                                        "\n"
+                                        "struct B {\n"
+                                        "   struct A a[10];\n"
+                                        "};\n"
+                                        "\n"
+                                        "void foo(int i) {\n"
+                                        "__builtin_offsetof(struct B,a[i].a);\n"
+                                        "}");
+        REQUIRE(expr.is<BuiltinOffsetOf>());
+        CHECK_FALSE(std::holds_alternative<std::uint64_t>(expr.as<BuiltinOffsetOf>().getOffset()));
+        SEMA_PRODUCES("\n"
+                      "struct A {\n"
+                      "   float x;\n"
+                      "   int a;\n"
+                      "};\n"
+                      "\n"
+                      "struct B {\n"
+                      "   struct A a[10];\n"
+                      "};\n"
+                      "\n"
+                      "void foo(int i) {\n"
+                      "switch(i) {\n"
+                      "case __builtin_offsetof(struct B,a[i].a):;\n"
+                      "}\n"
+                      "}",
+                      ProducesError(EXPRESSION_IN_OFFSETOF_IS_NOT_A_VALID_CONSTANT_EXPRESSION));
+    }
+    SEMA_PRODUCES("int main(void) { \n"
+                  "__builtin_offsetof(int,f);\n"
+                  "}",
+                  ProducesError(TYPE_N_IN_OFFSETOF_MUST_BE_A_STRUCT_OR_UNION_TYPE, "'int'"));
+    SEMA_PRODUCES("struct T {\n"
+                  "int i;\n"
+                  "int f : 3;\n"
+                  "};\n"
+                  "\n"
+                  "int main(void) { \n"
+                  "__builtin_offsetof(struct T,i.m);\n"
+                  "}",
+                  ProducesError(EXPECTED_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_THE_DOT_OPERATOR_2));
 }
 
 TEST_CASE("Semantics __sync_*", "[semantics]")
