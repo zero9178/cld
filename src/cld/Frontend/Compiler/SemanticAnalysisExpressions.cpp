@@ -688,8 +688,8 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     {
         if (isUnion(*currentType))
         {
-            // TODO: This is almost definitely wrong
-            currentType = result->second.type;
+            auto fieldLayout = getFieldLayout(*currentType);
+            currentType = fieldLayout[iter].type;
             continue;
         }
         auto memLayout = getMemoryLayout(*currentType);
@@ -720,12 +720,12 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                 return std::make_unique<ErrorExpression>(std::move(retType), node);
             }
             range = llvm::ArrayRef(node.getMemberName(), cld::get<Lexer::CTokenIterator>(iter) + 1);
-            for (auto& index : result->second.indices)
+            for (auto& index : subResult->second.indices)
             {
                 if (isUnion(*currentType))
                 {
-                    // TODO: This is almost definitely wrong
-                    currentType = result->second.type;
+                    auto fieldLayout = getFieldLayout(*currentType);
+                    currentType = fieldLayout[index].type;
                     continue;
                 }
                 auto memLayout = getMemoryLayout(*currentType);

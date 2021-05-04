@@ -4642,6 +4642,37 @@ TEST_CASE("Semantics inline functions", "[semantics]")
 
 TEST_CASE("Semantics anonymous inline structs and unions", "[semantics]")
 {
+    SECTION("Union size and layout")
+    {
+        auto program = generateProgram("    __extension__ union A {\n"
+                                       "        struct {\n"
+                                       "            unsigned int __low;\n"
+                                       "            unsigned long long __high;\n"
+                                       "        };\n"
+                                       "        unsigned char __wsed;\n"
+                                       "    };\n",
+                                       x64linux);
+        auto* unionInfo = program.lookupType<UnionInfo>("A", ProgramInterface::GLOBAL_SCOPE);
+        REQUIRE(unionInfo);
+        auto* unionDef = std::get_if<UnionDefinition>(&unionInfo->type);
+        REQUIRE(unionDef);
+        CHECK(unionDef->getAlignOf() == 8);
+        CHECK(unionDef->getSizeOf() == 16);
+        auto& fields = unionDef->getFields();
+        REQUIRE(fields.size() == 3);
+        CHECK(fields.values_container()[0].second.name == "__low");
+        CHECK_THAT(fields.values_container()[0].second.indices,
+                   Catch::Matchers::Equals(std::vector<std::size_t>{0, 0}));
+        CHECK(fields.values_container()[0].second.parentTypes.size() == 1);
+        CHECK(fields.values_container()[1].second.name == "__high");
+        CHECK_THAT(fields.values_container()[1].second.indices,
+                   Catch::Matchers::Equals(std::vector<std::size_t>{0, 1}));
+        CHECK(fields.values_container()[1].second.parentTypes.size() == 1);
+        CHECK(fields.values_container()[0].second.parentTypes == fields.values_container()[1].second.parentTypes);
+        CHECK(fields.values_container()[2].second.name == "__wsed");
+        CHECK_THAT(fields.values_container()[2].second.indices, Catch::Matchers::Equals(std::vector<std::size_t>{1}));
+        CHECK(fields.values_container()[2].second.parentTypes.empty());
+    }
     SECTION("Initialization")
     {
         SEMA_PRODUCES("struct __pthread_cond_s {\n"
@@ -4804,48 +4835,49 @@ TEST_CASE("Semantics flexible array member", "[semantics]")
 
 TEST_CASE("Semantics offsetof", "[semantics]")
 {
-    auto& expr = generateExpression(
-        "\n"
-        "typedef unsigned short LogEst;\n"
-        "\n"
-        "typedef unsigned long long Bitmask;\n"
-        "\n"
-        "struct WhereInfo\n"
-        "{\n"
-        "    int* pParse;\n"
-        "    int* pTabList;\n"
-        "    int* pOrderBy;\n"
-        "    int* pResultSet;\n"
-        "    int* pWhere;\n"
-        "    int aiCurOnePass[2];\n"
-        "    int iContinue;\n"
-        "    int iBreak;\n"
-        "    int savedNQueryLoop;\n"
-        "    unsigned short wctrlFlags;\n"
-        "    LogEst iLimit;\n"
-        "    unsigned char nLevel;\n"
-        "    char nOBSat;\n"
-        "    unsigned char eOnePass;\n"
-        "    unsigned char eDistinct;\n"
-        "    unsigned bDeferredSeek:1;\n"
-        "    unsigned untestedTerms:1;\n"
-        "    unsigned bOrderedInnerLoops:1;\n"
-        "    unsigned sorted:1;\n"
-        "    LogEst nRowOut;\n"
-        "    int iTop;\n"
-        "    int* pLoops;\n"
-        "    int* pExprMods;\n"
-        "    Bitmask revMask;\n"
-        "    int f;\n"
-        "};\n"
-        "\n"
-        "int main(void)\n"
-        "{\n"
-        "    __builtin_offsetof(struct WhereInfo,f);// - __builtin_offsetof(struct WhereInfo,nOBSat);\n"
-        "}",
-        cld::LanguageOptions::fromTriple(x64linux));
-    REQUIRE(expr.is<BuiltinOffsetOf>());
-    CHECK(expr.as<BuiltinOffsetOf>().getOffset() == 104);
+    SECTION("Anonymous unions and structs")
+    {
+        auto& expr = generateExpression("__extension__ struct __pthread_cond_s {\n"
+                                        "    union {\n"
+                                        "        unsigned long long int __wsed;\n"
+                                        "        struct {\n"
+                                        "            unsigned int __low;\n"
+                                        "            unsigned int __high;\n"
+                                        "        };\n"
+                                        "    };\n"
+                                        "};\n"
+                                        "\n"
+                                        "int main(void) {\n"
+                                        "__builtin_offsetof(struct __pthread_cond_s,__high);\n"
+                                        "}",
+                                        cld::LanguageOptions::fromTriple(x64linux));
+        REQUIRE(expr.is<BuiltinOffsetOf>());
+        CHECK(expr.as<BuiltinOffsetOf>().getOffset() == 4);
+    }
+    SECTION("Union")
+    {
+        auto& expr = generateExpression("\n"
+                                        "struct A {\n"
+                                        "   float x;\n"
+                                        "   int a;\n"
+                                        "};\n"
+                                        "\n"
+                                        "struct B {\n"
+                                        "   int a;\n"
+                                        "};\n"
+                                        "\n"
+                                        "union x {"
+                                        "  struct A a;\n"
+                                        "  struct B b;\n"
+                                        "};\n"
+                                        "\n"
+                                        "int main(void) {\n"
+                                        "__builtin_offsetof(union x,b.a);\n"
+                                        "}",
+                                        cld::LanguageOptions::fromTriple(x64linux));
+        REQUIRE(expr.is<BuiltinOffsetOf>());
+        CHECK(expr.as<BuiltinOffsetOf>().getOffset() == 0);
+    }
     SEMA_PRODUCES("struct T {\n"
                   "int i;\n"
                   "int f : 3;\n"
@@ -4877,6 +4909,51 @@ TEST_CASE("Semantics offsetof", "[semantics]")
                   "__builtin_offsetof(struct T,i[0]);\n"
                   "}",
                   ProducesError(EXPECTED_ARRAY_TYPE_ON_THE_LEFT_SIDE_OF_THE_SUBSCRIPT_OPERATOR));
+    SECTION("Struct")
+    {
+        auto& expr = generateExpression(
+            "\n"
+            "typedef unsigned short LogEst;\n"
+            "\n"
+            "typedef unsigned long long Bitmask;\n"
+            "\n"
+            "struct WhereInfo\n"
+            "{\n"
+            "    int* pParse;\n"
+            "    int* pTabList;\n"
+            "    int* pOrderBy;\n"
+            "    int* pResultSet;\n"
+            "    int* pWhere;\n"
+            "    int aiCurOnePass[2];\n"
+            "    int iContinue;\n"
+            "    int iBreak;\n"
+            "    int savedNQueryLoop;\n"
+            "    unsigned short wctrlFlags;\n"
+            "    LogEst iLimit;\n"
+            "    unsigned char nLevel;\n"
+            "    char nOBSat;\n"
+            "    unsigned char eOnePass;\n"
+            "    unsigned char eDistinct;\n"
+            "    unsigned bDeferredSeek:1;\n"
+            "    unsigned untestedTerms:1;\n"
+            "    unsigned bOrderedInnerLoops:1;\n"
+            "    unsigned sorted:1;\n"
+            "    LogEst nRowOut;\n"
+            "    int iTop;\n"
+            "    int* pLoops;\n"
+            "    int* pExprMods;\n"
+            "    Bitmask revMask;\n"
+            "    int f;\n"
+            "};\n"
+            "\n"
+            "int main(void)\n"
+            "{\n"
+            "    __builtin_offsetof(struct WhereInfo,f);// - __builtin_offsetof(struct WhereInfo,nOBSat);\n"
+            "}",
+            cld::LanguageOptions::fromTriple(x64linux));
+        REQUIRE(expr.is<BuiltinOffsetOf>());
+        CHECK(expr.as<BuiltinOffsetOf>().getOffset() == 104);
+    }
 }
 
 TEST_CASE("Semantics __sync_*", "[semantics]")

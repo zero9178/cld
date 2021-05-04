@@ -1412,7 +1412,7 @@ cld::IntrVarValue<cld::Semantics::Type>
     }
     else
     {
-        for (auto iter = fields.begin(); iter != fields.end();)
+        for (auto iter = fields.begin(); iter != fields.end(); fieldLayoutCounter++)
         {
             auto& field = iter.value();
             if (field.type->isUndefined())
@@ -1420,37 +1420,33 @@ cld::IntrVarValue<cld::Semantics::Type>
                 iter++;
                 continue;
             }
-            field.indices[0] = iter - fields.begin();
-            fieldLayout[fieldLayoutCounter++].layoutIndex = iter - fields.begin();
-            if (!fieldLayout[fieldLayoutCounter - 1].type->isUndefined())
+            // Add field to the size and alignment of this union
+            if (!fieldLayout[fieldLayoutCounter].type->isUndefined())
             {
-                auto size = fieldLayout[fieldLayoutCounter - 1].type->getSizeOf(*this);
-                if (size > currentSize)
-                {
-                    currentSize = size;
-                }
-                currentAlignment =
-                    std::max(currentAlignment, fieldLayout[fieldLayoutCounter - 1].type->getAlignOf(*this));
+                currentSize = std::max(currentSize, fieldLayout[fieldLayoutCounter].type->getSizeOf(*this));
+                currentAlignment = std::max(currentAlignment, fieldLayout[fieldLayoutCounter].type->getAlignOf(*this));
             }
-            if (!field.parentTypes.empty())
+            // If the field is an actual subfield of the union, and not "imported" through an inline anonymous struct
+            // or union, set it's index to the fieldLayoutCounter
+            if (field.parentTypes.empty())
             {
-                auto end = std::find_if_not(iter + 1, fields.end(),
-                                            [&](const auto& pair)
-                                            {
-                                                if (pair.second.parentTypes.empty())
-                                                {
-                                                    return false;
-                                                }
-                                                return pair.second.parentTypes.front() == field.parentTypes.front();
-                                            });
-                for (iter++; iter != end; iter++)
-                {
-                    iter.value().indices[0] = fieldLayout[fieldLayoutCounter - 1].layoutIndex;
-                }
-            }
-            else
-            {
+                field.indices[0] = fieldLayoutCounter;
                 iter++;
+                continue;
+            }
+            // Otherwise make sure that every of those subfields has the index of their parent added to their indices
+            auto end = std::find_if_not(iter, fields.end(),
+                                        [&](const auto& pair)
+                                        {
+                                            if (pair.second.parentTypes.empty())
+                                            {
+                                                return false;
+                                            }
+                                            return pair.second.parentTypes.front() == field.parentTypes.front();
+                                        });
+            for (; iter != end; iter++)
+            {
+                iter.value().indices[0] = fieldLayoutCounter;
             }
         }
     }

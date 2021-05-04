@@ -2138,7 +2138,9 @@ public:
 struct FieldInLayout
 {
     const Type* CLD_NON_NULL type;
-    std::size_t layoutIndex;
+    std::size_t layoutIndex; /// Index into the memory layout. Due to bitfields, multiple fields may have the same
+                             /// layout index as bitfields share a common underlying fields. This field
+                             /// is redundant in unions
     std::optional<std::pair<std::uint32_t, std::uint32_t>> bitFieldBounds;
 };
 
