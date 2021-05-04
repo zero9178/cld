@@ -1484,8 +1484,38 @@ cld::Semantics::PrimitiveType cld::Semantics::SemanticAnalysis::primitiveTypeSpe
 {
     using PrimitiveTypeSpecifier = Syntax::TypeSpecifier::PrimitiveTypeSpecifier;
     CLD_ASSERT(std::holds_alternative<PrimitiveTypeSpecifier>(typeSpecs[0]->getVariant()));
-    auto excessSpecifiersError = [this](std::string_view type, const Syntax::TypeSpecifier* typeSpec)
+
+    auto excessSpecifiersError = [&](const Syntax::TypeSpecifier* const& typeSpec)
     {
+        std::string type;
+        for (auto& iter : llvm::ArrayRef(typeSpecs.data(), &typeSpec))
+        {
+            auto* primType = std::get_if<PrimitiveTypeSpecifier>(&iter->getVariant());
+            if (!primType)
+            {
+                break;
+            }
+            if (!type.empty())
+            {
+                type += " ";
+            }
+            switch (*primType)
+            {
+                case Syntax::TypeSpecifier::Void: type += "void"; break;
+                case Syntax::TypeSpecifier::Char: type += "char"; break;
+                case Syntax::TypeSpecifier::Short: type += "short"; break;
+                case Syntax::TypeSpecifier::Int: type += "int"; break;
+                case Syntax::TypeSpecifier::Int128: type += "__int128"; break;
+                case Syntax::TypeSpecifier::Long: type += "long"; break;
+                case Syntax::TypeSpecifier::Float: type += "float"; break;
+                case Syntax::TypeSpecifier::Double: type += "double"; break;
+                case Syntax::TypeSpecifier::Signed: type += "signed"; break;
+                case Syntax::TypeSpecifier::Unsigned: type += "unsigned"; break;
+                case Syntax::TypeSpecifier::Bool: type += "_Bool"; break;
+                default: CLD_UNREACHABLE;
+            }
+        }
+        type = "'" + type + "'";
         if (std::holds_alternative<std::string_view>(typeSpec->getVariant()))
         {
             log(Errors::Semantics::CANNOT_COMBINE_N_WITH_TYPENAME.args(*typeSpec, m_sourceInterface, type, *typeSpec));
@@ -1625,27 +1655,6 @@ cld::Semantics::PrimitiveType cld::Semantics::SemanticAnalysis::primitiveTypeSpe
     auto primKindToType = [isConst, isVolatile, this](PrimitiveType::Kind kind)
     { return PrimitiveType(kind, getLanguageOptions(), flag::isConst = isConst, flag::isVolatile = isVolatile); };
 
-    auto primTypeSpecToString = [](PrimitiveTypeSpecifier spec) -> std::string_view
-    {
-        switch (spec)
-        {
-            case Syntax::TypeSpecifier::Void: return "void";
-            case Syntax::TypeSpecifier::Char: return "char";
-            case Syntax::TypeSpecifier::Short: return "short";
-            case Syntax::TypeSpecifier::Int: return "int";
-            case Syntax::TypeSpecifier::Int128: return "__int128";
-            case Syntax::TypeSpecifier::Long: return "long";
-            case Syntax::TypeSpecifier::Float: return "float";
-            case Syntax::TypeSpecifier::Double: return "double";
-            case Syntax::TypeSpecifier::Signed: return "signed";
-            case Syntax::TypeSpecifier::Unsigned: return "unsigned";
-            case Syntax::TypeSpecifier::Bool: return "_Bool";
-        }
-        CLD_UNREACHABLE;
-    };
-
-    std::string text = "'";
-    text += primTypeSpecToString(cld::get<PrimitiveTypeSpecifier>(typeSpecs[0]->getVariant()));
     BitSet type(cld::get<PrimitiveTypeSpecifier>(typeSpecs[0]->getVariant()));
     for (auto& iter : llvm::ArrayRef(typeSpecs).drop_front())
     {
@@ -1653,7 +1662,7 @@ cld::Semantics::PrimitiveType cld::Semantics::SemanticAnalysis::primitiveTypeSpe
         auto* typeSpec = std::get_if<PrimitiveTypeSpecifier>(&iter->getVariant());
         if (!typeSpec)
         {
-            excessSpecifiersError(text + "'", iter);
+            excessSpecifiersError(iter);
             auto result = table.find(type);
             CLD_ASSERT(result != table.end());
             return primKindToType(result->second.second);
@@ -1663,11 +1672,9 @@ cld::Semantics::PrimitiveType cld::Semantics::SemanticAnalysis::primitiveTypeSpe
         if ((result->second.first & BitSet(*typeSpec)).any())
         {
             type += BitSet(*typeSpec);
-            text += " ";
-            text += primTypeSpecToString(*typeSpec);
             continue;
         }
-        excessSpecifiersError(text + "'", iter);
+        excessSpecifiersError(iter);
         return primKindToType(result->second.second);
     }
     auto result = table.find(type);
