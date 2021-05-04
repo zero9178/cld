@@ -749,7 +749,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             currentType = &getArrayElementType(*currentType);
             auto& subscript = cld::get<Syntax::PrimaryExpressionBuiltinOffsetOf::Subscript>(iter);
             cld::ScopeExit exit{[&] { range = llvm::ArrayRef(node.getMemberName(), subscript.closeBracket + 1); }};
-            auto expression = visit(*subscript.expression);
+            auto expression = lvalueConversion(visit(*subscript.expression));
             if (expression->isUndefined())
             {
                 return std::make_unique<ErrorExpression>(std::move(retType), node);
@@ -786,9 +786,10 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     }
     if (runtimeEvaluated)
     {
-        return std::make_unique<BuiltinOffsetOf>(getLanguageOptions(), node.getBuiltinToken(),
-                                                 node.getOpenParentheses(), std::move(runtimeVariant),
-                                                 node.getCloseParentheses(), std::move(failedConstExpr));
+        return std::make_unique<BuiltinOffsetOf>(
+            getLanguageOptions(), node.getBuiltinToken(), node.getOpenParentheses(),
+            BuiltinOffsetOf::RuntimeEval{std::move(type), std::move(runtimeVariant), std::move(failedConstExpr)},
+            node.getCloseParentheses());
     }
     return std::make_unique<BuiltinOffsetOf>(getLanguageOptions(), node.getBuiltinToken(), node.getOpenParentheses(),
                                              currentOffset, node.getCloseParentheses());

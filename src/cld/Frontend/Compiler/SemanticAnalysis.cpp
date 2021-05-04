@@ -1864,8 +1864,9 @@ cld::Semantics::ConstValue
             {
                 return {llvm::APSInt(llvm::APInt(type.as<PrimitiveType>().getBitCount(), *value))};
             }
+            auto& loc = *cld::get<BuiltinOffsetOf::RuntimeEval>(builtinOffsetOf.getOffset()).failedConstExpr;
             logger(Errors::Semantics::EXPRESSION_IN_OFFSETOF_IS_NOT_A_VALID_CONSTANT_EXPRESSION.args(
-                *builtinOffsetOf.getFailedConstExpr(), m_sourceInterface, *builtinOffsetOf.getFailedConstExpr()));
+                loc, m_sourceInterface, loc));
             return {};
         });
 }

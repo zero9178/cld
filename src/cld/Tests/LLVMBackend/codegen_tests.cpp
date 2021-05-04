@@ -6572,3 +6572,29 @@ TEST_CASE("LLVM codegen __attribute__((noreturn))", "[LLVM]")
     REQUIRE(global);
     CHECK(global->hasFnAttribute(llvm::Attribute::NoReturn));
 }
+
+TEST_CASE("LLVM codegen offsetof", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    auto module = std::make_unique<llvm::Module>("", context);
+    SECTION("Runtime evaluated")
+    {
+        auto program = generateProgram("\n"
+                                       "struct A {\n"
+                                       "   float x;\n"
+                                       "   int a;\n"
+                                       "};\n"
+                                       "\n"
+                                       "struct B {\n"
+                                       "   struct A a[10];\n"
+                                       "};\n"
+                                       "\n"
+                                       "int test(int len) {\n"
+                                       "return __builtin_offsetof(struct B,a[len].a);\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        CHECK(cld::Tests::computeInJIT<int(int)>(std::move(module), "test", 3) == 28);
+    }
+}

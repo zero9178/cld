@@ -4878,8 +4878,9 @@ TEST_CASE("Semantics offsetof", "[semantics]")
             "}",
             cld::LanguageOptions::fromTriple(x64linux));
         REQUIRE(expr.is<BuiltinOffsetOf>());
-        CHECK(expr.as<BuiltinOffsetOf>().getOffset()
-              == BuiltinOffsetOf::OffsetType(std::in_place_type<std::uint64_t>, 104));
+        auto* value = std::get_if<std::uint64_t>(&expr.as<BuiltinOffsetOf>().getOffset());
+        REQUIRE(value);
+        CHECK(*value == 104);
         SEMA_PRODUCES("struct T {\n"
                       "int i;\n"
                       "int f : 3;\n"
@@ -4907,8 +4908,9 @@ TEST_CASE("Semantics offsetof", "[semantics]")
                                         "}",
                                         cld::LanguageOptions::fromTriple(x64linux));
         REQUIRE(expr.is<BuiltinOffsetOf>());
-        CHECK(expr.as<BuiltinOffsetOf>().getOffset()
-              == BuiltinOffsetOf::OffsetType(std::in_place_type<std::uint64_t>, 4));
+        auto* value = std::get_if<std::uint64_t>(&expr.as<BuiltinOffsetOf>().getOffset());
+        REQUIRE(value);
+        CHECK(*value == 4);
     }
     SECTION("Union")
     {
@@ -4932,8 +4934,9 @@ TEST_CASE("Semantics offsetof", "[semantics]")
                                         "}",
                                         cld::LanguageOptions::fromTriple(x64linux));
         REQUIRE(expr.is<BuiltinOffsetOf>());
-        CHECK(expr.as<BuiltinOffsetOf>().getOffset()
-              == BuiltinOffsetOf::OffsetType(std::in_place_type<std::uint64_t>, 0));
+        auto* value = std::get_if<std::uint64_t>(&expr.as<BuiltinOffsetOf>().getOffset());
+        REQUIRE(value);
+        CHECK(*value == 0);
     }
     SECTION("Array")
     {
@@ -4952,9 +4955,9 @@ TEST_CASE("Semantics offsetof", "[semantics]")
                                         "}",
                                         cld::LanguageOptions::fromTriple(x64linux));
         REQUIRE(expr.is<BuiltinOffsetOf>());
-        CHECK(expr.as<BuiltinOffsetOf>().getOffset()
-              == BuiltinOffsetOf::OffsetType(std::in_place_type<std::uint64_t>, 28));
-
+        auto* value = std::get_if<std::uint64_t>(&expr.as<BuiltinOffsetOf>().getOffset());
+        REQUIRE(value);
+        CHECK(*value == 28);
         SEMA_PRODUCES("struct T {\n"
                       "int* i;\n"
                       "int f : 3;\n"

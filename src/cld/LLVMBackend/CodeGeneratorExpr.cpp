@@ -639,7 +639,8 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::SizeofOper
         }
         return *currType;
     }();
-    llvm::Value* value = m_builder.getInt64(elementType.getSizeOf(m_programInterface));
+    llvm::Value* value =
+        llvm::ConstantInt::get(visit(sizeofOperator.getType()), elementType.getSizeOf(m_programInterface));
     for (auto& iter : Semantics::RecursiveVisitor(type, Semantics::ARRAY_TYPE_NEXT_FN))
     {
         llvm::Value* temp;
@@ -1279,8 +1280,46 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::BuiltinOff
     {
         return llvm::ConstantInt::get(visit(offsetOf.getType()), *value);
     }
-    // TODO:
-    CLD_UNREACHABLE;
+    auto& runtimeEval = cld::get<Semantics::BuiltinOffsetOf::RuntimeEval>(offsetOf.getOffset());
+    auto currentType = runtimeEval.type.data();
+    auto* llvmSizeT = visit(offsetOf.getType());
+    llvm::Value* currentOffset = llvm::ConstantInt::get(llvmSizeT, 0);
+    for (auto& iter : runtimeEval.path)
+    {
+        if (auto* field = std::get_if<const Semantics::Field*>(&iter))
+        {
+            for (auto index : (*field)->indices)
+            {
+                if (currentType->is<Semantics::UnionType>())
+                {
+                    auto fieldLayout = Semantics::getFieldLayout(*currentType);
+                    currentType = fieldLayout[index].type;
+                    continue;
+                }
+                auto memLayout = Semantics::getMemoryLayout(*currentType);
+                currentType = memLayout[index].type;
+                currentOffset =
+                    m_builder.CreateAdd(currentOffset, llvm::ConstantInt::get(llvmSizeT, memLayout[index].offset));
+            }
+            continue;
+        }
+
+        currentType = &Semantics::getArrayElementType(*currentType);
+        auto size = currentType->getSizeOf(getProgramInterface());
+        auto& expr = cld::get<IntrVarPtr<Semantics::ExpressionBase>>(iter);
+        auto value = visit(*expr);
+        if (expr->getType().as<Semantics::PrimitiveType>().isSigned())
+        {
+            value = m_builder.CreateSExtOrTrunc(value, llvmSizeT);
+        }
+        else
+        {
+            value = m_builder.CreateZExtOrTrunc(value, llvmSizeT);
+        }
+        value = m_builder.CreateMul(value, llvm::ConstantInt::get(llvmSizeT, size));
+        currentOffset = m_builder.CreateAdd(currentOffset, value);
+    }
+    return currentOffset;
 }
 
 namespace
