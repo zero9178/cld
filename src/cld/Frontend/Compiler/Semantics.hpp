@@ -1528,17 +1528,23 @@ class BuiltinOffsetOf final : public ExpressionBase
 {
     Lexer::CTokenIterator m_builtinToken;
     Lexer::CTokenIterator m_openParentheses;
-    std::uint64_t m_offset;
+
+public:
+    using OffsetType =
+        std::variant<std::uint64_t, std::vector<std::variant<IntrVarPtr<ExpressionBase>, Lexer::CTokenIterator>>>;
+
+private:
+    OffsetType m_offset;
     Lexer::CTokenIterator m_closeParentheses;
 
 public:
     BuiltinOffsetOf(const LanguageOptions& options, Lexer::CTokenIterator builtinToken,
-                    Lexer::CTokenIterator openParentheses, std::uint64_t offset, Lexer::CTokenIterator closeParentheses)
+                    Lexer::CTokenIterator openParentheses, OffsetType offset, Lexer::CTokenIterator closeParentheses)
         : ExpressionBase(std::in_place_type<std::decay_t<decltype(*this)>>, PrimitiveType(options.sizeTType, options),
                          ValueCategory::Rvalue),
           m_builtinToken(builtinToken),
           m_openParentheses(openParentheses),
-          m_offset(offset),
+          m_offset(std::move(offset)),
           m_closeParentheses(closeParentheses)
     {
     }
@@ -1553,7 +1559,7 @@ public:
         return m_openParentheses;
     }
 
-    [[nodiscard]] std::uint64_t getOffset() const
+    [[nodiscard]] const OffsetType& getOffset() const
     {
         return m_offset;
     }

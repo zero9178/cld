@@ -750,10 +750,8 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             auto constant = evaluateConstantExpression(*expression);
             if (!constant)
             {
-                for (auto& mes : constant.error())
-                {
-                    log(mes);
-                }
+                std::for_each(constant.error().begin(), constant.error().end(),
+                              cld::bind_front(&SemanticAnalysis::log, this));
                 return std::make_unique<ErrorExpression>(std::move(retType), node);
             }
             if (!isInteger(expression->getType()))

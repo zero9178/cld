@@ -4852,7 +4852,8 @@ TEST_CASE("Semantics offsetof", "[semantics]")
                                         "}",
                                         cld::LanguageOptions::fromTriple(x64linux));
         REQUIRE(expr.is<BuiltinOffsetOf>());
-        CHECK(expr.as<BuiltinOffsetOf>().getOffset() == 4);
+        CHECK(expr.as<BuiltinOffsetOf>().getOffset()
+              == BuiltinOffsetOf::OffsetType(std::in_place_type<std::uint64_t>, 4));
     }
     SECTION("Union")
     {
@@ -4876,7 +4877,8 @@ TEST_CASE("Semantics offsetof", "[semantics]")
                                         "}",
                                         cld::LanguageOptions::fromTriple(x64linux));
         REQUIRE(expr.is<BuiltinOffsetOf>());
-        CHECK(expr.as<BuiltinOffsetOf>().getOffset() == 0);
+        CHECK(expr.as<BuiltinOffsetOf>().getOffset()
+              == BuiltinOffsetOf::OffsetType(std::in_place_type<std::uint64_t>, 0));
     }
     SEMA_PRODUCES("struct T {\n"
                   "int i;\n"
@@ -4952,7 +4954,8 @@ TEST_CASE("Semantics offsetof", "[semantics]")
             "}",
             cld::LanguageOptions::fromTriple(x64linux));
         REQUIRE(expr.is<BuiltinOffsetOf>());
-        CHECK(expr.as<BuiltinOffsetOf>().getOffset() == 104);
+        CHECK(expr.as<BuiltinOffsetOf>().getOffset()
+              == BuiltinOffsetOf::OffsetType(std::in_place_type<std::uint64_t>, 104));
     }
 }
 

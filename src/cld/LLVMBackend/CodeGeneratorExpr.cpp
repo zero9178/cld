@@ -1275,7 +1275,12 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::BuiltinVAA
 
 cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::BuiltinOffsetOf& offsetOf)
 {
-    return llvm::ConstantInt::get(visit(offsetOf.getType()), offsetOf.getOffset());
+    if (auto* value = std::get_if<std::uint64_t>(&offsetOf.getOffset()))
+    {
+        return llvm::ConstantInt::get(visit(offsetOf.getType()), *value);
+    }
+    // TODO:
+    CLD_UNREACHABLE;
 }
 
 namespace

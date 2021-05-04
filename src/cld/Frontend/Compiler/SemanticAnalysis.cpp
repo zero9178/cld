@@ -1860,7 +1860,12 @@ cld::Semantics::ConstValue
         [&](const BuiltinOffsetOf& builtinOffsetOf) -> ConstValue
         {
             auto type = PrimitiveType(getLanguageOptions().sizeTType, getLanguageOptions());
-            return {llvm::APSInt(llvm::APInt(type.as<PrimitiveType>().getBitCount(), builtinOffsetOf.getOffset()))};
+            if (auto* value = std::get_if<std::uint64_t>(&builtinOffsetOf.getOffset()))
+            {
+                return {llvm::APSInt(llvm::APInt(type.as<PrimitiveType>().getBitCount(), *value))};
+            }
+            // TODO: Error
+            return {};
         });
 }
 
