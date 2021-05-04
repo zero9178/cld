@@ -967,3 +967,8 @@ cld::Semantics::FunctionGroup cld::Semantics::FunctionDefinition::getFunctionGro
 {
     return FunctionGroup(this);
 }
+
+cld::Semantics::VariableGroup cld::Semantics::VariableDeclaration::getVariableGroup() const
+{
+    return VariableGroup(this);
+}

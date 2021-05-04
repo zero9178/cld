@@ -54,14 +54,14 @@ class RecursiveVisitor
             return m_curr;
         }
 
-        Iterator& operator++(int) noexcept
+        Iterator& operator++() noexcept
         {
             CLD_ASSERT(m_curr && m_nextFunc);
             m_curr = (*m_nextFunc)(*m_curr);
             return *this;
         }
 
-        Iterator operator++() noexcept
+        Iterator operator++(int) noexcept
         {
             auto before = *this;
             CLD_ASSERT(m_curr && m_nextFunc);

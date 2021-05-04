@@ -2320,6 +2320,101 @@ public:
     }
 };
 
+template <class ValueType, class... Participants>
+class DeclarationGroup
+{
+    const ValueType* m_first;
+
+    class Iterator
+    {
+        const ValueType* m_curr;
+
+    public:
+        using value_type = const ValueType;
+        using reference = const ValueType&;
+        using pointer = const ValueType*;
+        using iterator_category = std::forward_iterator_tag;
+        using difference_type = void;
+
+        Iterator() : m_curr(nullptr) {}
+
+        explicit Iterator(const ValueType* curr) : m_curr(curr) {}
+
+        bool operator==(const Iterator& rhs) const noexcept
+        {
+            return m_curr == rhs.m_curr;
+        }
+
+        bool operator!=(const Iterator& rhs) const noexcept
+        {
+            return !(*this == rhs);
+        }
+
+        reference operator*() const noexcept
+        {
+            CLD_ASSERT(m_curr);
+            return *m_curr;
+        }
+
+        pointer operator->() const noexcept
+        {
+            return m_curr;
+        }
+
+        Iterator& operator++() noexcept
+        {
+            CLD_ASSERT(m_curr);
+            m_curr = m_curr->match(
+                [](const auto& value) -> const ValueType*
+                {
+                    using T = std::decay_t<decltype(value)>;
+                    if constexpr ((std::is_same_v<T, Participants> || ...))
+                    {
+                        return value.getNext();
+                    }
+                    CLD_UNREACHABLE;
+                });
+            return *this;
+        }
+
+        Iterator operator++(int) noexcept
+        {
+            auto before = *this;
+            this->operator++();
+            return before;
+        }
+    };
+
+protected:
+    explicit DeclarationGroup(cld::not_null<const ValueType> first) : m_first(first) {}
+
+    using value_type = const ValueType;
+    using reference = const ValueType&;
+    using const_reference = const ValueType&;
+    using iterator = Iterator;
+    using const_iterator = iterator;
+
+    [[nodiscard]] const_iterator begin() const
+    {
+        return Iterator(m_first);
+    }
+
+    [[nodiscard]] const_iterator end() const
+    {
+        return Iterator{};
+    }
+
+    [[nodiscard]] const_iterator cbegin() const
+    {
+        return begin();
+    }
+
+    [[nodiscard]] const_iterator cend() const
+    {
+        return end();
+    }
+};
+
 enum class InlineKind : std::uint8_t
 {
     InlineDefinition,
@@ -2371,6 +2466,8 @@ enum class Lifetime : std::uint8_t
     Static,
     Register
 };
+
+class VariableGroup;
 
 class VariableDeclaration final : public Declaration, public AttributeHolder<VariableAttribute>
 {
@@ -2438,15 +2535,23 @@ public:
         m_initializer = std::move(initializer);
     }
 
-    const VariableDeclaration* getNext() const
+    [[nodiscard]] VariableGroup getVariableGroup() const;
+
+    [[nodiscard]] const VariableDeclaration* getNext() const
     {
         return m_next;
     }
 
-    const VariableDeclaration& getFirst() const
+    [[nodiscard]] const VariableDeclaration& getFirst() const
     {
         return m_first ? *m_first : *this;
     }
+};
+
+class VariableGroup final : public DeclarationGroup<VariableDeclaration, VariableDeclaration>
+{
+public:
+    explicit VariableGroup(cld::not_null<const VariableDeclaration> decl) : DeclarationGroup(&decl->getFirst()) {}
 };
 
 class FunctionDefinition final : public Useable, public AttributeHolder<FunctionAttribute>
@@ -2611,93 +2716,12 @@ public:
     }
 };
 
-class FunctionGroup
+class FunctionGroup final : public DeclarationGroup<Useable, FunctionDefinition, FunctionDeclaration>
 {
-    const Useable* m_first;
-
-    class Iterator
-    {
-        const Useable* m_curr;
-
-    public:
-        using value_type = const Useable;
-        using reference = const Useable&;
-        using pointer = const Useable*;
-        using iterator_category = std::forward_iterator_tag;
-        using difference_type = void;
-
-        Iterator() : m_curr(nullptr) {}
-
-        explicit Iterator(const Useable* curr) : m_curr(curr) {}
-
-        bool operator==(const Iterator& rhs) const noexcept
-        {
-            return m_curr == rhs.m_curr;
-        }
-
-        bool operator!=(const Iterator& rhs) const noexcept
-        {
-            return !(*this == rhs);
-        }
-
-        reference operator*() const noexcept
-        {
-            CLD_ASSERT(m_curr);
-            return *m_curr;
-        }
-
-        pointer operator->() const noexcept
-        {
-            return m_curr;
-        }
-
-        Iterator& operator++(int) noexcept
-        {
-            CLD_ASSERT(m_curr);
-            m_curr = m_curr->match([](const FunctionDefinition& def) -> const Useable* { return def.getNext(); },
-                                   [](const FunctionDeclaration& decl) -> const Useable* { return decl.getNext(); },
-                                   [](const auto&) -> const Useable* { CLD_UNREACHABLE; });
-            return *this;
-        }
-
-        Iterator operator++() noexcept
-        {
-            auto before = *this;
-            this->operator++(0);
-            return before;
-        }
-    };
-
 public:
-    explicit FunctionGroup(cld::not_null<const FunctionDeclaration> decl) : m_first(&decl->getFirst()) {}
+    explicit FunctionGroup(cld::not_null<const FunctionDeclaration> decl) : DeclarationGroup(&decl->getFirst()) {}
 
-    explicit FunctionGroup(cld::not_null<const FunctionDefinition> decl) : m_first(&decl->getFirst()) {}
-
-    using value_type = const Useable;
-    using reference = const Useable&;
-    using const_reference = const Useable&;
-    using iterator = Iterator;
-    using const_iterator = iterator;
-
-    [[nodiscard]] const_iterator begin() const
-    {
-        return Iterator(m_first);
-    }
-
-    [[nodiscard]] const_iterator end() const
-    {
-        return Iterator{};
-    }
-
-    [[nodiscard]] const_iterator cbegin() const
-    {
-        return begin();
-    }
-
-    [[nodiscard]] const_iterator cend() const
-    {
-        return end();
-    }
+    explicit FunctionGroup(cld::not_null<const FunctionDefinition> decl) : DeclarationGroup(&decl->getFirst()) {}
 
     [[nodiscard]] bool isInline() const
     {
