@@ -5400,7 +5400,7 @@ TEST_CASE("Semantics vectors", "[semantics]")
                                            "f < 5;\n"
                                            "}");
             auto& type = exp.getType();
-            REQUIRE(isVector(type));
+            REQUIRE(type.is<VectorType>());
             auto& elementType = getVectorElementType(type);
             REQUIRE(elementType.is<PrimitiveType>());
             auto& primType = elementType.as<PrimitiveType>();
@@ -5415,7 +5415,7 @@ TEST_CASE("Semantics vectors", "[semantics]")
                                            "f < 5;\n"
                                            "}");
             auto& type = exp.getType();
-            REQUIRE(isVector(type));
+            REQUIRE(type.is<VectorType>());
             auto& elementType = getVectorElementType(type);
             REQUIRE(elementType.is<PrimitiveType>());
             auto& primType = elementType.as<PrimitiveType>();
@@ -5451,7 +5451,7 @@ TEST_CASE("Semantics vectors", "[semantics]")
                                            "f == 5;\n"
                                            "}");
             auto& type = exp.getType();
-            REQUIRE(isVector(type));
+            REQUIRE(type.is<VectorType>());
             auto& elementType = getVectorElementType(type);
             REQUIRE(elementType.is<PrimitiveType>());
             auto& primType = elementType.as<PrimitiveType>();
@@ -5466,7 +5466,7 @@ TEST_CASE("Semantics vectors", "[semantics]")
                                            "f == 5;\n"
                                            "}");
             auto& type = exp.getType();
-            REQUIRE(isVector(type));
+            REQUIRE(type.is<VectorType>());
             auto& elementType = getVectorElementType(type);
             REQUIRE(elementType.is<PrimitiveType>());
             auto& primType = elementType.as<PrimitiveType>();
@@ -5784,7 +5784,6 @@ TEST_CASE("Semantics __attribute__((aligned))", "[semantics]")
     }
 }
 
-
 TEST_CASE("Semantics __attribute__((gnu_inline))", "[semantics]")
 {
     SEMA_PRODUCES("int __attribute__ ((gnu_inline(8))) foo(void);",
@@ -5862,7 +5861,8 @@ TEST_CASE("Semantics __attribute__((dllimport))", "[semantics]")
 }
 
 TEMPLATE_TEST_CASE("Semantics __attribute__((T)) markers", "[semantics][template]", NoinlineAttribute,
-                   AlwaysInlineAttribute, ArtificialAttribute, NothrowAttribute, ConstAttribute,NoreturnAttribute,WeakAttribute,LeafAttribute)
+                   AlwaysInlineAttribute, ArtificialAttribute, NothrowAttribute, ConstAttribute, NoreturnAttribute,
+                   WeakAttribute, LeafAttribute)
 {
     std::string name = []
     {
@@ -5890,25 +5890,26 @@ TEMPLATE_TEST_CASE("Semantics __attribute__((T)) markers", "[semantics][template
         {
             return "noreturn";
         }
-        if constexpr (std::is_same_v<TestType,WeakAttribute>)
+        if constexpr (std::is_same_v<TestType, WeakAttribute>)
         {
             return "weak";
         }
-        if constexpr (std::is_same_v<TestType,LeafAttribute>)
+        if constexpr (std::is_same_v<TestType, LeafAttribute>)
         {
             return "leaf";
         }
         CLD_UNREACHABLE;
     }();
-    if constexpr (cld::variantTypesContainV<TestType,FunctionAttribute>)
+    if constexpr (cld::variantTypesContainV<TestType, FunctionAttribute>)
     {
-        SEMA_PRODUCES("int __attribute__ ((" + name + "(8))) foo(void);",
-                      ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N, "'" + name + "'", 1));
+        SEMA_PRODUCES(
+            "int __attribute__ ((" + name + "(8))) foo(void);",
+            ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N, "'" + name + "'", 1));
         auto program = generateProgram("__attribute__((" + name
-                                       + ")) void foo(void) {\n"
-                                         "    int i = 5;\n"
-                                         "    i;\n"
-                                         "}",
+                                           + ")) void foo(void) {\n"
+                                             "    int i = 5;\n"
+                                             "    i;\n"
+                                             "}",
                                        x64linux);
         auto& globals = program.getTranslationUnit().getGlobals();
         REQUIRE(globals.size() == 1);
@@ -5916,13 +5917,12 @@ TEMPLATE_TEST_CASE("Semantics __attribute__((T)) markers", "[semantics][template
         REQUIRE(func->is<FunctionDefinition>());
         CHECK(func->as<FunctionDefinition>().hasAttribute<TestType>());
     }
-    if constexpr (cld::variantTypesContainV<TestType,VariableAttribute>)
+    if constexpr (cld::variantTypesContainV<TestType, VariableAttribute>)
     {
-        SEMA_PRODUCES("int __attribute__ ((" + name + "(8))) foo;",
-                      ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N, "'" + name + "'", 1));
-        auto program = generateProgram("__attribute__((" + name
-                                       + ")) int foo;",
-                                       x64linux);
+        SEMA_PRODUCES(
+            "int __attribute__ ((" + name + "(8))) foo;",
+            ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N, "'" + name + "'", 1));
+        auto program = generateProgram("__attribute__((" + name + ")) int foo;", x64linux);
         auto& globals = program.getTranslationUnit().getGlobals();
         REQUIRE(globals.size() == 1);
         auto& func = globals[0];

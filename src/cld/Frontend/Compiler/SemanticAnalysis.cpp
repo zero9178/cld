@@ -84,7 +84,7 @@ cld::Semantics::TranslationUnit cld::Semantics::SemanticAnalysis::visit(const Sy
             [&declared = declared, this](VariableDeclaration* declaration)
             {
                 if (declaration->getKind() == VariableDeclaration::TentativeDefinition
-                    && !isCompleteType(declaration->getType()) && !isAbstractArray(declaration->getType()))
+                    && !isCompleteType(declaration->getType()) && !declaration->getType().is<AbstractArrayType>())
                 {
                     log(Errors::Semantics::TYPE_OF_TENTATIVE_DEFINITION_IS_NEVER_COMPLETED.args(
                         *declared.identifier, m_sourceInterface, *declared.identifier, declaration->getType()));
@@ -740,7 +740,7 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                                                                                          declaration->getType()));
                 visit(*iter.optionalInitializer, ErrorType{}, declaration->getLifetime() == Lifetime::Static);
             }
-            else if (!isCompleteType(declaration->getType()) && !isAbstractArray(declaration->getType()))
+            else if (!isCompleteType(declaration->getType()) && !declaration->getType().is<AbstractArrayType>())
             {
                 log(Errors::Semantics::CANNOT_INITIALIZE_VARIABLE_OF_INCOMPLETE_TYPE.args(*loc, m_sourceInterface,
                                                                                           *loc));
@@ -1380,7 +1380,7 @@ bool cld::Semantics::SemanticAnalysis::hasFlexibleArrayMember(const Type& type) 
         if (maybeStructDef)
         {
             return !maybeStructDef->getFields().empty()
-                   && isAbstractArray(*maybeStructDef->getFields().back().second.type);
+                   && maybeStructDef->getFields().back().second.type->is<AbstractArrayType>();
         }
     }
     else if (auto* unionType = type.tryAs<UnionType>())
@@ -1390,7 +1390,7 @@ bool cld::Semantics::SemanticAnalysis::hasFlexibleArrayMember(const Type& type) 
         {
             for (auto& [name, field] : maybeUnionDef->getFields())
             {
-                if (isAbstractArray(*field.type))
+                if (field.type->is<AbstractArrayType>())
                 {
                     return true;
                 }

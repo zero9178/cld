@@ -110,7 +110,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::add(Value lhs, const Semantics::T
 
         return m_builder.CreateFAdd(lhs, rhs);
     }
-    if (Semantics::isVector(lhsType))
+    if (lhsType.is<Semantics::VectorType>())
     {
         if (Semantics::isInteger(Semantics::getVectorElementType(lhsType)))
         {
@@ -134,7 +134,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::add(Value lhs, const Semantics::T
     for (auto& iter : Semantics::RecursiveVisitor(array, Semantics::ARRAY_TYPE_NEXT_FN))
     {
         llvm::Value* value;
-        if (Semantics::isArrayType(iter))
+        if (iter.is<Semantics::ArrayType>())
         {
             value = m_builder.getInt64(iter.as<Semantics::ArrayType>().getSize());
         }
@@ -164,7 +164,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::sub(Value lhs, const Semantics::T
 
         return m_builder.CreateFSub(lhs, rhs);
     }
-    if (Semantics::isVector(lhsType))
+    if (lhsType.is<Semantics::VectorType>())
     {
         if (Semantics::isInteger(Semantics::getVectorElementType(lhsType)))
         {
@@ -197,7 +197,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::mul(Value lhs, const Semantics::T
 
         return m_builder.CreateMul(lhs, rhs);
     }
-    if (Semantics::isVector(lhsType))
+    if (lhsType.is<Semantics::VectorType>())
     {
         if (Semantics::isInteger(Semantics::getVectorElementType(lhsType)))
         {
@@ -221,7 +221,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::div(Value lhs, const Semantics::T
 
         return m_builder.CreateUDiv(lhs, rhs);
     }
-    if (Semantics::isVector(lhsType) && Semantics::isInteger(Semantics::getVectorElementType(lhsType)))
+    if (lhsType.is<Semantics::VectorType>() && Semantics::isInteger(Semantics::getVectorElementType(lhsType)))
     {
         if (Semantics::getVectorElementType(lhsType).as<Semantics::PrimitiveType>().isSigned())
         {
@@ -240,7 +240,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::mod(Value lhs, const Semantics::T
     {
         return m_builder.CreateSRem(lhs, rhs);
     }
-    if (Semantics::isVector(lhsType))
+    if (lhsType.is<Semantics::VectorType>())
     {
         if (Semantics::getVectorElementType(lhsType).as<Semantics::PrimitiveType>().isSigned())
         {
@@ -272,7 +272,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::shr(Value lhs, const Semantics::T
     {
         return m_builder.CreateLShr(lhs, rhs);
     }
-    if (Semantics::isVector(lhsType))
+    if (lhsType.is<Semantics::VectorType>())
     {
         if (!Semantics::getVectorElementType(lhsType).as<Semantics::PrimitiveType>().isSigned())
         {
@@ -284,11 +284,11 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::shr(Value lhs, const Semantics::T
 
 cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::cast(Value value, const Semantics::Type& from, const Semantics::Type& to)
 {
-    if (Semantics::isVector(from) || Semantics::isVector(to))
+    if (from.is<Semantics::VectorType>() || to.is<Semantics::VectorType>())
     {
         return m_builder.CreateBitCast(value, visit(to));
     }
-    if (Semantics::isPointer(to))
+    if (to.is<Semantics::PointerType>())
     {
         if (Semantics::isInteger(from))
         {
@@ -316,7 +316,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::cast(Value value, const Semantics
     }
     if (Semantics::isInteger(to))
     {
-        if (Semantics::isPointer(from))
+        if (from.is<Semantics::PointerType>())
         {
             return m_builder.CreatePtrToInt(value, visit(to));
         }

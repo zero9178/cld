@@ -328,7 +328,7 @@ llvm::DIType* cld::CGLLVM::CodeGenerator::visitDebug(const Semantics::Type& type
                 const Semantics::Type* currentType = &type;
                 for (auto index : iter.second.indices)
                 {
-                    if (Semantics::isStruct(*currentType))
+                    if (currentType->is<Semantics::StructType>())
                     {
                         const auto& memoryLayout = Semantics::getMemoryLayout(*currentType);
                         offset += memoryLayout[index].offset;
@@ -393,7 +393,7 @@ llvm::DIType* cld::CGLLVM::CodeGenerator::visitDebug(const Semantics::Type& type
                 const Semantics::Type* currentType = &type;
                 for (auto index : iter.second.indices)
                 {
-                    if (Semantics::isStruct(*currentType))
+                    if (currentType->is<Semantics::StructType>())
                     {
                         const auto& memoryLayout = Semantics::getMemoryLayout(*currentType);
                         offset += memoryLayout[index].offset;
@@ -515,7 +515,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDe
         case Semantics::Linkage::External: linkageType = llvm::GlobalValue::ExternalLinkage; break;
         case Semantics::Linkage::None: break;
     }
-    CLD_ASSERT(Semantics::isFunctionType(declaration.getType()));
+    CLD_ASSERT(declaration.getType().is<Semantics::FunctionType>());
     if (!m_options.emitAllDecls && !declaration.isUsed() && !declaration.hasAttribute<Semantics::UsedAttribute>())
     {
         return nullptr;
@@ -586,7 +586,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::VariableDe
             return cld::get<Semantics::VariableDeclaration*>(decl)->getType();
         }();
         auto* type = visit(declType);
-        if (Semantics::isAbstractArray(declType))
+        if (declType.is<Semantics::AbstractArrayType>())
         {
             type = llvm::ArrayType::get(type->getArrayElementType(), 1);
         }
@@ -619,11 +619,11 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::VariableDe
             global = new llvm::GlobalVariable(
                 m_module, type, declType.isConst() && linkageType != llvm::GlobalValue::CommonLinkage, linkageType,
                 constant, llvm::StringRef{declaration.getNameToken()->getText()});
-            if (Semantics::isCompleteType(declType) || Semantics::isAbstractArray(declType))
+            if (Semantics::isCompleteType(declType) || declType.is<Semantics::AbstractArrayType>())
             {
                 std::uint64_t alignment = declType.getAlignOf(m_programInterface);
                 if (getSourceInterface().getLanguageOptions().triple.getArchitecture() == cld::Architecture::x86_64
-                    && Semantics::isArray(declType) && !Semantics::isAbstractArray(declType)
+                    && Semantics::isArray(declType) && !declType.is<Semantics::AbstractArrayType>()
                     && declType.getSizeOf(m_programInterface) >= 16)
                 {
                     alignment = std::max<std::uint64_t>(16, alignment);

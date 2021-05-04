@@ -1,6 +1,11 @@
 #include "SemanticAnalysis.hpp"
 
+#include <cld/Support/Expected.hpp>
+#include <cld/Support/Util.hpp>
+
+#include "ConstValue.hpp"
 #include "ErrorMessages.hpp"
+#include "SourceInterface.hpp"
 
 cld::IntrVarPtr<cld::Semantics::ExpressionBase> cld::Semantics::SemanticAnalysis::visit(const Syntax::Expression& node)
 {
@@ -99,7 +104,7 @@ bool cld::Semantics::SemanticAnalysis::doAssignmentLikeConstraints(
         return true;
     }
 
-    if (isVector(lhsType))
+    if (lhsType.is<VectorType>())
     {
         if (!rhsValue->getType().isUndefined()
             && !typesAreCompatible(*removeQualifiers(lhsType), *removeQualifiers(rhsValue->getType())))
@@ -110,7 +115,7 @@ bool cld::Semantics::SemanticAnalysis::doAssignmentLikeConstraints(
         return true;
     }
 
-    if (!isPointer(lhsType))
+    if (!lhsType.is<PointerType>())
     {
         return true;
     }
@@ -132,7 +137,7 @@ bool cld::Semantics::SemanticAnalysis::doAssignmentLikeConstraints(
         return true;
     }
 
-    if (!rhsValue->getType().isUndefined() && !isPointer(rhsValue->getType()))
+    if (!rhsValue->getType().isUndefined() && !rhsValue->getType().is<PointerType>())
     {
         mustBePointer();
         return false;
@@ -149,7 +154,7 @@ bool cld::Semantics::SemanticAnalysis::doAssignmentLikeConstraints(
     {
         bool leftIsVoid = isVoid(lhsElementType);
         auto& nonVoidType = leftIsVoid ? rhsElementType : lhsElementType;
-        if (isFunctionType(nonVoidType))
+        if (nonVoidType.is<FunctionType>())
         {
             voidFunctionPointers();
             return false;
@@ -190,7 +195,7 @@ void cld::Semantics::SemanticAnalysis::checkVectorCompoundAssign(const IntrVarPt
                                                                  const Type& lhsType, Lexer::CTokenIterator token,
                                                                  const IntrVarPtr<ExpressionBase>& rhs)
 {
-    if (isVector(lhsType) && isVector(rhs->getType()))
+    if (lhsType.is<VectorType>() && rhs->getType().is<VectorType>())
     {
         if (rhs->getType() != lhsType)
         {
@@ -203,7 +208,7 @@ void cld::Semantics::SemanticAnalysis::checkVectorCompoundAssign(const IntrVarPt
         log(Errors::Semantics::CONVERSION_OF_SCALAR_IN_VECTOR_OPERATION_COULD_CAUSE_TRUNCATION.args(
             *token, m_sourceInterface, *lhs, *rhs));
     }
-    if (!isVector(lhs->getType()) && isVector(lhsType))
+    if (!lhs->getType().is<VectorType>() && lhsType.is<VectorType>())
     {
         log(Errors::Semantics::CANNOT_ASSIGN_INCOMPATIBLE_TYPES.args(*token, m_sourceInterface, *lhs, *token, *rhs));
     }
@@ -293,15 +298,15 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             case Syntax::AssignmentExpression::PlusAssign:
             case Syntax::AssignmentExpression::MinusAssign:
             {
-                if (!lhsValue->isUndefined() && !isScalar(lhsValue->getType()) && !isVector(lhsValue->getType()))
+                if (!lhsValue->isUndefined() && !isScalar(lhsValue->getType()) && !lhsValue->getType().is<VectorType>())
                 {
                     log(Errors::Semantics::LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
                         *lhsValue, m_sourceInterface, *token, *lhsValue));
                 }
-                if (isPointer(lhsValue->getType()))
+                if (lhsValue->getType().is<PointerType>())
                 {
                     auto& elementType = getPointerElementType(lhsValue->getType());
-                    if (isFunctionType(elementType))
+                    if (elementType.is<FunctionType>())
                     {
                         log(Errors::Semantics::POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC.args(
                             *lhsValue, m_sourceInterface, *lhsValue));
@@ -329,7 +334,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                         arithmeticConversion(&lhsType, rhsValue);
                     }
                 }
-                else if (isVector(lhsValue->getType()))
+                else if (lhsValue->getType().is<VectorType>())
                 {
                     arithmeticConversion(&lhsType, rhsValue);
                     checkVectorCompoundAssign(lhsValue, lhsType, token, rhsValue);
@@ -343,18 +348,18 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             case Syntax::AssignmentExpression::MultiplyAssign:
             {
                 arithmeticConversion(&lhsType, rhsValue);
-                if (!lhsType->isUndefined() && !isArithmetic(lhsType) && !isVector(lhsType))
+                if (!lhsType->isUndefined() && !isArithmetic(lhsType) && !lhsType->is<VectorType>())
                 {
                     log(Errors::Semantics::LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE.args(
                         *lhsValue, m_sourceInterface, *token, *lhsValue));
                 }
                 if (!rhsValue->getType().isUndefined() && !isArithmetic(rhsValue->getType())
-                    && !isVector(rhsValue->getType()))
+                    && !rhsValue->getType().is<VectorType>())
                 {
                     log(Errors::Semantics::RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE.args(
                         *rhsValue, m_sourceInterface, *token, *rhsValue));
                 }
-                if (isVector(lhsType) || isVector(rhsValue->getType()))
+                if (lhsType->is<VectorType>() || rhsValue->getType().is<VectorType>())
                 {
                     checkVectorCompoundAssign(lhsValue, lhsType, token, rhsValue);
                 }
@@ -367,18 +372,18 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             {
                 arithmeticConversion(&lhsType, rhsValue);
                 if (!lhsType->isUndefined() && !isInteger(lhsType)
-                    && (!isVector(lhsType) || !isInteger(getVectorElementType(lhsType))))
+                    && (!lhsType->is<VectorType>() || !isInteger(getVectorElementType(lhsType))))
                 {
                     log(Errors::Semantics::LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE.args(
                         *lhsValue, m_sourceInterface, *token, *lhsValue));
                 }
                 if (!rhsValue->isUndefined() && !isInteger(rhsValue->getType())
-                    && (!isVector(rhsValue->getType()) || !isInteger(getVectorElementType(rhsValue->getType()))))
+                    && (!rhsValue->getType().is<VectorType>() || !isInteger(getVectorElementType(rhsValue->getType()))))
                 {
                     log(Errors::Semantics::RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE.args(
                         *rhsValue, m_sourceInterface, *token, *rhsValue));
                 }
-                if (isVector(lhsType) || isVector(rhsValue->getType()))
+                if (lhsType->is<VectorType>() || rhsValue->getType().is<VectorType>())
                 {
                     checkVectorCompoundAssign(lhsValue, lhsType, token, rhsValue);
                 }
@@ -387,7 +392,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             case Syntax::AssignmentExpression::LeftShiftAssign:
             case Syntax::AssignmentExpression::RightShiftAssign:
             {
-                if (isVector(lhsType) || isVector(rhsValue->getType()))
+                if (lhsType->is<VectorType>() || rhsValue->getType().is<VectorType>())
                 {
                     arithmeticConversion(&lhsType, rhsValue);
                 }
@@ -397,18 +402,18 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                     rhsValue = integerPromotion(std::move(rhsValue));
                 }
                 if (!lhsType->isUndefined() && !isInteger(lhsType)
-                    && (!isVector(lhsType) || !isInteger(getVectorElementType(lhsType))))
+                    && (!lhsType->is<VectorType>() || !isInteger(getVectorElementType(lhsType))))
                 {
                     log(Errors::Semantics::LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE.args(
                         *lhsValue, m_sourceInterface, *token, *lhsValue));
                 }
                 if (!rhsValue->isUndefined() && !isInteger(rhsValue->getType())
-                    && (!isVector(rhsValue->getType()) || !isInteger(getVectorElementType(rhsValue->getType()))))
+                    && (!rhsValue->getType().is<VectorType>() || !isInteger(getVectorElementType(rhsValue->getType()))))
                 {
                     log(Errors::Semantics::RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE.args(
                         *rhsValue, m_sourceInterface, *token, *rhsValue));
                 }
-                if (isVector(*lhsType) || isVector(rhsValue->getType()))
+                if (lhsType->is<VectorType>() || rhsValue->getType().is<VectorType>())
                 {
                     checkVectorCompoundAssign(lhsValue, lhsType, token, rhsValue);
                 }
@@ -686,7 +691,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     const Type* currentType = type.data();
     for (auto& iter : result->second.indices)
     {
-        if (isUnion(*currentType))
+        if (currentType->is<UnionType>())
         {
             auto fieldLayout = getFieldLayout(*currentType);
             currentType = fieldLayout[iter].type;
@@ -727,7 +732,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             range = llvm::ArrayRef(node.getMemberName(), cld::get<Lexer::CTokenIterator>(iter) + 1);
             for (auto& index : subResult->second.indices)
             {
-                if (isUnion(*currentType))
+                if (currentType->is<UnionType>())
                 {
                     auto fieldLayout = getFieldLayout(*currentType);
                     currentType = fieldLayout[index].type;
@@ -816,16 +821,16 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     {
         return std::make_unique<ErrorExpression>(node);
     }
-    if (!isPointer(first->getType()) && !isPointer(second->getType()) && !isVector(first->getType())
-        && !isVector(second->getType()))
+    if (!first->getType().is<PointerType>() && !second->getType().is<PointerType>()
+        && !first->getType().is<VectorType>() && !second->getType().is<VectorType>())
     {
         log(Errors::Semantics::EXPECTED_ONE_OPERAND_TO_BE_OF_POINTER_TYPE.args(node.getPostFixExpression(),
                                                                                m_sourceInterface, *first, *second));
         return std::make_unique<ErrorExpression>(node);
     }
-    if (isVector(first->getType()) || isVector(second->getType()))
+    if (first->getType().is<VectorType>() || second->getType().is<VectorType>())
     {
-        auto& vectorExpr = isVector(first->getType()) ? first : second;
+        auto& vectorExpr = first->getType().is<VectorType>() ? first : second;
         auto& intExpr = &vectorExpr == &first ? second : first;
         if (!isInteger(intExpr->getType()))
         {
@@ -838,7 +843,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                                                    node.getOpenBracket(), std::move(second), node.getCloseBracket());
     }
 
-    auto& pointerExpr = isPointer(first->getType()) ? first : second;
+    auto& pointerExpr = first->getType().is<PointerType>() ? first : second;
     auto& intExpr = &pointerExpr == &first ? second : first;
     if (!isInteger(intExpr->getType()))
     {
@@ -853,7 +858,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             *pointerExpr, m_sourceInterface, elementType, *pointerExpr));
         return std::make_unique<ErrorExpression>(node);
     }
-    if (isFunctionType(elementType))
+    if (elementType->is<FunctionType>())
     {
         log(Errors::Semantics::POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_SUBSCRIPT_OPERATOR.args(
             *pointerExpr, m_sourceInterface, *pointerExpr));
@@ -865,7 +870,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
 
 void cld::Semantics::SemanticAnalysis::reportNoMember(const Type& recordType, const Lexer::CToken& identifier)
 {
-    if (isUnion(recordType))
+    if (recordType.is<UnionType>())
     {
         if (isAnonymous(recordType))
         {
@@ -878,7 +883,7 @@ void cld::Semantics::SemanticAnalysis::reportNoMember(const Type& recordType, co
                                                                             recordType.as<UnionType>().getUnionName()));
         }
     }
-    if (isStruct(recordType))
+    if (recordType.is<StructType>())
     {
         if (isAnonymous(recordType))
         {
@@ -974,7 +979,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     {
         return std::make_unique<ErrorExpression>(node);
     }
-    if (!isPointer(structOrUnionPtr->getType()))
+    if (!structOrUnionPtr->getType().is<PointerType>())
     {
         log(Errors::Semantics::EXPECTED_POINTER_TO_STRUCT_OR_UNION_ON_THE_LEFT_SIDE_OF_THE_ARROW_OPERATOR.args(
             *structOrUnionPtr, m_sourceInterface, *structOrUnionPtr));
@@ -1258,7 +1263,7 @@ std::unique_ptr<cld::Semantics::CallExpression>
     {
         auto& decl = function->as<Conversion>().getExpression().as<DeclarationRead>();
         arguments.push_back(lvalueConversion(visit(node.getOptionalAssignmentExpressions()[0])));
-        if (!isPointer(arguments.back()->getType()))
+        if (!arguments.back()->getType().is<PointerType>())
         {
             log(Errors::Semantics::EXPECTED_POINTER_TYPE_AS_FIRST_ARGUMENT_TO_N.args(
                 *arguments.back(), m_sourceInterface, *decl.getIdentifierToken(), *arguments.back()));
@@ -1271,7 +1276,7 @@ std::unique_ptr<cld::Semantics::CallExpression>
                 log(Errors::Semantics::POINTER_ELEMENT_TYPE_IN_N_MAY_NOT_BE_CONST_QUALIFIED.args(
                     *arguments.back(), m_sourceInterface, *decl.getIdentifierToken(), *arguments.back()));
             }
-            if (!isInteger(elementType) && !isPointer(elementType))
+            if (!isInteger(elementType) && !elementType.is<PointerType>())
             {
                 log(Errors::Semantics::POINTER_ELEMENT_TYPE_IN_N_MUST_BE_AN_INTEGER_OR_POINTER_TYPe.args(
                     *arguments.back(), m_sourceInterface, *decl.getIdentifierToken(), *arguments.back()));
@@ -1486,7 +1491,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     if (!isBuiltinFunction(*function))
     {
         function = lvalueConversion(std::move(function));
-        if (!isPointer(function->getType()) || !isFunctionType(getPointerElementType(function->getType())))
+        if (!function->getType().is<PointerType>() || !getPointerElementType(function->getType()).is<FunctionType>())
         {
             if (!function->getType().isUndefined())
             {
@@ -1566,7 +1571,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         log(Errors::Semantics::INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args(*value, m_sourceInterface, elementType,
                                                                                  *value, value->getType()));
     }
-    else if (isFunctionType(elementType))
+    else if (elementType.is<FunctionType>())
     {
         log(Errors::Semantics::POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC.args(
             *value, m_sourceInterface, *value));
@@ -1603,7 +1608,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     }
     attributes = applyAttributes(std::pair{&type, diag::getPointRange(node.getTypeName())}, std::move(attributes));
     reportNotApplicableAttributes(attributes);
-    if (isFunctionType(type))
+    if (type->is<FunctionType>())
     {
         log(Errors::Semantics::CANNOT_INITIALIZE_FUNCTION_TYPE.args(node.getTypeName(), m_sourceInterface,
                                                                     node.getTypeName(), type));
@@ -1618,7 +1623,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         return std::make_unique<ErrorExpression>(node);
     }
     Initializer value{std::make_unique<ErrorExpression>(node)};
-    if (isAbstractArray(type))
+    if (type->is<AbstractArrayType>())
     {
         std::size_t size = 0;
         value = visit(node.getInitializerList(), type, !inFunction() || m_inStaticInitializer, &size);
@@ -1674,7 +1679,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                 }
             }
             if (auto* subscript = value->tryAs<SubscriptOperator>();
-                subscript && isVector(subscript->getPointerExpression().getType()))
+                subscript && subscript->getPointerExpression().getType().is<VectorType>())
             {
                 log(Errors::Semantics::CANNOT_TAKE_ADDRESS_OF_VECTOR_ELEMENT.args(*value, m_sourceInterface,
                                                                                   *node.getUnaryToken(), *value));
@@ -1696,7 +1701,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Asterisk:
         {
             value = lvalueConversion(std::move(value));
-            if (!value->getType().isUndefined() && !isPointer(value->getType()))
+            if (!value->getType().isUndefined() && !value->getType().is<PointerType>())
             {
                 log(Errors::Semantics::CANNOT_DEREFERENCE_NON_POINTER_TYPE_N.args(
                     *node.getUnaryToken(), m_sourceInterface, *node.getUnaryToken(), *value));
@@ -1714,7 +1719,8 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         case Syntax::UnaryExpressionUnaryOperator::UnaryOperator::Plus:
         {
             value = integerPromotion(std::move(value));
-            if (!value->getType().isUndefined() && !isArithmetic(value->getType()) && !isVector(value->getType()))
+            if (!value->getType().isUndefined() && !isArithmetic(value->getType())
+                && !value->getType().is<VectorType>())
             {
                 log(Errors::Semantics::OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE.args(
                     *node.getUnaryToken(), m_sourceInterface, *node.getUnaryToken(), *value));
@@ -1733,7 +1739,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         {
             value = integerPromotion(std::move(value));
             if (!value->getType().isUndefined() && !isInteger(value->getType())
-                && (!isVector(value->getType()) || !isInteger(getVectorElementType(value->getType()))))
+                && (!value->getType().is<VectorType>() || !isInteger(getVectorElementType(value->getType()))))
             {
                 log(Errors::Semantics::OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE.args(
                     *node.getUnaryToken(), m_sourceInterface, *node.getUnaryToken(), *value));
@@ -1779,7 +1785,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                 log(Errors::Semantics::INCOMPLETE_TYPE_N_IN_SIZE_OF.args(*exp, m_sourceInterface, type, *exp));
                 return std::make_unique<ErrorExpression>(node);
             }
-            if (isFunctionType(type))
+            if (type.is<FunctionType>())
             {
                 log(Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF.args(*exp, m_sourceInterface, *exp, type));
                 return std::make_unique<ErrorExpression>(node);
@@ -1814,7 +1820,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                                                                          *typeName));
                 return std::make_unique<ErrorExpression>(node);
             }
-            if (isFunctionType(type))
+            if (type->is<FunctionType>())
             {
                 log(Errors::Semantics::FUNCTION_TYPE_NOT_ALLOWED_IN_SIZE_OF.args(*typeName, m_sourceInterface,
                                                                                  *typeName, type));
@@ -1878,27 +1884,27 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                 return std::make_unique<Cast>(removeQualifiers(type), cast.openParentheses, cast.closeParentheses,
                                               std::move(value));
             }
-            if (!isScalar(type) && !isVector(type))
+            if (!isScalar(type) && !type->is<VectorType>())
             {
                 log(Errors::Semantics::TYPE_IN_CAST_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
                     cast.typeName, m_sourceInterface, cast.typeName, type));
                 return std::make_unique<ErrorExpression>(node);
             }
-            if (!isScalar(value->getType()) && !isVector(value->getType()))
+            if (!isScalar(value->getType()) && !value->getType().is<VectorType>())
             {
                 log(Errors::Semantics::EXPRESSION_IN_CAST_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
                     *value, m_sourceInterface, *value));
                 return std::make_unique<ErrorExpression>(node);
             }
             type = lvalueConversion(std::move(type));
-            if (isVector(type) || isVector(value->getType()))
+            if (type->is<VectorType>() || value->getType().is<VectorType>())
             {
-                if (isVector(type) != isVector(value->getType()))
+                if (type->is<VectorType>() != value->getType().is<VectorType>())
                 {
                     // Only one of them is a vector
                     if (!isInteger(type) && !isInteger(value->getType()))
                     {
-                        if (isVector(value->getType()))
+                        if (value->getType().is<VectorType>())
                         {
                             log(Errors::Semantics::CANNOT_CAST_FROM_VECTOR_TYPE_TO_NON_INTEGER_OR_VECTOR_TYPE.args(
                                 *value, m_sourceInterface, cast.typeName, type, *value));
@@ -1920,7 +1926,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                     auto fromString = "sizeof("
                                       + diag::StringConverter<Type>::inArg(value->getType(), &m_sourceInterface)
                                       + ") = " + std::to_string(fromSize);
-                    if (isVector(type))
+                    if (type->is<VectorType>())
                     {
                         log(Errors::Semantics::CANNOT_CAST_TO_VECTOR_TYPE_FROM_TYPE_OF_DIFFERING_SIZE.args(
                             *value, m_sourceInterface, cast.typeName, toString, *value, fromString));
@@ -1933,18 +1939,18 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                     return std::make_unique<ErrorExpression>(node);
                 }
             }
-            else if (isPointer(type))
+            else if (type->is<PointerType>())
             {
-                if (!isPointer(value->getType()) && !isInteger(value->getType()))
+                if (!value->getType().is<PointerType>() && !isInteger(value->getType()))
                 {
                     log(Errors::Semantics::CANNOT_CAST_NON_INTEGER_AND_POINTER_TYPE_N_TO_POINTER_TYPE.args(
                         *value, m_sourceInterface, *value));
                     return std::make_unique<ErrorExpression>(node);
                 }
             }
-            else if (isPointer(value->getType()))
+            else if (value->getType().is<PointerType>())
             {
-                if (!isPointer(type) && !isInteger(type))
+                if (!type->is<PointerType>() && !isInteger(type))
                 {
                     log(Errors::Semantics::CANNOT_CAST_POINTER_TYPE_TO_NON_INTEGER_AND_POINTER_TYPE.args(
                         cast.typeName, m_sourceInterface, cast.typeName, *value));
@@ -1960,9 +1966,9 @@ bool cld::Semantics::SemanticAnalysis::checkVectorBinaryOp(const IntrVarPtr<Expr
                                                            Lexer::CTokenIterator token,
                                                            const IntrVarPtr<ExpressionBase>& rhs)
 {
-    if (isVector(lhs->getType()) || isVector(rhs->getType()))
+    if (lhs->getType().is<VectorType>() || rhs->getType().is<VectorType>())
     {
-        if (isVector(lhs->getType()) && isVector(rhs->getType()))
+        if (lhs->getType().is<VectorType>() && rhs->getType().is<VectorType>())
         {
             if (rhs->getType() != lhs->getType())
             {
@@ -1998,13 +2004,14 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase> cld::Semantics::SemanticAnalysis
             {
                 arithmeticConversion(&value, rhsValue);
                 bool errors = false;
-                if (!value->isUndefined() && !isArithmetic(value->getType()) && !isVector(value->getType()))
+                if (!value->isUndefined() && !isArithmetic(value->getType()) && !value->getType().is<VectorType>())
                 {
                     log(Errors::Semantics::LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE.args(
                         *value, m_sourceInterface, *token, *value));
                     errors = true;
                 }
-                if (!rhsValue->isUndefined() && !isArithmetic(rhsValue->getType()) && !isVector(value->getType()))
+                if (!rhsValue->isUndefined() && !isArithmetic(rhsValue->getType())
+                    && !value->getType().is<VectorType>())
                 {
                     log(Errors::Semantics::RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_TYPE.args(
                         *rhsValue, m_sourceInterface, *token, *rhsValue));
@@ -2028,14 +2035,14 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase> cld::Semantics::SemanticAnalysis
                 arithmeticConversion(&value, rhsValue);
                 bool errors = false;
                 if (!value->isUndefined() && !isInteger(value->getType())
-                    && (!isVector(value->getType()) || !isInteger(getVectorElementType(value->getType()))))
+                    && (!value->getType().is<VectorType>() || !isInteger(getVectorElementType(value->getType()))))
                 {
                     log(Errors::Semantics::LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE.args(
                         *value, m_sourceInterface, *token, *value));
                     errors = true;
                 }
                 if (!rhsValue->isUndefined() && !isInteger(rhsValue->getType())
-                    && (!isVector(value->getType()) || !isInteger(getVectorElementType(value->getType()))))
+                    && (!value->getType().is<VectorType>() || !isInteger(getVectorElementType(value->getType()))))
                 {
                     log(Errors::Semantics::RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE.args(
                         *rhsValue, m_sourceInterface, *token, *rhsValue));
@@ -2068,8 +2075,8 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     for (auto& [kind, token, rhs] : node.getOptionalTerms())
     {
         auto rhsValue = visit(rhs);
-        if ((isArithmetic(value->getType()) && isArithmetic(rhsValue->getType())) || isVector(value->getType())
-            || isVector(rhsValue->getType()))
+        if ((isArithmetic(value->getType()) && isArithmetic(rhsValue->getType())) || value->getType().is<VectorType>()
+            || rhsValue->getType().is<VectorType>())
         {
             arithmeticConversion(&value, rhsValue);
         }
@@ -2079,20 +2086,20 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             rhsValue = lvalueConversion(std::move(rhsValue));
         }
         bool errors = false;
-        if (!value->getType().isUndefined() && !isScalar(value->getType()) && !isVector(value->getType()))
+        if (!value->getType().isUndefined() && !isScalar(value->getType()) && !value->getType().is<VectorType>())
         {
             log(Errors::Semantics::LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
                 *value, m_sourceInterface, *token, *value));
             errors = true;
         }
-        if (!rhsValue->getType().isUndefined() && !isScalar(rhsValue->getType()) && !isVector(value->getType()))
+        if (!rhsValue->getType().isUndefined() && !isScalar(rhsValue->getType()) && !value->getType().is<VectorType>())
         {
             log(Errors::Semantics::RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
                 *rhsValue, m_sourceInterface, *token, *rhsValue));
             errors = true;
         }
-        if ((isVector(value->getType()) && isPointer(rhsValue->getType()))
-            || (isPointer(value->getType()) && isVector(rhsValue->getType())))
+        if ((value->getType().is<VectorType>() && rhsValue->getType().is<PointerType>())
+            || (value->getType().is<PointerType>() && rhsValue->getType().is<VectorType>()))
         {
             log(Errors::Semantics::POINTER_ARITHMETIC_WITH_VECTORS_IS_NOT_ALLOWED.args(*token, m_sourceInterface,
                                                                                        *value, *token, *rhsValue));
@@ -2118,14 +2125,14 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                                                              BinaryOperator::Subtraction, token, std::move(rhsValue));
                     continue;
                 }
-                if (isVector(value->getType()))
+                if (value->getType().is<VectorType>())
                 {
                     IntrVarValue type = value->getType();
                     value = std::make_unique<BinaryOperator>(std::move(type), std::move(value),
                                                              BinaryOperator::Subtraction, token, std::move(rhsValue));
                     continue;
                 }
-                if (isArithmetic(value->getType()) && isPointer(rhsValue->getType()))
+                if (isArithmetic(value->getType()) && rhsValue->getType().is<PointerType>())
                 {
                     log(Errors::Semantics::CANNOT_SUBTRACT_POINTER_FROM_ARITHMETIC_TYPE.args(
                         *value, m_sourceInterface, *value, *token, *rhsValue));
@@ -2141,12 +2148,12 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                     log(Errors::Semantics::INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args(
                         *value, m_sourceInterface, valueElementType, *value, value->getType()));
                 }
-                else if (isFunctionType(valueElementType))
+                else if (valueElementType.is<FunctionType>())
                 {
                     log(Errors::Semantics::POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC.args(
                         *value, m_sourceInterface, *value));
                 }
-                if (isPointer(rhsValue->getType()))
+                if (rhsValue->getType().is<PointerType>())
                 {
                     auto& rhsElementType = getPointerElementType(rhsValue->getType());
                     if (!isCompleteType(rhsElementType))
@@ -2154,7 +2161,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                         log(Errors::Semantics::INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args(
                             *rhsValue, m_sourceInterface, rhsElementType, *rhsValue, rhsValue->getType()));
                     }
-                    else if (isFunctionType(rhsElementType))
+                    else if (rhsElementType.is<FunctionType>())
                     {
                         log(Errors::Semantics::POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC.args(
                             *rhsValue, m_sourceInterface, *rhsValue));
@@ -2191,14 +2198,14 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                                                              BinaryOperator::Addition, token, std::move(rhsValue));
                     continue;
                 }
-                if (isVector(value->getType()))
+                if (value->getType().is<VectorType>())
                 {
                     IntrVarValue type = value->getType();
                     value = std::make_unique<BinaryOperator>(std::move(type), std::move(value),
                                                              BinaryOperator::Addition, token, std::move(rhsValue));
                     continue;
                 }
-                auto& pointerExpr = isPointer(value->getType()) ? value : rhsValue;
+                auto& pointerExpr = value->getType().is<PointerType>() ? value : rhsValue;
                 auto& intExpr = &pointerExpr == &value ? rhsValue : value;
                 if (!isInteger(intExpr->getType()))
                 {
@@ -2211,7 +2218,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                     log(Errors::Semantics::INCOMPLETE_TYPE_N_USED_IN_POINTER_ARITHMETIC.args(
                         *pointerExpr, m_sourceInterface, elementType, *pointerExpr, pointerExpr->getType()));
                 }
-                else if (isFunctionType(elementType))
+                else if (elementType.is<FunctionType>())
                 {
                     log(Errors::Semantics::POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC.args(
                         *pointerExpr, m_sourceInterface, *pointerExpr));
@@ -2238,7 +2245,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     for (auto& [kind, token, rhs] : node.getOptionalAdditiveExpressions())
     {
         auto rhsValue = visit(rhs);
-        if (isVector(value->getType()) || isVector(rhsValue->getType()))
+        if (value->getType().is<VectorType>() || rhsValue->getType().is<VectorType>())
         {
             arithmeticConversion(&value, rhsValue);
         }
@@ -2248,14 +2255,14 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         }
         bool errors = false;
         if (!value->getType().isUndefined() && !isInteger(value->getType())
-            && (!isVector(value->getType()) || !isInteger(getVectorElementType(value->getType()))))
+            && (!value->getType().is<VectorType>() || !isInteger(getVectorElementType(value->getType()))))
         {
             log(Errors::Semantics::LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE.args(*value, m_sourceInterface,
                                                                                            *token, *value));
             errors = true;
         }
         if (!rhsValue->getType().isUndefined() && !isInteger(rhsValue->getType())
-            && (!isVector(rhsValue->getType()) || !isInteger(getVectorElementType(rhsValue->getType()))))
+            && (!rhsValue->getType().is<VectorType>() || !isInteger(getVectorElementType(rhsValue->getType()))))
         {
             log(Errors::Semantics::RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE.args(
                 *rhsValue, m_sourceInterface, *token, *rhsValue));
@@ -2336,8 +2343,8 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     {
         IntrVarValue resultType = PrimitiveType(PrimitiveType::Int, getLanguageOptions());
         auto rhsValue = visit(rhs);
-        if ((isArithmetic(value->getType()) && isArithmetic(rhsValue->getType())) || isVector(value->getType())
-            || isVector(rhsValue->getType()))
+        if ((isArithmetic(value->getType()) && isArithmetic(rhsValue->getType())) || value->getType().is<VectorType>()
+            || rhsValue->getType().is<VectorType>())
         {
             arithmeticConversion(&value, rhsValue);
         }
@@ -2346,12 +2353,12 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             value = lvalueConversion(std::move(value));
             rhsValue = lvalueConversion(std::move(rhsValue));
         }
-        if (!value->isUndefined() && !isScalar(value->getType()) && !isVector(value->getType()))
+        if (!value->isUndefined() && !isScalar(value->getType()) && !value->getType().is<VectorType>())
         {
             log(Errors::Semantics::LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
                 *value, m_sourceInterface, *token, *value));
         }
-        else if (isArithmetic(value->getType()) && !isVector(rhsValue->getType()))
+        else if (isArithmetic(value->getType()) && !rhsValue->getType().is<VectorType>())
         {
             if (!rhsValue->isUndefined() && !isArithmetic(rhsValue->getType()))
             {
@@ -2359,9 +2366,9 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                     *rhsValue, m_sourceInterface, *token, *rhsValue));
             }
         }
-        else if (isPointer(value->getType()))
+        else if (value->getType().is<PointerType>())
         {
-            if (!rhsValue->isUndefined() && !isPointer(rhsValue->getType()))
+            if (!rhsValue->isUndefined() && !rhsValue->getType().is<PointerType>())
             {
                 log(Errors::Semantics::EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_A_POINTER_TYPE.args(
                     *rhsValue, m_sourceInterface, *token, *rhsValue));
@@ -2370,11 +2377,11 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             {
                 auto rhsElementType = removeQualifiers(getPointerElementType(rhsValue->getType()));
                 auto valueElementType = removeQualifiers(getPointerElementType(value->getType()));
-                if (isFunctionType(valueElementType))
+                if (valueElementType->is<FunctionType>())
                 {
                     log(Errors::Semantics::POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC.args(
                         *value, m_sourceInterface, *value));
-                    if (isFunctionType(rhsElementType))
+                    if (rhsElementType->is<FunctionType>())
                     {
                         log(Errors::Semantics::POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC.args(
                             *rhsValue, m_sourceInterface, *rhsValue));
@@ -2382,7 +2389,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                 }
                 else
                 {
-                    if (isFunctionType(rhsElementType))
+                    if (rhsElementType->is<FunctionType>())
                     {
                         log(Errors::Semantics::POINTER_TO_FUNCTION_TYPE_NOT_ALLOWED_IN_POINTER_ARITHMETIC.args(
                             *rhsValue, m_sourceInterface, *rhsValue));
@@ -2395,7 +2402,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                 }
             }
         }
-        else if (isVector(value->getType()) || isVector(rhsValue->getType()))
+        else if (value->getType().is<VectorType>() || rhsValue->getType().is<VectorType>())
         {
             if (checkVectorBinaryOp(value, token, rhsValue))
             {
@@ -2434,8 +2441,8 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     {
         IntrVarValue resultType = PrimitiveType(PrimitiveType::Int, getLanguageOptions());
         auto rhsValue = visit(rhs);
-        if ((isArithmetic(value->getType()) && isArithmetic(rhsValue->getType())) || isVector(value->getType())
-            || isVector(rhsValue->getType()))
+        if ((isArithmetic(value->getType()) && isArithmetic(rhsValue->getType())) || value->getType().is<VectorType>()
+            || rhsValue->getType().is<VectorType>())
         {
             arithmeticConversion(&value, rhsValue);
         }
@@ -2444,14 +2451,14 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             value = lvalueConversion(std::move(value));
             rhsValue = lvalueConversion(std::move(rhsValue));
         }
-        if (!value->isUndefined() && !isScalar(value->getType()) && !isVector(value->getType()))
+        if (!value->isUndefined() && !isScalar(value->getType()) && !value->getType().is<VectorType>())
         {
             log(Errors::Semantics::LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
                 *value, m_sourceInterface, *token, *value));
         }
-        else if (isArithmetic(value->getType()) && !isVector(rhsValue->getType()))
+        else if (isArithmetic(value->getType()) && !rhsValue->getType().is<VectorType>())
         {
-            if (isPointer(rhsValue->getType()) && isInteger(value->getType()))
+            if (rhsValue->getType().is<PointerType>() && isInteger(value->getType()))
             {
                 auto constant = evaluateConstantExpression(*value);
                 if (!constant || constant->getInteger() != 0)
@@ -2467,7 +2474,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                     *rhsValue, m_sourceInterface, *token, *rhsValue));
             }
         }
-        else if (isPointer(value->getType()))
+        else if (value->getType().is<PointerType>())
         {
             if (isInteger(rhsValue->getType()))
             {
@@ -2487,7 +2494,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                 }
                 rhsValue = std::make_unique<Conversion>(value->getType(), Conversion::Implicit, std::move(rhsValue));
             }
-            else if (!rhsValue->isUndefined() && !isPointer(rhsValue->getType()))
+            else if (!rhsValue->isUndefined() && !rhsValue->getType().is<PointerType>())
             {
                 log(Errors::Semantics::EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_A_POINTER_TYPE.args(
                     *rhsValue, m_sourceInterface, *token, *rhsValue));
@@ -2517,7 +2524,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                 }
             }
         }
-        else if (isVector(value->getType()) || isVector(rhsValue->getType()))
+        else if (value->getType().is<VectorType>() || rhsValue->getType().is<VectorType>())
         {
             if (checkVectorBinaryOp(value, token, rhsValue))
             {
@@ -2538,21 +2545,21 @@ std::unique_ptr<cld::Semantics::BinaryOperator>
     cld::Semantics::SemanticAnalysis::doBitOperators(IntrVarPtr<ExpressionBase>&& lhs, BinaryOperator::Kind kind,
                                                      Lexer::CTokenIterator token, IntrVarPtr<ExpressionBase>&& rhs)
 {
-    if ((isArithmetic(lhs->getType()) && isArithmetic(rhs->getType())) || isVector(lhs->getType())
-        || isVector(rhs->getType()))
+    if ((isArithmetic(lhs->getType()) && isArithmetic(rhs->getType())) || lhs->getType().is<VectorType>()
+        || rhs->getType().is<VectorType>())
     {
         arithmeticConversion(&lhs, rhs);
     }
     bool errors = false;
     if (!lhs->isUndefined() && !isInteger(lhs->getType())
-        && (!isVector(lhs->getType()) || !isInteger(getVectorElementType(lhs->getType()))))
+        && (!lhs->getType().is<VectorType>() || !isInteger(getVectorElementType(lhs->getType()))))
     {
         log(Errors::Semantics::LEFT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE.args(*lhs, m_sourceInterface, *token,
                                                                                        *lhs));
         errors = true;
     }
     if (!rhs->isUndefined() && !isInteger(rhs->getType())
-        && (!isVector(rhs->getType()) || !isInteger(getVectorElementType(rhs->getType()))))
+        && (!rhs->getType().is<VectorType>() || !isInteger(getVectorElementType(rhs->getType()))))
     {
         log(Errors::Semantics::RIGHT_OPERAND_OF_OPERATOR_N_MUST_BE_AN_INTEGER_TYPE.args(*rhs, m_sourceInterface, *token,
                                                                                         *rhs));
@@ -2682,8 +2689,8 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     condition = toBool(std::move(condition));
     auto second = visit(*node.getOptionalExpression());
     auto third = visit(*node.getOptionalConditionalExpression());
-    if ((isArithmetic(second->getType()) && isArithmetic(third->getType())) || isVector(second->getType())
-        || isVector(third->getType()))
+    if ((isArithmetic(second->getType()) && isArithmetic(third->getType())) || second->getType().is<VectorType>()
+        || third->getType().is<VectorType>())
     {
         arithmeticConversion(&second, third);
     }
@@ -2694,9 +2701,9 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     }
 
     IntrVarValue resultType = ErrorType{};
-    if (isArithmetic(second->getType()) && !isVector(third->getType()))
+    if (isArithmetic(second->getType()) && !third->getType().is<VectorType>())
     {
-        if (isPointer(third->getType()) && isInteger(second->getType()))
+        if (third->getType().is<PointerType>() && isInteger(second->getType()))
         {
             auto constant = evaluateConstantExpression(*second);
             if (!constant || constant->getInteger() != 0)
@@ -2722,7 +2729,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         }
         resultType = second->getType();
     }
-    else if (isPointer(second->getType()))
+    else if (second->getType().is<PointerType>())
     {
         if (isInteger(third->getType()))
         {
@@ -2741,7 +2748,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             third = std::make_unique<Conversion>(second->getType(), Conversion::Implicit, std::move(third));
             resultType = second->getType();
         }
-        else if (!third->isUndefined() && !isPointer(third->getType()))
+        else if (!third->isUndefined() && !third->getType().is<PointerType>())
         {
             log(Errors::Semantics::EXPECTED_THIRD_OPERAND_OF_CONDITIONAL_EXPRESSION_TO_BE_A_POINTER_TYPE.args(
                 *third, m_sourceInterface, *third, *node.getOptionalQuestionMark(), *node.getOptionalColon()));
@@ -2788,9 +2795,9 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             resultType = second->getType();
         }
     }
-    else if (isVector(second->getType()) || isVector(third->getType()))
+    else if (second->getType().is<VectorType>() || third->getType().is<VectorType>())
     {
-        if (isVector(second->getType()) && isVector(third->getType()))
+        if (second->getType().is<VectorType>() && third->getType().is<VectorType>())
         {
             if (second->getType() != third->getType())
             {
@@ -2828,7 +2835,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         auto& elementType = getArrayElementType(expression->getType());
         return std::make_unique<Conversion>(PointerType(&elementType), Conversion::LValue, std::move(expression));
     }
-    if (isFunctionType(expression->getType()))
+    if (expression->getType().is<FunctionType>())
     {
         if (isBuiltinFunction(*expression))
         {
@@ -2861,7 +2868,7 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::lvalue
         auto& elementType = getArrayElementType(type);
         return PointerType(&elementType);
     }
-    if (isFunctionType(type))
+    if (type->is<FunctionType>())
     {
         return PointerType(typeAlloc(std::move(*type)));
     }
@@ -2927,8 +2934,8 @@ std::unique_ptr<cld::Semantics::Conversion>
 }
 
 void cld::Semantics::SemanticAnalysis::arithmeticConversion(
-    std::variant<IntrVarPtr<ExpressionBase> * CLD_NON_NULL, IntrVarValue<Type> * CLD_NON_NULL> lhs,
-    IntrVarPtr<ExpressionBase>& rhs)
+    std::variant<cld::IntrVarPtr<ExpressionBase> * CLD_NON_NULL, cld::IntrVarValue<Type> * CLD_NON_NULL> lhs,
+    cld::IntrVarPtr<cld::Semantics::ExpressionBase>& rhs)
 {
     auto getLhsType = [](auto&& value) -> const Type&
     {
@@ -2936,11 +2943,11 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(
             value, [](IntrVarValue<Type>* type) -> const Type& { return *type; },
             [](IntrVarPtr<ExpressionBase>* ptr) -> const Type& { return (*ptr)->getType(); });
     };
-    if (isVector(getLhsType(lhs)) || isVector(rhs->getType()))
+    if (getLhsType(lhs).is<VectorType>() || rhs->getType().is<VectorType>())
     {
         cld::match(lhs, [&](auto* lhs) { *lhs = lvalueConversion(std::move(*lhs)); });
         rhs = lvalueConversion(std::move(rhs));
-        if (isVector(getLhsType(lhs)) && isVector(rhs->getType()))
+        if (getLhsType(lhs).is<VectorType>() && rhs->getType().is<VectorType>())
         {
             std::size_t lhsKind = getVectorElementType(getLhsType(lhs)).as<PrimitiveType>().getKind();
             std::size_t rhsKind = getVectorElementType(rhs->getType()).as<PrimitiveType>().getKind();
@@ -2986,7 +2993,7 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(
             }
             return;
         }
-        auto& vectorType = isVector(getLhsType(lhs)) ? getLhsType(lhs) : rhs->getType();
+        auto& vectorType = getLhsType(lhs).is<VectorType>() ? getLhsType(lhs) : rhs->getType();
         auto& scalarType = &vectorType == &getLhsType(lhs) ? rhs->getType() : getLhsType(lhs);
         auto scalar = &vectorType == &getLhsType(lhs) ? decltype(lhs){&rhs} : lhs;
         if (!isArithmetic(scalarType))
@@ -2995,7 +3002,7 @@ void cld::Semantics::SemanticAnalysis::arithmeticConversion(
         }
         auto& elementType = getVectorElementType(vectorType);
         std::size_t scalarKind;
-        if (isEnum(scalarType))
+        if (scalarType.is<EnumType>())
         {
             scalarKind = integerPromotion(scalarType)->as<PrimitiveType>().getKind();
         }
@@ -3275,7 +3282,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             }
         });
 
-    if (isAbstractArray(type) && size)
+    if (type.is<AbstractArrayType>() && size)
     {
         auto& elementType = getArrayElementType(type);
         if (isCharType(elementType))
@@ -3466,7 +3473,7 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const Syntax
                                     if (isRecord(type))
                                     {
                                         auto ref = getFieldLayout(type);
-                                        if (isAbstractArray(*ref.back().type))
+                                        if (ref.back().type->is<AbstractArrayType>())
                                         {
                                             ref = ref.drop_back();
                                         }
@@ -3482,39 +3489,37 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const Syntax
                                             }
                                         }
                                     }
-                                    if (isArrayType(type))
+                                    if (auto* arrayType = type.tryAs<ArrayType>())
                                     {
-                                        auto& arrayType = type.as<ArrayType>();
-                                        parent.resize(arrayType.getSize());
-                                        for (std::size_t i = 0; i < arrayType.getSize(); i++)
+                                        parent.resize(arrayType->getSize());
+                                        for (std::size_t i = 0; i < arrayType->getSize(); i++)
                                         {
-                                            parent.at(i).type = &arrayType.getType();
+                                            parent.at(i).type = &arrayType->getType();
                                             parent.at(i).index = i;
                                             parent.at(i).parent = &parent;
-                                            if (isAggregate(arrayType.getType()))
+                                            if (isAggregate(arrayType->getType()))
                                             {
-                                                self(arrayType.getType(), parent.at(i));
+                                                self(arrayType->getType(), parent.at(i));
                                             }
                                         }
                                     }
-                                    if (isVector(type))
+                                    if (auto* vectorType = type.tryAs<VectorType>())
                                     {
-                                        auto& vectorType = type.as<VectorType>();
-                                        parent.resize(vectorType.getSize());
-                                        for (std::size_t i = 0; i < vectorType.getSize(); i++)
+                                        parent.resize(vectorType->getSize());
+                                        for (std::size_t i = 0; i < vectorType->getSize(); i++)
                                         {
-                                            parent.at(i).type = &vectorType.getType();
+                                            parent.at(i).type = &vectorType->getType();
                                             parent.at(i).index = i;
                                             parent.at(i).parent = &parent;
-                                            if (isAggregate(vectorType.getType()))
+                                            if (isAggregate(vectorType->getType()))
                                             {
-                                                self(vectorType.getType(), parent.at(i));
+                                                self(vectorType->getType(), parent.at(i));
                                             }
                                         }
                                     }
                                 }};
     bool abstractArray = false;
-    if (isAbstractArray(type))
+    if (type.is<AbstractArrayType>())
     {
         abstractArray = true;
         top.resize(1);
@@ -3646,7 +3651,7 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const Syntax
                 {
                     if (!std::holds_alternative<Lexer::CTokenIterator>(desig))
                     {
-                        if (isStruct(*current->type))
+                        if (current->type->is<StructType>())
                         {
                             log(Errors::Semantics::EXPECTED_MEMBER_DESIGNATOR_FOR_STRUCT_TYPE.args(
                                 desig, m_sourceInterface, desig));
@@ -3697,7 +3702,7 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const Syntax
                         finishRest(iter + 1, node.getNonCommaExpressionsAndBlocks().end());
                         return std::make_unique<ErrorExpression>(node);
                     }
-                    if (isAbstractArray(*result->second.type))
+                    if (result->second.type->is<AbstractArrayType>())
                     {
                         log(Errors::Semantics::CANNOT_INITIALIZE_FLEXIBLE_ARRAY_MEMBER.args(*token, m_sourceInterface,
                                                                                             *token));
@@ -3837,7 +3842,7 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const Syntax
                                                        std::move(expression), staticLifetime, nullptr);
             initializations.push_back({{path.rbegin(), path.rend()}, std::move(expression)});
         }
-        if (isUnion(*current->type))
+        if (current->type->is<UnionType>())
         {
             currentIndex = current->index + 1;
             current = current->parent;

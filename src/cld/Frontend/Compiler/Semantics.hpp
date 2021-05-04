@@ -2813,10 +2813,6 @@ Program analyse(const Syntax::TranslationUnit& parseTree, CSourceObject&& cToken
 
 [[nodiscard]] bool isArray(const Type& type);
 
-[[nodiscard]] bool isArrayType(const Type& type);
-
-[[nodiscard]] bool isAbstractArray(const Type& type);
-
 [[nodiscard]] bool isCharArray(const Type& type, const LanguageOptions& options);
 
 [[nodiscard]] const Type& getArrayElementType(const Type& type);
@@ -2833,27 +2829,15 @@ Program analyse(const Syntax::TranslationUnit& parseTree, CSourceObject&& cToken
 
 [[nodiscard]] bool isScalar(const Type& type);
 
-[[nodiscard]] bool isPointer(const Type& type);
-
 [[nodiscard]] bool isRecord(const Type& type);
 
-[[nodiscard]] bool isStruct(const Type& type);
-
-[[nodiscard]] bool isUnion(const Type& type);
-
 [[nodiscard]] bool isAnonymous(const Type& type);
-
-[[nodiscard]] bool isEnum(const Type& type);
 
 [[nodiscard]] bool isBool(const Type& type);
 
 [[nodiscard]] bool isCharType(const Type& type);
 
 [[nodiscard]] bool isAggregate(const Type& type);
-
-[[nodiscard]] bool isVector(const Type& type);
-
-[[nodiscard]] bool isFunctionType(const Type& type);
 
 [[nodiscard]] bool isVariablyModified(const Type& type);
 
@@ -3037,16 +3021,6 @@ inline bool cld::Semantics::isArray(const Type& type)
     return type.is<ArrayType>() || type.is<AbstractArrayType>() || type.is<ValArrayType>();
 }
 
-inline bool cld::Semantics::isArrayType(const Type& type)
-{
-    return type.is<ArrayType>();
-}
-
-inline bool cld::Semantics::isAbstractArray(const Type& type)
-{
-    return type.is<AbstractArrayType>();
-}
-
 inline bool cld::Semantics::isCharArray(const Type& type, const LanguageOptions& options)
 {
     if (!isArray(type))
@@ -3091,24 +3065,9 @@ inline bool cld::Semantics::isScalar(const Type& type)
     return isArithmetic(type) || type.is<PointerType>();
 }
 
-inline bool cld::Semantics::isPointer(const cld::Semantics::Type& type)
-{
-    return type.is<PointerType>();
-}
-
 inline bool cld::Semantics::isRecord(const cld::Semantics::Type& type)
 {
-    return isUnion(type) || isStruct(type);
-}
-
-inline bool cld::Semantics::isStruct(const cld::Semantics::Type& type)
-{
-    return type.is<StructType>();
-}
-
-inline bool cld::Semantics::isUnion(const cld::Semantics::Type& type)
-{
-    return type.is<UnionType>();
+    return type.is<UnionType>() || type.is<StructType>();
 }
 
 inline bool cld::Semantics::isAnonymous(const Type& type)
@@ -3116,11 +3075,6 @@ inline bool cld::Semantics::isAnonymous(const Type& type)
     return (type.is<EnumType>() && type.as<EnumType>().isAnonymous())
            || (type.is<StructType>() && type.as<StructType>().isAnonymous())
            || (type.is<UnionType>() && type.as<UnionType>().isAnonymous());
-}
-
-inline bool cld::Semantics::isEnum(const Type& type)
-{
-    return type.is<EnumType>();
 }
 
 inline bool cld::Semantics::isBool(const cld::Semantics::Type& type)
@@ -3156,17 +3110,7 @@ inline bool cld::Semantics::isCharacterLikeType(const Type& type, const Language
 
 inline bool cld::Semantics::isAggregate(const Type& type)
 {
-    return isRecord(type) || isArray(type) || isVector(type);
-}
-
-inline bool cld::Semantics::isVector(const Type& type)
-{
-    return type.is<VectorType>();
-}
-
-inline bool cld::Semantics::isFunctionType(const Type& type)
-{
-    return type.is<FunctionType>();
+    return isRecord(type) || isArray(type) || type.is<VectorType>();
 }
 
 inline cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::removeQualifiers(const Type& type)

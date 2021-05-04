@@ -575,7 +575,7 @@ void cld::Semantics::SemanticAnalysis::apply(AffectsTypeVariable applicant,
         applicant,
         [](not_null<VariableDeclaration> variableDeclaration) -> const Type& { return variableDeclaration->getType(); },
         [](auto pair) -> const Type& { return *pair.first; });
-    if (!isArithmetic(baseType) || isEnum(baseType))
+    if (!isArithmetic(baseType) || baseType.is<EnumType>())
     {
         cld::match(
             applicant,

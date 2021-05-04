@@ -346,15 +346,13 @@ bool cld::Semantics::isBitfieldAccess(const ExpressionBase& expression)
 bool cld::Semantics::isVariablyModified(const Type& type)
 {
     auto typeVisitor = RecursiveVisitor(type, TYPE_NEXT_FN);
-    return std::any_of(typeVisitor.begin(), typeVisitor.end(),
-                       [](const Type& type) { return type.is<ValArrayType>(); });
+    return std::any_of(typeVisitor.begin(), typeVisitor.end(), std::mem_fn(&Type::is<ValArrayType>));
 }
 
 bool cld::Semantics::isVariableLengthArray(const Type& type)
 {
     auto typeVisitor = RecursiveVisitor(type, ARRAY_TYPE_NEXT_FN);
-    return std::any_of(typeVisitor.begin(), typeVisitor.end(),
-                       [](const Type& type) { return type.is<ValArrayType>(); });
+    return std::any_of(typeVisitor.begin(), typeVisitor.end(), std::mem_fn(&Type::is<ValArrayType>));
 }
 
 namespace

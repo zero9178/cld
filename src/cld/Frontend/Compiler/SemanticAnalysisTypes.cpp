@@ -11,7 +11,7 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
                            std::vector<ParsedAttribute<>>&&)>
         paramCallback)
 {
-    if (isFunctionType(type))
+    if (type->is<FunctionType>())
     {
         log(Errors::Semantics::FUNCTION_RETURN_TYPE_MUST_NOT_BE_A_FUNCTION.args(returnTypeLoc, m_sourceInterface,
                                                                                 returnTypeLoc, type));
@@ -91,7 +91,7 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
                                              {
                                                  return valArray->isStatic();
                                              }
-                                             if (isArrayType(type))
+                                             if (type.is<ArrayType>())
                                              {
                                                  return type.as<ArrayType>().isStatic();
                                              }
@@ -151,7 +151,7 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
                     {
                         return type.as<ValArrayType>().isRestricted() || type.isConst() || type.isVolatile();
                     }
-                    if (isArrayType(type))
+                    if (type.is<ArrayType>())
                     {
                         return type.as<ArrayType>().isRestricted() || type.isConst() || type.isVolatile();
                     }
@@ -172,7 +172,7 @@ void cld::Semantics::SemanticAnalysis::handleParameterList(
         }
         // Not transforming array types to pointers here as we might still want to use that information
         // to warn callers.
-        if (isFunctionType(paramType))
+        if (paramType->is<FunctionType>())
         {
             paramType.emplace<PointerType>(typeAlloc(std::move(*paramType)));
         }
@@ -319,7 +319,7 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::applyD
                 for (auto& iter : parentheses.getDeclarator().getPointers())
                 {
                     auto [isConst, isVolatile, restricted] = getQualifiers(iter.getTypeQualifiers());
-                    if (restricted && isFunctionType(type))
+                    if (restricted && type->is<FunctionType>())
                     {
                         auto restrictQual = std::find_if(
                             iter.getTypeQualifiers().begin(), iter.getTypeQualifiers().end(),
@@ -394,7 +394,7 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::applyD
                 {
                     scope2.emplace(pushScope());
                 }
-                if (isFunctionType(type))
+                if (type->is<FunctionType>())
                 {
                     log(Errors::Semantics::FUNCTION_RETURN_TYPE_MUST_NOT_BE_A_FUNCTION.args(
                         /*TODO: Better source location*/ identifiers.getDirectDeclarator(), m_sourceInterface,
@@ -781,8 +781,8 @@ cld::IntrVarValue<cld::Semantics::Type>
     {
         if (typeSpec.size() != 1)
         {
-            this->log(Errors::Semantics::EXPECTED_NO_FURTHER_TYPE_SPECIFIERS_AFTER_N.args(
-                *typeSpec[1], this->m_sourceInterface,
+            log(Errors::Semantics::EXPECTED_NO_FURTHER_TYPE_SPECIFIERS_AFTER_N.args(
+                *typeSpec[1], m_sourceInterface,
                 (*structOrUnionPtr)->isUnion() ? cld::Lexer::TokenType::UnionKeyword :
                                                  cld::Lexer::TokenType::StructKeyword,
                 llvm::ArrayRef(typeSpec).drop_front()));
@@ -1175,7 +1175,8 @@ cld::IntrVarValue<cld::Semantics::Type>
                 }
                 type.emplace<ErrorType>();
             }
-            else if (!isCompleteType(type) && !(!structOrUnion.isUnion() && last && !first && isAbstractArray(type)))
+            else if (!isCompleteType(type)
+                     && !(!structOrUnion.isUnion() && last && !first && type->is<AbstractArrayType>()))
             {
                 if (structOrUnion.isUnion())
                 {
@@ -1189,7 +1190,7 @@ cld::IntrVarValue<cld::Semantics::Type>
                 }
                 type.emplace<ErrorType>();
             }
-            else if (isFunctionType(type))
+            else if (type->is<FunctionType>())
             {
                 if (structOrUnion.isUnion())
                 {
@@ -1205,7 +1206,7 @@ cld::IntrVarValue<cld::Semantics::Type>
             }
             else if (!structOrUnion.isUnion() && hasFlexibleArrayMember(type))
             {
-                if (isStruct(type))
+                if (type->is<StructType>())
                 {
                     log(Errors::Semantics::STRUCT_WITH_FLEXIBLE_ARRAY_MEMBER_NOT_ALLOWED_IN_STRUCT.args(
                         specifiers, m_sourceInterface, specifiers));
@@ -1348,7 +1349,7 @@ cld::IntrVarValue<cld::Semantics::Type>
             {
                 iter.value().indices[0] = memoryLayout.size();
                 fieldLayout[fieldLayoutCounter++].layoutIndex = memoryLayout.size();
-                if (!isCompleteType(*iter->second.type) && !isAbstractArray(*iter->second.type))
+                if (!isCompleteType(*iter->second.type) && !iter->second.type->is<AbstractArrayType>())
                 {
                     iter++;
                     continue;
@@ -1680,7 +1681,7 @@ void cld::Semantics::SemanticAnalysis::handleArray(IntrVarValue<Type>& type,
                                                    const Lexer::CToken* isStatic, bool valArray,
                                                    const diag::PointRange& returnTypeLoc)
 {
-    if (isFunctionType(type))
+    if (type->is<FunctionType>())
     {
         log(Errors::Semantics::ARRAY_ELEMENT_TYPE_MUST_NOT_BE_A_FUNCTION.args(returnTypeLoc, m_sourceInterface,
                                                                               returnTypeLoc, type));
