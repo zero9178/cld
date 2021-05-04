@@ -1555,15 +1555,7 @@ cld::Semantics::PrimitiveType cld::Semantics::SemanticAnalysis::primitiveTypeSpe
         }
     };
 
-    constexpr auto clz = [](std::size_t value)
-    {
-        std::size_t i = 0;
-        for (; value != 0; value >>= 1, i++)
-            ;
-        return i;
-    };
-
-    using BitSet = Bitset2::bitset2<clz(PrimitiveTypeSpecifier::MAX_VALUE)>;
+    using BitSet = cld::suitableUInt<PrimitiveTypeSpecifier::MAX_VALUE>;
     static const auto table = []() -> std::unordered_map<BitSet, std::pair<BitSet, PrimitiveType::Kind>>
     {
         using Tuple = std::tuple<std::underlying_type_t<PrimitiveTypeSpecifier>,
@@ -1659,8 +1651,8 @@ cld::Semantics::PrimitiveType cld::Semantics::SemanticAnalysis::primitiveTypeSpe
     for (auto& iter : llvm::ArrayRef(typeSpecs).drop_front())
     {
         CLD_ASSERT(iter);
-        auto* typeSpec = std::get_if<PrimitiveTypeSpecifier>(&iter->getVariant());
-        if (!typeSpec)
+        auto* primType = std::get_if<PrimitiveTypeSpecifier>(&iter->getVariant());
+        if (!primType)
         {
             excessSpecifiersError(iter);
             auto result = table.find(type);
@@ -1669,9 +1661,9 @@ cld::Semantics::PrimitiveType cld::Semantics::SemanticAnalysis::primitiveTypeSpe
         }
         auto result = table.find(type);
         CLD_ASSERT(result != table.end());
-        if ((result->second.first & BitSet(*typeSpec)).any())
+        if (result->second.first & BitSet(*primType))
         {
-            type += BitSet(*typeSpec);
+            type += BitSet(*primType);
             continue;
         }
         excessSpecifiersError(iter);
