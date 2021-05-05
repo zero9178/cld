@@ -3014,6 +3014,22 @@ TEST_CASE("Semantics equal expressions", "[semantics]")
                       " f == r;\n"
                       "}",
                       ProducesNoErrors());
+        SEMA_PRODUCES("void foo(int (*r)(void)) {\n"
+                      " r == (void*)0;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(int (*r)(void)) {\n"
+                      "(void*)0 == r;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(int (*r)(void)) {\n"
+                      "(void*)0 == r;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(int (*r)(void)) {\n"
+                      "(void*)5 == r;\n"
+                      "}",
+                      ProducesError(EXPECTED_LEFT_OPERAND_OF_OPERATOR_N_TO_BE_NULL,"'=='"));
         SEMA_PRODUCES("void foo(int *r,void *f) {\n"
                       " f == r;\n"
                       "}",
@@ -3272,6 +3288,17 @@ TEST_CASE("Semantics conditional expression", "[semantics]")
 
 TEST_CASE("Semantics assignment expression", "[semantics]")
 {
+    SECTION("Null pointer constant")
+    {
+        SEMA_PRODUCES("void foo(int (*fp)(int)) {\n"
+                      "fp = (void*)0;\n"
+                      "}",
+                      ProducesNoErrors());
+        SEMA_PRODUCES("void foo(int (*fp)(int)) {\n"
+                      "fp = (void*)3;\n"
+                      "}",
+                      ProducesError(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_NULL, "'='"));
+    }
     SECTION("Simple")
     {
         auto& exp = generateExpression("void foo(volatile int i) {\n"
@@ -3370,10 +3397,6 @@ TEST_CASE("Semantics assignment expression", "[semantics]")
                       "i = foo;\n"
                       "}",
                       ProducesError(CANNOT_ASSIGN_FUNCTION_POINTER_TO_VOID_POINTER));
-        SEMA_PRODUCES("void foo(void (*i)(void)) {\n"
-                      "i = (void*)5;\n"
-                      "}",
-                      ProducesError(CANNOT_ASSIGN_VOID_POINTER_TO_FUNCTION_POINTER));
         SEMA_PRODUCES("void foo(int* i) {\n"
                       "i = (const int*)3;\n"
                       "}",

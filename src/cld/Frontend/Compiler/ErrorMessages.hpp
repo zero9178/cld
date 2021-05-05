@@ -469,6 +469,9 @@ CREATE_ERROR(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_NULL, "Expected right op
 CREATE_ERROR(EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_NULL_2, "Expected right operand of operator %0 to be null",
              PointAt<0>, Underline<1>);
 
+CREATE_ERROR(EXPECTED_LEFT_OPERAND_OF_OPERATOR_N_TO_BE_NULL, "Expected left operand of operator %0 to be null",
+             PointAt<0>, Annotate<1, 2>);
+
 CREATE_ERROR(EXPECTED_OTHER_OPERAND_OF_OPERATOR_N_TO_BE_OF_INTEGER_TYPE,
              "Expected other operand of operator %0 to be of integer type", PointAt<0>, AnnotateExpr<1>);
 

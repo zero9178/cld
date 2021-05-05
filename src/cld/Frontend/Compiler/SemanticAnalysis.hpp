@@ -280,6 +280,18 @@ class SemanticAnalysis final : public ProgramInterface
     std::unique_ptr<BinaryOperator> doLogicOperators(IntrVarPtr<ExpressionBase>&& lhs, BinaryOperator::Kind kind,
                                                      Lexer::CTokenIterator token, IntrVarPtr<ExpressionBase>&& rhs);
 
+    enum class NPCCheck
+    {
+        Success,
+        WrongType,
+        NotConstExpr
+    };
+
+    cld::Expected<NPCCheck, ConstValue> checkNullPointerConstant(const ExpressionBase& expression);
+
+    cld::Expected<NPCCheck, ConstValue> checkPointerOperandsForNPC(const ExpressionBase& possibleNPC,
+                                                                   const Type& otherType);
+
 public:
     enum Mode
     {

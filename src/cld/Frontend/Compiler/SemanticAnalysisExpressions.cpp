@@ -121,21 +121,22 @@ bool cld::Semantics::SemanticAnalysis::doAssignmentLikeConstraints(
         return true;
     }
 
-    if (isInteger(rhsValue->getType()))
+    if (auto npc = checkPointerOperandsForNPC(*rhsValue, lhsType); !npc || *npc != NPCCheck::WrongType)
     {
-        auto constant = evaluateConstantExpression(*rhsValue);
-        if (!constant)
+        if (!npc)
         {
-            notICE();
+            notNull(npc.error());
             return false;
         }
-        if (constant->getInteger() != 0)
+        switch (*npc)
         {
-            notNull(*constant);
-            return false;
+            case NPCCheck::Success:
+                rhsValue =
+                    std::make_unique<Conversion>(removeQualifiers(lhsType), Conversion::Implicit, std::move(rhsValue));
+                return true;
+            case NPCCheck::NotConstExpr: notICE(); return false;
+            default: CLD_UNREACHABLE;
         }
-        rhsValue = std::make_unique<Conversion>(removeQualifiers(lhsType), Conversion::Implicit, std::move(rhsValue));
-        return true;
     }
 
     if (!rhsValue->getType().isUndefined() && !rhsValue->getType().is<PointerType>())
@@ -2477,20 +2478,22 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
         }
         else if (value->getType().is<PointerType>())
         {
-            if (isInteger(rhsValue->getType()))
+            if (auto npc = checkPointerOperandsForNPC(*rhsValue, value->getType()); !npc || *npc != NPCCheck::WrongType)
             {
-                auto constant = evaluateConstantExpression(*rhsValue);
-                if (!constant)
+                if (!npc)
                 {
-                    log(Errors::Semantics::EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_NULL_2.args(
-                        *rhsValue, m_sourceInterface, *token, *rhsValue));
+                    log(Errors::Semantics::EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_NULL.args(
+                        *rhsValue, m_sourceInterface, *token, *rhsValue, npc.error()));
                 }
                 else
                 {
-                    if (constant->getInteger() != 0)
+                    switch (*npc)
                     {
-                        log(Errors::Semantics::EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_NULL.args(
-                            *rhsValue, m_sourceInterface, *token, *rhsValue, *constant));
+                        case NPCCheck::NotConstExpr:
+                            log(Errors::Semantics::EXPECTED_RIGHT_OPERAND_OF_OPERATOR_N_TO_BE_NULL_2.args(
+                                *rhsValue, m_sourceInterface, *token, *rhsValue));
+                            break;
+                        default: break;
                     }
                 }
                 rhsValue = std::make_unique<Conversion>(value->getType(), Conversion::Implicit, std::move(rhsValue));
@@ -2504,23 +2507,57 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             {
                 auto valueElementType = removeQualifiers(getPointerElementType(value->getType()));
                 auto rhsElementType = removeQualifiers(getPointerElementType(rhsValue->getType()));
-                if (!isVoid(valueElementType) && !isVoid(rhsElementType)
-                    && !typesAreCompatible(valueElementType, rhsElementType))
+                if (!isVoid(valueElementType) && !isVoid(rhsElementType))
                 {
-                    log(Errors::Semantics::CANNOT_COMPARE_POINTERS_OF_INCOMPATIBLE_TYPES.args(
-                        *value, m_sourceInterface, *value, *token, *rhsValue));
+                    if (!typesAreCompatible(valueElementType, rhsElementType))
+                    {
+                        log(Errors::Semantics::CANNOT_COMPARE_POINTERS_OF_INCOMPATIBLE_TYPES.args(
+                            *value, m_sourceInterface, *value, *token, *rhsValue));
+                    }
                 }
-                if (valueElementType != rhsElementType)
+                else
                 {
                     if (isVoid(valueElementType))
                     {
-                        value =
-                            std::make_unique<Conversion>(rhsValue->getType(), Conversion::Implicit, std::move(value));
+                        if (rhsElementType->is<FunctionType>())
+                        {
+                            if (npc = checkNullPointerConstant(*value), !npc || *npc != NPCCheck::Success)
+                            {
+                                if (!npc)
+                                {
+                                    log(Errors::Semantics::EXPECTED_LEFT_OPERAND_OF_OPERATOR_N_TO_BE_NULL.args(
+                                        *value, m_sourceInterface, *token, *value, npc.error()));
+                                }
+                                else
+                                {
+                                    log(Errors::Semantics::CANNOT_COMPARE_POINTERS_OF_INCOMPATIBLE_TYPES.args(
+                                        *value, m_sourceInterface, *value, *token, *rhsValue));
+                                }
+                            }
+                            else
+                            {
+                                value = std::make_unique<Conversion>(rhsValue->getType(), Conversion::Implicit,
+                                                                     std::move(value));
+                            }
+                        }
+                        else
+                        {
+                            value = std::make_unique<Conversion>(rhsValue->getType(), Conversion::Implicit,
+                                                                 std::move(value));
+                        }
                     }
                     else
                     {
-                        rhsValue =
-                            std::make_unique<Conversion>(value->getType(), Conversion::Implicit, std::move(rhsValue));
+                        if (valueElementType->is<FunctionType>())
+                        {
+                            log(Errors::Semantics::CANNOT_COMPARE_POINTERS_OF_INCOMPATIBLE_TYPES.args(
+                                *value, m_sourceInterface, *value, *token, *rhsValue));
+                        }
+                        else
+                        {
+                            rhsValue = std::make_unique<Conversion>(value->getType(), Conversion::Implicit,
+                                                                    std::move(rhsValue));
+                        }
                     }
                 }
             }
@@ -2732,19 +2769,25 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     }
     else if (second->getType().is<PointerType>())
     {
-        if (isInteger(third->getType()))
+        if (auto npc = checkPointerOperandsForNPC(*third, second->getType()); !npc || *npc != NPCCheck::WrongType)
         {
-            auto constant = evaluateConstantExpression(*third);
-            if (!constant)
-            {
-                log(Errors::Semantics::EXPECTED_THIRD_OPERAND_OF_CONDITIONAL_EXPRESSION_TO_BE_NULL_2.args(
-                    *third, m_sourceInterface, *third, *node.getOptionalQuestionMark(), *node.getOptionalColon()));
-            }
-            else if (constant->getInteger() != 0)
+            if (!npc)
             {
                 log(Errors::Semantics::EXPECTED_THIRD_OPERAND_OF_CONDITIONAL_EXPRESSION_TO_BE_NULL.args(
-                    *third, m_sourceInterface, *third, *constant, *node.getOptionalQuestionMark(),
+                    *third, m_sourceInterface, *third, npc.error(), *node.getOptionalQuestionMark(),
                     *node.getOptionalColon()));
+            }
+            else
+            {
+                switch (*npc)
+                {
+                    case NPCCheck::NotConstExpr:
+                        log(Errors::Semantics::EXPECTED_THIRD_OPERAND_OF_CONDITIONAL_EXPRESSION_TO_BE_NULL_2.args(
+                            *third, m_sourceInterface, *third, *node.getOptionalQuestionMark(),
+                            *node.getOptionalColon()));
+                        break;
+                    default: break;
+                }
             }
             third = std::make_unique<Conversion>(second->getType(), Conversion::Implicit, std::move(third));
             resultType = second->getType();
@@ -3854,4 +3897,49 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const Syntax
         }
     }
     return InitializerList(std::move(initializations));
+}
+
+cld::Expected<cld::Semantics::SemanticAnalysis::NPCCheck, cld::Semantics::ConstValue>
+    cld::Semantics::SemanticAnalysis::checkNullPointerConstant(const ExpressionBase& expression)
+{
+    // C99 6.3.2.3§3:
+    // An integer constant expression with the value 0, or such an expression cast to type
+    // void *, is called a null pointer constant.
+    const ExpressionBase* expr = &expression;
+    if (expression.is<Cast>() && expression.getType().is<PointerType>()
+        && isVoid(expression.getType().as<PointerType>().getElementType())
+        && expression.getType().as<PointerType>().getElementType().getFlags() == Type::Nothing)
+    {
+        expr = &expression.as<Cast>().getExpression();
+    }
+    if (!isInteger(expr->getType()))
+    {
+        return NPCCheck::WrongType;
+    }
+    auto constant = evaluateConstantExpression(*expr);
+    if (!constant)
+    {
+        return NPCCheck::NotConstExpr;
+    }
+    if (constant->getInteger() != 0)
+    {
+        return *constant;
+    }
+    return NPCCheck::Success;
+}
+
+cld::Expected<cld::Semantics::SemanticAnalysis::NPCCheck, cld::Semantics::ConstValue>
+    cld::Semantics::SemanticAnalysis::checkPointerOperandsForNPC(const ExpressionBase& possibleNPC,
+                                                                 const Type& otherType)
+{
+    // if the expression is void*, the other type is not a pointer to a function and the null pointer check failed,
+    // fail with a WrongType error, allowing callees to check whether pointer conversion would work
+    auto npc = checkNullPointerConstant(possibleNPC);
+    if ((!npc || *npc != NPCCheck::WrongType)
+        && ((npc && *npc == NPCCheck::Success) || otherType.as<PointerType>().getElementType().is<FunctionType>()
+            || !possibleNPC.getType().is<PointerType>()))
+    {
+        return npc;
+    }
+    return NPCCheck::WrongType;
 }
