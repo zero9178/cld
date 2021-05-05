@@ -3029,7 +3029,7 @@ TEST_CASE("Semantics equal expressions", "[semantics]")
         SEMA_PRODUCES("void foo(int (*r)(void)) {\n"
                       "(void*)5 == r;\n"
                       "}",
-                      ProducesError(EXPECTED_LEFT_OPERAND_OF_OPERATOR_N_TO_BE_NULL,"'=='"));
+                      ProducesError(EXPECTED_LEFT_OPERAND_OF_OPERATOR_N_TO_BE_NULL, "'=='"));
         SEMA_PRODUCES("void foo(int *r,void *f) {\n"
                       " f == r;\n"
                       "}",
@@ -5885,7 +5885,7 @@ TEST_CASE("Semantics __attribute__((dllimport))", "[semantics]")
 
 TEMPLATE_TEST_CASE("Semantics __attribute__((T)) markers", "[semantics][template]", NoinlineAttribute,
                    AlwaysInlineAttribute, ArtificialAttribute, NothrowAttribute, ConstAttribute, NoreturnAttribute,
-                   WeakAttribute, LeafAttribute)
+                   WeakAttribute, LeafAttribute, PureAttribute)
 {
     std::string name = []
     {
@@ -5920,6 +5920,10 @@ TEMPLATE_TEST_CASE("Semantics __attribute__((T)) markers", "[semantics][template
         if constexpr (std::is_same_v<TestType, LeafAttribute>)
         {
             return "leaf";
+        }
+        if constexpr (std::is_same_v<TestType, PureAttribute>)
+        {
+            return "pure";
         }
         CLD_UNREACHABLE;
     }();

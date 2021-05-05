@@ -6598,3 +6598,16 @@ TEST_CASE("LLVM codegen offsetof", "[LLVM]")
         CHECK(cld::Tests::computeInJIT<int(int)>(std::move(module), "test", 3) == 28);
     }
 }
+
+TEST_CASE("LLVM codegen __attribute__((pure))", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    llvm::Module module("", context);
+    auto program = generateProgramWithOptions("int __attribute__((pure)) foo(void) { return 5; }", x64linux);
+    cld::CGLLVM::generateLLVM(module, program);
+    CAPTURE(module);
+    REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
+    auto* global = module.getFunction("foo");
+    REQUIRE(global);
+    CHECK(global->hasFnAttribute(llvm::Attribute::ReadOnly));
+}
