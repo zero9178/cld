@@ -1,7 +1,5 @@
 #pragma once
 
-#include <llvm/ADT/ArrayRef.h>
-
 #include <cld/Support/Expected.hpp>
 #include <cld/Support/ScopeExit.hpp>
 #include <cld/Support/ValueReset.h>

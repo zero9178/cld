@@ -610,7 +610,7 @@ TEST_CASE("Semantics primitive declarations", "[semantics]")
         do
         {
             std::string text(variants[0]);
-            for (auto& iter : llvm::ArrayRef(variants).drop_front())
+            for (auto& iter : tcb::span(variants).subspan(1))
             {
                 text += " ";
                 text += iter;

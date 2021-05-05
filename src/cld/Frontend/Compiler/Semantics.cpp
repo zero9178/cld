@@ -549,7 +549,7 @@ std::string typeToString(const cld::Semantics::Type& arg, bool respectTypedefs)
                     return &functionType.getReturnType();
                 }
                 declarators += typeToString(*functionType.getParameters()[0].type, respectTypedefs);
-                for (auto& iter : llvm::ArrayRef(functionType.getParameters()).drop_front())
+                for (auto& iter : tcb::span(functionType.getParameters()).subspan(1))
                 {
                     declarators += ", " + typeToString(*iter.type, respectTypedefs);
                 }
@@ -915,7 +915,7 @@ const cld::Semantics::FieldMap& cld::Semantics::getFields(const cld::Semantics::
     CLD_UNREACHABLE;
 }
 
-llvm::ArrayRef<cld::Semantics::MemoryLayout> cld::Semantics::getMemoryLayout(const cld::Semantics::Type& structType)
+tcb::span<const cld::Semantics::MemoryLayout> cld::Semantics::getMemoryLayout(const cld::Semantics::Type& structType)
 {
     if (auto* structTy = structType.tryAs<StructType>())
     {
@@ -924,7 +924,7 @@ llvm::ArrayRef<cld::Semantics::MemoryLayout> cld::Semantics::getMemoryLayout(con
     CLD_UNREACHABLE;
 }
 
-llvm::ArrayRef<cld::Semantics::FieldInLayout> cld::Semantics::getFieldLayout(const cld::Semantics::Type& recordType)
+tcb::span<const cld::Semantics::FieldInLayout> cld::Semantics::getFieldLayout(const cld::Semantics::Type& recordType)
 {
     if (auto* structType = recordType.tryAs<StructType>())
     {

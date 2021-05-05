@@ -48,8 +48,7 @@ void skipUntil(cld::Lexer::PPTokenIterator& begin, cld::Lexer::PPTokenIterator e
                const std::array<cld::Lexer::TokenType, N>& tokens)
 {
     begin = std::find_if(begin, end,
-                         [&tokens](const cld::Lexer::PPToken& token)
-                         {
+                         [&tokens](const cld::Lexer::PPToken& token) {
                              return std::any_of(tokens.begin(), tokens.end(),
                                                 cld::bind_front(std::equal_to<>{}, token.getTokenType()));
                          });
@@ -294,7 +293,7 @@ cld::PP::ElIfGroup cld::PP::parseElIfGroup(Lexer::PPTokenIterator& begin, Lexer:
     CLD_ASSERT(begin != end && begin->getTokenType() == Lexer::TokenType::Identifier && begin->getValue() == "elif");
     const auto* elifToken = begin++;
     const auto* eol = findNewline(begin, end);
-    auto vector = llvm::ArrayRef(begin, eol);
+    auto vector = tcb::span(begin, eol);
     begin = eol;
     expect(Lexer::TokenType::Newline, begin, end, context);
     if (begin == end
@@ -320,7 +319,7 @@ cld::PP::IfGroup cld::PP::parseIfGroup(Lexer::PPTokenIterator& begin, Lexer::PPT
     {
         begin++;
         const auto* eol = findNewline(begin, end);
-        auto vector = llvm::ArrayRef(begin, eol);
+        auto vector = tcb::span(begin, eol);
         if (vector.empty())
         {
             context.log(

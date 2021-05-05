@@ -16,7 +16,8 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase> cld::Semantics::SemanticAnalysis
     std::vector<std::pair<IntrVarPtr<ExpressionBase>, Lexer::CTokenIterator>> expressions;
     expressions.emplace_back(visit(node.getAssignmentExpression()),
                              node.getOptionalAssignmentExpressions().front().first);
-    auto ref = llvm::ArrayRef(node.getOptionalAssignmentExpressions()).drop_back();
+    auto ref =
+        tcb::span(node.getOptionalAssignmentExpressions().data(), node.getOptionalAssignmentExpressions().size() - 1);
     for (const auto* iter = ref.begin(); iter != ref.end(); iter++)
     {
         auto& [token, exp] = *iter;
@@ -221,7 +222,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
     {
         return visit(node.getConditionalExpression());
     }
-    auto ref = llvm::ArrayRef(node.getOptionalConditionalExpressions());
+    auto ref = tcb::span(node.getOptionalConditionalExpressions());
     auto rhsValue = lvalueConversion(visit(ref.back().conditionalExpression));
     for (auto iter = ref.rbegin(); iter != ref.rend(); iter++)
     {
@@ -685,7 +686,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                                                                       *node.getMemberName()));
         return std::make_unique<ErrorExpression>(std::move(retType), node);
     }
-    llvm::ArrayRef<Lexer::CToken> range(node.getMemberName(), node.getMemberName() + 1);
+    tcb::span<const Lexer::CToken> range(node.getMemberName(), node.getMemberName() + 1);
     std::uint64_t currentOffset = 0;
 
     const Type* currentType = type.data();
@@ -729,7 +730,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
                 return std::make_unique<ErrorExpression>(std::move(retType), node);
             }
             runtimeVariant.emplace_back(&subResult->second);
-            range = llvm::ArrayRef(node.getMemberName(), cld::get<Lexer::CTokenIterator>(iter) + 1);
+            range = tcb::span(node.getMemberName(), cld::get<Lexer::CTokenIterator>(iter) + 1);
             for (auto& index : subResult->second.indices)
             {
                 if (currentType->is<UnionType>())
@@ -753,7 +754,7 @@ cld::IntrVarPtr<cld::Semantics::ExpressionBase>
             }
             currentType = &getArrayElementType(*currentType);
             auto& subscript = cld::get<Syntax::PrimaryExpressionBuiltinOffsetOf::Subscript>(iter);
-            cld::ScopeExit exit{[&] { range = llvm::ArrayRef(node.getMemberName(), subscript.closeBracket + 1); }};
+            cld::ScopeExit exit{[&] { range = tcb::span(node.getMemberName(), subscript.closeBracket + 1); }};
             auto expression = lvalueConversion(visit(*subscript.expression));
             if (expression->isUndefined())
             {
@@ -1082,7 +1083,7 @@ std::unique_ptr<cld::Semantics::CallExpression>
     {
         log(Errors::Semantics::TOO_MANY_ARGUMENTS_FOR_CALLING_FUNCTION_VA_START_EXPECTED_N_GOT_N.args(
             *function, m_sourceInterface, 2, node.getOptionalAssignmentExpressions().size(), *function,
-            llvm::ArrayRef(node.getOptionalAssignmentExpressions()).drop_front(2)));
+            tcb::span(node.getOptionalAssignmentExpressions()).subspan(2)));
     }
     else
     {
@@ -1148,7 +1149,7 @@ std::unique_ptr<cld::Semantics::CallExpression>
         auto& decl = function->as<DeclarationRead>();
         log(Errors::Semantics::TOO_MANY_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_N_GOT_N.args(
             decl, m_sourceInterface, *decl.getIdentifierToken(), 3, node.getOptionalAssignmentExpressions().size(),
-            llvm::ArrayRef(node.getOptionalAssignmentExpressions()).drop_front(3)));
+            tcb::span(node.getOptionalAssignmentExpressions()).subspan(3)));
     }
     else
     {
@@ -1216,7 +1217,7 @@ std::unique_ptr<cld::Semantics::CallExpression>
         auto& decl = function->as<DeclarationRead>();
         log(Errors::Semantics::TOO_MANY_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_N_GOT_N.args(
             decl, m_sourceInterface, *decl.getIdentifierToken(), 3, node.getOptionalAssignmentExpressions().size(),
-            llvm::ArrayRef(node.getOptionalAssignmentExpressions()).drop_front(3)));
+            tcb::span(node.getOptionalAssignmentExpressions()).subspan(3)));
     }
     else
     {
@@ -1455,13 +1456,13 @@ bool cld::Semantics::SemanticAnalysis::checkFunctionCount(const ExpressionBase& 
             log(Errors::Semantics::TOO_MANY_ARGUMENTS_FOR_CALLING_FUNCTION_N_EXPECTED_N_GOT_N.args(
                 decl, m_sourceInterface, *decl.getIdentifierToken(), argumentTypes.size(),
                 node.getOptionalAssignmentExpressions().size(),
-                llvm::ArrayRef(node.getOptionalAssignmentExpressions()).drop_front(argumentTypes.size())));
+                tcb::span(node.getOptionalAssignmentExpressions()).subspan(argumentTypes.size())));
         }
         else
         {
             log(Errors::Semantics::TOO_MANY_ARGUMENTS_FOR_FUNCTION_CALL_EXPECTED_N_GOT_N.args(
                 function, m_sourceInterface, argumentTypes.size(), node.getOptionalAssignmentExpressions().size(),
-                function, llvm::ArrayRef(node.getOptionalAssignmentExpressions()).drop_front(argumentTypes.size())));
+                function, tcb::span(node.getOptionalAssignmentExpressions()).subspan(argumentTypes.size())));
         }
         return false;
     }
@@ -3475,7 +3476,7 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const Syntax
                                         auto ref = getFieldLayout(type);
                                         if (ref.back().type->is<AbstractArrayType>())
                                         {
-                                            ref = ref.drop_back();
+                                            ref = ref.subspan(1);
                                         }
                                         parent.resize(ref.size());
                                         for (std::size_t i = 0; i < ref.size(); i++)
@@ -3715,7 +3716,7 @@ cld::Semantics::Initializer cld::Semantics::SemanticAnalysis::visit(const Syntax
                     }
                     else
                     {
-                        for (auto index : llvm::ArrayRef(result->second.indices).drop_back())
+                        for (auto index : tcb::span(result->second.indices.data(), result->second.indices.size() - 1))
                         {
                             current = &current->at(index);
                         }

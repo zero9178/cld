@@ -1,7 +1,5 @@
 #pragma once
 
-#include <llvm/ADT/ArrayRef.h>
-
 #include <cld/Frontend/Compiler/Message.hpp>
 #include <cld/Support/Constexpr.hpp>
 #include <cld/Support/MaxVector.hpp>
@@ -15,6 +13,8 @@
 #include <unordered_set>
 #include <variant>
 #include <vector>
+
+#include <tcb/span.hpp>
 
 namespace cld
 {
@@ -526,18 +526,19 @@ template <auto* cliOption, std::size_t i, std::size_t index>
 constexpr auto arg = std::get<index>(std::get<i>(cliOption->getAlternatives()));
 
 Message emitConsumeFailure(std::size_t currentIndex, std::size_t currentPos,
-                           llvm::ArrayRef<std::string_view> commandLine, std::string_view text);
+                           tcb::span<const std::string_view> commandLine, std::string_view text);
 
-Message emitMissingArg(std::size_t currentIndex, std::size_t currentPos, llvm::ArrayRef<std::string_view> commandLine,
+Message emitMissingArg(std::size_t currentIndex, std::size_t currentPos, tcb::span<const std::string_view> commandLine,
                        bool immediatelyAfter);
 
 Message emitMissingWhitespace(std::size_t currentIndex, std::size_t currentPos,
-                              llvm::ArrayRef<std::string_view> commandLine);
+                              tcb::span<const std::string_view> commandLine);
 
 Message emitFailedInteger(std::size_t currentIndex, std::size_t currentPos,
-                          llvm::ArrayRef<std::string_view> commandLine);
+                          tcb::span<const std::string_view> commandLine);
 
-Message emitInvalidUTF8(std::size_t currentIndex, std::size_t currentPos, llvm::ArrayRef<std::string_view> commandLine);
+Message emitInvalidUTF8(std::size_t currentIndex, std::size_t currentPos,
+                        tcb::span<const std::string_view> commandLine);
 
 using LazyMessage = SmallFunction<Message(), 64>;
 
@@ -547,7 +548,7 @@ class Mutator
     MaxVector<SmallFunction<void(), 24>, size * 3> m_queue;
     std::size_t m_currentIndex{};
     std::size_t m_currentPos{};
-    llvm::MutableArrayRef<std::string_view>& m_commandLine;
+    tcb::span<std::string_view>& m_commandLine;
     Storage& m_storage;
     bool m_removeFromStorage{};
     bool m_firstArg = true;
@@ -591,8 +592,7 @@ class Mutator
     }
 
 public:
-    Mutator(llvm::MutableArrayRef<std::string_view>& commandLine, Storage& storage)
-        : m_commandLine(commandLine), m_storage(storage)
+    Mutator(tcb::span<std::string_view>& commandLine, Storage& storage) : m_commandLine(commandLine), m_storage(storage)
     {
         if constexpr (std::is_same_v<bool, Storage>)
         {
@@ -795,7 +795,7 @@ public:
         }
         if (m_currentIndex < m_commandLine.size())
         {
-            m_queue.push_back([this] { m_commandLine = m_commandLine.drop_front(); });
+            m_queue.push_back([this] { m_commandLine = m_commandLine.subspan(1); });
             m_currentIndex++;
             m_currentPos = 0;
         }
@@ -859,7 +859,7 @@ struct Failure
 };
 
 template <auto* cliOption, std::size_t i, class Storage>
-std::optional<Failure> checkAlternative(llvm::MutableArrayRef<std::string_view>& commandLine, Storage& storage)
+std::optional<Failure> checkAlternative(tcb::span<std::string_view>& commandLine, Storage& storage)
 {
     using AlternativeType = std::tuple_element_t<i, std::decay_t<decltype(cliOption->getAlternatives())>>;
     Mutator<cliOption, std::tuple_size_v<AlternativeType>, Storage> mutator(commandLine, storage);
@@ -891,8 +891,8 @@ std::optional<Failure> checkAlternative(llvm::MutableArrayRef<std::string_view>&
 }
 
 template <auto* cliOption, class Storage, std::size_t... indices>
-bool checkAllAlternativesImpl(llvm::raw_ostream* reporter, llvm::MutableArrayRef<std::string_view>& commandLine,
-                              Storage& storage, std::index_sequence<indices...>)
+bool checkAllAlternativesImpl(llvm::raw_ostream* reporter, tcb::span<std::string_view>& commandLine, Storage& storage,
+                              std::index_sequence<indices...>)
 {
     using AllAlternatives = std::decay_t<decltype(cliOption->getAlternatives())>;
     MaxVector<Failure, std::tuple_size_v<AllAlternatives>> failures;
@@ -945,8 +945,7 @@ bool checkAllAlternativesImpl(llvm::raw_ostream* reporter, llvm::MutableArrayRef
 }
 
 template <auto* cliOption, class Storage>
-bool checkAllAlternatives(llvm::raw_ostream* reporter, llvm::MutableArrayRef<std::string_view>& commandLine,
-                          Storage& storage)
+bool checkAllAlternatives(llvm::raw_ostream* reporter, tcb::span<std::string_view>& commandLine, Storage& storage)
 {
     using AllAlternatives = std::decay_t<decltype(cliOption->getAlternatives())>;
     return checkAllAlternativesImpl<cliOption, Storage>(reporter, commandLine, storage,
@@ -1046,7 +1045,7 @@ struct InitialStorage
 } // namespace cli
 
 template <auto&... options>
-auto parseCommandLine(llvm::MutableArrayRef<std::string_view> commandLine, llvm::raw_ostream* reporter = nullptr)
+auto parseCommandLine(tcb::span<std::string_view> commandLine, llvm::raw_ostream* reporter = nullptr)
 {
     constexpr auto tuple = std::make_tuple(detail::CommandLine::Pointer<&options>{}...);
     auto storage = std::make_tuple(std::tuple{
@@ -1077,7 +1076,7 @@ auto parseCommandLine(llvm::MutableArrayRef<std::string_view> commandLine, llvm:
                 Constexpr::integerSequenceToTuple(std::make_index_sequence<sizeof...(options)>{})))
         {
             unrecognized.push_back(commandLine.front());
-            commandLine = commandLine.drop_front();
+            commandLine = commandLine.subspan(1);
         }
         counter++;
     }

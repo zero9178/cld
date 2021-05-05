@@ -1,7 +1,5 @@
 #pragma once
 
-#include <llvm/ADT/ArrayRef.h>
-
 #include <cld/Support/Constexpr.hpp>
 #include <cld/Support/Text.hpp>
 #include <cld/Support/Util.hpp>
@@ -10,6 +8,8 @@
 #include <optional>
 #include <unordered_map>
 #include <unordered_set>
+
+#include <tcb/span.hpp>
 
 #include "CustomDiag.hpp"
 #include "DiagnosticUtil.hpp"
@@ -227,12 +227,12 @@ protected:
     };
 
     Message print(std::pair<diag::PointLocation, diag::PointLocation> location, std::string_view message,
-                  llvm::MutableArrayRef<Argument> arguments, llvm::ArrayRef<Modifiers> modifiers,
+                  tcb::span<Argument> arguments, tcb::span<const Modifiers> modifiers,
                   const SourceInterface& sourceInterface) const;
 
-    Message print(std::string_view message, llvm::MutableArrayRef<Argument> arguments) const;
+    Message print(std::string_view message, tcb::span<Argument> arguments) const;
 
-    void evaluateFormatsInMessage(std::string_view message, llvm::MutableArrayRef<Argument> arguments,
+    void evaluateFormatsInMessage(std::string_view message, tcb::span<Argument> arguments,
                                   llvm::raw_string_ostream& ss) const;
 
 public:

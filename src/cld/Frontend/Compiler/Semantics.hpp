@@ -2276,9 +2276,9 @@ public:
 
 const FieldMap& getFields(const Type& recordType);
 
-llvm::ArrayRef<MemoryLayout> getMemoryLayout(const Type& structType);
+tcb::span<const MemoryLayout> getMemoryLayout(const Type& structType);
 
-llvm::ArrayRef<FieldInLayout> getFieldLayout(const Type& recordType);
+tcb::span<const FieldInLayout> getFieldLayout(const Type& recordType);
 
 class EnumDefinition
 {

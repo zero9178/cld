@@ -2923,7 +2923,7 @@ std::string parseGNUASMString(cld::Lexer::CTokenIterator& begin, cld::Lexer::CTo
     if (!std::holds_alternative<std::string>(literal.getValue()))
     {
         context.log(Errors::Parser::EXPECTED_NORMAL_STRING_LITERAL_INSIDE_OF_ASM.args(
-            llvm::ArrayRef(literalStart, begin), context.getSourceInterface(), llvm::ArrayRef(literalStart, begin)));
+            tcb::span(literalStart, begin), context.getSourceInterface(), tcb::span(literalStart, begin)));
     }
     else
     {

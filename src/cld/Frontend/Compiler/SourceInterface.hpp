@@ -1,9 +1,9 @@
 #pragma once
 
-#include <llvm/ADT/ArrayRef.h>
-
 #include <cstdint>
 #include <variant>
+
+#include <tcb/span.hpp>
 
 #include "LanguageOptions.hpp"
 
@@ -41,9 +41,9 @@ public:
 
     [[nodiscard]] virtual std::uint64_t getLineEndOffset(std::uint32_t fileID, std::uint64_t line) const noexcept = 0;
 
-    [[nodiscard]] virtual llvm::ArrayRef<Source::File> getFiles() const noexcept = 0;
+    [[nodiscard]] virtual tcb::span<const Source::File> getFiles() const noexcept = 0;
 
-    [[nodiscard]] virtual llvm::ArrayRef<Source::PPRecord> getSubstitutions() const noexcept = 0;
+    [[nodiscard]] virtual tcb::span<const Source::PPRecord> getSubstitutions() const noexcept = 0;
 
     [[nodiscard]] virtual const LanguageOptions& getLanguageOptions() const noexcept = 0;
 };
@@ -58,6 +58,6 @@ public:
     PPSourceInterface(PPSourceInterface&&) noexcept = default;
     PPSourceInterface& operator=(PPSourceInterface&&) noexcept = default;
 
-    [[nodiscard]] virtual llvm::ArrayRef<Lexer::IntervalMap> getIntervalMaps() const noexcept = 0;
+    [[nodiscard]] virtual tcb::span<const Lexer::IntervalMap> getIntervalMaps() const noexcept = 0;
 };
 } // namespace cld

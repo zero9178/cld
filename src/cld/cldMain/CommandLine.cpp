@@ -29,7 +29,7 @@ void cld::detail::CommandLine::printHelp(llvm::raw_ostream& os,
 namespace
 {
 std::string reconstructCommand(std::size_t currentIndex, std::size_t currentPos,
-                               llvm::ArrayRef<std::string_view> commandLine)
+                               tcb::span<const std::string_view> commandLine)
 {
     std::string command;
     for (std::size_t i = 0; i <= currentIndex; i++)
@@ -52,7 +52,7 @@ std::string reconstructCommand(std::size_t currentIndex, std::size_t currentPos,
 } // namespace
 
 cld::Message cld::detail::CommandLine::emitConsumeFailure(std::size_t currentIndex, std::size_t currentPos,
-                                                          llvm::ArrayRef<std::string_view> commandLine,
+                                                          tcb::span<const std::string_view> commandLine,
                                                           std::string_view text)
 {
     auto command = reconstructCommand(currentIndex, currentPos, commandLine);
@@ -60,7 +60,7 @@ cld::Message cld::detail::CommandLine::emitConsumeFailure(std::size_t currentInd
 }
 
 cld::Message cld::detail::CommandLine::emitMissingArg(std::size_t currentIndex, std::size_t currentPos,
-                                                      llvm::ArrayRef<std::string_view> commandLine,
+                                                      tcb::span<const std::string_view> commandLine,
                                                       bool immediatelyAfter)
 {
     auto command = reconstructCommand(currentIndex, currentPos, commandLine);
@@ -73,21 +73,21 @@ cld::Message cld::detail::CommandLine::emitMissingArg(std::size_t currentIndex, 
 }
 
 cld::Message cld::detail::CommandLine::emitMissingWhitespace(std::size_t currentIndex, std::size_t currentPos,
-                                                             llvm::ArrayRef<std::string_view> commandLine)
+                                                             tcb::span<const std::string_view> commandLine)
 {
     auto command = reconstructCommand(currentIndex, currentPos, commandLine);
     return Errors::CLI::EXPECTED_WHITESPACE_AFTER_N.argsCLI(command);
 }
 
 cld::Message cld::detail::CommandLine::emitFailedInteger(std::size_t currentIndex, std::size_t currentPos,
-                                                         llvm::ArrayRef<std::string_view> commandLine)
+                                                         tcb::span<const std::string_view> commandLine)
 {
     auto command = reconstructCommand(currentIndex, currentPos, commandLine);
     return Errors::CLI::ERRORS_PARSING_INTEGER_ARGUMENT_IN_N.argsCLI(command);
 }
 
 cld::Message cld::detail::CommandLine::emitInvalidUTF8(std::size_t currentIndex, std::size_t currentPos,
-                                                       llvm::ArrayRef<std::string_view> commandLine)
+                                                       tcb::span<const std::string_view> commandLine)
 {
     auto command = reconstructCommand(currentIndex, currentPos, commandLine);
     return Errors::CLI::ERRORS_PARSING_INVALID_UTF8_IN_N.argsCLI(command);

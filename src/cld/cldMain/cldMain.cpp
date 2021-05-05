@@ -806,7 +806,7 @@ std::optional<cld::fs::path> compileCFile(Action action, cld::fs::path cSourceFi
 
 template <class CL>
 int doActionOnAllFiles(Action action, const cld::LanguageOptions& languageOptions, const cld::Triple& triple,
-                       llvm::ArrayRef<std::string_view> files, const CL& cli, llvm::raw_ostream* reporter)
+                       tcb::span<const std::string_view> files, const CL& cli, llvm::raw_ostream* reporter)
 {
     std::vector<cld::fs::path> linkableFiles;
     for (auto& iter : files)
@@ -837,7 +837,7 @@ void printVersion(llvm::raw_ostream& os)
 
 } // namespace
 
-int cld::main(llvm::MutableArrayRef<std::string_view> elements, llvm::raw_ostream* reporter, llvm::raw_ostream* out)
+int cld::main(tcb::span<std::string_view> elements, llvm::raw_ostream* reporter, llvm::raw_ostream* out)
 {
     llvm::InitializeAllTargetInfos();
     llvm::InitializeAllTargets();

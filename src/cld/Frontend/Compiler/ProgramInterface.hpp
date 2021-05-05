@@ -1,8 +1,6 @@
 
 #pragma once
 
-#include <llvm/ADT/ArrayRef.h>
-
 #include <cld/Support/IntrVarAllocator.hpp>
 
 #include <deque>

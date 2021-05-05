@@ -27,7 +27,7 @@ struct IfGroup final
     {
         std::string_view identifier;
     };
-    using variant = std::variant<IfnDefTag, IfDefTag, llvm::ArrayRef<Lexer::PPToken>>;
+    using variant = std::variant<IfnDefTag, IfDefTag, tcb::span<const Lexer::PPToken>>;
     Lexer::PPTokenIterator ifsToken;
     variant ifs;
     std::unique_ptr<Group> optionalGroup;
@@ -39,7 +39,7 @@ struct IfGroup final
 struct ElIfGroup final
 {
     Lexer::PPTokenIterator elifToken;
-    llvm::ArrayRef<Lexer::PPToken> constantExpression;
+    tcb::span<const Lexer::PPToken> constantExpression;
     std::unique_ptr<Group> optionalGroup;
 };
 
@@ -81,7 +81,7 @@ struct IfSection final
 struct DefineDirective final
 {
     Lexer::PPTokenIterator defineToken;
-    llvm::ArrayRef<Lexer::PPToken> tokens;
+    tcb::span<const Lexer::PPToken> tokens;
 };
 
 /**
@@ -99,24 +99,24 @@ struct ControlLine final
     struct IncludeTag final
     {
         Lexer::PPTokenIterator includeToken;
-        llvm::ArrayRef<Lexer::PPToken> tokens;
+        tcb::span<const Lexer::PPToken> tokens;
     };
 
     struct LineTag final
     {
         Lexer::PPTokenIterator lineToken;
-        llvm::ArrayRef<Lexer::PPToken> tokens;
+        tcb::span<const Lexer::PPToken> tokens;
     };
 
     struct ErrorTag final
     {
         Lexer::PPTokenIterator errorToken;
-        llvm::ArrayRef<Lexer::PPToken> tokens;
+        tcb::span<const Lexer::PPToken> tokens;
     };
 
     struct PragmaTag final
     {
-        llvm::ArrayRef<Lexer::PPToken> tokens;
+        tcb::span<const Lexer::PPToken> tokens;
     };
 
     std::variant<IncludeTag, LineTag, ErrorTag, PragmaTag, Lexer::PPTokenIterator, DefineDirective> variant;
@@ -136,7 +136,7 @@ struct NonDirective final
  */
 struct TextBlock final
 {
-    llvm::ArrayRef<Lexer::PPToken> tokens;
+    tcb::span<const Lexer::PPToken> tokens;
 };
 
 struct UnknownDirective

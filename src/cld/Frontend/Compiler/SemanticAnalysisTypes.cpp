@@ -733,7 +733,7 @@ cld::IntrVarValue<cld::Semantics::Type>
         if (typeSpec.size() != 1)
         {
             log(Errors::Semantics::EXPECTED_NO_FURTHER_TYPE_SPECIFIERS_AFTER_TYPENAME.args(
-                *typeSpec[1], m_sourceInterface, llvm::ArrayRef(typeSpec).drop_front()));
+                *typeSpec[1], m_sourceInterface, tcb::span(typeSpec).subspan(1)));
         }
         const auto* typeDef = getTypedef(*name);
         CLD_ASSERT(typeDef);
@@ -785,7 +785,7 @@ cld::IntrVarValue<cld::Semantics::Type>
                 *typeSpec[1], m_sourceInterface,
                 (*structOrUnionPtr)->isUnion() ? cld::Lexer::TokenType::UnionKeyword :
                                                  cld::Lexer::TokenType::StructKeyword,
-                llvm::ArrayRef(typeSpec).drop_front()));
+                tcb::span(typeSpec).subspan(1)));
         }
         return structOrUnionSpecifierToType(isConst, isVolatile, **structOrUnionPtr);
     }
@@ -793,7 +793,7 @@ cld::IntrVarValue<cld::Semantics::Type>
     if (typeSpec.size() != 1)
     {
         log(Errors::Semantics::EXPECTED_NO_FURTHER_TYPE_SPECIFIERS_AFTER_N.args(
-            *typeSpec[1], m_sourceInterface, Lexer::TokenType::EnumKeyword, llvm::ArrayRef(typeSpec).drop_front()));
+            *typeSpec[1], m_sourceInterface, Lexer::TokenType::EnumKeyword, tcb::span(typeSpec).subspan(1)));
     }
     auto& enumDecl = cld::get<std::unique_ptr<Syntax::EnumSpecifier>>(typeSpec[0]->getVariant());
     if (auto* loc = std::get_if<Syntax::EnumSpecifier::EnumTag>(&enumDecl->getVariant()))
@@ -1489,7 +1489,7 @@ cld::Semantics::PrimitiveType cld::Semantics::SemanticAnalysis::primitiveTypeSpe
     auto excessSpecifiersError = [&](const Syntax::TypeSpecifier* const& typeSpec)
     {
         std::string type;
-        for (auto& iter : llvm::ArrayRef(typeSpecs.data(), &typeSpec))
+        for (auto& iter : tcb::span(typeSpecs.data(), &typeSpec))
         {
             auto* primType = std::get_if<PrimitiveTypeSpecifier>(&iter->getVariant());
             if (!primType)
@@ -1649,7 +1649,7 @@ cld::Semantics::PrimitiveType cld::Semantics::SemanticAnalysis::primitiveTypeSpe
     { return PrimitiveType(kind, getLanguageOptions(), flag::isConst = isConst, flag::isVolatile = isVolatile); };
 
     BitSet type(cld::get<PrimitiveTypeSpecifier>(typeSpecs[0]->getVariant()));
-    for (auto& iter : llvm::ArrayRef(typeSpecs).drop_front())
+    for (auto& iter : tcb::span(typeSpecs).subspan(1))
     {
         CLD_ASSERT(iter);
         auto* primType = std::get_if<PrimitiveTypeSpecifier>(&iter->getVariant());

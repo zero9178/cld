@@ -93,7 +93,7 @@ struct ModifierOfLine
 };
 
 void printLine(llvm::raw_ostream& ss, std::uint64_t line, std::uint64_t lineStartOffset, std::string_view text,
-               std::uint64_t width, llvm::ArrayRef<ModifierOfLine> modifiersOfLine)
+               std::uint64_t width, tcb::span<ModifierOfLine> modifiersOfLine)
 {
     ss << llvm::format_decimal(line, width) << " | ";
     ss.write(text.data(), text.size()) << '\n';
@@ -270,11 +270,9 @@ auto cld::diag::after(const Lexer::TokenBase& token) -> std::tuple<const Lexer::
     return std::make_tuple(std::cref(token), token.getOffset() + token.getLength());
 }
 
-cld::Message
-    cld::detail::Diagnostic::DiagnosticBase::print(std::pair<diag::PointLocation, diag::PointLocation> location,
-                                                   std::string_view message, llvm::MutableArrayRef<Argument> arguments,
-                                                   llvm::ArrayRef<Modifiers> modifiers,
-                                                   const SourceInterface& sourceInterface) const
+cld::Message cld::detail::Diagnostic::DiagnosticBase::print(
+    std::pair<diag::PointLocation, diag::PointLocation> location, std::string_view message,
+    tcb::span<Argument> arguments, tcb::span<const Modifiers> modifiers, const SourceInterface& sourceInterface) const
 {
     if (m_severity == Severity::Warning
         && !sourceInterface.getLanguageOptions().enabledWarnings.count(to_string(m_name)))
@@ -493,7 +491,7 @@ cld::Message
 }
 
 void cld::detail::Diagnostic::DiagnosticBase::evaluateFormatsInMessage(std::string_view message,
-                                                                       llvm::MutableArrayRef<Argument> arguments,
+                                                                       tcb::span<Argument> arguments,
                                                                        llvm::raw_string_ostream& ss) const
 {
     switch (this->m_severity)
@@ -531,7 +529,7 @@ void cld::detail::Diagnostic::DiagnosticBase::evaluateFormatsInMessage(std::stri
 }
 
 cld::Message cld::detail::Diagnostic::DiagnosticBase::print(std::string_view message,
-                                                            llvm::MutableArrayRef<Argument> arguments) const
+                                                            tcb::span<Argument> arguments) const
 {
     std::string result;
     // TODO: Right now the colour is useless. Just putting it here to know what the colour when and were.

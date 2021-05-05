@@ -81,7 +81,7 @@ public:
     {
     }
 
-    llvm::ArrayRef<Lexer::IntervalMap> getIntervalMaps() const noexcept override
+    tcb::span<const Lexer::IntervalMap> getIntervalMaps() const noexcept override
     {
         return m_intervalMap;
     }
@@ -176,7 +176,7 @@ public:
         return m_tokens;
     }
 
-    [[nodiscard]] llvm::ArrayRef<Source::PPRecord> getSubstitutions() const noexcept override
+    [[nodiscard]] tcb::span<const Source::PPRecord> getSubstitutions() const noexcept override
     {
         return m_substitutions;
     }
@@ -186,7 +186,7 @@ public:
         return m_substitutions;
     }
 
-    [[nodiscard]] llvm::ArrayRef<Source::File> getFiles() const noexcept override
+    [[nodiscard]] tcb::span<const Source::File> getFiles() const noexcept override
     {
         return m_files;
     }

@@ -223,8 +223,8 @@ TEST_CASE("Parse Preprocessor if section", "[PPParse]")
         treeProduces("#if 0\n5\n#endif\n", ProducesNoErrors());
         auto ret = functionProduces(parseIfGroup, "#if 0\n5\n", 1, ProducesNoErrors());
         CHECK(ret.optionalGroup);
-        REQUIRE(std::holds_alternative<llvm::ArrayRef<cld::Lexer::PPToken>>(ret.ifs));
-        const auto& tokens = std::get<llvm::ArrayRef<cld::Lexer::PPToken>>(ret.ifs);
+        REQUIRE(std::holds_alternative<tcb::span<const cld::Lexer::PPToken>>(ret.ifs));
+        const auto& tokens = std::get<tcb::span<const cld::Lexer::PPToken>>(ret.ifs);
         REQUIRE(tokens.size() == 1);
         CHECK(tokens[0].getTokenType() == cld::Lexer::TokenType::PPNumber);
         CHECK(tokens[0].getRepresentation(sourceObject) == "0");

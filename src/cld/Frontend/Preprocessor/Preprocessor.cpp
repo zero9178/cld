@@ -42,7 +42,7 @@ class Preprocessor final : private cld::PPSourceInterface
         cld::Lexer::PPTokenIterator identifierPos;
         std::optional<std::vector<cld::Lexer::PPToken>> argumentList;
         bool hasEllipse;
-        llvm::ArrayRef<cld::Lexer::PPToken> replacement;
+        tcb::span<const cld::Lexer::PPToken> replacement;
     };
     std::unordered_map<std::string_view, Macro> m_defines;
 
@@ -133,7 +133,7 @@ class Preprocessor final : private cld::PPSourceInterface
     std::vector<cld::Lexer::PPToken> argumentSubstitution(std::uint32_t parentID,
                                                           const std::vector<cld::Lexer::PPToken>& identifierList,
                                                           std::vector<cld::Lexer::PPToken>&& replacementList,
-                                                          std::vector<llvm::ArrayRef<cld::Lexer::PPToken>>&& arguments,
+                                                          std::vector<tcb::span<const cld::Lexer::PPToken>>&& arguments,
                                                           TokenSet&& argumentsInReplacement,
                                                           std::unordered_map<std::string_view, std::size_t> nameToIndex)
     {
@@ -174,7 +174,7 @@ class Preprocessor final : private cld::PPSourceInterface
             bool inTokenPasting = (doublePoundToTheLeft || doublePoundToTheRight) && !stringify;
             auto index = nameToIndex.find(iter->getValue());
             CLD_ASSERT(index != nameToIndex.end());
-            std::vector<cld::Lexer::PPToken> copy = arguments[index->second];
+            std::vector<cld::Lexer::PPToken> copy(arguments[index->second].begin(), arguments[index->second].end());
             for (auto tokenIter = copy.begin(); tokenIter != copy.end();)
             {
                 if (tokenIter->getTokenType() != cld::Lexer::TokenType::Newline)
@@ -310,7 +310,8 @@ class Preprocessor final : private cld::PPSourceInterface
     }
 
     template <class F>
-    static TokenSet filterTokens(llvm::ArrayRef<cld::Lexer::PPToken> tokens, cld::Lexer::TokenType type, F&& hasValueFn)
+    static TokenSet filterTokens(tcb::span<const cld::Lexer::PPToken> tokens, cld::Lexer::TokenType type,
+                                 F&& hasValueFn)
     {
         TokenSet result;
         for (auto& token : tokens)
@@ -327,11 +328,11 @@ class Preprocessor final : private cld::PPSourceInterface
         return result;
     }
 
-    std::optional<std::vector<llvm::ArrayRef<cld::Lexer::PPToken>>>
+    std::optional<std::vector<tcb::span<const cld::Lexer::PPToken>>>
         gatherArguments(const cld::Lexer::PPToken*& begin, const cld::Lexer::PPToken* end,
                         const cld::Lexer::PPToken& namePos, const Macro& macro, std::uint64_t& line)
     {
-        std::vector<llvm::ArrayRef<cld::Lexer::PPToken>> arguments;
+        std::vector<tcb::span<const cld::Lexer::PPToken>> arguments;
         const auto identifierCount = macro.argumentList->size() - (macro.hasEllipse ? 1 : 0);
         auto* first = begin;
         const cld::Lexer::PPToken* varargStart = begin;
@@ -620,7 +621,8 @@ class Preprocessor final : private cld::PPSourceInterface
                 m_disabledMacros.push_back({result->second.identifierPos});
                 m_disabledMacros[i].insert(m_disabledMacros[iter->getMacroId()].begin(),
                                            m_disabledMacros[iter->getMacroId()].end());
-                std::vector<cld::Lexer::PPToken> temp = result->second.replacement;
+                std::vector<cld::Lexer::PPToken> temp(result->second.replacement.begin(),
+                                                      result->second.replacement.end());
                 m_substitutions.push_back(
                     cld::Source::Substitution{*result->second.identifierPos, *iter, {}, temp.empty()});
                 if (temp.empty())
@@ -690,7 +692,8 @@ class Preprocessor final : private cld::PPSourceInterface
 
             auto concatOps = filterTokens(result->second.replacement, cld::Lexer::TokenType::DoublePound,
                                           [](auto&&) { return true; });
-            std::vector<cld::Lexer::PPToken> ppToken = result->second.replacement;
+            std::vector<cld::Lexer::PPToken> ppToken(result->second.replacement.begin(),
+                                                     result->second.replacement.end());
             auto actualReplacement =
                 argumentSubstitution(i, *result->second.argumentList, std::move(ppToken), std::move(*arguments),
                                      std::move(argumentsInReplacement), std::move(nameToIndex));
@@ -871,14 +874,11 @@ class Preprocessor final : private cld::PPSourceInterface
     }
 
     std::optional<bool> evaluateExpression(cld::Lexer::PPTokenIterator ifToken,
-                                           llvm::ArrayRef<cld::Lexer::PPToken> tokens)
+                                           tcb::span<const cld::Lexer::PPToken> tokens)
     {
         std::vector<cld::Lexer::PPToken> result;
-        macroSubstitute(
-            tokens,
-            [&result](auto&& tokens)
-            { result.insert(result.end(), std::move_iterator(tokens.begin()), std::move_iterator(tokens.end())); },
-            true);
+        macroSubstitute({tokens.begin(), tokens.end()}, cld::bind_front(&append<cld::Lexer::PPToken>, std::ref(result)),
+                        true);
         bool errorsOccurred = false;
         auto ctokens =
             cld::Lexer::toCTokens(result.data(), result.data() + result.size(), *this, m_reporter, &errorsOccurred);
@@ -1011,12 +1011,12 @@ class Preprocessor final : private cld::PPSourceInterface
         return m_files[fileID].starts[line] - 1;
     }
 
-    llvm::ArrayRef<cld::Source::File> getFiles() const noexcept override
+    tcb::span<const cld::Source::File> getFiles() const noexcept override
     {
         return m_files;
     }
 
-    llvm::ArrayRef<cld::Source::PPRecord> getSubstitutions() const noexcept override
+    tcb::span<const cld::Source::PPRecord> getSubstitutions() const noexcept override
     {
         return m_substitutions;
     }
@@ -1026,7 +1026,7 @@ class Preprocessor final : private cld::PPSourceInterface
         return m_languageOptions;
     }
 
-    llvm::ArrayRef<cld::Lexer::IntervalMap> getIntervalMaps() const noexcept override
+    tcb::span<const cld::Lexer::IntervalMap> getIntervalMaps() const noexcept override
     {
         return m_intervalMaps;
     }
@@ -1096,7 +1096,7 @@ public:
         return m_result;
     }
 
-    llvm::ArrayRef<cld::Source::PPRecord> getSubstitutions() noexcept
+    tcb::span<const cld::Source::PPRecord> getSubstitutions() noexcept
     {
         return m_substitutions;
     }
@@ -1187,7 +1187,8 @@ public:
                         neededMacros.emplace_back(
                             cld::match(
                                 iter->ifGroup.ifs,
-                                [](const llvm::ArrayRef<cld::Lexer::PPToken>&) -> std::string_view { CLD_UNREACHABLE; },
+                                [](const tcb::span<const cld::Lexer::PPToken>&) -> std::string_view
+                                { CLD_UNREACHABLE; },
                                 [](const auto& value) { return value.identifier; }),
                             std::holds_alternative<cld::PP::IfGroup::IfDefTag>(iter->ifGroup.ifs));
                     }
@@ -1237,7 +1238,7 @@ public:
 
     void visit(const cld::PP::TextBlock& text)
     {
-        macroSubstitute(text.tokens, cld::bind_front(&Preprocessor::pushLine, this));
+        macroSubstitute({text.tokens.begin(), text.tokens.end()}, cld::bind_front(&Preprocessor::pushLine, this));
     }
 
     void visit(const cld::PP::IfSection& ifSection)
@@ -1250,7 +1251,7 @@ public:
             [&](const cld::PP::IfGroup::IfDefTag& ifDefTag) -> std::optional<bool> {
                 return m_defines.count(ifDefTag.identifier) != 0;
             },
-            [&](llvm::ArrayRef<cld::Lexer::PPToken> tokens) -> std::optional<bool> {
+            [&](tcb::span<const cld::Lexer::PPToken> tokens) -> std::optional<bool> {
                 return evaluateExpression(ifSection.ifGroup.ifsToken, tokens);
             });
         if (!included)
@@ -1308,9 +1309,8 @@ public:
         else
         {
             std::vector<cld::Lexer::PPToken> result;
-            macroSubstitute(
-                includeTag.tokens, [&result](auto&& tokens)
-                { result.insert(result.end(), std::move_iterator(tokens.begin()), std::move_iterator(tokens.end())); });
+            macroSubstitute({includeTag.tokens.begin(), includeTag.tokens.end()},
+                            cld::bind_front(&append<cld::Lexer::PPToken>, std::ref(result)));
             if (result.empty())
             {
                 if (includeTag.tokens.empty())
@@ -1498,13 +1498,12 @@ public:
                      || lineTag.tokens[1].getTokenType() != cld::Lexer::TokenType::StringLiteral
                      || lineTag.tokens[1].getRepresentation(*this).front() != '"')))
         {
-            result = lineTag.tokens;
+            result.insert(result.end(), lineTag.tokens.begin(), lineTag.tokens.end());
         }
         else
         {
-            macroSubstitute(
-                lineTag.tokens, [&result](auto&& tokens)
-                { result.insert(result.end(), std::move_iterator(tokens.begin()), std::move_iterator(tokens.end())); });
+            macroSubstitute({lineTag.tokens.begin(), lineTag.tokens.end()},
+                            cld::bind_front(&append<cld::Lexer::PPToken>, std::ref(result)));
             if (result.empty())
             {
                 log(cld::Errors::PP::EXPECTED_A_NUMBER_AFTER_LINE.args(*lineTag.lineToken, *this, *lineTag.lineToken));
@@ -1710,5 +1709,6 @@ cld::PPSourceObject cld::PP::preprocess(cld::PPSourceObject&& sourceObject, cons
         *errorsOccurred = preprocessor.errorsOccurred();
     }
     return PPSourceObject(std::move(preprocessor.getResult()), std::move(preprocessor.getFiles()), &languageOptions,
-                          std::move(preprocessor.getSubstitutions()), {std::move(preprocessor.getIntervalMaps())});
+                          {preprocessor.getSubstitutions().begin(), preprocessor.getSubstitutions().end()},
+                          {std::move(preprocessor.getIntervalMaps())});
 }

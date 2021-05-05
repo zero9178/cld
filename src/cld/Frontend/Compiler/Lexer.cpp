@@ -745,12 +745,12 @@ class Context : private cld::SourceInterface
         return m_sourceSpace.size();
     }
 
-    llvm::ArrayRef<cld::Source::File> getFiles() const noexcept override
+    tcb::span<const cld::Source::File> getFiles() const noexcept override
     {
-        return m_fakeFile;
+        return {&m_fakeFile, &m_fakeFile + 1};
     }
 
-    llvm::ArrayRef<cld::Source::PPRecord> getSubstitutions() const noexcept override
+    tcb::span<const cld::Source::PPRecord> getSubstitutions() const noexcept override
     {
         return {};
     }
@@ -2613,8 +2613,9 @@ cld::CSourceObject cld::Lexer::toCTokens(const PPSourceObject& sourceObject, llv
     auto tokens = toCTokens(sourceObject.data().data(), sourceObject.data().data() + sourceObject.data().size(),
                             sourceObject, reporter, errorsOccurred);
     tokens.shrink_to_fit();
-    return CSourceObject(std::move(tokens), sourceObject.getFiles(), sourceObject.getLanguageOptions(),
-                         sourceObject.getSubstitutions());
+    return CSourceObject(std::move(tokens), {sourceObject.getFiles().begin(), sourceObject.getFiles().end()},
+                         sourceObject.getLanguageOptions(),
+                         {sourceObject.getSubstitutions().begin(), sourceObject.getSubstitutions().end()});
 }
 
 std::vector<cld::Lexer::CToken> cld::Lexer::toCTokens(PPTokenIterator begin, PPTokenIterator end,
