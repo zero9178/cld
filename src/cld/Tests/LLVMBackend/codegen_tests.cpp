@@ -6611,3 +6611,16 @@ TEST_CASE("LLVM codegen __attribute__((pure))", "[LLVM]")
     REQUIRE(global);
     CHECK(global->hasFnAttribute(llvm::Attribute::ReadOnly));
 }
+
+TEST_CASE("LLVM codegen __attribute__((leaf))", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    llvm::Module module("", context);
+    auto program = generateProgramWithOptions("int __attribute__((leaf)) foo(void) { return 5; }", x64linux);
+    cld::CGLLVM::generateLLVM(module, program);
+    CAPTURE(module);
+    REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
+    auto* global = module.getFunction("foo");
+    REQUIRE(global);
+    CHECK(global->hasFnAttribute(llvm::Attribute::NoCallback));
+}

@@ -553,7 +553,10 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDe
     {
         function->addFnAttr(llvm::Attribute::NoReturn);
     }
-    // TODO: map __attribute__((leaf)) to NoCallback in LLVM 12
+    if (declaration.hasAttribute<Semantics::LeafAttribute>())
+    {
+        function->addFnAttr(llvm::Attribute::NoCallback);
+    }
     if (declaration.hasAttribute<Semantics::PureAttribute>())
     {
         function->addFnAttr(llvm::Attribute::ReadOnly);
@@ -781,7 +784,10 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDefinition& func
         {
             function->addFnAttr(llvm::Attribute::NoReturn);
         }
-        // TODO: map __attribute__((leaf)) to NoCallback in LLVM 12
+        if (functionDefinition.hasAttribute<Semantics::LeafAttribute>())
+        {
+            function->addFnAttr(llvm::Attribute::NoCallback);
+        }
         if (functionDefinition.hasAttribute<Semantics::PureAttribute>())
         {
             function->addFnAttr(llvm::Attribute::ReadOnly);
