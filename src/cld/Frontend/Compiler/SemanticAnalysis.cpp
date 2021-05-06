@@ -1788,7 +1788,7 @@ cld::Semantics::ConstValue
             if (sizeofOperator.getSize())
             {
                 auto type = PrimitiveType(getLanguageOptions().sizeTType, getLanguageOptions());
-                return {llvm::APSInt(llvm::APInt(type.as<PrimitiveType>().getBitCount(), *sizeofOperator.getSize()))};
+                return {llvm::APSInt(llvm::APInt(type.getBitCount(), *sizeofOperator.getSize()))};
             }
             logger(Errors::Semantics::SIZEOF_VAL_MODIFIED_TYPE_CANNOT_BE_DETERMINED_IN_CONSTANT_EXPRESSION.args(
                 sizeofOperator, m_sourceInterface, sizeofOperator));
@@ -1862,7 +1862,7 @@ cld::Semantics::ConstValue
             auto type = PrimitiveType(getLanguageOptions().sizeTType, getLanguageOptions());
             if (auto* value = std::get_if<std::uint64_t>(&builtinOffsetOf.getOffset()))
             {
-                return {llvm::APSInt(llvm::APInt(type.as<PrimitiveType>().getBitCount(), *value))};
+                return {llvm::APSInt(llvm::APInt(type.getBitCount(), *value))};
             }
             auto& loc = *cld::get<BuiltinOffsetOf::RuntimeEval>(builtinOffsetOf.getOffset()).failedConstExpr;
             logger(Errors::Semantics::EXPRESSION_IN_OFFSETOF_IS_NOT_A_VALID_CONSTANT_EXPRESSION.args(

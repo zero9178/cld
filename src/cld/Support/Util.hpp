@@ -97,6 +97,29 @@
     #define CLD_NULLABLE
 #endif
 
+#ifndef __has_attribute
+    #define __has_attribute(x) 0
+#endif
+
+#if __has_attribute(diagnose_if)
+    #define CLD_WARN_IF(expr, message) __attribute__((diagnose_if((expr), message, "warning")))
+    #define CLD_ERROR_IF(expr, message) __attribute__((diagnose_if((expr), message, "error")))
+#else
+    #define CLD_WARN_IF(expr, message)
+    #define CLD_ERROR_IF(expr, message)
+#endif
+
+#define CLD_WARN_ON_USAGE(message) CLD_WARN_IF(1, message)
+#define CLD_ERROR_ON_USAGE(message) CLD_ERROR_IF(1, message)
+
+#if __has_attribute(always_inline) || __GNUC__ >= 5
+    #define CLD_ALWAYS_INLINE inline __attribute__((always_inline))
+#elif defined(_MSC_VER)
+    #define CLD_ALWAYS_INLINE __forceinline
+#else
+    #define CLD_ALWAYS_INLINE inline
+#endif
+
 namespace cld
 {
 template <typename T, typename Variant>

@@ -328,6 +328,8 @@ public:
     {
         return m_kind;
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(PrimitiveType)
 };
 
 class ArrayType final : public Type
@@ -377,6 +379,8 @@ public:
     {
         return m_flags & Static;
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(ArrayType)
 };
 
 class AbstractArrayType final : public Type
@@ -415,6 +419,8 @@ public:
     {
         return *m_type;
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(AbstractArrayType)
 };
 
 class ExpressionBase;
@@ -467,6 +473,8 @@ public:
     {
         return m_expression;
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(ValArrayType)
 };
 
 class FunctionType final : public Type
@@ -537,6 +545,8 @@ public:
     {
         return m_flags & KAndR;
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(FunctionType)
 };
 
 class StructType final : public Type
@@ -575,6 +585,8 @@ public:
     {
         return *m_info;
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(StructType)
 };
 
 class UnionType final : public Type
@@ -613,6 +625,8 @@ public:
     {
         return *m_info;
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(UnionType)
 };
 
 class EnumType final : public Type
@@ -651,6 +665,8 @@ public:
     {
         return *m_info;
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(EnumType)
 };
 
 class PointerType final : public Type
@@ -683,6 +699,8 @@ public:
     {
         return *m_elementType;
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(PointerType)
 };
 
 class VectorType final : public Type
@@ -730,6 +748,8 @@ public:
     {
         return m_size;
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(VectorType)
 };
 
 class ErrorType : public Type
@@ -756,6 +776,8 @@ public:
     ErrorType(Flags&&... flags) : Type(std::in_place_type<ErrorType>, (Nothing | ... | flags.result()))
     {
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(ErrorType)
 };
 
 enum class ValueCategory : std::uint8_t
@@ -857,6 +879,8 @@ public:
     {
         return m_valueEnd;
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(Constant)
 };
 
 class FunctionDefinition;
@@ -903,6 +927,8 @@ public:
     {
         return m_identifierToken + 1;
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(DeclarationRead)
 };
 
 class Conversion final : public ExpressionBase
@@ -942,6 +968,8 @@ public:
     [[nodiscard]] Lexer::CTokenIterator begin() const;
 
     [[nodiscard]] Lexer::CTokenIterator end() const;
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(Conversion)
 };
 
 class Cast final : public ExpressionBase
@@ -981,6 +1009,8 @@ public:
     }
 
     [[nodiscard]] Lexer::CTokenIterator end() const;
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(Cast)
 };
 
 struct Field
@@ -1025,6 +1055,8 @@ public:
     {
         return m_memberIdentifier + 1;
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(MemberAccess)
 };
 
 class SubscriptOperator final : public ExpressionBase
@@ -1084,6 +1116,8 @@ public:
     {
         return m_closeBracket + 1;
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(SubscriptOperator)
 };
 
 class BinaryOperator final : public ExpressionBase
@@ -1152,6 +1186,8 @@ public:
     [[nodiscard]] Lexer::CTokenIterator begin() const;
 
     [[nodiscard]] Lexer::CTokenIterator end() const;
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(BinaryOperator)
 };
 
 class UnaryOperator final : public ExpressionBase
@@ -1204,6 +1240,8 @@ public:
     [[nodiscard]] Lexer::CTokenIterator begin() const;
 
     [[nodiscard]] Lexer::CTokenIterator end() const;
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(UnaryOperator)
 };
 
 class SizeofOperator final : public ExpressionBase
@@ -1250,6 +1288,8 @@ public:
     }
 
     [[nodiscard]] Lexer::CTokenIterator end() const;
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(SizeofOperator)
 };
 
 class Conditional final : public ExpressionBase
@@ -1301,6 +1341,8 @@ public:
     [[nodiscard]] Lexer::CTokenIterator begin() const;
 
     [[nodiscard]] Lexer::CTokenIterator end() const;
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(Conditional)
 };
 
 class Assignment final : public ExpressionBase
@@ -1369,6 +1411,8 @@ public:
     [[nodiscard]] Lexer::CTokenIterator begin() const;
 
     [[nodiscard]] Lexer::CTokenIterator end() const;
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(Assignment)
 };
 
 class CommaExpression final : public ExpressionBase
@@ -1401,6 +1445,8 @@ public:
     [[nodiscard]] Lexer::CTokenIterator begin() const;
 
     [[nodiscard]] Lexer::CTokenIterator end() const;
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(CommaExpression)
 };
 
 class CallExpression final : public ExpressionBase
@@ -1445,6 +1491,8 @@ public:
     [[nodiscard]] Lexer::CTokenIterator begin() const;
 
     [[nodiscard]] Lexer::CTokenIterator end() const;
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(CallExpression)
 };
 
 class InitializerList;
@@ -1477,6 +1525,8 @@ public:
     {
         return m_staticLifetime;
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(CompoundLiteral)
 };
 
 class BuiltinVAArg final : public ExpressionBase
@@ -1523,6 +1573,8 @@ public:
     {
         return m_closeParentheses + 1;
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(BuiltinVAArg)
 };
 
 class BuiltinOffsetOf final : public ExpressionBase
@@ -1585,6 +1637,8 @@ public:
     {
         return m_closeParentheses + 1;
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(BuiltinOffsetOf)
 };
 
 class ErrorExpression final : public ExpressionBase
@@ -1616,6 +1670,8 @@ public:
     {
         return m_end;
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(ErrorExpression)
 };
 
 class CompoundStatement;
@@ -1689,6 +1745,8 @@ public:
     {
         return m_expression;
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(ReturnStatement)
 };
 
 class ExpressionStatement final : public Statement
@@ -1705,6 +1763,8 @@ public:
     {
         return m_expression.get();
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(ExpressionStatement)
 };
 
 class GotoStatement final : public Statement
@@ -1721,6 +1781,8 @@ public:
     {
         return m_label;
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(GotoStatement)
 };
 
 using BreakableStatements = std::variant<const ForStatement*, const FootWhileStatement * CLD_NON_NULL,
@@ -1740,6 +1802,8 @@ public:
     {
         return m_statement;
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(BreakStatement)
 };
 
 using LoopStatements =
@@ -1759,6 +1823,8 @@ public:
     {
         return m_loopStatement;
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(ContinueStatement)
 };
 
 class IfStatement final : public Statement
@@ -1788,6 +1854,8 @@ public:
     {
         return m_falseBranch.get();
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(IfStatement)
 };
 
 class Useable : public AbstractIntrusiveVariant<Useable, class VariableDeclaration, class FunctionDefinition,
@@ -1899,6 +1967,8 @@ public:
     {
         return m_compoundItems;
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(CompoundStatement)
 };
 
 class ForStatement final : public Statement
@@ -1947,6 +2017,8 @@ public:
     }
 
     [[nodiscard]] const Statement& getStatement() const;
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(ForStatement)
 };
 
 class HeadWhileStatement final : public Statement
@@ -1968,6 +2040,8 @@ public:
     }
 
     [[nodiscard]] const Statement& getStatement() const;
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(HeadWhileStatement)
 };
 
 class FootWhileStatement final : public Statement
@@ -1989,6 +2063,8 @@ public:
     {
         return *m_expression;
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(FootWhileStatement)
 };
 
 class SwitchStatement final : public Statement
@@ -2031,6 +2107,8 @@ public:
     {
         return m_default;
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(SwitchStatement)
 };
 
 class DefaultStatement final : public Statement
@@ -2067,6 +2145,8 @@ public:
     {
         return *m_switchStmt;
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(DefaultStatement)
 };
 
 class CaseStatement final : public Statement
@@ -2111,6 +2191,8 @@ public:
     {
         return *m_switchStmt;
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(CaseStatement)
 };
 
 class LabelStatement final : public Statement
@@ -2140,12 +2222,16 @@ public:
     {
         return m_sizeOfCurrentScope;
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(LabelStatement)
 };
 
 class GNUASMStatement final : public Statement
 {
 public:
     GNUASMStatement(std::int64_t scope) : Statement(scope, std::in_place_type<GNUASMStatement>) {}
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(GNUASMStatement)
 };
 
 struct FieldInLayout
@@ -2474,6 +2560,8 @@ public:
     {
         return m_first ? *m_first : *this;
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(FunctionDeclaration)
 };
 
 enum class Lifetime : std::uint8_t
@@ -2562,6 +2650,8 @@ public:
     {
         return m_first ? *m_first : *this;
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(VariableDeclaration)
 };
 
 class VariableGroup final : public DeclarationGroup<VariableDeclaration, VariableDeclaration>
@@ -2730,6 +2820,8 @@ public:
     {
         return m_kind;
     }
+
+    CLD_GEN_INTR_VAR_WARNING_FUNCS(BuiltinFunction)
 };
 
 class FunctionGroup final : public DeclarationGroup<Useable, FunctionDefinition, FunctionDeclaration>

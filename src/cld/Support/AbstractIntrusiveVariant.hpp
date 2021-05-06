@@ -202,3 +202,89 @@ template <class T>
 using IntrVarPtr = std::unique_ptr<T, ::cld::IntrusiveVariantDeleter<T>>;
 
 } // namespace cld
+
+#define CLD_GEN_INTR_VAR_WARNING_FUNCS(ThisClass)                                                             \
+                                                                                                              \
+    template <class T>                                                                                        \
+    CLD_WARN_ON_USAGE("Function always returns false")                                                        \
+    constexpr CLD_ALWAYS_INLINE std::enable_if_t<!std::is_same_v<T, ThisClass>, bool> is() const noexcept     \
+    {                                                                                                         \
+        return false;                                                                                         \
+    }                                                                                                         \
+                                                                                                              \
+    template <class T>                                                                                        \
+    CLD_WARN_ON_USAGE("Function always returns true")                                                         \
+    constexpr CLD_ALWAYS_INLINE std::enable_if_t<std::is_same_v<T, ThisClass>, bool> is() const noexcept      \
+    {                                                                                                         \
+        return true;                                                                                          \
+    }                                                                                                         \
+                                                                                                              \
+    template <class T>                                                                                        \
+    CLD_ERROR_ON_USAGE("Cast will never succeed")                                                             \
+    CLD_ALWAYS_INLINE std::enable_if_t<!std::is_same_v<T, ThisClass>, T&> as() noexcept                       \
+    {                                                                                                         \
+        return AbstractIntrusiveVariant::as<T>();                                                             \
+    }                                                                                                         \
+                                                                                                              \
+    template <class T>                                                                                        \
+    CLD_ERROR_ON_USAGE("Cast will never succeed")                                                             \
+    CLD_ALWAYS_INLINE std::enable_if_t<!std::is_same_v<T, ThisClass>, const T&> as() const noexcept           \
+    {                                                                                                         \
+        return AbstractIntrusiveVariant::as<T>();                                                             \
+    }                                                                                                         \
+                                                                                                              \
+    template <class T>                                                                                        \
+    CLD_WARN_ON_USAGE("Class is already of type " #ThisClass)                                                 \
+    CLD_ALWAYS_INLINE std::enable_if_t<std::is_same_v<T, ThisClass>, ThisClass&> as() noexcept                \
+    {                                                                                                         \
+        return *this;                                                                                         \
+    }                                                                                                         \
+                                                                                                              \
+    template <class T>                                                                                        \
+    CLD_WARN_ON_USAGE("Class is already of type " #ThisClass)                                                 \
+    CLD_ALWAYS_INLINE std::enable_if_t<std::is_same_v<T, ThisClass>, const ThisClass&> as() const noexcept    \
+    {                                                                                                         \
+        return *this;                                                                                         \
+    }                                                                                                         \
+                                                                                                              \
+    template <class T>                                                                                        \
+    CLD_WARN_ON_USAGE("Function will always return nullptr")                                                  \
+    CLD_ALWAYS_INLINE std::enable_if_t<!std::is_same_v<T, ThisClass>, T*> tryAs() noexcept                    \
+    {                                                                                                         \
+        return nullptr;                                                                                       \
+    }                                                                                                         \
+                                                                                                              \
+    template <class T>                                                                                        \
+    CLD_WARN_ON_USAGE("Function will always return nullptr")                                                  \
+    CLD_ALWAYS_INLINE std::enable_if_t<!std::is_same_v<T, ThisClass>, const T*> tryAs() const noexcept        \
+    {                                                                                                         \
+        return nullptr;                                                                                       \
+    }                                                                                                         \
+                                                                                                              \
+    template <class T>                                                                                        \
+    CLD_WARN_ON_USAGE("Class is already of type " #ThisClass)                                                 \
+    CLD_ALWAYS_INLINE std::enable_if_t<std::is_same_v<T, ThisClass>, ThisClass*> tryAs() noexcept             \
+    {                                                                                                         \
+        return this;                                                                                          \
+    }                                                                                                         \
+                                                                                                              \
+    template <class T>                                                                                        \
+    CLD_WARN_ON_USAGE("Class is already of type " #ThisClass)                                                 \
+    CLD_ALWAYS_INLINE std::enable_if_t<std::is_same_v<T, ThisClass>, const ThisClass*> tryAs() const noexcept \
+    {                                                                                                         \
+        return this;                                                                                          \
+    }                                                                                                         \
+                                                                                                              \
+    template <class... F>                                                                                     \
+    CLD_WARN_ON_USAGE("Class type " #ThisClass " known ahead of time already")                                \
+    CLD_ALWAYS_INLINE decltype(auto) match(F&&... f)                                                          \
+    {                                                                                                         \
+        return AbstractIntrusiveVariant::match(std::forward<F>(f)...);                                        \
+    }                                                                                                         \
+                                                                                                              \
+    template <class... F>                                                                                     \
+    CLD_WARN_ON_USAGE("Class type " #ThisClass " known ahead of time already")                                \
+    CLD_ALWAYS_INLINE decltype(auto) match(F&&... f) const                                                    \
+    {                                                                                                         \
+        return AbstractIntrusiveVariant::match(std::forward<F>(f)...);                                        \
+    }

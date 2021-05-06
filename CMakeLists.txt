@@ -122,7 +122,7 @@ else ()
 endif ()
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-    add_compile_options(-Wno-assume -Wno-nullability-extension -Wno-nullability-completeness -Wno-unknown-pragmas)
+    add_compile_options(-Wno-assume -Wno-nullability-extension -Wno-nullability-completeness -Wno-unknown-pragmas -Wno-gcc-compat)
 endif ()
 if (NOT MSVC)
     find_package(Threads REQUIRED)

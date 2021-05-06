@@ -803,7 +803,7 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDefinition& func
         function = generateFunctionDecl(functionDefinition);
     }
     m_lvalues.emplace(&functionDefinition, valueOf(function));
-    auto& ft = functionDefinition.getType().as<Semantics::FunctionType>();
+    auto& ft = functionDefinition.getType();
     if (functionDefinition.hasAttribute<Semantics::GnuInlineAttribute>())
     {
         // GNU90 semantics

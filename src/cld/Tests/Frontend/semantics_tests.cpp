@@ -5107,7 +5107,7 @@ TEST_CASE("Semantics __attribute__", "[semantics]")
             REQUIRE(translationUnit->getGlobals()[0]->is<FunctionDeclaration>());
             auto* decl = &translationUnit->getGlobals()[0]->as<FunctionDeclaration>();
             CHECK(decl->hasAttribute<UsedAttribute>());
-            CHECK(decl->getType().as<FunctionType>().getReturnType().is<VectorType>());
+            CHECK(decl->getType().getReturnType().is<VectorType>());
             SEMA_PRODUCES("static __attribute__((used)) int foo(void);",
                           ProducesNoErrors() && !ProducesWarning(UNUSED_FUNCTION_N, "'foo'"));
         }

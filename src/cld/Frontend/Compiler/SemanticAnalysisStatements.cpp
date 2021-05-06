@@ -5,7 +5,7 @@
 std::unique_ptr<cld::Semantics::ReturnStatement>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::ReturnStatement& node)
 {
-    auto& ft = getCurrentFunctionScope()->currentFunction->getType().as<FunctionType>();
+    auto& ft = getCurrentFunctionScope()->currentFunction->getType();
     if (!node.getExpression())
     {
         if (!isVoid(ft.getReturnType()))
