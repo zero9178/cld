@@ -6624,3 +6624,29 @@ TEST_CASE("LLVM codegen __attribute__((leaf))", "[LLVM]")
     REQUIRE(global);
     CHECK(global->hasFnAttribute(llvm::Attribute::NoCallback));
 }
+
+TEST_CASE("LLVM codegen __attribute__((weak))", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    llvm::Module module("", context);
+    SECTION("Function Declaration")
+    {
+        auto program = generateProgramWithOptions("int __attribute__((weak,used)) foo(void);", x64linux);
+        cld::CGLLVM::generateLLVM(module, program, emitAllDecls);
+        CAPTURE(module);
+        REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
+        auto* global = module.getFunction("foo");
+        REQUIRE(global);
+        CHECK(global->getLinkage() == llvm::Function::ExternalWeakLinkage);
+    }
+    SECTION("Function Definition")
+    {
+        auto program = generateProgramWithOptions("int __attribute__((weak)) foo(void) { return 5; }", x64linux);
+        cld::CGLLVM::generateLLVM(module, program);
+        CAPTURE(module);
+        REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
+        auto* global = module.getFunction("foo");
+        REQUIRE(global);
+        CHECK(global->getLinkage() == llvm::Function::WeakAnyLinkage);
+    }
+}

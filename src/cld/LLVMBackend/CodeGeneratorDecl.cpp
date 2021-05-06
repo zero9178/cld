@@ -518,6 +518,17 @@ llvm::Function* cld::CGLLVM::CodeGenerator::generateFunctionDecl(const T& decDef
         case Semantics::Linkage::None: break;
     }
     auto& type = decDef.getType();
+    if (decDef.template hasAttribute<Semantics::WeakAttribute>())
+    {
+        if constexpr (std::is_same_v<T, Semantics::FunctionDefinition>)
+        {
+            linkageType = llvm::GlobalValue::WeakAnyLinkage;
+        }
+        else
+        {
+            linkageType = llvm::GlobalValue::ExternalWeakLinkage;
+        }
+    }
 
     auto* name = decDef.getNameToken();
     auto* ft = llvm::cast<llvm::FunctionType>(visit(type));
@@ -586,12 +597,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDe
         chosen = &iter;
     }
     if (!m_options.emitAllDecls && !chosen->isUsed()
-        && !chosen->match([](auto&& value) { return value.template hasAttribute<Semantics::UsedAttribute>(); },
-                          [](const Semantics::BuiltinFunction&) -> bool
-                          {
-                              // TODO: I feel like this will change in the future
-                              CLD_UNREACHABLE;
-                          }))
+        && !chosen->match([](auto&& value) { return value.template hasAttribute<Semantics::UsedAttribute>(); }))
     {
         return nullptr;
     }
