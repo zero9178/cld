@@ -1264,6 +1264,14 @@ CREATE_WARNING(TYPE_N_IS_DEPRECATED, "deprecated", "Type %0 is deprecated", Unde
 
 CREATE_WARNING(TYPE_N_IS_DEPRECATED_N, "deprecated", "Type %0 is deprecated: %1", Underline<2>);
 
+// __attribute__((warn_unused_result))
+
+CREATE_WARNING(FUNCTION_N_WITH_WARN_UNUSED_RESULT_ATTRIBUTE_RETURNS_NOTHING, "ignored-attributes",
+               "Function %0 with 'warn_unused_result' attribute returns nothing", Underline<0>, Underline<1>);
+
+CREATE_WARNING(RESULT_OF_CALL_TO_FUNCTION_N_UNUSED, "unused-result", "Result of call to function %0 unused",
+               Underline<0>);
+
 } // namespace Semantics
 namespace Lexer
 {

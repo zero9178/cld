@@ -272,6 +272,8 @@ class SemanticAnalysis final : public ProgramInterface
 
     void checkForDeprecatedType(const Type& type);
 
+    void checkUnusedResult(const ExpressionBase& expression);
+
     VectorType vectorCompResultType(const VectorType& vectorType, const LanguageOptions& options);
 
     std::unique_ptr<BinaryOperator> doBitOperators(IntrVarPtr<ExpressionBase>&& lhs, BinaryOperator::Kind kind,
@@ -624,6 +626,8 @@ public:
     void apply(AffectsTagVariableFunction declaration, const ParsedAttribute<DeprecatedAttribute>& attribute);
 
     void apply(AffectsFunction declaration, const ParsedAttribute<NonnullAttribute>& attribute);
+
+    void apply(AffectsFunction declaration, const ParsedAttribute<WarnUnusedResultAttribute>& attribute);
 
 private:
     std::unordered_map<std::string,

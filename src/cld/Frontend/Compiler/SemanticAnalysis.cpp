@@ -994,7 +994,9 @@ cld::IntrVarPtr<cld::Semantics::Statement> cld::Semantics::SemanticAnalysis::vis
             {
                 return std::make_unique<ExpressionStatement>(m_currentScope, nullptr);
             }
-            return std::make_unique<ExpressionStatement>(m_currentScope, visit(*node.getOptionalExpression()));
+            auto expression = visit(*node.getOptionalExpression());
+            checkUnusedResult(*expression);
+            return std::make_unique<ExpressionStatement>(m_currentScope, std::move(expression));
         });
 }
 

@@ -452,6 +452,7 @@ void cld::Semantics::SemanticAnalysis::createAttributes()
     gnuSpelling("weak", &SemanticAnalysis::parseAttribute<WeakAttribute>);
     gnuSpelling("leaf", &SemanticAnalysis::parseAttribute<LeafAttribute>);
     gnuSpelling("pure", &SemanticAnalysis::parseAttribute<PureAttribute>);
+    gnuSpelling("warn_unused_result", &SemanticAnalysis::parseAttribute<WarnUnusedResultAttribute>);
     if (getLanguageOptions().triple.getPlatform() == Platform::Windows)
     {
         gnuSpelling("dllimport", &SemanticAnalysis::parseAttribute<DllImportAttribute>);
@@ -775,4 +776,19 @@ void cld::Semantics::SemanticAnalysis::apply(AffectsFunction applicant,
             *cld::match(applicant, [](auto holder) { return holder->getNameToken(); }), *attribute.name));
     }
     cld::match(applicant, [&](auto holder) { holder->addAttribute(attribute.attribute); });
+}
+
+void cld::Semantics::SemanticAnalysis::apply(AffectsFunction applicant,
+                                             const ParsedAttribute<WarnUnusedResultAttribute>& attribute)
+{
+    auto& retType =
+        cld::match(applicant, [](auto&& value) -> decltype(auto) { return value->getType().getReturnType(); });
+    if (isVoid(retType))
+    {
+        auto* token = cld::match(applicant, [](auto&& value) { return value->getNameToken(); });
+        log(Warnings::Semantics::FUNCTION_N_WITH_WARN_UNUSED_RESULT_ATTRIBUTE_RETURNS_NOTHING.args(
+            *token, m_sourceInterface, *token, *attribute.name));
+        return;
+    }
+    cld::match(applicant, [](auto holder) { holder->addAttribute(WarnUnusedResultAttribute{}); });
 }

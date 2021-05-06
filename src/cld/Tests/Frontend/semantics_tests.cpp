@@ -6081,3 +6081,46 @@ TEST_CASE("Semantics __attribute__((deprecated))", "[semantics]")
                       && ProducesNote(MARKED_DEPRECATED_HERE));
     */
 }
+
+TEST_CASE("Semantics __attribute__((warn_unused_result))", "[semantics]")
+{
+    SEMA_PRODUCES("__attribute__((warn_unused_result)) void foo(void);",
+                  ProducesWarning(FUNCTION_N_WITH_WARN_UNUSED_RESULT_ATTRIBUTE_RETURNS_NOTHING, "'foo'"));
+    SECTION("Recognition")
+    {
+        SEMA_PRODUCES(
+            "int __attribute__ ((warn_unused_result(8))) foo(void);",
+            ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N, "'warn_unused_result'", 1));
+        auto program = generateProgram("__attribute__((warn_unused_result)) int foo(void) {\n"
+                                       "    int i = 5;\n"
+                                       "    return i;\n"
+                                       "}",
+                                       x64linux);
+        auto& globals = program.getTranslationUnit().getGlobals();
+        REQUIRE(globals.size() == 1);
+        auto& func = globals[0];
+        REQUIRE(func->is<FunctionDefinition>());
+        CHECK(func->as<FunctionDefinition>().hasAttribute<WarnUnusedResultAttribute>());
+    }
+    SEMA_PRODUCES("__attribute__((warn_unused_result)) int foo(void);\n"
+                  "\n"
+                  "int main(void)\n"
+                  "{\n"
+                  "    foo();\n"
+                  "}",
+                  ProducesWarning(RESULT_OF_CALL_TO_FUNCTION_N_UNUSED, "'foo'"));
+    SEMA_PRODUCES("__attribute__((warn_unused_result)) int foo(void);\n"
+                  "\n"
+                  "int main(void)\n"
+                  "{\n"
+                  "    for(foo();;);\n"
+                  "}",
+                  ProducesWarning(RESULT_OF_CALL_TO_FUNCTION_N_UNUSED, "'foo'"));
+    SEMA_PRODUCES("__attribute__((warn_unused_result)) int foo(void);\n"
+                  "\n"
+                  "int main(void)\n"
+                  "{\n"
+                  "    for(;;foo());\n"
+                  "}",
+                  ProducesWarning(RESULT_OF_CALL_TO_FUNCTION_N_UNUSED, "'foo'"));
+}

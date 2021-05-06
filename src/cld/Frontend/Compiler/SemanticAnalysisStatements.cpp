@@ -127,6 +127,7 @@ std::unique_ptr<cld::Semantics::ForStatement> cld::Semantics::SemanticAnalysis::
         if (expression)
         {
             initial = visit(*expression);
+            checkUnusedResult(*cld::get<IntrVarPtr<ExpressionBase>>(initial));
         }
     }
 
@@ -146,6 +147,7 @@ std::unique_ptr<cld::Semantics::ForStatement> cld::Semantics::SemanticAnalysis::
     if (node.getPost())
     {
         iteration = visit(*node.getPost());
+        checkUnusedResult(*iteration);
     }
 
     auto forStatement = std::make_unique<ForStatement>(m_currentScope, node.begin(), ForStatement::Variant{}, nullptr,
@@ -524,4 +526,34 @@ std::unique_ptr<cld::Semantics::GNUASMStatement>
 {
     // TODO:
     return std::make_unique<GNUASMStatement>(m_currentScope);
+}
+
+void cld::Semantics::SemanticAnalysis::checkUnusedResult(const cld::Semantics::ExpressionBase& expression)
+{
+    auto* callExpression = expression.tryAs<CallExpression>();
+    if (!callExpression)
+    {
+        return;
+    }
+    auto* conversion = callExpression->getFunctionExpression().tryAs<Conversion>();
+    if (!conversion || conversion->getKind() != Conversion::LValue)
+    {
+        return;
+    }
+    auto* function = conversion->getExpression().tryAs<DeclarationRead>();
+    if (!function
+        || (!function->getDeclRead().is<FunctionDefinition>() && !function->getDeclRead().is<FunctionDeclaration>()
+            && !function->getDeclRead().is<BuiltinFunction>()))
+    {
+        return;
+    }
+    auto& attributes = function->getDeclRead().match(
+        [](const auto& value) -> const AttributeHolder<FunctionAttribute>& { return value; },
+        [](const VariableDeclaration&) -> const AttributeHolder<FunctionAttribute>& { CLD_UNREACHABLE; });
+    if (!attributes.hasAttribute<WarnUnusedResultAttribute>())
+    {
+        return;
+    }
+    log(Warnings::Semantics::RESULT_OF_CALL_TO_FUNCTION_N_UNUSED.args(
+        *function->getIdentifierToken(), m_sourceInterface, *function->getIdentifierToken()));
 }

@@ -2751,7 +2751,7 @@ public:
     }
 };
 
-class BuiltinFunction final : public Useable
+class BuiltinFunction final : public Useable, public AttributeHolder<FunctionAttribute>
 {
     FunctionType m_type;
 
