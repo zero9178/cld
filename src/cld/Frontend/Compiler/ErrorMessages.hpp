@@ -1001,6 +1001,14 @@ CREATE_ERROR(NONNULL_INDEX_N_OUT_OF_BOUNDS, "'nonnull' index %0 out of bounds", 
 CREATE_ERROR(ARGUMENT_TO_DEPRECATED_MUST_BE_A_STRING_LITERAL, "Argument to 'deprecated' must be a string literal",
              Underline<0>);
 
+// __attribute__((weak))
+
+CREATE_ERROR(WEAK_ATTRIBUTE_CANNOT_BE_APPLIED_TO_FUNCTION_N_WITH_INTERNAL_LINKAGE,
+             "'weak' attribute cannot be applied to function %0 with internal linkage", Underline<0>, Underline<1>);
+
+CREATE_ERROR(WEAK_ATTRIBUTE_CANNOT_BE_APPLIED_TO_VARIABLE_N_WITH_INTERNAL_LINKAGE,
+             "'weak' attribute cannot be applied to variable %0 with internal linkage", Underline<0>, Underline<1>);
+
 } // namespace Semantics
 
 namespace Lexer

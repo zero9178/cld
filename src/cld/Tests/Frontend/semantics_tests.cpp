@@ -5885,7 +5885,7 @@ TEST_CASE("Semantics __attribute__((dllimport))", "[semantics]")
 
 TEMPLATE_TEST_CASE("Semantics __attribute__((T)) markers", "[semantics][template]", NoinlineAttribute,
                    AlwaysInlineAttribute, ArtificialAttribute, NothrowAttribute, ConstAttribute, NoreturnAttribute,
-                   WeakAttribute, LeafAttribute, PureAttribute)
+                   LeafAttribute, PureAttribute)
 {
     std::string name = []
     {
@@ -5912,10 +5912,6 @@ TEMPLATE_TEST_CASE("Semantics __attribute__((T)) markers", "[semantics][template
         if constexpr (std::is_same_v<TestType, NoreturnAttribute>)
         {
             return "noreturn";
-        }
-        if constexpr (std::is_same_v<TestType, WeakAttribute>)
-        {
-            return "weak";
         }
         if constexpr (std::is_same_v<TestType, LeafAttribute>)
         {
@@ -6123,4 +6119,27 @@ TEST_CASE("Semantics __attribute__((warn_unused_result))", "[semantics]")
                   "    for(;;foo());\n"
                   "}",
                   ProducesWarning(RESULT_OF_CALL_TO_FUNCTION_N_UNUSED, "'foo'"));
+}
+
+TEST_CASE("Semantics __attribute__((weak))", "[semantics]]")
+{
+    SECTION("Recognition")
+    {
+        SEMA_PRODUCES("int __attribute__ ((weak(8))) foo(void);",
+                      ProducesError(INVALID_NUMBER_OF_ARGUMENTS_FOR_ATTRIBUTE_N_EXPECTED_NONE_GOT_N, "'weak'", 1));
+        auto program = generateProgram("__attribute__((weak)) int foo(void) {\n"
+                                       "    int i = 5;\n"
+                                       "    return i;\n"
+                                       "}",
+                                       x64linux);
+        auto& globals = program.getTranslationUnit().getGlobals();
+        REQUIRE(globals.size() == 1);
+        auto& func = globals[0];
+        REQUIRE(func->is<FunctionDefinition>());
+        CHECK(func->as<FunctionDefinition>().hasAttribute<WeakAttribute>());
+    }
+    SEMA_PRODUCES("static int __attribute__((weak)) foo;",
+                  ProducesError(WEAK_ATTRIBUTE_CANNOT_BE_APPLIED_TO_VARIABLE_N_WITH_INTERNAL_LINKAGE, "'foo'"));
+    SEMA_PRODUCES("static int __attribute__((weak)) foo();",
+                  ProducesError(WEAK_ATTRIBUTE_CANNOT_BE_APPLIED_TO_FUNCTION_N_WITH_INTERNAL_LINKAGE, "'foo'"));
 }

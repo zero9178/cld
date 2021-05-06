@@ -792,3 +792,25 @@ void cld::Semantics::SemanticAnalysis::apply(AffectsFunction applicant,
     }
     cld::match(applicant, [](auto holder) { holder->addAttribute(WarnUnusedResultAttribute{}); });
 }
+
+void cld::Semantics::SemanticAnalysis::apply(AffectsVariableFunction applicant,
+                                             const ParsedAttribute<WeakAttribute>& attribute)
+{
+    if (cld::match(applicant, [](auto&& value) { return value->getLinkage(); }) == Linkage::Internal)
+    {
+        cld::match(
+            applicant,
+            [&](cld::not_null<VariableDeclaration> variable)
+            {
+                log(Errors::Semantics::WEAK_ATTRIBUTE_CANNOT_BE_APPLIED_TO_VARIABLE_N_WITH_INTERNAL_LINKAGE.args(
+                    *variable->getNameToken(), m_sourceInterface, *variable->getNameToken(), *attribute.name));
+            },
+            [&](auto function)
+            {
+                log(Errors::Semantics::WEAK_ATTRIBUTE_CANNOT_BE_APPLIED_TO_FUNCTION_N_WITH_INTERNAL_LINKAGE.args(
+                    *function->getNameToken(), m_sourceInterface, *function->getNameToken(), *attribute.name));
+            });
+        return;
+    }
+    cld::match(applicant, [](auto holder) { holder->addAttribute(WeakAttribute{}); });
+}

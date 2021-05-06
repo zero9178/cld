@@ -629,6 +629,8 @@ public:
 
     void apply(AffectsFunction declaration, const ParsedAttribute<WarnUnusedResultAttribute>& attribute);
 
+    void apply(AffectsVariableFunction declaration, const ParsedAttribute<WeakAttribute>& attribute);
+
 private:
     std::unordered_map<std::string,
                        std::optional<AllAttributes> (SemanticAnalysis::*)(const Syntax::GNUAttributes::GNUAttribute&)>
