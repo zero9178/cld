@@ -95,7 +95,6 @@ class CodeGenerator final
     llvm::AllocaInst* m_returnSlot = nullptr;
     std::unordered_map<std::shared_ptr<const Semantics::ExpressionBase>, llvm::Value*> m_valSizes;
     std::unordered_map<const Semantics::VariableDeclaration * CLD_NON_NULL, llvm::AllocaInst*> m_stackSaves;
-    std::unordered_map<std::string_view, llvm::GlobalVariable*> m_cGlobalVariables;
 
     std::optional<llvm::DIBuilder> m_debugInfo;
     std::vector<llvm::DIFile*> m_fileIdToFile;

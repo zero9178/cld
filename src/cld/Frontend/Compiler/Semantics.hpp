@@ -1902,11 +1902,12 @@ class Declaration : public Useable
 {
     Linkage m_linkage;
     Lexer::CTokenIterator m_nameToken;
+    std::size_t m_scope;
 
 protected:
     template <class T>
-    Declaration(std::in_place_type_t<T>, Linkage linkage, Lexer::CTokenIterator nameToken)
-        : Useable(std::in_place_type<T>), m_linkage(linkage), m_nameToken(nameToken)
+    Declaration(std::in_place_type_t<T>, Linkage linkage, Lexer::CTokenIterator nameToken, std::size_t scope)
+        : Useable(std::in_place_type<T>), m_linkage(linkage), m_nameToken(nameToken), m_scope(scope)
     {
     }
 
@@ -1919,6 +1920,11 @@ public:
     [[nodiscard]] Lexer::CTokenIterator getNameToken() const
     {
         return m_nameToken;
+    }
+
+    [[nodiscard]] std::size_t getScope() const
+    {
+        return m_scope;
     }
 };
 
@@ -2462,6 +2468,8 @@ class DeclarationGroup
             return m_curr;
         }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wuser-defined-warnings"
         Iterator& operator++() noexcept
         {
             CLD_ASSERT(m_curr);
@@ -2477,6 +2485,7 @@ class DeclarationGroup
                 });
             return *this;
         }
+#pragma clang diagnostic pop
 
         Iterator operator++(int) noexcept
         {
@@ -2537,7 +2546,7 @@ class FunctionDeclaration final : public Declaration, public AttributeHolder<Fun
 
 public:
     FunctionDeclaration(FunctionType type, Linkage linkage, Lexer::CTokenIterator nameToken, InlineKind inlineKind,
-                        Useable* previous);
+                        std::size_t scope, Useable* previous);
 
     [[nodiscard]] const FunctionType& getType() const noexcept
     {
@@ -2594,8 +2603,9 @@ private:
 
 public:
     VariableDeclaration(IntrVarValue<Type> type, Linkage linkage, Lifetime lifetime, Lexer::CTokenIterator nameToken,
-                        Kind kind, std::optional<Initializer> initializer = {}, VariableDeclaration* previous = nullptr)
-        : Declaration(std::in_place_type<VariableDeclaration>, linkage, nameToken),
+                        Kind kind, std::size_t scope, std::optional<Initializer> initializer = {},
+                        VariableDeclaration* previous = nullptr)
+        : Declaration(std::in_place_type<VariableDeclaration>, linkage, nameToken, scope),
           m_type(std::move(type)),
           m_initializer(std::move(initializer)),
           m_lifetime(lifetime),
@@ -2658,6 +2668,19 @@ class VariableGroup final : public DeclarationGroup<VariableDeclaration, Variabl
 {
 public:
     explicit VariableGroup(cld::not_null<const VariableDeclaration> decl) : DeclarationGroup(&decl->getFirst()) {}
+
+    [[nodiscard]] const VariableDeclaration& getDefinitionOrLast() const noexcept
+    {
+        auto last = begin();
+        for (auto iter = last; iter != end(); last = iter++)
+        {
+            if (iter->getKind() == VariableDeclaration::Definition)
+            {
+                return *iter;
+            }
+        }
+        return *last;
+    }
 };
 
 class FunctionDefinition final : public Useable, public AttributeHolder<FunctionAttribute>

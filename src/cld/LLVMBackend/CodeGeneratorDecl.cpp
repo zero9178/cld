@@ -491,17 +491,7 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::TranslationUnit& transla
 {
     for (auto& iter : translationUnit.getGlobals())
     {
-        iter->match([&](const Semantics::FunctionDefinition& functionDefinition) { visit(functionDefinition); },
-                    [&](const Semantics::VariableDeclaration& declaration)
-                    {
-                        auto global = visit(declaration);
-                        if (llvm::isa_and_nonnull<llvm::GlobalVariable>(global.value))
-                        {
-                            m_cGlobalVariables.emplace(declaration.getNameToken()->getText(),
-                                                       llvm::cast<llvm::GlobalVariable>(global.value));
-                        }
-                    },
-                    [&](const Semantics::FunctionDeclaration& functionDeclaration) { visit(functionDeclaration); },
+        iter->match([&](const auto& value) { visit(value); },
                     [&](const Semantics::BuiltinFunction&) { CLD_UNREACHABLE; });
     }
 }
@@ -611,13 +601,6 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDe
 
 cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::VariableDeclaration& declaration)
 {
-    llvm::Function::LinkageTypes linkageType = llvm::GlobalValue::ExternalLinkage;
-    switch (declaration.getLinkage())
-    {
-        case Semantics::Linkage::Internal: linkageType = llvm::GlobalValue::InternalLinkage; break;
-        case Semantics::Linkage::External: linkageType = llvm::GlobalValue::ExternalLinkage; break;
-        case Semantics::Linkage::None: break;
-    }
     if (declaration.getLifetime() == Semantics::Lifetime::Static)
     {
         if (!m_options.emitAllDecls && declaration.getLinkage() == Semantics::Linkage::Internal && !declaration.isUsed()
@@ -625,35 +608,46 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::VariableDe
         {
             return nullptr;
         }
-        auto& declType = [&]() -> decltype(auto)
+        auto& variableDef = declaration.getVariableGroup().getDefinitionOrLast();
+        if (declaration.getScope() == Semantics::Program::GLOBAL_SCOPE)
         {
-            if (m_currentFunction)
+            if (auto* global = m_module.getGlobalVariable(declaration.getNameToken()->getText(),
+                                                          variableDef.getLinkage() == Semantics::Linkage::Internal))
             {
-                return declaration.getType();
+                m_lvalues.emplace(&declaration,
+                                  createBitCast(global, llvm::PointerType::getUnqual(visit(variableDef.getType()))));
+                return global;
             }
+        }
 
-            auto& decl =
-                m_programInterface.getScopes()[0].declarations.at(declaration.getNameToken()->getText()).declared;
-            return cld::get<Semantics::VariableDeclaration*>(decl)->getType();
-        }();
-        auto* type = visit(declType);
-        if (declType.is<Semantics::AbstractArrayType>())
+        llvm::Function::LinkageTypes linkageType = llvm::GlobalValue::ExternalLinkage;
+        switch (variableDef.getLinkage())
+        {
+            case Semantics::Linkage::Internal: linkageType = llvm::GlobalValue::InternalLinkage; break;
+            case Semantics::Linkage::External: linkageType = llvm::GlobalValue::ExternalLinkage; break;
+            case Semantics::Linkage::None: break;
+        }
+
+        auto* type = visit(variableDef.getType());
+        if (variableDef.getType().is<Semantics::AbstractArrayType>())
         {
             type = llvm::ArrayType::get(type->getArrayElementType(), 1);
         }
 
         auto* prevType = type;
         llvm::Constant* constant = nullptr;
-        if (declaration.getInitializer() && declaration.getKind() != Semantics::VariableDeclaration::DeclarationOnly)
+        if (variableDef.getInitializer() && variableDef.getKind() != Semantics::VariableDeclaration::DeclarationOnly)
         {
-            constant = llvm::cast<llvm::Constant>(visit(*declaration.getInitializer(), declType, type).value);
+            constant =
+                llvm::cast<llvm::Constant>(visit(*variableDef.getInitializer(), variableDef.getType(), type).value);
             type = constant->getType();
         }
-        else if (declaration.getKind() != Semantics::VariableDeclaration::DeclarationOnly)
+        else if (variableDef.getKind() != Semantics::VariableDeclaration::DeclarationOnly)
         {
             constant = llvm::Constant::getNullValue(type);
         }
-        if (m_currentFunction && declaration.getKind() != Semantics::VariableDeclaration::DeclarationOnly)
+        if (variableDef.getScope() != Semantics::Program::GLOBAL_SCOPE
+            && variableDef.getKind() != Semantics::VariableDeclaration::DeclarationOnly)
         {
             linkageType = llvm::GlobalValue::InternalLinkage;
         }
@@ -664,38 +658,35 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::VariableDe
         //            linkageType = llvm::GlobalValue::CommonLinkage;
         //        }
 
-        llvm::GlobalVariable* global = nullptr;
-        if (m_currentFunction || m_cGlobalVariables.count(declaration.getNameToken()->getText()) == 0)
+        std::string name = cld::to_string(variableDef.getNameToken()->getText());
+        if (variableDef.getScope() != Semantics::Program::GLOBAL_SCOPE)
         {
-            global = new llvm::GlobalVariable(
-                m_module, type, declType.isConst() && linkageType != llvm::GlobalValue::CommonLinkage, linkageType,
-                constant, llvm::StringRef{declaration.getNameToken()->getText()});
-            if (Semantics::isCompleteType(declType) || declType.is<Semantics::AbstractArrayType>())
-            {
-                std::uint64_t alignment = declType.getAlignOf(m_programInterface);
-                if (getSourceInterface().getLanguageOptions().triple.getArchitecture() == cld::Architecture::x86_64
-                    && Semantics::isArray(declType) && !declType.is<Semantics::AbstractArrayType>()
-                    && declType.getSizeOf(m_programInterface) >= 16)
-                {
-                    alignment = std::max<std::uint64_t>(16, alignment);
-                }
-                if (auto* aligned = declaration.getAttributeIf<Semantics::AlignedAttribute>())
-                {
-                    alignment = *aligned->alignment;
-                }
-                global->setAlignment(llvm::Align(alignment));
-            }
-            if (!m_options.reloc)
-            {
-                global->setDSOLocal(true);
-            }
+            name = "static." + name;
         }
-        else
+        llvm::GlobalVariable* global = nullptr;
+        global = new llvm::GlobalVariable(
+            m_module, type, variableDef.getType().isConst() && linkageType != llvm::GlobalValue::CommonLinkage,
+            linkageType, constant, name);
+        if (Semantics::isCompleteType(variableDef.getType())
+            || variableDef.getType().is<Semantics::AbstractArrayType>())
         {
-            global = m_cGlobalVariables[declaration.getNameToken()->getText()];
-            global->setConstant(declType.isConst() && linkageType != llvm::GlobalValue::CommonLinkage);
-            global->setLinkage(linkageType);
-            global->setInitializer(constant);
+            std::uint64_t alignment = variableDef.getType().getAlignOf(m_programInterface);
+            if (getSourceInterface().getLanguageOptions().triple.getArchitecture() == cld::Architecture::x86_64
+                && Semantics::isArray(variableDef.getType())
+                && !variableDef.getType().is<Semantics::AbstractArrayType>()
+                && variableDef.getType().getSizeOf(m_programInterface) >= 16)
+            {
+                alignment = std::max<std::uint64_t>(16, alignment);
+            }
+            if (auto* aligned = variableDef.getAttributeIf<Semantics::AlignedAttribute>())
+            {
+                alignment = *aligned->alignment;
+            }
+            global->setAlignment(llvm::Align(alignment));
+        }
+        if (!m_options.reloc)
+        {
+            global->setDSOLocal(true);
         }
 
         m_lvalues.emplace(&declaration, createBitCast(global, llvm::PointerType::getUnqual(prevType)));
@@ -704,6 +695,14 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::VariableDe
     if (!m_options.emitAllDecls && !declaration.isUsed())
     {
         return nullptr;
+    }
+
+    llvm::Function::LinkageTypes linkageType = llvm::GlobalValue::ExternalLinkage;
+    switch (declaration.getLinkage())
+    {
+        case Semantics::Linkage::Internal: linkageType = llvm::GlobalValue::InternalLinkage; break;
+        case Semantics::Linkage::External: linkageType = llvm::GlobalValue::ExternalLinkage; break;
+        case Semantics::Linkage::None: break;
     }
     auto* type = visit(declaration.getType());
     // Place all allocas up top except variably modified types

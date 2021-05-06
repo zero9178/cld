@@ -166,8 +166,9 @@ std::unique_ptr<cld::Semantics::FunctionDefinition>
             }
             paramType = adjustParameterType(paramType);
 
-            auto& ptr = parameterDeclarations.emplace_back(std::make_unique<VariableDeclaration>(
-                std::move(paramType), Linkage::None, lifetime, loc, VariableDeclaration::Kind::Definition));
+            auto& ptr = parameterDeclarations.emplace_back(
+                std::make_unique<VariableDeclaration>(std::move(paramType), Linkage::None, lifetime, loc,
+                                                      VariableDeclaration::Kind::Definition, m_currentScope));
             auto [prev, notRedefined] =
                 getCurrentScope().declarations.insert({loc->getText(), DeclarationInScope{loc, ptr.get()}});
             if (!notRedefined)
@@ -354,7 +355,7 @@ std::unique_ptr<cld::Semantics::FunctionDefinition>
     auto funcType = ArrayType(typeAlloc<PrimitiveType>(PrimitiveType::Char, getLanguageOptions(), flag::isConst = true),
                               loc->getText().size() + 1);
     auto funcName = std::make_unique<VariableDeclaration>(
-        std::move(funcType), Linkage::Internal, Lifetime::Static, loc, VariableDeclaration::Definition,
+        std::move(funcType), Linkage::Internal, Lifetime::Static, loc, VariableDeclaration::Definition, m_currentScope,
         std::make_unique<Constant>(
             ArrayType(typeAlloc<PrimitiveType>(PrimitiveType::Char, getLanguageOptions()), loc->getText().size() + 1),
             cld::to_string(loc->getText()), loc, loc + 1));
@@ -655,13 +656,15 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
                 // All declarations in the same scope that refer to the same object or function shall specify
                 // compatible types.
                 || !typesAreCompatible(result, cld::get<VariableDeclaration*>(prev->second.declared)->getType())
-                // C99 6.9§3:
-                // There shall be no more than one external definition for each identifier declared with
-                // internal linkage in a translation unit.
-                || (m_currentScope == 0 && (kind == VariableDeclaration::Definition && linkage == Linkage::Internal)
-                    && (cld::get<VariableDeclaration*>(prev->second.declared)->getKind()
-                            == VariableDeclaration::Definition
-                        && cld::get<VariableDeclaration*>(prev->second.declared)->getLinkage() == Linkage::Internal)))
+                // C99 6.9§5:
+                // If an identifier declared with external
+                // linkage is used in an expression (other than as part of the operand of a sizeof operator
+                // whose result is an integer constant), somewhere in the entire program there shall be
+                // exactly one external definition for the identifier; otherwise, there shall be no more than
+                // one.
+                || (kind == VariableDeclaration::Definition
+                    && cld::get<VariableDeclaration*>(prev->second.declared)->getKind()
+                           == VariableDeclaration::Definition))
             {
                 log(Errors::REDEFINITION_OF_SYMBOL_N.args(*loc, m_sourceInterface, *loc));
                 log(Notes::PREVIOUSLY_DECLARED_HERE.args(*prev->second.identifier, m_sourceInterface,
@@ -705,16 +708,31 @@ std::vector<cld::Semantics::SemanticAnalysis::DeclRetVariant>
         }
 
         auto declaration = std::make_unique<VariableDeclaration>(std::move(result), linkage, lifetime, loc, kind,
-                                                                 std::nullopt, prevDecl);
+                                                                 m_currentScope, std::nullopt, prevDecl);
+        if (prevDecl && prevDecl->getKind() == VariableDeclaration::Definition)
+        {
+            for (auto& iter : thisAttributes)
+            {
+                if (log(Warnings::Semantics::ATTRIBUTE_N_ON_DECLARATION_OF_VARIABLE_N_MUST_PRECEDE_ITS_DEFINITION.args(
+                        *iter.name, m_sourceInterface, *iter.name, *loc)))
+                {
+                    log(Notes::Semantics::VARIABLE_DEFINITION_HERE.args(*prevDecl->getNameToken(), m_sourceInterface,
+                                                                        *prevDecl->getNameToken()));
+                }
+            }
+        }
         thisAttributes = applyAttributes(declaration.get(), std::move(thisAttributes));
         reportNotApplicableAttributes(thisAttributes);
-        if (prevDecl)
+        if (prevDecl && prevDecl->getKind() != VariableDeclaration::Definition)
         {
             declaration->tryAddFromOther(*prevDecl);
         }
-        getCurrentScope().declarations.insert_or_assign(loc->getText(), DeclarationInScope{loc, declaration.get()});
+        else if (!prevDecl || prevDecl->getKind() != VariableDeclaration::Definition)
+        {
+            getCurrentScope().declarations.insert_or_assign(loc->getText(), DeclarationInScope{loc, declaration.get()});
+        }
 
-        if (!declaration->hasAttribute<DeprecatedAttribute>())
+        if (!prevDecl && !declaration->hasAttribute<DeprecatedAttribute>())
         {
             checkForDeprecatedType(declaration->getType());
         }
@@ -908,7 +926,8 @@ std::unique_ptr<cld::Semantics::FunctionDeclaration> cld::Semantics::SemanticAna
         }
     }
 
-    auto declaration = std::make_unique<FunctionDeclaration>(std::move(type), linkage, loc, inlineKind, previous);
+    auto declaration =
+        std::make_unique<FunctionDeclaration>(std::move(type), linkage, loc, inlineKind, m_currentScope, previous);
     if (previous && previous->is<FunctionDefinition>())
     {
         for (auto& iter : attributes)

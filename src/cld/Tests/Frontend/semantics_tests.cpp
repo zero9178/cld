@@ -5124,6 +5124,10 @@ TEST_CASE("Semantics __attribute__", "[semantics]")
         "int foo(void) { return 5; } int __attribute__((weak)) foo(void);",
         ProducesWarning(ATTRIBUTE_N_ON_DECLARATION_OF_FUNCTION_N_MUST_PRECEDE_ITS_DEFINITION, "'weak'", "'foo'")
             && ProducesNote(FUNCTION_DEFINITION_HERE));
+    SEMA_PRODUCES(
+        "int foo = 5; int __attribute__((weak)) foo;",
+        ProducesWarning(ATTRIBUTE_N_ON_DECLARATION_OF_VARIABLE_N_MUST_PRECEDE_ITS_DEFINITION, "'weak'", "'foo'")
+        && ProducesNote(VARIABLE_DEFINITION_HERE));
 }
 
 TEST_CASE("Semantics __attribute__((used))", "[semantics]")

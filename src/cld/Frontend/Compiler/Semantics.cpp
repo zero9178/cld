@@ -939,8 +939,9 @@ tcb::span<const cld::Semantics::FieldInLayout> cld::Semantics::getFieldLayout(co
 
 cld::Semantics::FunctionDeclaration::FunctionDeclaration(FunctionType type, cld::Semantics::Linkage linkage,
                                                          cld::Lexer::CTokenIterator nameToken,
-                                                         cld::Semantics::InlineKind inlineKind, Useable* previous)
-    : Declaration(std::in_place_type<FunctionDeclaration>, linkage, nameToken),
+                                                         cld::Semantics::InlineKind inlineKind, std::size_t scope,
+                                                         Useable* previous)
+    : Declaration(std::in_place_type<FunctionDeclaration>, linkage, nameToken, scope),
       m_type(std::move(type)),
       m_inlineKind(inlineKind),
       m_first(previous ? previous->match([](FunctionDeclaration& decl) -> const Useable* { return &decl.getFirst(); },
