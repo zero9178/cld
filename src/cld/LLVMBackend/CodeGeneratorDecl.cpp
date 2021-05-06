@@ -506,34 +506,26 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::TranslationUnit& transla
     }
 }
 
-cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDeclaration& declaration)
+template <class T>
+llvm::Function* cld::CGLLVM::CodeGenerator::generateFunctionDecl(const T& decDef)
 {
+    auto linkage = decDef.getLinkage();
     llvm::Function::LinkageTypes linkageType = llvm::GlobalValue::ExternalLinkage;
-    switch (declaration.getLinkage())
+    switch (linkage)
     {
         case Semantics::Linkage::Internal: linkageType = llvm::GlobalValue::InternalLinkage; break;
         case Semantics::Linkage::External: linkageType = llvm::GlobalValue::ExternalLinkage; break;
         case Semantics::Linkage::None: break;
     }
-    CLD_ASSERT(declaration.getType().is<Semantics::FunctionType>());
-    if (!m_options.emitAllDecls && !declaration.isUsed() && !declaration.hasAttribute<Semantics::UsedAttribute>())
-    {
-        return nullptr;
-    }
-    auto* function = m_module.getFunction(declaration.getNameToken()->getText());
-    if (function)
-    {
-        m_lvalues.emplace(&declaration, valueOf(function));
-        return valueOf(function);
-    }
-    auto* ft = llvm::cast<llvm::FunctionType>(visit(declaration.getType()));
-    function =
-        llvm::Function::Create(ft, linkageType, -1, llvm::StringRef{declaration.getNameToken()->getText()}, &m_module);
+    auto& type = decDef.getType();
+
+    auto* name = decDef.getNameToken();
+    auto* ft = llvm::cast<llvm::FunctionType>(visit(type));
+    auto* function = llvm::Function::Create(ft, linkageType, -1, llvm::StringRef{name->getText()}, &m_module);
     auto attributes = function->getAttributes();
-    attributes = m_abi->generateFunctionAttributes(
-        std::move(attributes), ft, declaration.getType().as<Semantics::FunctionType>(), m_programInterface);
+    attributes = m_abi->generateFunctionAttributes(std::move(attributes), ft, type, m_programInterface);
     function->setAttributes(std::move(attributes));
-    if (declaration.hasAttribute<Semantics::DllImportAttribute>())
+    if (decDef.template hasAttribute<Semantics::DllImportAttribute>())
     {
         function->setDLLStorageClass(llvm::GlobalValue::DLLImportStorageClass);
     }
@@ -541,28 +533,74 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDe
     {
         function->setDSOLocal(true);
     }
-    if (declaration.hasAttribute<Semantics::NothrowAttribute>())
+    if (decDef.template hasAttribute<Semantics::NothrowAttribute>())
     {
         function->addFnAttr(llvm::Attribute::NoUnwind);
     }
-    if (declaration.hasAttribute<Semantics::ConstAttribute>())
+    if (decDef.template hasAttribute<Semantics::ConstAttribute>())
     {
         function->addFnAttr(llvm::Attribute::ReadNone);
     }
-    if (declaration.hasAttribute<Semantics::NoreturnAttribute>())
+    if (decDef.template hasAttribute<Semantics::NoreturnAttribute>())
     {
         function->addFnAttr(llvm::Attribute::NoReturn);
     }
-    if (declaration.hasAttribute<Semantics::LeafAttribute>())
+    if (decDef.template hasAttribute<Semantics::LeafAttribute>())
     {
         function->addFnAttr(llvm::Attribute::NoCallback);
     }
-    if (declaration.hasAttribute<Semantics::PureAttribute>())
+    if (decDef.template hasAttribute<Semantics::PureAttribute>())
     {
         function->addFnAttr(llvm::Attribute::ReadOnly);
     }
-    m_lvalues.emplace(&declaration, valueOf(function));
-    return valueOf(function);
+    if (auto* aligned = decDef.template getAttributeIf<Semantics::AlignedAttribute>())
+    {
+        function->setAlignment(llvm::Align(*aligned->alignment));
+    }
+    if (decDef.template hasAttribute<Semantics::NoinlineAttribute>())
+    {
+        function->addFnAttr(llvm::Attribute::NoInline);
+    }
+    if (decDef.template hasAttribute<Semantics::AlwaysInlineAttribute>())
+    {
+        function->addFnAttr(llvm::Attribute::AlwaysInline);
+    }
+    return function;
+}
+
+cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDeclaration& declaration)
+{
+    if (auto* function = m_module.getFunction(declaration.getNameToken()->getText()))
+    {
+        m_lvalues.emplace(&declaration, valueOf(function));
+        return valueOf(function);
+    }
+    const Semantics::Useable* chosen = nullptr;
+    for (auto& iter : declaration.getFunctionGroup())
+    {
+        if (iter.is<Semantics::FunctionDefinition>())
+        {
+            chosen = &iter;
+            break;
+        }
+        chosen = &iter;
+    }
+    if (!m_options.emitAllDecls && !chosen->isUsed()
+        && !chosen->match([](auto&& value) { return value.template hasAttribute<Semantics::UsedAttribute>(); },
+                          [](const Semantics::BuiltinFunction&) -> bool
+                          {
+                              // TODO: I feel like this will change in the future
+                              CLD_UNREACHABLE;
+                          }))
+    {
+        return nullptr;
+    }
+    auto function =
+        valueOf(chosen->match([this](const Semantics::FunctionDeclaration& decl) { return generateFunctionDecl(decl); },
+                              [this](const Semantics::FunctionDefinition& def) { return generateFunctionDecl(def); },
+                              [](const auto&) -> llvm::Function* { CLD_UNREACHABLE; }));
+    m_lvalues.emplace(&declaration, function);
+    return function;
 }
 
 cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::VariableDeclaration& declaration)
@@ -762,62 +800,10 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDefinition& func
     auto* function = m_module.getFunction(functionDefinition.getNameToken()->getText());
     if (!function)
     {
-        llvm::Function::LinkageTypes linkageType;
-        switch (functionDefinition.getLinkage())
-        {
-            case Semantics::Linkage::Internal: linkageType = llvm::GlobalValue::InternalLinkage; break;
-            case Semantics::Linkage::External: linkageType = llvm::GlobalValue::ExternalLinkage; break;
-            case Semantics::Linkage::None: CLD_UNREACHABLE;
-        }
-        auto* ft = llvm::cast<llvm::FunctionType>(visit(functionDefinition.getType()));
-        function = llvm::Function::Create(ft, linkageType, -1,
-                                          llvm::StringRef{functionDefinition.getNameToken()->getText()}, &m_module);
-        if (functionDefinition.hasAttribute<Semantics::NothrowAttribute>())
-        {
-            function->addFnAttr(llvm::Attribute::NoUnwind);
-        }
-        if (functionDefinition.hasAttribute<Semantics::ConstAttribute>())
-        {
-            function->addFnAttr(llvm::Attribute::ReadNone);
-        }
-        if (functionDefinition.hasAttribute<Semantics::NoreturnAttribute>())
-        {
-            function->addFnAttr(llvm::Attribute::NoReturn);
-        }
-        if (functionDefinition.hasAttribute<Semantics::LeafAttribute>())
-        {
-            function->addFnAttr(llvm::Attribute::NoCallback);
-        }
-        if (functionDefinition.hasAttribute<Semantics::PureAttribute>())
-        {
-            function->addFnAttr(llvm::Attribute::ReadOnly);
-        }
-    }
-    if (auto* aligned = functionDefinition.getAttributeIf<Semantics::AlignedAttribute>())
-    {
-        if (auto existingAlign = function->getAlign())
-        {
-            function->setAlignment(llvm::Align(std::max<std::uint64_t>(existingAlign->value(), *aligned->alignment)));
-        }
-        else
-        {
-            function->setAlignment(llvm::Align(*aligned->alignment));
-        }
-    }
-    if (functionDefinition.hasAttribute<Semantics::NoinlineAttribute>())
-    {
-        function->addFnAttr(llvm::Attribute::NoInline);
-    }
-    if (functionDefinition.hasAttribute<Semantics::AlwaysInlineAttribute>())
-    {
-        function->addFnAttr(llvm::Attribute::AlwaysInline);
+        function = generateFunctionDecl(functionDefinition);
     }
     m_lvalues.emplace(&functionDefinition, valueOf(function));
     auto& ft = functionDefinition.getType().as<Semantics::FunctionType>();
-    auto attributes = function->getAttributes();
-    attributes =
-        m_abi->generateFunctionAttributes(std::move(attributes), function->getFunctionType(), ft, m_programInterface);
-    function->setAttributes(std::move(attributes));
     if (functionDefinition.hasAttribute<Semantics::GnuInlineAttribute>())
     {
         // GNU90 semantics
@@ -835,11 +821,6 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDefinition& func
         {
             return;
         }
-    }
-
-    if (!m_options.reloc)
-    {
-        function->setDSOLocal(true);
     }
 
     auto* bb = llvm::BasicBlock::Create(m_module.getContext(), "entry", function);

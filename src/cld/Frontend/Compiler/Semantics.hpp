@@ -2403,6 +2403,7 @@ class DeclarationGroup
 protected:
     explicit DeclarationGroup(cld::not_null<const ValueType> first) : m_first(first) {}
 
+public:
     using value_type = const ValueType;
     using reference = const ValueType&;
     using const_reference = const ValueType&;

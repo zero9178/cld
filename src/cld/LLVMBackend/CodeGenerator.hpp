@@ -104,6 +104,9 @@ class CodeGenerator final
 
     std::unique_ptr<ABIImplementation> m_abi;
 
+    template <class T>
+    llvm::Function* generateFunctionDecl(const T& declDef);
+
 public:
     explicit CodeGenerator(llvm::Module& module, const Semantics::ProgramInterface& programInterface,
                            const cld::SourceInterface& sourceInterface, const cld::CGLLVM::Options& options);
