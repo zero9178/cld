@@ -268,9 +268,23 @@ bool cld::Semantics::SemanticAnalysis::parseMember(Lexer::CTokenIterator& identi
     return true;
 }
 
-bool cld::Semantics::SemanticAnalysis::parseMember(const Useable*& useable, Lexer::CTokenIterator attributeName,
+bool cld::Semantics::SemanticAnalysis::parseMember(std::shared_ptr<const DeclarationRead>& declarationRead,
+                                                   Lexer::CTokenIterator attributeName,
                                                    const Syntax::AssignmentExpression* expression)
 {
+    auto result = visit(*expression);
+    if (result->isUndefined())
+    {
+        return false;
+    }
+    auto* declRead = result->tryAs<DeclarationRead>();
+    if (!declRead)
+    {
+        log(Errors::Semantics::EXPECTED_SYMBOL_AS_ARGUMENT_TO_N.args(*result, m_sourceInterface, *result,
+                                                                     *attributeName));
+        return false;
+    }
+    declarationRead = std::static_pointer_cast<const DeclarationRead>(std::shared_ptr(std::move(result)));
     return true;
 }
 
@@ -453,6 +467,7 @@ void cld::Semantics::SemanticAnalysis::createAttributes()
     gnuSpelling("leaf", &SemanticAnalysis::parseAttribute<LeafAttribute>);
     gnuSpelling("pure", &SemanticAnalysis::parseAttribute<PureAttribute>);
     gnuSpelling("warn_unused_result", &SemanticAnalysis::parseAttribute<WarnUnusedResultAttribute>);
+    gnuSpelling("cleanup", &SemanticAnalysis::parseAttribute<CleanupAttribute>);
     if (getLanguageOptions().triple.getPlatform() == Platform::Windows)
     {
         gnuSpelling("dllimport", &SemanticAnalysis::parseAttribute<DllImportAttribute>);
@@ -813,4 +828,63 @@ void cld::Semantics::SemanticAnalysis::apply(AffectsVariableFunction applicant,
         return;
     }
     cld::match(applicant, [](auto holder) { holder->addAttribute(WeakAttribute{}); });
+}
+
+void cld::Semantics::SemanticAnalysis::apply(AffectsVariable applicant,
+                                             const ParsedAttribute<CleanupAttribute>& attribute)
+{
+    auto& variable = *cld::get<cld::not_null<VariableDeclaration>>(applicant);
+    if (variable.getLifetime() != Lifetime::Automatic)
+    {
+        log(Errors::Semantics::CLEANUP_ATTRIBUTE_CAN_ONLY_BE_APPLIED_TO_LOCAL_VARIABLES.args(
+            *attribute.name, m_sourceInterface, *attribute.name, *variable.getNameToken()));
+        return;
+    }
+    auto& declRead = attribute.attribute.cleanupFunction;
+    if (auto* var = declRead->getDeclRead().tryAs<VariableDeclaration>())
+    {
+        log(Errors::Semantics::EXPECTED_FUNCTION_AS_ARGUMENT_TO_CLEANUP.args(*var->getNameToken(), m_sourceInterface,
+                                                                             *var->getNameToken(), *attribute.name));
+        return;
+    }
+    auto& type =
+        declRead->getDeclRead().match([](const VariableDeclaration&) -> const FunctionType& { CLD_UNREACHABLE; },
+                                      [](const auto& value) -> const FunctionType& { return value.getType(); });
+    if (type.getParameters().size() != 1)
+    {
+        log(Errors::Semantics::FUNCTION_N_IN_ATTRIBUTE_CLEANUP_MUST_ONLY_TAKE_A_SINGLE_ARGUMENT.args(
+            *declRead->getIdentifierToken(), m_sourceInterface, *declRead->getIdentifierToken(), type,
+            *attribute.name));
+        return;
+    }
+    auto* singleParamType = type.getParameters()[0].type->tryAs<PointerType>();
+    if (!singleParamType)
+    {
+        log(Errors::Semantics::FIRST_PARAMETER_IN_FUNCTION_N_IN_ATTRIBUTE_CLEANUP_MUST_BE_A_POINTER_TO_A_COMPATIBLE_TYPE
+                .args(*declRead->getIdentifierToken(), m_sourceInterface, *declRead->getIdentifierToken(), type,
+                      *attribute.name, *variable.getNameToken(), variable.getType()));
+        return;
+    }
+    // void* always works, even if variable is a function pointer (as a pointer to a pointer to a function is
+    // convertible to void*)
+    if (!isVoid(singleParamType->getElementType()))
+    {
+        if (!typesAreCompatible(removeQualifiers(singleParamType->getElementType()),
+                                removeQualifiers(variable.getType())))
+        {
+            log(Errors::Semantics::
+                    FIRST_PARAMETER_IN_FUNCTION_N_IN_ATTRIBUTE_CLEANUP_MUST_BE_A_POINTER_TO_A_COMPATIBLE_TYPE.args(
+                        *declRead->getIdentifierToken(), m_sourceInterface, *declRead->getIdentifierToken(), type,
+                        *attribute.name, *variable.getNameToken(), variable.getType()));
+            return;
+        }
+    }
+    if (declRead->getDeclRead().match([](const VariableDeclaration&) -> bool { CLD_UNREACHABLE; },
+                                      [](const auto& value) -> bool
+                                      { return value.template hasAttribute<WarnUnusedResultAttribute>(); }))
+    {
+        log(Warnings::Semantics::RESULT_OF_CALL_TO_FUNCTION_N_UNUSED.args(
+            *declRead->getIdentifierToken(), m_sourceInterface, *declRead->getIdentifierToken()));
+    }
+    cld::match(applicant, [&](auto holder) { holder->addAttribute(attribute.attribute); });
 }

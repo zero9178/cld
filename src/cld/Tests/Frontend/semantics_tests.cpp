@@ -6147,3 +6147,45 @@ TEST_CASE("Semantics __attribute__((weak))", "[semantics]]")
     SEMA_PRODUCES("static int __attribute__((weak)) foo();",
                   ProducesError(WEAK_ATTRIBUTE_CANNOT_BE_APPLIED_TO_FUNCTION_N_WITH_INTERNAL_LINKAGE, "'foo'"));
 }
+
+TEST_CASE("Semantics __attribute__((cleanup))", "[semantics]")
+{
+    SEMA_PRODUCES("void bar(int*);\n"
+                  "\n"
+                  "int __attribute__((cleanup(bar))) foo;",
+                  ProducesError(CLEANUP_ATTRIBUTE_CAN_ONLY_BE_APPLIED_TO_LOCAL_VARIABLES));
+    SEMA_PRODUCES("int bar;\n"
+                  "\n"
+                  "void test(void) {\n"
+                  "int __attribute__((cleanup(bar))) foo;\n"
+                  "}\n",
+                  ProducesError(EXPECTED_FUNCTION_AS_ARGUMENT_TO_CLEANUP));
+    SEMA_PRODUCES("void bar(int,int);\n"
+                  "\n"
+                  "void test(void) {\n"
+                  "int __attribute__((cleanup(bar))) foo;\n"
+                  "}\n",
+                  ProducesError(FUNCTION_N_IN_ATTRIBUTE_CLEANUP_MUST_ONLY_TAKE_A_SINGLE_ARGUMENT, "'bar'"));
+    SEMA_PRODUCES(
+        "void bar(int);\n"
+        "\n"
+        "void test(void) {\n"
+        "int __attribute__((cleanup(bar))) foo;\n"
+        "}\n",
+        ProducesError(FIRST_PARAMETER_IN_FUNCTION_N_IN_ATTRIBUTE_CLEANUP_MUST_BE_A_POINTER_TO_A_COMPATIBLE_TYPE,
+                      "'bar'"));
+    SEMA_PRODUCES(
+        "void bar(float*);\n"
+        "\n"
+        "void test(void) {\n"
+        "int __attribute__((cleanup(bar))) foo;\n"
+        "}\n",
+        ProducesError(FIRST_PARAMETER_IN_FUNCTION_N_IN_ATTRIBUTE_CLEANUP_MUST_BE_A_POINTER_TO_A_COMPATIBLE_TYPE,
+                      "'bar'"));
+    SEMA_PRODUCES("__attribute__((warn_unused_result)) int bar(int*);\n"
+                  "\n"
+                  "void test(void) {\n"
+                  "int __attribute__((cleanup(bar))) foo;\n"
+                  "}\n",
+                  ProducesWarning(RESULT_OF_CALL_TO_FUNCTION_N_UNUSED, "'bar'"));
+}

@@ -961,6 +961,8 @@ CREATE_ERROR(EXPECTED_INTEGER_CONSTANT_EXPRESSION_AS_ARGUMENT_TO_N,
 CREATE_ERROR(ARGUMENT_TO_N_MUST_BE_A_POSITIVE_NUMBER, "Argument to %0 must be a positive number", Underline<0>,
              Annotate<1, 2>);
 
+CREATE_ERROR(EXPECTED_SYMBOL_AS_ARGUMENT_TO_N, "Expected symbol as argument to %1", Underline<0>, Underline<1>);
+
 // __attribute__((vector_size(n)))
 
 CREATE_ERROR(VECTOR_SIZE_CAN_ONLY_BE_APPLIED_TO_VARIABLES_OF_ARITHMETIC_TYPES,
@@ -1008,6 +1010,21 @@ CREATE_ERROR(WEAK_ATTRIBUTE_CANNOT_BE_APPLIED_TO_FUNCTION_N_WITH_INTERNAL_LINKAG
 
 CREATE_ERROR(WEAK_ATTRIBUTE_CANNOT_BE_APPLIED_TO_VARIABLE_N_WITH_INTERNAL_LINKAGE,
              "'weak' attribute cannot be applied to variable %0 with internal linkage", Underline<0>, Underline<1>);
+
+// __attribute__((cleanup))
+
+CREATE_ERROR(CLEANUP_ATTRIBUTE_CAN_ONLY_BE_APPLIED_TO_LOCAL_VARIABLES,
+             "'cleanup' attribute can only be applied to local variables", Underline<0>, Underline<1>);
+
+CREATE_ERROR(EXPECTED_FUNCTION_AS_ARGUMENT_TO_CLEANUP, "Expected function as argument to 'cleanup'", Underline<0>,
+             Underline<1>);
+
+CREATE_ERROR(FUNCTION_N_IN_ATTRIBUTE_CLEANUP_MUST_ONLY_TAKE_A_SINGLE_ARGUMENT,
+             "Function %0 in attribute 'cleanup' must only take a single argument", Annotate<0, 1>, Underline<2>);
+
+CREATE_ERROR(FIRST_PARAMETER_IN_FUNCTION_N_IN_ATTRIBUTE_CLEANUP_MUST_BE_A_POINTER_TO_A_COMPATIBLE_TYPE,
+             "First parameter in function %0 in attribute 'cleanup' must be a pointer to a compatible type",
+             Annotate<0, 1>, Underline<2>, Annotate<3, 4>);
 
 } // namespace Semantics
 

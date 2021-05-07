@@ -631,6 +631,8 @@ public:
 
     void apply(AffectsVariableFunction declaration, const ParsedAttribute<WeakAttribute>& attribute);
 
+    void apply(AffectsVariable declaration, const ParsedAttribute<CleanupAttribute>& attribute);
+
 private:
     std::unordered_map<std::string,
                        std::optional<AllAttributes> (SemanticAnalysis::*)(const Syntax::GNUAttributes::GNUAttribute&)>
@@ -645,7 +647,7 @@ private:
     bool parseMember(Lexer::CTokenIterator& identifier, Lexer::CTokenIterator attributeName,
                      const Syntax::AssignmentExpression* expression);
 
-    bool parseMember(const Useable*& useable, Lexer::CTokenIterator attributeName,
+    bool parseMember(std::shared_ptr<const DeclarationRead>& declarationRead, Lexer::CTokenIterator attributeName,
                      const Syntax::AssignmentExpression* expression);
 
     bool parseMember(std::string& text, Lexer::CTokenIterator attributeName,

@@ -2980,6 +2980,56 @@ struct StringConverter<Semantics::Type>
 };
 
 template <>
+struct StringConverter<Semantics::PrimitiveType> : StringConverter<Semantics::Type>
+{
+};
+
+template <>
+struct StringConverter<Semantics::ArrayType> : StringConverter<Semantics::Type>
+{
+};
+
+template <>
+struct StringConverter<Semantics::AbstractArrayType> : StringConverter<Semantics::Type>
+{
+};
+
+template <>
+struct StringConverter<Semantics::ValArrayType> : StringConverter<Semantics::Type>
+{
+};
+
+template <>
+struct StringConverter<Semantics::FunctionType> : StringConverter<Semantics::Type>
+{
+};
+
+template <>
+struct StringConverter<Semantics::StructType> : StringConverter<Semantics::Type>
+{
+};
+
+template <>
+struct StringConverter<Semantics::UnionType> : StringConverter<Semantics::Type>
+{
+};
+
+template <>
+struct StringConverter<Semantics::EnumType> : StringConverter<Semantics::Type>
+{
+};
+
+template <>
+struct StringConverter<Semantics::PointerType> : StringConverter<Semantics::Type>
+{
+};
+
+template <>
+struct StringConverter<Semantics::VectorType> : StringConverter<Semantics::Type>
+{
+};
+
+template <>
 struct CustomFormat<U'f', U'u', U'l', U'l'>
 {
     std::string operator()(const Semantics::Type& arg);

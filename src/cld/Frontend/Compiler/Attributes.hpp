@@ -6,7 +6,7 @@
 
 namespace cld::Semantics
 {
-class Useable;
+class DeclarationRead;
 
 struct AlignedAttribute
 {
@@ -25,7 +25,7 @@ struct DeprecatedAttribute
 
 struct CleanupAttribute
 {
-    const Useable* cleanupFunction;
+    std::shared_ptr<const DeclarationRead> cleanupFunction;
 
     constexpr static std::size_t count = 1;
 };
