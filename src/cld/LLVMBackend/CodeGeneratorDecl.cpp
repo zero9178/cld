@@ -646,6 +646,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::VariableDe
         {
             constant = llvm::Constant::getNullValue(type);
         }
+        // Static variables at block scope
         if (variableDef.getScope() != Semantics::Program::GLOBAL_SCOPE
             && variableDef.getKind() != Semantics::VariableDeclaration::DeclarationOnly)
         {
@@ -657,6 +658,18 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::VariableDe
         //        {
         //            linkageType = llvm::GlobalValue::CommonLinkage;
         //        }
+
+        if (variableDef.hasAttribute<Semantics::WeakAttribute>())
+        {
+            if (variableDef.getKind() == Semantics::VariableDeclaration::DeclarationOnly)
+            {
+                linkageType = llvm::GlobalValue::ExternalWeakLinkage;
+            }
+            else
+            {
+                linkageType = llvm::GlobalValue::WeakAnyLinkage;
+            }
+        }
 
         std::string name = cld::to_string(variableDef.getNameToken()->getText());
         if (variableDef.getScope() != Semantics::Program::GLOBAL_SCOPE)
