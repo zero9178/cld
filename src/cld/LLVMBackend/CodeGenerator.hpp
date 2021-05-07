@@ -107,6 +107,12 @@ class CodeGenerator final
     llvm::Function* generateFunctionDecl(const T& declDef);
 
 public:
+    llvm::Type* charType;
+    llvm::Type* wcharTType;
+    llvm::Type* intType;
+    llvm::Type* sizeTType;
+    llvm::Type* longDoubleType;
+
     explicit CodeGenerator(llvm::Module& module, const Semantics::ProgramInterface& programInterface,
                            const cld::SourceInterface& sourceInterface, const cld::CGLLVM::Options& options);
 

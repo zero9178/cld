@@ -606,8 +606,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::UnaryOpera
         case Semantics::UnaryOperator::BooleanNegate:
         {
             value = m_builder.CreateNot(boolToi1(value));
-            return m_builder.CreateZExt(value, visit(Semantics::PrimitiveType(Semantics::PrimitiveType::Int,
-                                                                              m_sourceInterface.getLanguageOptions())));
+            return m_builder.CreateZExt(value, intType);
         }
         case Semantics::UnaryOperator::BitwiseNegate: return m_builder.CreateNot(value);
     }
@@ -618,9 +617,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::SizeofOper
 {
     if (sizeofOperator.getSize())
     {
-        auto* type = visit(Semantics::PrimitiveType(m_programInterface.getLanguageOptions().sizeTType,
-                                                    m_programInterface.getLanguageOptions()));
-        return llvm::ConstantInt::get(type, *sizeofOperator.getSize());
+        return llvm::ConstantInt::get(sizeTType, *sizeofOperator.getSize());
     }
     const Semantics::Type& type = cld::match(
         sizeofOperator.getVariant(),
@@ -639,8 +636,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::SizeofOper
         }
         return *currType;
     }();
-    llvm::Value* value =
-        llvm::ConstantInt::get(visit(sizeofOperator.getType()), elementType.getSizeOf(m_programInterface));
+    llvm::Value* value = llvm::ConstantInt::get(sizeTType, elementType.getSizeOf(m_programInterface));
     for (auto& iter : Semantics::RecursiveVisitor(type, Semantics::ARRAY_TYPE_NEXT_FN))
     {
         llvm::Value* temp;
@@ -1010,9 +1006,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::CallExpres
             case Semantics::BuiltinFunction::Inff: return llvm::ConstantFP::getInfinity(m_builder.getFloatTy());
             case Semantics::BuiltinFunction::Infl:
             {
-                auto* type = visit(Semantics::PrimitiveType(Semantics::PrimitiveType::LongDouble,
-                                                            m_sourceInterface.getLanguageOptions()));
-                return llvm::ConstantFP::getInfinity(type);
+                return llvm::ConstantFP::getInfinity(longDoubleType);
             }
             case Semantics::BuiltinFunction::SyncSynchronize:
                 return m_builder.CreateFence(llvm::AtomicOrdering::SequentiallyConsistent);
@@ -1278,12 +1272,11 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::BuiltinOff
 {
     if (auto* value = std::get_if<std::uint64_t>(&offsetOf.getOffset()))
     {
-        return llvm::ConstantInt::get(visit(offsetOf.getType()), *value);
+        return llvm::ConstantInt::get(sizeTType, *value);
     }
     auto& runtimeEval = cld::get<Semantics::BuiltinOffsetOf::RuntimeEval>(offsetOf.getOffset());
     auto currentType = runtimeEval.type.data();
-    auto* llvmSizeT = visit(offsetOf.getType());
-    llvm::Value* currentOffset = llvm::ConstantInt::get(llvmSizeT, 0);
+    llvm::Value* currentOffset = llvm::ConstantInt::get(sizeTType, 0);
     for (auto& iter : runtimeEval.path)
     {
         if (auto* field = std::get_if<const Semantics::Field*>(&iter))
@@ -1299,7 +1292,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::BuiltinOff
                 auto memLayout = Semantics::getMemoryLayout(*currentType);
                 currentType = memLayout[index].type;
                 currentOffset =
-                    m_builder.CreateAdd(currentOffset, llvm::ConstantInt::get(llvmSizeT, memLayout[index].offset));
+                    m_builder.CreateAdd(currentOffset, llvm::ConstantInt::get(sizeTType, memLayout[index].offset));
             }
             continue;
         }
@@ -1310,13 +1303,13 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::BuiltinOff
         auto value = visit(*expr);
         if (expr->getType().as<Semantics::PrimitiveType>().isSigned())
         {
-            value = m_builder.CreateSExtOrTrunc(value, llvmSizeT);
+            value = m_builder.CreateSExtOrTrunc(value, sizeTType);
         }
         else
         {
-            value = m_builder.CreateZExtOrTrunc(value, llvmSizeT);
+            value = m_builder.CreateZExtOrTrunc(value, sizeTType);
         }
-        value = m_builder.CreateMul(value, llvm::ConstantInt::get(llvmSizeT, size));
+        value = m_builder.CreateMul(value, llvm::ConstantInt::get(sizeTType, size));
         currentOffset = m_builder.CreateAdd(currentOffset, value);
     }
     return currentOffset;
@@ -1421,17 +1414,8 @@ llvm::Value* visitStaticInitializerList(cld::CGLLVM::CodeGenerator& codeGenerato
                                          { return nonCharString.characters.size(); },
                                          [](const auto&) -> std::size_t { CLD_UNREACHABLE; }));
                 auto* elementType = cld::match(
-                    constant.getValue(),
-                    [&](const std::string&) -> llvm::Type* {
-                        return codeGenerator.visit(
-                            cld::Semantics::PrimitiveType(cld::Semantics::PrimitiveType::Char,
-                                                          codeGenerator.getProgramInterface().getLanguageOptions()));
-                    },
-                    [&](const cld::Lexer::NonCharString&) -> llvm::Type* {
-                        return codeGenerator.visit(cld::Semantics::PrimitiveType(
-                            codeGenerator.getProgramInterface().getLanguageOptions().wcharUnderlyingType,
-                            codeGenerator.getProgramInterface().getLanguageOptions()));
-                    },
+                    constant.getValue(), [&](const std::string&) -> llvm::Type* { return codeGenerator.charType; },
+                    [&](const cld::Lexer::NonCharString&) -> llvm::Type* { return codeGenerator.wcharTType; },
                     [](const auto&) -> llvm::Type* { CLD_UNREACHABLE; });
                 for (std::size_t i = 0; i < size; i++)
                 {

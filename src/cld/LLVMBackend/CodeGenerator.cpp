@@ -19,7 +19,18 @@ cld::CGLLVM::CodeGenerator::CodeGenerator(llvm::Module& module,
                                           const cld::Semantics::ProgramInterface& programInterface,
                                           const cld::SourceInterface& sourceInterface,
                                           const cld::CGLLVM::Options& options)
-    : m_module(module), m_programInterface(programInterface), m_sourceInterface(sourceInterface), m_options(options)
+    : m_module(module),
+      m_programInterface(programInterface),
+      m_sourceInterface(sourceInterface),
+      m_options(options),
+      charType(visit(Semantics::PrimitiveType(Semantics::PrimitiveType::Char, programInterface.getLanguageOptions()))),
+      wcharTType(visit(Semantics::PrimitiveType(programInterface.getLanguageOptions().wcharUnderlyingType,
+                                                programInterface.getLanguageOptions()))),
+      intType(visit(Semantics::PrimitiveType(Semantics::PrimitiveType::Int, programInterface.getLanguageOptions()))),
+      sizeTType(visit(Semantics::PrimitiveType(programInterface.getLanguageOptions().sizeTType,
+                                               programInterface.getLanguageOptions()))),
+      longDoubleType(
+          visit(Semantics::PrimitiveType(Semantics::PrimitiveType::LongDouble, programInterface.getLanguageOptions())))
 {
     if (m_programInterface.getLanguageOptions().triple.getArchitecture() == Architecture::x86_64
         && m_programInterface.getLanguageOptions().triple.getPlatform() == Platform::Windows)
