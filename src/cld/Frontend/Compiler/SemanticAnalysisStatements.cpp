@@ -2,6 +2,61 @@
 
 #include "ErrorMessages.hpp"
 
+std::unique_ptr<cld::Semantics::CompoundStatement>
+    cld::Semantics::SemanticAnalysis::visit(const Syntax::CompoundStatement& node, bool pushScope)
+{
+    std::optional<decltype(this->pushScope())> scope;
+    if (pushScope)
+    {
+        scope.emplace(this->pushScope());
+    }
+    std::vector<CompoundStatement::Variant> result;
+    for (auto& iter : node.getBlockItems())
+    {
+        auto tmp = visit(iter);
+        result.insert(result.end(), std::move_iterator(tmp.begin()), std::move_iterator(tmp.end()));
+    }
+    return std::make_unique<CompoundStatement>(m_currentScope, node.begin(), std::move(result), node.end() - 1);
+}
+
+std::vector<cld::Semantics::CompoundStatement::Variant>
+    cld::Semantics::SemanticAnalysis::visit(const Syntax::CompoundItem& node)
+{
+    std::vector<CompoundStatement::Variant> result;
+    cld::match(
+        node,
+        [&](const Syntax::Declaration& declaration)
+        {
+            auto tmp = visit(declaration);
+            result.reserve(result.size() + tmp.size());
+            std::transform(std::move_iterator(tmp.begin()), std::move_iterator(tmp.end()), std::back_inserter(result),
+                           [](DeclRetVariant&& variant)
+                           {
+                               return cld::match(std::move(variant),
+                                                 [](auto&& value) -> CompoundStatement::Variant
+                                                 { return {std::move(value)}; });
+                           });
+        },
+        [&](const Syntax::Statement& statement) { result.emplace_back(visit(statement)); });
+    return result;
+}
+
+cld::IntrVarPtr<cld::Semantics::Statement> cld::Semantics::SemanticAnalysis::visit(const Syntax::Statement& node)
+{
+    return cld::match(
+        node, [&](const auto& node) -> cld::IntrVarPtr<Statement> { return visit(node); },
+        [&](const Syntax::ExpressionStatement& node) -> cld::IntrVarPtr<Statement>
+        {
+            if (!node.getOptionalExpression())
+            {
+                return std::make_unique<ExpressionStatement>(m_currentScope, nullptr);
+            }
+            auto expression = visit(*node.getOptionalExpression());
+            checkUnusedResult(*expression);
+            return std::make_unique<ExpressionStatement>(m_currentScope, std::move(expression));
+        });
+}
+
 std::unique_ptr<cld::Semantics::ReturnStatement>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::ReturnStatement& node)
 {
