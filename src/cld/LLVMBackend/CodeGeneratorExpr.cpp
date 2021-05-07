@@ -1209,6 +1209,13 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::CallExpres
                 llvm::errs() << "Not implemented yet, sorry\n";
                 std::terminate();
             }
+            case Semantics::BuiltinFunction::Alloca:
+            {
+                auto count = visit(*call.getArgumentExpressions()[0]);
+                auto* alloca = m_builder.CreateAlloca(m_builder.getInt8Ty(), count);
+                alloca->setAlignment(m_module.getDataLayout().getStackAlignment());
+                return alloca;
+            }
         }
         CLD_UNREACHABLE;
     }

@@ -6670,3 +6670,25 @@ TEST_CASE("LLVM codegen __attribute__((weak))", "[LLVM]")
         CHECK(global->getLinkage() == llvm::Function::WeakAnyLinkage);
     }
 }
+
+TEST_CASE("LLVM codegen __builtin_alloca", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    auto module = std::make_unique<llvm::Module>("", context);
+    auto program = generateProgram("int test(int len) {\n"
+                                   "int* array = __builtin_alloca(sizeof(int) * len);\n"
+                                   "for (int* iter = array; iter != array + len; iter++) {\n"
+                                   "   *iter = 5;\n"
+                                   "}\n"
+                                   "\n"
+                                   "int sum = 0;\n"
+                                   "for (int* iter = array; iter != array + len; iter++) {\n"
+                                   "   sum += *iter;\n"
+                                   "}\n"
+                                   "return sum;\n"
+                                   "}");
+    cld::CGLLVM::generateLLVM(*module, program);
+    CAPTURE(*module);
+    REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+    CHECK(cld::Tests::computeInJIT<int(int)>(std::move(module), "test", 10) == 50);
+}

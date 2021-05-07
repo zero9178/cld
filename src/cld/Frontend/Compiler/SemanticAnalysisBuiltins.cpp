@@ -13,6 +13,7 @@ enum class Types
     Float,
     Double,
     LongDouble,
+    SizeT,
     VAList,
     VoidStar,
     ConstVoidStar,
@@ -92,6 +93,12 @@ constexpr Types extractType(std::string_view& text)
             CLD_ASSERT(!result);
             result = Types::Placeholder;
             text.remove_prefix(4);
+        }
+        else if (text.substr(0, 6) == "size_t")
+        {
+            CLD_ASSERT(!result);
+            result = Types::SizeT;
+            text.remove_prefix(6);
         }
         else if (text.substr(0, 7) == "va_list")
         {
@@ -285,6 +292,7 @@ const cld::Semantics::ProgramInterface::DeclarationInScope::Variant* CLD_NULLABL
             case Types::Double: return PrimitiveType(PrimitiveType::Double, options);
             case Types::LongDouble: return PrimitiveType(PrimitiveType::LongDouble, options);
             case Types::VAList: return getTypedef("__builtin_va_list")->type;
+            case Types::SizeT: return PrimitiveType(options.sizeTType, options);
             case Types::VoidStar: return PointerType(typeAlloc<PrimitiveType>(PrimitiveType::Void, options));
             case Types::ConstVoidStar:
                 return PointerType(typeAlloc<PrimitiveType>(PrimitiveType::Void, options, flag::isConst = true));
