@@ -275,7 +275,7 @@ constexpr auto createBuiltin(cld::Semantics::BuiltinFunction::Kind kind)
 #define HANDLE_BUILTIN(a, b) DECL_BUILTIN(a, b)
 #include "Builtins.def"
 
-const cld::Semantics::ProgramInterface::DeclarationInScope::Variant* CLD_NULLABLE
+const cld::Semantics::DeclarationInScope::Variant* CLD_NULLABLE
     cld::Semantics::SemanticAnalysis::getBuiltinFuncDecl(std::string_view name)
 {
     auto typeEnumToType = [&](Types types) -> IntrVarValue<Type>

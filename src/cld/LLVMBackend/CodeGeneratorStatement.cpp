@@ -5,16 +5,18 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::CompoundStatement& compo
     std::optional<cld::ValueReset<llvm::DIScope*>> reset;
     if (m_options.debugEmission != cld::CGLLVM::DebugEmission::None)
     {
-        if (!m_scopeIdToScope[compoundStatement.getScope()])
+        if (!m_scopeIdToScope[compoundStatement.getScopePoint().getScopeId()])
         {
-            auto* parent = m_scopeIdToScope[m_programInterface.getScopes()[compoundStatement.getScope()].previousScope];
+            auto* parent =
+                m_scopeIdToScope[m_programInterface.getScopes()[compoundStatement.getScopePoint().getScopeId()]
+                                     .previousScope];
             CLD_ASSERT(parent);
-            m_scopeIdToScope[compoundStatement.getScope()] = m_debugInfo->createLexicalBlock(
+            m_scopeIdToScope[compoundStatement.getScopePoint().getScopeId()] = m_debugInfo->createLexicalBlock(
                 parent, getFile(compoundStatement.getOpenBrace()), getLine(compoundStatement.getOpenBrace()),
                 getColumn(compoundStatement.getOpenBrace()));
         }
         reset.emplace(m_currentDebugScope, m_currentDebugScope);
-        m_currentDebugScope = m_scopeIdToScope[compoundStatement.getScope()];
+        m_currentDebugScope = m_scopeIdToScope[compoundStatement.getScopePoint().getScopeId()];
     }
     for (auto& iter : compoundStatement.getCompoundItems())
     {
@@ -43,7 +45,7 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::CompoundStatement& compo
     }
     if (m_builder.GetInsertBlock())
     {
-        runDestructors(compoundStatement.getScope());
+        runDestructors(compoundStatement.getScopePoint());
     }
 }
 
@@ -68,7 +70,7 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::ReturnStatement& returnS
     }
     if (!returnStatement.getExpression())
     {
-        runDestructors(returnStatement.getScope(), 0);
+        runDestructors(returnStatement.getScopePoint(), Semantics::ProgramInterface::GLOBAL_SCOPE);
         m_builder.CreateRetVoid();
         m_builder.ClearInsertionPoint();
         return;
@@ -77,7 +79,7 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::ReturnStatement& returnS
     // auto* function = m_currentFunction;
     auto value = visit(*returnStatement.getExpression());
     auto* ret = m_abi->generateValueReturn(*this, value);
-    runDestructors(returnStatement.getScope(), 0);
+    runDestructors(returnStatement.getScopePoint(), Semantics::ProgramInterface::GLOBAL_SCOPE);
     if (ret)
     {
         m_builder.CreateRet(ret);
@@ -98,17 +100,18 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::ForStatement& forStateme
         {
             if (m_options.debugEmission != cld::CGLLVM::DebugEmission::None)
             {
-                if (!m_scopeIdToScope[forStatement.getScope()])
+                if (!m_scopeIdToScope[forStatement.getScopePoint().getScopeId()])
                 {
                     auto* parent =
-                        m_scopeIdToScope[m_programInterface.getScopes()[forStatement.getScope()].previousScope];
+                        m_scopeIdToScope[m_programInterface.getScopes()[forStatement.getScopePoint().getScopeId()]
+                                             .previousScope];
                     CLD_ASSERT(parent);
-                    m_scopeIdToScope[forStatement.getScope()] = llvm::DILexicalBlock::get(
+                    m_scopeIdToScope[forStatement.getScopePoint().getScopeId()] = llvm::DILexicalBlock::get(
                         m_module.getContext(), parent, getFile(forStatement.getForToken()),
                         getLine(forStatement.getForToken()), getColumn(forStatement.getForToken()));
                 }
                 reset.emplace(m_currentDebugScope, m_currentDebugScope);
-                m_currentDebugScope = m_scopeIdToScope[forStatement.getScope()];
+                m_currentDebugScope = m_scopeIdToScope[forStatement.getScopePoint().getScopeId()];
             }
             for (auto& iter : declaration)
             {
@@ -163,7 +166,7 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::ForStatement& forStateme
     {
         // If the for statement held declarations we must run the destructors for those declarations as soon as we
         // leave the statement
-        runDestructors(forStatement.getScope());
+        runDestructors(forStatement.getScopePoint());
     }
 }
 
@@ -285,8 +288,8 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::BreakStatement& breakSta
     {
         return;
     }
-    runDestructors(breakStatement.getScope(),
-                   cld::match(breakStatement.getBreakableStatement(), [](auto* ptr) { return ptr->getScope(); }));
+    runDestructors(breakStatement.getScopePoint(), cld::match(breakStatement.getBreakableStatement(), [](auto* ptr)
+                                                              { return ptr->getScopePoint().getScopeId(); }));
     m_builder.CreateBr(m_breakTargets[breakStatement.getBreakableStatement()]);
     m_builder.ClearInsertionPoint();
 }
@@ -297,8 +300,8 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::ContinueStatement& conti
     {
         return;
     }
-    runDestructors(continueStatement.getScope(),
-                   cld::match(continueStatement.getLoopStatement(), [](auto* ptr) { return ptr->getScope(); }));
+    runDestructors(continueStatement.getScopePoint(), cld::match(continueStatement.getLoopStatement(), [](auto* ptr)
+                                                                 { return ptr->getScopePoint().getScopeId(); }));
     m_builder.CreateBr(m_continueTargets[continueStatement.getLoopStatement()]);
     m_builder.ClearInsertionPoint();
 }
@@ -385,21 +388,15 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::GotoStatement& gotoState
     // can be anywhere in the whole function. Therefore we must find the first scope that both are part of.
     // That scope is the exclusive end of all scopes whose declarations must be destructed
     std::unordered_set<std::size_t> labelScopes;
-    {
-        auto currScope = gotoStatement.getLabel()->getScope();
-        while (currScope != static_cast<std::size_t>(-1))
-        {
-            labelScopes.insert(currScope);
-            currScope = m_programInterface.getScopes()[currScope].previousScope;
-        }
-    }
-    auto commonScope = gotoStatement.getScope();
-    while (commonScope != static_cast<std::size_t>(-1) && labelScopes.count(commonScope) == 0)
-    {
-        commonScope = m_programInterface.getScopes()[commonScope].previousScope;
-    }
+    auto scopeIterators = m_programInterface.scopeIterators(gotoStatement.getLabel()->getScopePoint().getScopeId());
+    std::transform(std::next(scopeIterators.begin()), scopeIterators.end(),
+                   std::inserter(labelScopes, labelScopes.begin()), std::mem_fn(&Semantics::Scope::thisScopeId));
 
-    runDestructors(gotoStatement.getScope(), commonScope);
+    auto gotoScopeIterators = m_programInterface.scopeIterators(gotoStatement.getScopePoint().getScopeId());
+    auto end = std::find_if(gotoScopeIterators.begin(), gotoScopeIterators.end(),
+                            [&](const Semantics::Scope& scope) { return labelScopes.count(scope.thisScopeId); });
+    CLD_ASSERT(end != gotoScopeIterators.end());
+    runDestructors(gotoStatement.getScopePoint(), end->thisScopeId);
     auto* bb = m_labels[gotoStatement.getLabel()];
     if (!bb)
     {

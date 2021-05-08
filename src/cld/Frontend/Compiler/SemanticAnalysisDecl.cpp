@@ -312,7 +312,7 @@ std::unique_ptr<cld::Semantics::FunctionDefinition>
 
     auto ptr =
         std::make_unique<FunctionDefinition>(std::move(ft), loc, std::move(parameterDeclarations), linkage, inlineKind,
-                                             CompoundStatement(m_currentScope, loc, {}, loc), prevDecl);
+                                             CompoundStatement(getCurrentScopePoint(), loc, {}, loc), prevDecl);
     attributes = applyAttributes(ptr.get(), std::move(attributes), FunctionContext{isInline});
     reportNotApplicableAttributes(attributes);
     if (prevDecl)

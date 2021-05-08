@@ -3920,7 +3920,7 @@ TEST_CASE("LLVM Codegen variably modified types", "[LLVM]")
 
 namespace
 {
-std::string text;
+thread_local std::string text;
 
 int printfCallback(const char* format, ...)
 {
@@ -6691,4 +6691,81 @@ TEST_CASE("LLVM codegen __builtin_alloca", "[LLVM]")
     CAPTURE(*module);
     REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
     CHECK(cld::Tests::computeInJIT<int(int)>(std::move(module), "test", 10) == 50);
+}
+
+TEST_CASE("LLVM codegen __attribute__((cleanup))", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    auto module = std::make_unique<llvm::Module>("", context);
+    SECTION("Calls in order")
+    {
+        text.clear();
+        auto program = generateProgram("int (*print)(const char*,...);\n"
+                                       "\n"
+                                       "void printInt(int* value) {\n"
+                                       "   print(\"%d\\n\",*value);\n"
+                                       "}\n"
+                                       "\n"
+                                       "void test(int (*func)(const char*,...)) {\n"
+                                       "   print = func;\n"
+                                       "   int __attribute__((cleanup(printInt))) i1 = 5;\n"
+                                       "   int __attribute__((cleanup(printInt))) i2 = 7;\n"
+                                       "}");
+        cld::CGLLVM::generateLLVM(*module, program);
+        CAPTURE(*module);
+        REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+        cld::Tests::computeInJIT<void(int (*)(const char*, ...))>(std::move(module), "test", printfCallback);
+        CHECK(text == "7\n5\n");
+    }
+    SECTION("Only run after declaration")
+    {
+        SECTION("Early return")
+        {
+            text.clear();
+            auto program = generateProgram("int (*print)(const char*,...);\n"
+                                           "\n"
+                                           "void printInt(int* value) {\n"
+                                           "   print(\"%d\\n\",*value);\n"
+                                           "}\n"
+                                           "\n"
+                                           "void test(int earlyReturn,int (*func)(const char*,...)) {\n"
+                                           "   print = func;\n"
+                                           "   int __attribute__((cleanup(printInt))) i1 = 5;\n"
+                                           "   if (earlyReturn) {\n"
+                                           "      return;\n"
+                                           "   }\n"
+                                           "   int __attribute__((cleanup(printInt))) i2 = 7;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            cld::Tests::computeInJIT<void(int, int (*)(const char*, ...))>(std::move(module), "test", 1,
+                                                                           printfCallback);
+            CHECK(text == "5\n");
+        }
+        SECTION("No early return")
+        {
+            text.clear();
+            auto program = generateProgram("int (*print)(const char*,...);\n"
+                                           "\n"
+                                           "void printInt(int* value) {\n"
+                                           "   print(\"%d\\n\",*value);\n"
+                                           "}\n"
+                                           "\n"
+                                           "void test(int earlyReturn,int (*func)(const char*,...)) {\n"
+                                           "   print = func;\n"
+                                           "   int __attribute__((cleanup(printInt))) i1 = 5;\n"
+                                           "   if (earlyReturn) {\n"
+                                           "      return;\n"
+                                           "   }\n"
+                                           "   int __attribute__((cleanup(printInt))) i2 = 7;\n"
+                                           "}");
+            cld::CGLLVM::generateLLVM(*module, program);
+            CAPTURE(*module);
+            REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
+            cld::Tests::computeInJIT<void(int, int (*)(const char*, ...))>(std::move(module), "test", 0,
+                                                                           printfCallback);
+            CHECK(text == "7\n5\n");
+        }
+    }
 }

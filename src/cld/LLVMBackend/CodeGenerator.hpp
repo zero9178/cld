@@ -220,11 +220,11 @@ public:
 
     Value getStringLiteralData(llvm::Type* elementType, const Semantics::Constant::Variant& value);
 
-    void runDestructors(std::size_t from, std::size_t toExclusive);
+    void runDestructors(Semantics::ScopePoint from, std::size_t toExclusive);
 
-    void runDestructors(std::size_t scope)
+    void runDestructors(Semantics::ScopePoint scope)
     {
-        runDestructors(scope, m_programInterface.getScopes()[scope].previousScope);
+        runDestructors(scope, m_programInterface.getScopes()[scope.getScopeId()].previousScope);
     }
 
     llvm::IRBuilder<>& getBuilder()

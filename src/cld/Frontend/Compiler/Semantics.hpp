@@ -41,6 +41,10 @@ class UnionDefinition;
 
 class EnumDefinition;
 
+struct Scope;
+
+struct DeclarationInScope;
+
 class ProgramInterface;
 
 class Type : public AbstractIntrusiveVariant<Type, class PrimitiveType, class ArrayType, class AbstractArrayType,
@@ -1674,6 +1678,33 @@ public:
     CLD_GEN_INTR_VAR_WARNING_FUNCS(ErrorExpression)
 };
 
+class ScopePoint
+{
+    std::size_t m_scopeId;
+    std::vector<std::size_t> m_declCounts;
+
+public:
+    ScopePoint(std::size_t scopeId, std::vector<std::size_t> declCounts)
+        : m_scopeId(scopeId), m_declCounts(std::move(declCounts))
+    {
+    }
+
+    [[nodiscard]] std::size_t getScopeId() const
+    {
+        return m_scopeId;
+    }
+
+    [[nodiscard]] const std::vector<std::size_t>& getDeclCounts() const&
+    {
+        return m_declCounts;
+    }
+
+    [[nodiscard]] std::vector<std::size_t>&& getDeclCounts() &&
+    {
+        return std::move(m_declCounts);
+    }
+};
+
 class CompoundStatement;
 
 class LabelStatement;
@@ -1710,24 +1741,19 @@ class Statement
                                       ContinueStatement, SwitchStatement, DefaultStatement, CaseStatement,
                                       GotoStatement, LabelStatement, GNUASMStatement>
 {
-    std::size_t m_scope;
+    ScopePoint m_scopePoint;
 
 protected:
     template <class T>
-    Statement(std::size_t scope, std::in_place_type_t<T>)
-        : AbstractIntrusiveVariant(std::in_place_type<T>), m_scope(scope)
+    Statement(ScopePoint&& scope, std::in_place_type_t<T>)
+        : AbstractIntrusiveVariant(std::in_place_type<T>), m_scopePoint(std::move(scope))
     {
     }
 
 public:
-    /**
-     * Scope of the statement. If the statement starts a new scope
-     * (Currently only Compound statement and for loop with declaration) it's the scope it started
-     * @return Scope of the statement
-     */
-    [[nodiscard]] std::size_t getScope() const
+    [[nodiscard]] const ScopePoint& getScopePoint() const
     {
-        return m_scope;
+        return m_scopePoint;
     }
 };
 
@@ -1736,8 +1762,8 @@ class ReturnStatement final : public Statement
     IntrVarPtr<ExpressionBase> m_expression;
 
 public:
-    explicit ReturnStatement(std::int64_t scope, IntrVarPtr<ExpressionBase>&& expression)
-        : Statement(scope, std::in_place_type<ReturnStatement>), m_expression(std::move(expression))
+    explicit ReturnStatement(ScopePoint scopePoint, IntrVarPtr<ExpressionBase>&& expression)
+        : Statement(std::move(scopePoint), std::in_place_type<ReturnStatement>), m_expression(std::move(expression))
     {
     }
 
@@ -1754,8 +1780,8 @@ class ExpressionStatement final : public Statement
     IntrVarPtr<ExpressionBase> m_expression;
 
 public:
-    explicit ExpressionStatement(std::size_t scope, IntrVarPtr<ExpressionBase>&& expression)
-        : Statement(scope, std::in_place_type<ExpressionStatement>), m_expression(std::move(expression))
+    explicit ExpressionStatement(ScopePoint scopePoint, IntrVarPtr<ExpressionBase>&& expression)
+        : Statement(std::move(scopePoint), std::in_place_type<ExpressionStatement>), m_expression(std::move(expression))
     {
     }
 
@@ -1772,8 +1798,8 @@ class GotoStatement final : public Statement
     const LabelStatement* m_label;
 
 public:
-    explicit GotoStatement(std::size_t scope, const LabelStatement* label)
-        : Statement(scope, std::in_place_type<GotoStatement>), m_label(label)
+    explicit GotoStatement(ScopePoint scopePoint, const LabelStatement* label)
+        : Statement(std::move(scopePoint), std::in_place_type<GotoStatement>), m_label(label)
     {
     }
 
@@ -1793,8 +1819,8 @@ class BreakStatement final : public Statement
     BreakableStatements m_statement;
 
 public:
-    explicit BreakStatement(std::size_t scope, BreakableStatements statements)
-        : Statement(scope, std::in_place_type<BreakStatement>), m_statement(statements)
+    explicit BreakStatement(ScopePoint scopePoint, BreakableStatements statements)
+        : Statement(std::move(scopePoint), std::in_place_type<BreakStatement>), m_statement(statements)
     {
     }
 
@@ -1814,8 +1840,8 @@ class ContinueStatement final : public Statement
     LoopStatements m_loopStatement;
 
 public:
-    explicit ContinueStatement(std::size_t scope, LoopStatements loopStatement)
-        : Statement(scope, std::in_place_type<ContinueStatement>), m_loopStatement(loopStatement)
+    explicit ContinueStatement(ScopePoint scopePoint, LoopStatements loopStatement)
+        : Statement(std::move(scopePoint), std::in_place_type<ContinueStatement>), m_loopStatement(loopStatement)
     {
     }
 
@@ -1834,9 +1860,9 @@ class IfStatement final : public Statement
     IntrVarPtr<Statement> m_falseBranch;
 
 public:
-    IfStatement(std::size_t scope, IntrVarPtr<ExpressionBase>&& expression, IntrVarPtr<Statement>&& trueBranch,
+    IfStatement(ScopePoint scopePoint, IntrVarPtr<ExpressionBase>&& expression, IntrVarPtr<Statement>&& trueBranch,
                 IntrVarPtr<Statement>&& falseBranch)
-        : Statement(scope, std::in_place_type<IfStatement>),
+        : Statement(std::move(scopePoint), std::in_place_type<IfStatement>),
           m_expression(std::move(expression)),
           m_trueBranch(std::move(trueBranch)),
           m_falseBranch(std::move(falseBranch))
@@ -1906,8 +1932,8 @@ class Declaration : public Useable
 
 protected:
     template <class T>
-    Declaration(std::in_place_type_t<T>, Linkage linkage, Lexer::CTokenIterator nameToken, std::size_t scope)
-        : Useable(std::in_place_type<T>), m_linkage(linkage), m_nameToken(nameToken), m_scope(scope)
+    Declaration(std::in_place_type_t<T>, Linkage linkage, Lexer::CTokenIterator nameToken, std::size_t scopePoint)
+        : Useable(std::in_place_type<T>), m_linkage(linkage), m_nameToken(nameToken), m_scope(scopePoint)
     {
     }
 
@@ -1939,9 +1965,9 @@ private:
     Lexer::CTokenIterator m_closeBrace;
 
 public:
-    CompoundStatement(std::size_t scope, Lexer::CTokenIterator openBrace, std::vector<Variant>&& compoundItems,
+    CompoundStatement(ScopePoint scopePoint, Lexer::CTokenIterator openBrace, std::vector<Variant>&& compoundItems,
                       Lexer::CTokenIterator closeBrace)
-        : Statement(scope, std::in_place_type<CompoundStatement>),
+        : Statement(std::move(scopePoint), std::in_place_type<CompoundStatement>),
           m_openBrace(openBrace),
           m_compoundItems(std::move(compoundItems)),
           m_closeBrace(closeBrace)
@@ -1990,10 +2016,10 @@ private:
     IntrVarPtr<Statement> m_statement;
 
 public:
-    ForStatement(std::size_t scope, Lexer::CTokenIterator forToken, Variant&& initial,
+    ForStatement(ScopePoint scopePoint, Lexer::CTokenIterator forToken, Variant&& initial,
                  IntrVarPtr<ExpressionBase>&& controlling, IntrVarPtr<ExpressionBase>&& iteration,
                  IntrVarPtr<Statement>&& statement)
-        : Statement(scope, std::in_place_type<ForStatement>),
+        : Statement(std::move(scopePoint), std::in_place_type<ForStatement>),
           m_forToken(forToken),
           m_initial(std::move(initial)),
           m_controlling(std::move(controlling)),
@@ -2033,8 +2059,9 @@ class HeadWhileStatement final : public Statement
     IntrVarPtr<Statement> m_statement;
 
 public:
-    HeadWhileStatement(std::size_t scope, IntrVarPtr<ExpressionBase>&& expression, IntrVarPtr<Statement>&& statement)
-        : Statement(scope, std::in_place_type<HeadWhileStatement>),
+    HeadWhileStatement(ScopePoint scopePoint, IntrVarPtr<ExpressionBase>&& expression,
+                       IntrVarPtr<Statement>&& statement)
+        : Statement(std::move(scopePoint), std::in_place_type<HeadWhileStatement>),
           m_expression(std::move(expression)),
           m_statement(std::move(statement))
     {
@@ -2056,8 +2083,9 @@ class FootWhileStatement final : public Statement
     IntrVarPtr<ExpressionBase> m_expression;
 
 public:
-    FootWhileStatement(std::size_t scope, IntrVarPtr<Statement>&& statement, IntrVarPtr<ExpressionBase>&& expression)
-        : Statement(scope, std::in_place_type<FootWhileStatement>),
+    FootWhileStatement(ScopePoint scopePoint, IntrVarPtr<Statement>&& statement,
+                       IntrVarPtr<ExpressionBase>&& expression)
+        : Statement(std::move(scopePoint), std::in_place_type<FootWhileStatement>),
           m_statement(std::move(statement)),
           m_expression(std::move(expression))
     {
@@ -2081,10 +2109,10 @@ class SwitchStatement final : public Statement
     const DefaultStatement* CLD_NULLABLE m_default;
 
 public:
-    SwitchStatement(std::size_t scope, IntrVarPtr<ExpressionBase>&& expression, IntrVarPtr<Statement>&& statement,
+    SwitchStatement(ScopePoint scopePoint, IntrVarPtr<ExpressionBase>&& expression, IntrVarPtr<Statement>&& statement,
                     std::map<llvm::APSInt, const CaseStatement* CLD_NON_NULL> cases = {},
                     const DefaultStatement* CLD_NULLABLE defaultStmt = nullptr)
-        : Statement(scope, std::in_place_type<SwitchStatement>),
+        : Statement(std::move(scopePoint), std::in_place_type<SwitchStatement>),
           m_expression(std::move(expression)),
           m_statement(std::move(statement)),
           m_cases(std::move(cases)),
@@ -2125,9 +2153,9 @@ class DefaultStatement final : public Statement
     const SwitchStatement* CLD_NON_NULL m_switchStmt;
 
 public:
-    DefaultStatement(std::size_t scope, Lexer::CTokenIterator defaultToken, Lexer::CTokenIterator colonToken,
+    DefaultStatement(ScopePoint scopePoint, Lexer::CTokenIterator defaultToken, Lexer::CTokenIterator colonToken,
                      IntrVarPtr<Statement>&& statement, const SwitchStatement& switchStmt)
-        : Statement(scope, std::in_place_type<DefaultStatement>),
+        : Statement(std::move(scopePoint), std::in_place_type<DefaultStatement>),
           m_defaultToken(defaultToken),
           m_colonToken(colonToken),
           m_statement(std::move(statement)),
@@ -2164,10 +2192,10 @@ class CaseStatement final : public Statement
     const SwitchStatement* CLD_NON_NULL m_switchStmt;
 
 public:
-    CaseStatement(std::size_t scope, Lexer::CTokenIterator caseToken, llvm::APSInt constant,
+    CaseStatement(ScopePoint scopePoint, Lexer::CTokenIterator caseToken, llvm::APSInt constant,
                   Lexer::CTokenIterator colonToken, IntrVarPtr<Statement>&& statement,
                   const SwitchStatement& switchStmt)
-        : Statement(scope, std::in_place_type<CaseStatement>),
+        : Statement(std::move(scopePoint), std::in_place_type<CaseStatement>),
           m_caseToken(caseToken),
           m_constant(std::move(constant)),
           m_colonToken(colonToken),
@@ -2208,9 +2236,9 @@ class LabelStatement final : public Statement
     IntrVarPtr<Statement> m_statement;
 
 public:
-    LabelStatement(std::size_t scope, Lexer::CTokenIterator identifier, std::size_t sizeOfCurrentScope,
+    LabelStatement(ScopePoint scopePoint, Lexer::CTokenIterator identifier, std::size_t sizeOfCurrentScope,
                    IntrVarPtr<Statement>&& statement)
-        : Statement(scope, std::in_place_type<LabelStatement>),
+        : Statement(std::move(scopePoint), std::in_place_type<LabelStatement>),
           m_identifier(identifier),
           m_sizeOfCurrentScope(sizeOfCurrentScope),
           m_statement(std::move(statement))
@@ -2235,7 +2263,7 @@ public:
 class GNUASMStatement final : public Statement
 {
 public:
-    GNUASMStatement(std::int64_t scope) : Statement(scope, std::in_place_type<GNUASMStatement>) {}
+    GNUASMStatement(ScopePoint scopePoint) : Statement(std::move(scopePoint), std::in_place_type<GNUASMStatement>) {}
 
     CLD_GEN_INTR_VAR_WARNING_FUNCS(GNUASMStatement)
 };
@@ -2249,9 +2277,7 @@ struct FieldInLayout
     std::optional<std::pair<std::uint32_t, std::uint32_t>> bitFieldBounds;
 };
 
-using FieldMap = tsl::ordered_map<std::string_view, Field, std::hash<std::string_view>, std::equal_to<std::string_view>,
-                                  std::allocator<std::pair<std::string_view, Field>>,
-                                  std::vector<std::pair<std::string_view, Field>>>;
+using FieldMap = cld::ordered_map<std::string_view, Field>;
 
 struct MemoryLayout
 {

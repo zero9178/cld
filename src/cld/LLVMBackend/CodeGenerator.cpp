@@ -477,31 +477,37 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::getStringLiteralData(llvm::Type* 
     CLD_UNREACHABLE;
 }
 
-void cld::CGLLVM::CodeGenerator::runDestructors(std::size_t from, std::size_t toExclusive)
+void cld::CGLLVM::CodeGenerator::runDestructors(Semantics::ScopePoint from, std::size_t toExclusive)
 {
-    while (from > 0 && from != toExclusive)
+    for (auto& declInScope : m_programInterface.declIterators(from, toExclusive))
     {
-        // Destructors must be run backwards in order of declaration
-        for (auto iter = m_programInterface.getScopes()[from].declarations.rbegin();
-             iter != m_programInterface.getScopes()[from].declarations.rend(); iter++)
+        const auto* decl = std::get_if<Semantics::VariableDeclaration*>(&declInScope.declared);
+        if (!decl)
         {
-            const auto* decl = std::get_if<Semantics::VariableDeclaration*>(&iter->second.declared);
-            if (!decl)
-            {
-                continue;
-            }
-            if (Semantics::isVariableLengthArray((*decl)->getType()))
-            {
-                auto* alloca = m_stackSaves[*decl];
-                if (alloca)
-                {
-                    auto loaded = createLoad(alloca, false);
-                    m_builder.CreateIntrinsic(llvm::Intrinsic::stackrestore, {}, {loaded});
-                }
-                continue;
-            }
+            continue;
         }
-        from = m_programInterface.getScopes()[from].previousScope;
+        if (Semantics::isVariableLengthArray((*decl)->getType()))
+        {
+            auto* alloca = m_stackSaves[*decl];
+            if (alloca)
+            {
+                auto loaded = createLoad(alloca, false);
+                m_builder.CreateIntrinsic(llvm::Intrinsic::stackrestore, {}, {loaded});
+            }
+            continue;
+        }
+        if (auto* cleanup = (*decl)->getAttributeIf<Semantics::CleanupAttribute>())
+        {
+            auto lvalue = m_lvalues.find(*decl);
+            CLD_ASSERT(lvalue != m_lvalues.end());
+            auto function = visit(*cleanup->cleanupFunction);
+            m_abi->generateFunctionCall(
+                *this, function, llvm::cast<llvm::FunctionType>(function.value->getType()->getPointerElementType()),
+                cleanup->cleanupFunction->getDeclRead().match(
+                    [](auto&& value) -> const Semantics::FunctionType& { return value.getType(); },
+                    [](const Semantics::VariableDeclaration&) -> const Semantics::FunctionType& { CLD_UNREACHABLE; }),
+                {lvalue->second});
+        }
     }
 }
 

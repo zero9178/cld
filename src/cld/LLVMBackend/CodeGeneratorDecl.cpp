@@ -705,7 +705,7 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::VariableDe
         m_lvalues.emplace(&declaration, createBitCast(global, llvm::PointerType::getUnqual(prevType)));
         return global;
     }
-    if (!m_options.emitAllDecls && !declaration.isUsed())
+    if (!m_options.emitAllDecls && !declaration.isUsed() && !declaration.hasAttribute<Semantics::CleanupAttribute>())
     {
         return nullptr;
     }
@@ -874,7 +874,8 @@ void cld::CGLLVM::CodeGenerator::visit(const Semantics::FunctionDefinition& func
             getLine(functionDefinition.getCompoundStatement().getOpenBrace()), diFlags, spFlags);
         m_currentFunction->setSubprogram(subProgram);
         subProgramReset.emplace(m_currentDebugScope, m_currentDebugScope);
-        m_scopeIdToScope[functionDefinition.getCompoundStatement().getScope()] = m_currentDebugScope = subProgram;
+        m_scopeIdToScope[functionDefinition.getCompoundStatement().getScopePoint().getScopeId()] = m_currentDebugScope =
+            subProgram;
 
         std::vector<llvm::Metadata*> parameters;
         if (m_options.debugEmission > cld::CGLLVM::DebugEmission::Line)

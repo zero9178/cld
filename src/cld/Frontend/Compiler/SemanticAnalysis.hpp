@@ -108,7 +108,7 @@ class SemanticAnalysis final : public ProgramInterface
     [[nodiscard]] auto pushScope()
     {
         m_scopes[m_currentScope].subScopes.push_back(m_scopes.size());
-        m_scopes.push_back({m_currentScope, {}, {}, {}});
+        m_scopes.push_back({m_scopes.size(), m_currentScope, {}, {}, {}});
         m_currentScope = m_scopes.size() - 1;
         return cld::ScopeExit(
             [&, prev = m_scopes.back().previousScope]
@@ -116,6 +116,15 @@ class SemanticAnalysis final : public ProgramInterface
                 diagnoseUnusedLocals();
                 m_currentScope = prev;
             });
+    }
+
+    [[nodiscard]] ScopePoint getCurrentScopePoint() const
+    {
+        std::vector<std::size_t> declCounts;
+        auto iterators = scopeIterators(m_currentScope);
+        std::transform(iterators.begin(), iterators.end(), std::back_inserter(declCounts),
+                       [](const Scope& scope) { return scope.declarations.size(); });
+        return {getCurrentScope().thisScopeId, std::move(declCounts)};
     }
 
     [[nodiscard]] auto pushLoop(LoopStatements loop)
@@ -392,7 +401,7 @@ private:
 
     void createAttributes();
 
-    std::pair<tsl::ordered_map<std::string_view, DeclarationInScope>::iterator, bool>
+    std::pair<cld::ordered_map<std::string_view, DeclarationInScope>::iterator, bool>
         insertTypedef(TypedefInfo typedefInfo);
 
     [[nodiscard]] ValueReset<bool> enableExtensions(bool extensions);

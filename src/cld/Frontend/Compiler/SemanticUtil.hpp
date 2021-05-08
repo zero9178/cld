@@ -12,22 +12,22 @@ namespace cld::Semantics
 template <class StartType, class Callable>
 class RecursiveVisitor
 {
-    const StartType& m_start;
+    const StartType* m_start;
     Callable m_nextFunc;
 
     using ValueType = std::decay_t<std::remove_pointer_t<std::invoke_result_t<Callable, const StartType&>>>;
 
     class Iterator
     {
-        const ValueType* m_curr;
-        const Callable* m_nextFunc;
+        const ValueType* m_curr = nullptr;
+        const Callable* m_nextFunc = nullptr;
 
     public:
         using reference = const ValueType&;
         using value_type = const ValueType;
         using pointer = const ValueType*;
         using iterator_category = std::forward_iterator_tag;
-        using difference_type = void;
+        using difference_type = std::ptrdiff_t;
 
         Iterator() = default;
 
@@ -43,13 +43,13 @@ class RecursiveVisitor
             return !(*this == rhs);
         }
 
-        const ValueType& operator*() const noexcept
+        reference operator*() const noexcept
         {
             CLD_ASSERT(m_curr);
             return *m_curr;
         }
 
-        const ValueType* operator->() const noexcept
+        pointer operator->() const noexcept
         {
             return m_curr;
         }
@@ -68,10 +68,16 @@ class RecursiveVisitor
             m_curr = (*m_nextFunc)(*m_curr);
             return before;
         }
+
+        friend void swap(Iterator& lhs, Iterator& rhs)
+        {
+            std::swap(lhs.m_curr, rhs.m_curr);
+            std::swap(lhs.m_nextFunc, rhs.m_nextFunc);
+        }
     };
 
 public:
-    RecursiveVisitor(const StartType& start, Callable nextFunc) : m_start(start), m_nextFunc(std::move(nextFunc))
+    RecursiveVisitor(const StartType& start, Callable nextFunc) : m_start(&start), m_nextFunc(std::move(nextFunc))
     {
         static_assert(std::is_convertible_v<const StartType&, const ValueType&>);
         static_assert(std::is_invocable_r_v<const ValueType*, Callable, const ValueType&>);
@@ -79,13 +85,13 @@ public:
 
     using value_type = const ValueType;
     using reference = const ValueType&;
-    using const_reference = const ValueType&;
+    using const_reference = reference;
     using const_iterator = Iterator;
     using iterator = Iterator;
 
     const_iterator begin() const
     {
-        return Iterator(&static_cast<const ValueType&>(m_start), &m_nextFunc);
+        return Iterator(&static_cast<const ValueType&>(*m_start), &m_nextFunc);
     }
 
     const_iterator cbegin() const

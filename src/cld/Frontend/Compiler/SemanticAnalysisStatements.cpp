@@ -16,7 +16,7 @@ std::unique_ptr<cld::Semantics::CompoundStatement>
         auto tmp = visit(iter);
         result.insert(result.end(), std::move_iterator(tmp.begin()), std::move_iterator(tmp.end()));
     }
-    return std::make_unique<CompoundStatement>(m_currentScope, node.begin(), std::move(result), node.end() - 1);
+    return std::make_unique<CompoundStatement>(getCurrentScopePoint(), node.begin(), std::move(result), node.end() - 1);
 }
 
 std::vector<cld::Semantics::CompoundStatement::Variant>
@@ -49,11 +49,11 @@ cld::IntrVarPtr<cld::Semantics::Statement> cld::Semantics::SemanticAnalysis::vis
         {
             if (!node.getOptionalExpression())
             {
-                return std::make_unique<ExpressionStatement>(m_currentScope, nullptr);
+                return std::make_unique<ExpressionStatement>(getCurrentScopePoint(), nullptr);
             }
             auto expression = visit(*node.getOptionalExpression());
             checkUnusedResult(*expression);
-            return std::make_unique<ExpressionStatement>(m_currentScope, std::move(expression));
+            return std::make_unique<ExpressionStatement>(getCurrentScopePoint(), std::move(expression));
         });
 }
 
@@ -69,7 +69,7 @@ std::unique_ptr<cld::Semantics::ReturnStatement>
                 node, m_sourceInterface, *getCurrentFunctionScope()->currentFunction->getNameToken(),
                 ft.getReturnType(), node));
         }
-        return std::make_unique<ReturnStatement>(m_currentScope, nullptr);
+        return std::make_unique<ReturnStatement>(getCurrentScopePoint(), nullptr);
     }
     if (isVoid(ft.getReturnType()))
     {
@@ -122,7 +122,7 @@ std::unique_ptr<cld::Semantics::ReturnStatement>
                     *value, m_sourceInterface, *node.begin(), *value));
             }
         });
-    return std::make_unique<ReturnStatement>(m_currentScope, std::move(value));
+    return std::make_unique<ReturnStatement>(getCurrentScopePoint(), std::move(value));
 }
 
 std::unique_ptr<cld::Semantics::IfStatement> cld::Semantics::SemanticAnalysis::visit(const Syntax::IfStatement& node)
@@ -137,10 +137,10 @@ std::unique_ptr<cld::Semantics::IfStatement> cld::Semantics::SemanticAnalysis::v
     auto trueBranch = visit(node.getBranch());
     if (!node.getElseBranch())
     {
-        return std::make_unique<IfStatement>(m_currentScope, std::move(value), std::move(trueBranch), nullptr);
+        return std::make_unique<IfStatement>(getCurrentScopePoint(), std::move(value), std::move(trueBranch), nullptr);
     }
     auto falseBranch = visit(*node.getElseBranch());
-    return std::make_unique<IfStatement>(m_currentScope, std::move(value), std::move(trueBranch),
+    return std::make_unique<IfStatement>(getCurrentScopePoint(), std::move(value), std::move(trueBranch),
                                          std::move(falseBranch));
 }
 
@@ -205,11 +205,11 @@ std::unique_ptr<cld::Semantics::ForStatement> cld::Semantics::SemanticAnalysis::
         checkUnusedResult(*iteration);
     }
 
-    auto forStatement = std::make_unique<ForStatement>(m_currentScope, node.begin(), ForStatement::Variant{}, nullptr,
-                                                       nullptr, nullptr);
+    auto forStatement = std::make_unique<ForStatement>(getCurrentScopePoint(), node.begin(), ForStatement::Variant{},
+                                                       nullptr, nullptr, nullptr);
     auto loopGuard = pushLoop(forStatement.get());
     auto statement = visit(node.getStatement());
-    *forStatement = ForStatement(m_currentScope, node.begin(), std::move(initial), std::move(controlling),
+    *forStatement = ForStatement(getCurrentScopePoint(), node.begin(), std::move(initial), std::move(controlling),
                                  std::move(iteration), std::move(statement));
     return forStatement;
 }
@@ -223,17 +223,18 @@ std::unique_ptr<cld::Semantics::HeadWhileStatement>
         log(Errors::Semantics::CONTROLLING_EXPRESSION_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
             *expression, m_sourceInterface, *expression));
     }
-    auto loop = std::make_unique<HeadWhileStatement>(m_currentScope, nullptr, nullptr);
+    auto loop = std::make_unique<HeadWhileStatement>(getCurrentScopePoint(), nullptr, nullptr);
     auto loopGuard = pushLoop(loop.get());
     auto statement = visit(node.getStatement());
-    *loop = HeadWhileStatement(m_currentScope, toBool(std::move(expression)), std::move(statement));
+    *loop = HeadWhileStatement(getCurrentScopePoint(), toBool(std::move(expression)), std::move(statement));
     return loop;
 }
 
 std::unique_ptr<cld::Semantics::FootWhileStatement>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::FootWhileStatement& node)
 {
-    auto loop = std::make_unique<FootWhileStatement>(m_currentScope, nullptr, std::make_unique<ErrorExpression>(node));
+    auto loop =
+        std::make_unique<FootWhileStatement>(getCurrentScopePoint(), nullptr, std::make_unique<ErrorExpression>(node));
     auto guard = pushLoop(loop.get());
     auto statement = visit(node.getStatement());
     auto expression = lvalueConversion(visit(node.getExpression()));
@@ -242,7 +243,7 @@ std::unique_ptr<cld::Semantics::FootWhileStatement>
         log(Errors::Semantics::CONTROLLING_EXPRESSION_MUST_BE_AN_ARITHMETIC_OR_POINTER_TYPE.args(
             *expression, m_sourceInterface, *expression));
     }
-    *loop = FootWhileStatement(m_currentScope, std::move(statement), toBool(std::move(expression)));
+    *loop = FootWhileStatement(getCurrentScopePoint(), std::move(statement), toBool(std::move(expression)));
     return loop;
 }
 
@@ -254,7 +255,7 @@ std::unique_ptr<cld::Semantics::BreakStatement>
         log(Errors::Semantics::BREAK_MUST_BE_WITHIN_A_SWITCH_OR_LOOP_STATEMENT.args(node, m_sourceInterface, node));
         return {};
     }
-    return std::make_unique<BreakStatement>(m_currentScope, m_breakableStatements.back());
+    return std::make_unique<BreakStatement>(getCurrentScopePoint(), m_breakableStatements.back());
 }
 
 std::unique_ptr<cld::Semantics::ContinueStatement>
@@ -265,7 +266,7 @@ std::unique_ptr<cld::Semantics::ContinueStatement>
         log(Errors::Semantics::CONTINUE_MUST_BE_WITHIN_A_LOOP_STATEMENT.args(node, m_sourceInterface, node));
         return {};
     }
-    return std::make_unique<ContinueStatement>(m_currentScope, m_loopStatements.back());
+    return std::make_unique<ContinueStatement>(getCurrentScopePoint(), m_loopStatements.back());
 }
 
 std::unique_ptr<cld::Semantics::SwitchStatement>
@@ -278,10 +279,10 @@ std::unique_ptr<cld::Semantics::SwitchStatement>
                                                                                    *expression));
         expression = std::make_unique<ErrorExpression>(node);
     }
-    auto switchStmt = std::make_unique<SwitchStatement>(m_currentScope, std::move(expression), nullptr);
+    auto switchStmt = std::make_unique<SwitchStatement>(getCurrentScopePoint(), std::move(expression), nullptr);
     auto guard = pushSwitch(*switchStmt);
     auto statement = visit(node.getStatement());
-    *switchStmt = SwitchStatement(m_currentScope, std::move(*switchStmt).getExpression(), std::move(statement),
+    *switchStmt = SwitchStatement(getCurrentScopePoint(), std::move(*switchStmt).getExpression(), std::move(statement),
                                   std::move(m_switchStatements.back().cases), m_switchStatements.back().defaultStmt);
     return switchStmt;
 }
@@ -294,10 +295,13 @@ void cld::Semantics::SemanticAnalysis::checkForIllegalSwitchJumps(
     bool isTypedef = false;
     const Lexer::CToken* identifier = nullptr;
     const Semantics::Type* type = nullptr;
-    auto curr = m_currentScope;
-    while (!illegalJump && curr != switchStatement.getScope())
+    for (auto& iter : scopeIterators(m_currentScope))
     {
-        for (auto& [name, decl] : m_scopes[curr].declarations)
+        if (iter.thisScopeId == switchStatement.getScopePoint().getScopeId() || illegalJump)
+        {
+            break;
+        }
+        for (auto& [name, decl] : iter.declarations)
         {
             if (auto* val = std::get_if<VariableDeclaration*>(&decl.declared))
             {
@@ -321,7 +325,6 @@ void cld::Semantics::SemanticAnalysis::checkForIllegalSwitchJumps(
                 }
             }
         }
-        curr = m_scopes[curr].previousScope;
     }
 
     if (!illegalJump)
@@ -372,8 +375,8 @@ std::unique_ptr<cld::Semantics::DefaultStatement>
     auto& switchStmt = *m_switchStatements.back().switchStatement;
     checkForIllegalSwitchJumps(std::forward_as_tuple(*node.getDefaultToken(), *node.getColonToken()), switchStmt,
                                false);
-    auto defaultStmt = std::make_unique<DefaultStatement>(m_currentScope, node.getDefaultToken(), node.getColonToken(),
-                                                          nullptr, switchStmt);
+    auto defaultStmt = std::make_unique<DefaultStatement>(getCurrentScopePoint(), node.getDefaultToken(),
+                                                          node.getColonToken(), nullptr, switchStmt);
     if (m_switchStatements.back().defaultStmt)
     {
         log(Errors::Semantics::REDEFINITION_OF_DEFAULT.args(
@@ -391,8 +394,8 @@ std::unique_ptr<cld::Semantics::DefaultStatement>
         m_switchStatements.back().defaultStmt = defaultStmt.get();
     }
     auto statement = visit(node.getStatement());
-    *defaultStmt = DefaultStatement(m_currentScope, node.getDefaultToken(), node.getColonToken(), std::move(statement),
-                                    switchStmt);
+    *defaultStmt = DefaultStatement(getCurrentScopePoint(), node.getDefaultToken(), node.getColonToken(),
+                                    std::move(statement), switchStmt);
     return defaultStmt;
 }
 
@@ -431,7 +434,7 @@ std::unique_ptr<cld::Semantics::CaseStatement>
         return {};
     }
     constant = constant->castTo(switchStmt.getExpression().getType(), this, getLanguageOptions());
-    auto caseStmt = std::make_unique<CaseStatement>(m_currentScope, node.getCaseToken(),
+    auto caseStmt = std::make_unique<CaseStatement>(getCurrentScopePoint(), node.getCaseToken(),
                                                     cld::get<llvm::APSInt>(constant->getValue()), node.getColonToken(),
                                                     nullptr, switchStmt);
     auto [prev, notRedefinition] = m_switchStatements.back().cases.emplace(caseStmt->getConstant(), caseStmt.get());
@@ -444,8 +447,8 @@ std::unique_ptr<cld::Semantics::CaseStatement>
             std::forward_as_tuple(prev->second->getCaseToken() + 1, prev->second->getColonToken() - 1), *constant));
     }
     auto statement = visit(node.getStatement());
-    *caseStmt = CaseStatement(m_currentScope, node.getCaseToken(), caseStmt->getConstant(), node.getColonToken(),
-                              std::move(statement), switchStmt);
+    *caseStmt = CaseStatement(getCurrentScopePoint(), node.getCaseToken(), caseStmt->getConstant(),
+                              node.getColonToken(), std::move(statement), switchStmt);
     return caseStmt;
 }
 
@@ -463,52 +466,38 @@ void cld::Semantics::SemanticAnalysis::resolveGotos()
 
         // The current scope always needs to be checked as different declarations might be visible at the point of both
         // the label and the goto even if they're in the same scope
-        auto scopeIter = scopeIterator(m_currentScope);
+        auto scopeIter = scopeIterators(m_currentScope);
         std::unordered_set<std::size_t> scopes;
-        std::transform(scopeIter.begin(), scopeIter.end(), std::inserter(scopes, scopes.begin()),
-                       [](const Scope& scope) { return scope.previousScope; });
-        scopes.erase(END_OF_SCOPES);
+        std::transform(std::next(scopeIter.begin()), scopeIter.end(), std::inserter(scopes, scopes.begin()),
+                       std::mem_fn(&Scope::thisScopeId));
 
         bool illegalJump = false;
         bool isTypedef = false;
         const Lexer::CToken* identifier = nullptr;
         const Semantics::Type* type = nullptr;
-        auto labelScope = result->second->getScope();
-        while (!illegalJump && scopes.count(labelScope) == 0)
+        auto iterators = scopeIterators(result->second->getScopePoint().getScopeId());
+        auto end = std::find_if(iterators.begin(), iterators.end(),
+                                [&](const Scope& scope) { return scopes.count(scope.thisScopeId); });
+        CLD_ASSERT(end != iterators.end());
+        for (auto& decl : declIterators(result->second->getScopePoint(), end->thisScopeId))
         {
-            for (auto iter = m_scopes[labelScope].declarations.begin(); iter != m_scopes[labelScope].declarations.end();
-                 iter++)
+            if (auto* val = std::get_if<VariableDeclaration*>(&decl.declared);
+                val && isVariablyModified((*val)->getType()))
             {
-                if (labelScope == result->second->getScope()
-                    && static_cast<std::size_t>(iter - m_scopes[labelScope].declarations.begin())
-                           >= result->second->getSizeOfCurrentScope())
-                {
-                    break;
-                }
-                auto& [name, decl] = *iter;
-                if (auto* val = std::get_if<VariableDeclaration*>(&decl.declared))
-                {
-                    if (isVariablyModified((*val)->getType()))
-                    {
-                        illegalJump = true;
-                        identifier = decl.identifier;
-                        type = &(*val)->getType();
-                        break;
-                    }
-                }
-                if (auto* typeDef = std::get_if<TypedefInfo*>(&decl.declared))
-                {
-                    if (isVariablyModified((*typeDef)->type))
-                    {
-                        isTypedef = true;
-                        illegalJump = true;
-                        identifier = decl.identifier;
-                        type = (*typeDef)->type.data();
-                        break;
-                    }
-                }
+                illegalJump = true;
+                identifier = decl.identifier;
+                type = &(*val)->getType();
+                break;
             }
-            labelScope = m_scopes[labelScope].previousScope;
+            if (auto* typeDef = std::get_if<TypedefInfo*>(&decl.declared);
+                typeDef && isVariablyModified((*typeDef)->type))
+            {
+                illegalJump = true;
+                isTypedef = true;
+                identifier = decl.identifier;
+                type = (*typeDef)->type.data();
+                break;
+            }
         }
 
         if (illegalJump)
@@ -533,7 +522,7 @@ void cld::Semantics::SemanticAnalysis::resolveGotos()
                                                     *result->second->getIdentifier()));
         }
 
-        *gotoStmt = GotoStatement(m_currentScope, result->second);
+        *gotoStmt = GotoStatement(getCurrentScopePoint(), result->second);
     }
     m_scheduledGotos.clear();
 }
@@ -541,7 +530,7 @@ void cld::Semantics::SemanticAnalysis::resolveGotos()
 std::unique_ptr<cld::Semantics::GotoStatement>
     cld::Semantics::SemanticAnalysis::visit(const Syntax::GotoStatement& node)
 {
-    auto gotoStatement = std::make_unique<GotoStatement>(m_currentScope, nullptr);
+    auto gotoStatement = std::make_unique<GotoStatement>(getCurrentScopePoint(), nullptr);
     m_scheduledGotos.emplace_back(node.getIdentifier(), gotoStatement.get());
     return gotoStatement;
 }
@@ -556,7 +545,7 @@ std::unique_ptr<cld::Semantics::LabelStatement>
         return {};
     }
 
-    auto storage = std::make_unique<LabelStatement>(m_currentScope, node.getIdentifierToken(),
+    auto storage = std::make_unique<LabelStatement>(getCurrentScopePoint(), node.getIdentifierToken(),
                                                     getCurrentScope().declarations.size(), nullptr);
     auto [prev, notRedefinition] =
         getCurrentFunctionScope()->labels.emplace(node.getIdentifierToken()->getText(), storage.get());
@@ -569,8 +558,8 @@ std::unique_ptr<cld::Semantics::LabelStatement>
     }
     else if (auto* statement = std::get_if<std::unique_ptr<Syntax::Statement>>(&node.getStatementOrAttribute()))
     {
-        *storage = LabelStatement(m_currentScope, node.getIdentifierToken(), getCurrentScope().declarations.size(),
-                                  visit(**statement));
+        *storage = LabelStatement(getCurrentScopePoint(), node.getIdentifierToken(),
+                                  getCurrentScope().declarations.size(), visit(**statement));
     }
 
     return storage;
@@ -580,7 +569,7 @@ std::unique_ptr<cld::Semantics::GNUASMStatement>
     cld::Semantics::SemanticAnalysis::visit(const cld::Syntax::GNUASMStatement&)
 {
     // TODO:
-    return std::make_unique<GNUASMStatement>(m_currentScope);
+    return std::make_unique<GNUASMStatement>(getCurrentScopePoint());
 }
 
 void cld::Semantics::SemanticAnalysis::checkUnusedResult(const cld::Semantics::ExpressionBase& expression)

@@ -7,6 +7,8 @@
 #include <memory>
 #include <variant>
 
+#include <tsl/ordered_map.h>
+
 #ifdef NDEBUG
 
     #ifndef CLD_USE_ASSERTS
@@ -688,6 +690,11 @@ template <class T>
 not_null<T> operator+(not_null<T>, std::ptrdiff_t) = delete;
 template <class T>
 not_null<T> operator+(std::ptrdiff_t, not_null<T>) = delete;
+
+template <class Key, class Mapped, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<Key>,
+          class Allocator = std::allocator<std::pair<Key, Mapped>>,
+          class ValueTypeContainer = std::vector<std::pair<Key, Mapped>, Allocator>>
+using ordered_map = ::tsl::ordered_map<Key, Mapped, Hash, KeyEqual, Allocator, ValueTypeContainer>;
 
 } // namespace cld
 

@@ -30,7 +30,7 @@ bool cld::Semantics::SemanticAnalysis::log(const Message& message)
 
 bool cld::Semantics::SemanticAnalysis::isTypedef(std::string_view name) const
 {
-    auto range = scopeIterator(m_currentScope);
+    auto range = scopeIterators(m_currentScope);
     return std::any_of(range.begin(), range.end(),
                        [name](const Scope& scope)
                        {
@@ -46,7 +46,7 @@ bool cld::Semantics::SemanticAnalysis::isTypedef(std::string_view name) const
 
 bool cld::Semantics::SemanticAnalysis::isTypedefInScope(std::string_view name) const
 {
-    for (auto& scope : scopeIterator(m_currentScope))
+    for (auto& scope : scopeIterators(m_currentScope))
     {
         auto result = scope.declarations.find(name);
         if (result != scope.declarations.end())
@@ -58,10 +58,10 @@ bool cld::Semantics::SemanticAnalysis::isTypedefInScope(std::string_view name) c
     return false;
 }
 
-const cld::Semantics::SemanticAnalysis::DeclarationInScope::Variant*
-    cld::Semantics::SemanticAnalysis::lookupDecl(std::string_view name, std::int64_t scope)
+const cld::Semantics::DeclarationInScope::Variant* cld::Semantics::SemanticAnalysis::lookupDecl(std::string_view name,
+                                                                                                std::int64_t scope)
 {
-    for (auto& iter : scopeIterator(scope))
+    for (auto& iter : scopeIterators(scope))
     {
         auto result = iter.declarations.find(name);
         if (result != iter.declarations.end())
@@ -915,7 +915,7 @@ bool cld::Semantics::SemanticAnalysis::extensionsEnabled(const cld::Lexer::CToke
 }
 
 auto cld::Semantics::SemanticAnalysis::insertTypedef(TypedefInfo typedefInfo)
-    -> std::pair<tsl::ordered_map<std::string_view, DeclarationInScope>::iterator, bool>
+    -> std::pair<cld::ordered_map<std::string_view, DeclarationInScope>::iterator, bool>
 {
     auto& back = m_typedefDefinitions.emplace_back(std::move(typedefInfo));
     back.type->setTypedef(&back);
