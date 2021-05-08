@@ -6188,4 +6188,10 @@ TEST_CASE("Semantics __attribute__((cleanup))", "[semantics]")
                   "int __attribute__((cleanup(bar))) foo;\n"
                   "}\n",
                   ProducesWarning(RESULT_OF_CALL_TO_FUNCTION_N_UNUSED, "'bar'"));
+    SEMA_PRODUCES("int bar(int*);\n"
+                  "\n"
+                  "void test(void) {\n"
+                  "int __attribute__((cleanup(bar))) foo;\n"
+                  "}\n",
+                  ProducesNoErrors() && !ProducesWarning(UNUSED_VARIABLE_N, "'foo'"));
 }

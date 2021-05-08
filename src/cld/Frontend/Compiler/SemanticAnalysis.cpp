@@ -931,7 +931,8 @@ void cld::Semantics::SemanticAnalysis::diagnoseUnusedLocals()
             declInScope.declared, [](FunctionDeclaration*) {},
             [this, &declInScope = declInScope](VariableDeclaration* declaration)
             {
-                if (declaration->isUsed() || declaration->getLinkage() == Linkage::External || !declInScope.identifier)
+                if (declaration->isUsed() || declaration->getLinkage() == Linkage::External || !declInScope.identifier
+                    || declaration->hasAttribute<CleanupAttribute>() || declaration->hasAttribute<UsedAttribute>())
                 {
                     return;
                 }
