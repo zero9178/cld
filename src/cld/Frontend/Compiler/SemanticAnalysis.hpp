@@ -642,6 +642,8 @@ public:
 
     void apply(AffectsVariable declaration, const ParsedAttribute<CleanupAttribute>& attribute);
 
+    void apply(AffectsFunction declaration, const ParsedAttribute<AllocSizeAttribute>& attribute);
+
 private:
     std::unordered_map<std::string,
                        std::optional<AllAttributes> (SemanticAnalysis::*)(const Syntax::GNUAttributes::GNUAttribute&)>

@@ -223,25 +223,23 @@ namespace detail
 template <class T, class... Args>
 constexpr auto variantTypesContain(std::variant<Args...>) -> std::disjunction<std::is_same<T, Args>...>;
 
-template <class T, class... Args>
-constexpr auto addToVariantType(std::variant<Args...>) -> std::variant<Args..., T>;
-
 template <class Variant, class OtherVariant>
 struct VariantUnion;
 
-template <class Variant, class First>
-struct VariantUnion<Variant, std::variant<First>>
+template <class... ThisArgs, class First>
+struct VariantUnion<std::variant<ThisArgs...>, std::variant<First>>
 {
-    using type = std::conditional_t<decltype(variantTypesContain<First>(std::declval<Variant>())){}, Variant,
-                                    decltype(addToVariantType<First>(std::declval<Variant>()))>;
+    using type = std::conditional_t<(std::is_same_v<ThisArgs, First> || ...), std::variant<ThisArgs...>,
+                                    std::variant<ThisArgs..., First>>;
 };
 
-template <class Variant, class First, class... Args>
-struct VariantUnion<Variant, std::variant<First, Args...>>
+template <class... ThisArgs, class First, class... Args>
+struct VariantUnion<std::variant<ThisArgs...>, std::variant<First, Args...>>
 {
-    using type = typename std::conditional_t<
-        decltype(variantTypesContain<First>(std::declval<Variant>())){}, VariantUnion<Variant, std::variant<Args...>>,
-        VariantUnion<decltype(addToVariantType<First>(std::declval<Variant>())), std::variant<Args...>>>::type;
+    using type =
+        typename std::conditional_t<(std::is_same_v<ThisArgs, First> || ...),
+                                    VariantUnion<std::variant<ThisArgs...>, std::variant<Args...>>,
+                                    VariantUnion<std::variant<ThisArgs..., First>, std::variant<Args...>>>::type;
 };
 
 template <class Variant>

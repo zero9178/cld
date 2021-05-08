@@ -468,6 +468,7 @@ void cld::Semantics::SemanticAnalysis::createAttributes()
     gnuSpelling("pure", &SemanticAnalysis::parseAttribute<PureAttribute>);
     gnuSpelling("warn_unused_result", &SemanticAnalysis::parseAttribute<WarnUnusedResultAttribute>);
     gnuSpelling("cleanup", &SemanticAnalysis::parseAttribute<CleanupAttribute>);
+    gnuSpelling("alloc_size", &SemanticAnalysis::parseAttribute<AllocSizeAttribute>);
     if (getLanguageOptions().triple.getPlatform() == Platform::Windows)
     {
         gnuSpelling("dllimport", &SemanticAnalysis::parseAttribute<DllImportAttribute>);
@@ -885,6 +886,51 @@ void cld::Semantics::SemanticAnalysis::apply(AffectsVariable applicant,
     {
         log(Warnings::Semantics::RESULT_OF_CALL_TO_FUNCTION_N_UNUSED.args(
             *declRead->getIdentifierToken(), m_sourceInterface, *declRead->getIdentifierToken()));
+    }
+    cld::match(applicant, [&](auto holder) { holder->addAttribute(attribute.attribute); });
+}
+
+void cld::Semantics::SemanticAnalysis::apply(AffectsFunction applicant,
+                                             const ParsedAttribute<AllocSizeAttribute>& attribute)
+{
+    auto& ft = cld::match(applicant, [](auto&& value) -> decltype(auto) { return value->getType(); });
+    auto* token = cld::match(applicant, [](auto&& value) { return value->getNameToken(); });
+    if (!ft.getReturnType().is<PointerType>())
+    {
+        // TODO: Make use of better type AST in the future
+        log(Errors::Semantics::ALLOC_SIZE_ATTRIBUTE_CAN_ONLY_BE_APPLIED_TO_A_FUNCTION_RETURNING_A_POINTER.args(
+            *token, m_sourceInterface, *token, *attribute.name));
+        return;
+    }
+    if (attribute.attribute.sizeOne == 0 || attribute.attribute.sizeOne > ft.getParameters().size())
+    {
+        log(Errors::Semantics::ALLOC_SIZE_INDEX_N_OUT_OF_BOUNDS.args(attribute.expressionRanges[0], m_sourceInterface,
+                                                                     1, attribute.expressionRanges[0]));
+        return;
+    }
+    // TODO: WAAAAAAAY Better source locations for the errors below
+    auto& firstParam = *ft.getParameters()[attribute.attribute.sizeOne - 1].type;
+    if (!isInteger(firstParam) && !firstParam.is<EnumType>())
+    {
+        log(Errors::Semantics::EXPECTED_INTEGER_OR_ENUMERATION_TYPE_FOR_PARAMETER_TYPE_POINTED_TO_BY_ALLOC_SIZE.args(
+            *attribute.name, m_sourceInterface, *attribute.name, attribute.expressionRanges[0]));
+        return;
+    }
+    if (attribute.attribute.sizeTwo)
+    {
+        if (*attribute.attribute.sizeTwo == 0 || *attribute.attribute.sizeTwo > ft.getParameters().size())
+        {
+            log(Errors::Semantics::ALLOC_SIZE_INDEX_N_OUT_OF_BOUNDS.args(
+                attribute.expressionRanges[1], m_sourceInterface, 2, attribute.expressionRanges[1]));
+            return;
+        }
+        auto& secondParam = *ft.getParameters()[*attribute.attribute.sizeTwo - 1].type;
+        if (!isInteger(secondParam) && !firstParam.is<EnumType>())
+        {
+            log(Errors::Semantics::EXPECTED_INTEGER_OR_ENUMERATION_TYPE_FOR_PARAMETER_TYPE_POINTED_TO_BY_ALLOC_SIZE
+                    .args(*attribute.name, m_sourceInterface, *attribute.name, attribute.expressionRanges[1]));
+            return;
+        }
     }
     cld::match(applicant, [&](auto holder) { holder->addAttribute(attribute.attribute); });
 }

@@ -274,6 +274,21 @@ cld::IntrVarValue<cld::Semantics::Type> cld::Semantics::SemanticAnalysis::applyD
             auto [isConst, isVolatile, restricted] = getQualifiers(iter.getTypeQualifiers());
             type.emplace<PointerType>(typeAlloc(std::move(*type)), flag::isConst = isConst,
                                       flag::isVolatile = isVolatile, flag::isRestricted = restricted);
+            for (auto& attr : iter.getTypeQualifiers())
+            {
+                auto* attributes = std::get_if<Syntax::GNUAttributes>(&attr);
+                if (!attributes)
+                {
+                    continue;
+                }
+                auto result = visit(*attributes);
+                result = applyAttributes(std::pair{&type, diag::getPointRange(iter)}, std::move(result));
+                if (attributesOut)
+                {
+                    attributesOut->insert(attributesOut->end(), std::move_iterator(result.begin()),
+                                          std::move_iterator(result.end()));
+                }
+            }
         }
         for (auto& iter : RecursiveVisitor(realDecl.getDirectDeclarator(), DIRECT_DECL_NEXT_FN))
         {

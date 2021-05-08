@@ -1026,6 +1026,18 @@ CREATE_ERROR(FIRST_PARAMETER_IN_FUNCTION_N_IN_ATTRIBUTE_CLEANUP_MUST_BE_A_POINTE
              "First parameter in function %0 in attribute 'cleanup' must be a pointer to a compatible type",
              Annotate<0, 1>, Underline<2>, Annotate<3, 4>);
 
+// __attribute__((alloc_size))
+
+CREATE_ERROR(ALLOC_SIZE_ATTRIBUTE_CAN_ONLY_BE_APPLIED_TO_A_FUNCTION_RETURNING_A_POINTER,
+             "'alloc_size' attribute can only be applied to a function returning a pointer", Underline<0>,
+             Underline<1>);
+
+CREATE_ERROR(ALLOC_SIZE_INDEX_N_OUT_OF_BOUNDS, "'alloc_size' index %0 out of bounds", Underline<1>);
+
+CREATE_ERROR(EXPECTED_INTEGER_OR_ENUMERATION_TYPE_FOR_PARAMETER_TYPE_POINTED_TO_BY_ALLOC_SIZE,
+             "Expected integer or enumeration type for parameter type pointed to by 'alloc_size'", Underline<0>,
+             Underline<1>);
+
 } // namespace Semantics
 
 namespace Lexer

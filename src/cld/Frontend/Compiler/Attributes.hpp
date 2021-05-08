@@ -108,11 +108,19 @@ struct WarnUnusedResultAttribute
     constexpr static std::size_t count = 0;
 };
 
+struct AllocSizeAttribute
+{
+    std::uint64_t sizeOne;
+    std::optional<std::uint64_t> sizeTwo;
+
+    constexpr static std::size_t count = 2;
+};
+
 using FunctionAttribute =
     std::variant<AlignedAttribute, DeprecatedAttribute, UsedAttribute, NoinlineAttribute, AlwaysInlineAttribute,
                  GnuInlineAttribute, ArtificialAttribute, DllImportAttribute, NothrowAttribute, ConstAttribute,
                  NonnullAttribute, NoreturnAttribute, WeakAttribute, LeafAttribute, PureAttribute,
-                 WarnUnusedResultAttribute>;
+                 WarnUnusedResultAttribute, AllocSizeAttribute>;
 
 using TypeAttribute = std::variant<AlignedAttribute, DeprecatedAttribute>;
 

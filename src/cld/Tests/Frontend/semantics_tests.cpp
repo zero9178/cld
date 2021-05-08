@@ -6195,3 +6195,19 @@ TEST_CASE("Semantics __attribute__((cleanup))", "[semantics]")
                   "}\n",
                   ProducesNoErrors() && !ProducesWarning(UNUSED_VARIABLE_N, "'foo'"));
 }
+
+TEST_CASE("Semantics __attribute__((alloc_size))", "[semantics]")
+{
+    SEMA_PRODUCES("int __attribute__((alloc_size(1))) foo(int);",
+                  ProducesError(ALLOC_SIZE_ATTRIBUTE_CAN_ONLY_BE_APPLIED_TO_A_FUNCTION_RETURNING_A_POINTER));
+
+    SEMA_PRODUCES("int* __attribute__((alloc_size(1))) foo(int);", ProducesNoErrors());
+    SEMA_PRODUCES("int* __attribute__((alloc_size(0))) foo(int);", ProducesError(ALLOC_SIZE_INDEX_N_OUT_OF_BOUNDS, 1));
+    SEMA_PRODUCES("int* __attribute__((alloc_size(1))) foo(float);",
+                  ProducesError(EXPECTED_INTEGER_OR_ENUMERATION_TYPE_FOR_PARAMETER_TYPE_POINTED_TO_BY_ALLOC_SIZE));
+    SEMA_PRODUCES("int* __attribute__((alloc_size(1,2))) foo(int,int);", ProducesNoErrors());
+    SEMA_PRODUCES("int* __attribute__((alloc_size(1,0))) foo(int,int);",
+                  ProducesError(ALLOC_SIZE_INDEX_N_OUT_OF_BOUNDS, 2));
+    SEMA_PRODUCES("int* __attribute__((alloc_size(1,2))) foo(int,float);",
+                  ProducesError(EXPECTED_INTEGER_OR_ENUMERATION_TYPE_FOR_PARAMETER_TYPE_POINTED_TO_BY_ALLOC_SIZE));
+}
