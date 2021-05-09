@@ -6401,32 +6401,6 @@ TEST_CASE("LLVM codegen __attribute__((aligned))", "[LLVM]")
     }
 }
 
-TEST_CASE("LLVM codegen __attribute__((noinline))", "[LLVM]")
-{
-    llvm::LLVMContext context;
-    llvm::Module module("", context);
-    auto program = generateProgramWithOptions("int __attribute__((noinline)) foo(void) { return 5; }", x64linux);
-    cld::CGLLVM::generateLLVM(module, program);
-    CAPTURE(module);
-    REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
-    auto* global = module.getFunction("foo");
-    REQUIRE(global);
-    CHECK(global->hasFnAttribute(llvm::Attribute::NoInline));
-}
-
-TEST_CASE("LLVM codegen __attribute__((always_inline))", "[LLVM]")
-{
-    llvm::LLVMContext context;
-    llvm::Module module("", context);
-    auto program = generateProgramWithOptions("int __attribute__((always_inline)) foo(void) { return 5; }", x64linux);
-    cld::CGLLVM::generateLLVM(module, program);
-    CAPTURE(module);
-    REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
-    auto* global = module.getFunction("foo");
-    REQUIRE(global);
-    CHECK(global->hasFnAttribute(llvm::Attribute::AlwaysInline));
-}
-
 TEST_CASE("LLVM codegen __attribute__((gnu_inline))", "[LLVM]")
 {
     llvm::LLVMContext context;
@@ -6534,45 +6508,6 @@ TEST_CASE("LLVM codegen __attribute__((dllimport))", "[LLVM]")
     }
 }
 
-TEST_CASE("LLVM codegen __attribute__((nothrow))", "[LLVM]")
-{
-    llvm::LLVMContext context;
-    llvm::Module module("", context);
-    auto program = generateProgramWithOptions("int __attribute__((nothrow)) foo(void) { return 5; }", x64linux);
-    cld::CGLLVM::generateLLVM(module, program);
-    CAPTURE(module);
-    REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
-    auto* global = module.getFunction("foo");
-    REQUIRE(global);
-    CHECK(global->hasFnAttribute(llvm::Attribute::NoUnwind));
-}
-
-TEST_CASE("LLVM codegen __attribute__((const))", "[LLVM]")
-{
-    llvm::LLVMContext context;
-    llvm::Module module("", context);
-    auto program = generateProgramWithOptions("int __attribute__((const)) foo(void) { return 5; }", x64linux);
-    cld::CGLLVM::generateLLVM(module, program);
-    CAPTURE(module);
-    REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
-    auto* global = module.getFunction("foo");
-    REQUIRE(global);
-    CHECK(global->hasFnAttribute(llvm::Attribute::ReadNone));
-}
-
-TEST_CASE("LLVM codegen __attribute__((noreturn))", "[LLVM]")
-{
-    llvm::LLVMContext context;
-    llvm::Module module("", context);
-    auto program = generateProgramWithOptions("int __attribute__((noreturn)) foo(void) { return 5; }", x64linux);
-    cld::CGLLVM::generateLLVM(module, program);
-    CAPTURE(module);
-    REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
-    auto* global = module.getFunction("foo");
-    REQUIRE(global);
-    CHECK(global->hasFnAttribute(llvm::Attribute::NoReturn));
-}
-
 TEST_CASE("LLVM codegen offsetof", "[LLVM]")
 {
     llvm::LLVMContext context;
@@ -6597,32 +6532,6 @@ TEST_CASE("LLVM codegen offsetof", "[LLVM]")
         REQUIRE_FALSE(llvm::verifyModule(*module, &llvm::errs()));
         CHECK(cld::Tests::computeInJIT<int(int)>(std::move(module), "test", 3) == 28);
     }
-}
-
-TEST_CASE("LLVM codegen __attribute__((pure))", "[LLVM]")
-{
-    llvm::LLVMContext context;
-    llvm::Module module("", context);
-    auto program = generateProgramWithOptions("int __attribute__((pure)) foo(void) { return 5; }", x64linux);
-    cld::CGLLVM::generateLLVM(module, program);
-    CAPTURE(module);
-    REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
-    auto* global = module.getFunction("foo");
-    REQUIRE(global);
-    CHECK(global->hasFnAttribute(llvm::Attribute::ReadOnly));
-}
-
-TEST_CASE("LLVM codegen __attribute__((leaf))", "[LLVM]")
-{
-    llvm::LLVMContext context;
-    llvm::Module module("", context);
-    auto program = generateProgramWithOptions("int __attribute__((leaf)) foo(void) { return 5; }", x64linux);
-    cld::CGLLVM::generateLLVM(module, program);
-    CAPTURE(module);
-    REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
-    auto* global = module.getFunction("foo");
-    REQUIRE(global);
-    CHECK(global->hasFnAttribute(llvm::Attribute::NoCallback));
 }
 
 TEST_CASE("LLVM codegen __attribute__((weak))", "[LLVM]")
@@ -6802,5 +6711,30 @@ TEST_CASE("LLVM codegen __attribute__((alloc_size))", "[LLVM]")
         CHECK(first == 0);
         REQUIRE(second);
         CHECK(*second == 1);
+    }
+}
+
+TEST_CASE("LLVM codegen tag function attributes", "[LLVM]")
+{
+    auto [name, attr] =
+        GENERATE(table<std::string, llvm::Attribute::AttrKind>({{"noinline", llvm::Attribute::NoInline},
+                                                                {"always_inline", llvm::Attribute::AlwaysInline},
+                                                                {"nothrow", llvm::Attribute::NoUnwind},
+                                                                {"noreturn", llvm::Attribute::NoReturn},
+                                                                {"pure", llvm::Attribute::ReadOnly},
+                                                                {"leaf", llvm::Attribute::NoCallback},
+                                                                {"const", llvm::Attribute::ReadNone}}));
+    DYNAMIC_SECTION("__attribute__((" << name << "))")
+    {
+        llvm::LLVMContext context;
+        llvm::Module module("", context);
+        auto program =
+            generateProgramWithOptions("int __attribute__((" + name + ")) foo(void) { return 5; }", x64linux);
+        cld::CGLLVM::generateLLVM(module, program);
+        CAPTURE(module);
+        REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
+        auto* global = module.getFunction("foo");
+        REQUIRE(global);
+        CHECK(global->hasFnAttribute(attr));
     }
 }
