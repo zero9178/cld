@@ -272,7 +272,7 @@ constexpr auto createBuiltin(cld::Semantics::BuiltinFunction::Kind kind)
         }                                                                                                             \
     } while (0)
 
-#define HANDLE_BUILTIN(a, b) DECL_BUILTIN(a, b)
+#define HANDLE_BUILTIN(a, b) DECL_BUILTIN(a, b);
 #include "Builtins.def"
 
 const cld::Semantics::DeclarationInScope::Variant* CLD_NULLABLE
@@ -305,7 +305,7 @@ const cld::Semantics::DeclarationInScope::Variant* CLD_NULLABLE
         CLD_UNREACHABLE;
     };
 
-#define HANDLE_BUILTIN(a, b) DEF_BUILTIN(b)
+#define HANDLE_BUILTIN(a, b) DEF_BUILTIN(b);
 #define HANDLE_X86(signature, name, feature)                                                                 \
     if (getLanguageOptions().targetFeatures->hasFeature(TargetFeatures::IsX86))                              \
     {                                                                                                        \

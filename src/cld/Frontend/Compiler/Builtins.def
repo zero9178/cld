@@ -7,50 +7,50 @@
     #define HANDLE_X86(signature, kind, required) HANDLE_BUILTIN(signature, kind)
 #endif
 
-HANDLE_BUILTIN("int __builtin_abs(int)", Abs);
-HANDLE_BUILTIN("void* __builtin_alloca(size_t)",Alloca);
-HANDLE_BUILTIN("void __builtin___clear_cache(void*,void*)", ClearCache);
-HANDLE_BUILTIN("long __builtin_expect(long,long)", Expect);
-HANDLE_BUILTIN("long __builtin_expect_with_probability(long,long,double)", ExpectWithProbability);
-HANDLE_BUILTIN("void* __builtin_extract_return_addr(void*)", ExtractReturnAddr);
-HANDLE_BUILTIN("double __builtin_fabs(double)", FAbs);
-HANDLE_BUILTIN("float __builtin_fabsf(float)", FAbsf);
-HANDLE_BUILTIN("long double __builtin_fabsl(long double)", FAbsl);
-HANDLE_BUILTIN("void* __builtin_frame_address(unsigned int)", FrameAddress);
-HANDLE_BUILTIN("void* __builtin_frob_return_addr(void*)", FRobReturnAddr);
-HANDLE_BUILTIN("double __builtin_inf()", Inf);
-HANDLE_BUILTIN("float __builtin_inff()", Inff);
-HANDLE_BUILTIN("long double __builtin_infl()", Infl);
-HANDLE_BUILTIN("long __builtin_labs(long)", LAbs);
-HANDLE_BUILTIN("long long __builtin_llabs(long long)", LLAbs);
-HANDLE_BUILTIN("void __builtin_prefetch(const void*,...)", Prefetch);
-HANDLE_BUILTIN("void* __builtin_return_address(unsigned int)", ReturnAddress);
-HANDLE_BUILTIN("type __sync_add_and_fetch(type*,type,...)", SyncAddAndFetch);
-HANDLE_BUILTIN("type __sync_and_and_fetch(type*,type,...)", SyncAndAndFetch);
-HANDLE_BUILTIN("bool __sync_bool_compare_and_swap(type*,type,type,...)", SyncBoolCompareAndSwap);
-HANDLE_BUILTIN("type __sync_fetch_and_add(type*,type,...)", SyncFetchAndAdd);
-HANDLE_BUILTIN("type __sync_fetch_and_and(type*,type,...)", SyncFetchAndAnd);
-HANDLE_BUILTIN("type __sync_fetch_and_nand(type*,type,...)", SyncFetchAndNand);
-HANDLE_BUILTIN("type __sync_fetch_and_sub(type*,type,...)", SyncFetchAndSub);
-HANDLE_BUILTIN("type __sync_fetch_and_or(type*,type,...)", SyncFetchAndOr);
-HANDLE_BUILTIN("type __sync_fetch_and_xor(type*,type,...)", SyncFetchAndXor);
-HANDLE_BUILTIN("void __sync_lock_release(type*,...)", SyncLockRelease);
-HANDLE_BUILTIN("type __sync_lock_test_and_set(type*,type,...)", SyncLockTestAndSet);
-HANDLE_BUILTIN("type __sync_nand_and_fetch(type*,type,...)", SyncNandAndFetch);
-HANDLE_BUILTIN("type __sync_or_and_fetch(type*,type,...)", SyncOrAndFetch);
-HANDLE_BUILTIN("type __sync_sub_and_fetch(type*,type,...)", SyncSubAndFetch);
-HANDLE_BUILTIN("void __sync_synchronize(...)", SyncSynchronize);
-HANDLE_BUILTIN("type __sync_val_compare_and_swap(type*,type,type,...)", SyncValCompareAndSwap);
-HANDLE_BUILTIN("type __sync_xor_and_fetch(type*,type,...)", SyncXorAndFetch);
-HANDLE_BUILTIN("void __builtin_trap()", Trap);
-HANDLE_BUILTIN("void __builtin_unreachable()", Unreachable);
-HANDLE_BUILTIN("void __builtin_va_copy(va_list,va_list)", VACopy);
-HANDLE_BUILTIN("void __builtin_va_end(va_list)", VAEnd);
-HANDLE_BUILTIN("void __builtin_va_start(va_list,...)", VAStart);
+HANDLE_BUILTIN("int __builtin_abs(int)", Abs)
+HANDLE_BUILTIN("void* __builtin_alloca(size_t)",Alloca)
+HANDLE_BUILTIN("void __builtin___clear_cache(void*,void*)", ClearCache)
+HANDLE_BUILTIN("long __builtin_expect(long,long)", Expect)
+HANDLE_BUILTIN("long __builtin_expect_with_probability(long,long,double)", ExpectWithProbability)
+HANDLE_BUILTIN("void* __builtin_extract_return_addr(void*)", ExtractReturnAddr)
+HANDLE_BUILTIN("double __builtin_fabs(double)", FAbs)
+HANDLE_BUILTIN("float __builtin_fabsf(float)", FAbsf)
+HANDLE_BUILTIN("long double __builtin_fabsl(long double)", FAbsl)
+HANDLE_BUILTIN("void* __builtin_frame_address(unsigned int)", FrameAddress)
+HANDLE_BUILTIN("void* __builtin_frob_return_addr(void*)", FRobReturnAddr)
+HANDLE_BUILTIN("double __builtin_inf()", Inf)
+HANDLE_BUILTIN("float __builtin_inff()", Inff)
+HANDLE_BUILTIN("long double __builtin_infl()", Infl)
+HANDLE_BUILTIN("long __builtin_labs(long)", LAbs)
+HANDLE_BUILTIN("long long __builtin_llabs(long long)", LLAbs)
+HANDLE_BUILTIN("void __builtin_prefetch(const void*,...)", Prefetch)
+HANDLE_BUILTIN("void* __builtin_return_address(unsigned int)", ReturnAddress)
+HANDLE_BUILTIN("type __sync_add_and_fetch(type*,type,...)", SyncAddAndFetch)
+HANDLE_BUILTIN("type __sync_and_and_fetch(type*,type,...)", SyncAndAndFetch)
+HANDLE_BUILTIN("bool __sync_bool_compare_and_swap(type*,type,type,...)", SyncBoolCompareAndSwap)
+HANDLE_BUILTIN("type __sync_fetch_and_add(type*,type,...)", SyncFetchAndAdd)
+HANDLE_BUILTIN("type __sync_fetch_and_and(type*,type,...)", SyncFetchAndAnd)
+HANDLE_BUILTIN("type __sync_fetch_and_nand(type*,type,...)", SyncFetchAndNand)
+HANDLE_BUILTIN("type __sync_fetch_and_sub(type*,type,...)", SyncFetchAndSub)
+HANDLE_BUILTIN("type __sync_fetch_and_or(type*,type,...)", SyncFetchAndOr)
+HANDLE_BUILTIN("type __sync_fetch_and_xor(type*,type,...)", SyncFetchAndXor)
+HANDLE_BUILTIN("void __sync_lock_release(type*,...)", SyncLockRelease)
+HANDLE_BUILTIN("type __sync_lock_test_and_set(type*,type,...)", SyncLockTestAndSet)
+HANDLE_BUILTIN("type __sync_nand_and_fetch(type*,type,...)", SyncNandAndFetch)
+HANDLE_BUILTIN("type __sync_or_and_fetch(type*,type,...)", SyncOrAndFetch)
+HANDLE_BUILTIN("type __sync_sub_and_fetch(type*,type,...)", SyncSubAndFetch)
+HANDLE_BUILTIN("void __sync_synchronize(...)", SyncSynchronize)
+HANDLE_BUILTIN("type __sync_val_compare_and_swap(type*,type,type,...)", SyncValCompareAndSwap)
+HANDLE_BUILTIN("type __sync_xor_and_fetch(type*,type,...)", SyncXorAndFetch)
+HANDLE_BUILTIN("void __builtin_trap()", Trap)
+HANDLE_BUILTIN("void __builtin_unreachable()", Unreachable)
+HANDLE_BUILTIN("void __builtin_va_copy(va_list,va_list)", VACopy)
+HANDLE_BUILTIN("void __builtin_va_end(va_list)", VAEnd)
+HANDLE_BUILTIN("void __builtin_va_start(va_list,...)", VAStart)
 
-HANDLE_X86("void __builtin_cpu_init()", x86CpuInit, {});
-HANDLE_X86("int __builtin_cpu_is(const char*)", x86CpuIs, {});
-HANDLE_X86("int __builtin_cpu_supports(const char*)", x86CpuSupports, {});
+HANDLE_X86("void __builtin_cpu_init()", x86CpuInit, {})
+HANDLE_X86("int __builtin_cpu_is(const char*)", x86CpuIs, {})
+HANDLE_X86("int __builtin_cpu_supports(const char*)", x86CpuSupports, {})
 
 #undef HANDLE_X86
 #undef HANDLE_BUILTIN
