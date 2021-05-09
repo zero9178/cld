@@ -576,6 +576,10 @@ llvm::Function* cld::CGLLVM::CodeGenerator::generateFunctionDecl(const T& decDef
         function->addFnAttr(
             llvm::Attribute::getWithAllocSizeArgs(function->getContext(), allocSize->sizeOne - 1, second));
     }
+    if (decDef.template hasAttribute<Semantics::ColdAttribute>())
+    {
+        function->addFnAttr(llvm::Attribute::Cold);
+    }
     return function;
 }
 

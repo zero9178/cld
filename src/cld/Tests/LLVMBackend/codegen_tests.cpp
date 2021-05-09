@@ -6723,6 +6723,7 @@ TEST_CASE("LLVM codegen tag function attributes", "[LLVM]")
                                                                 {"noreturn", llvm::Attribute::NoReturn},
                                                                 {"pure", llvm::Attribute::ReadOnly},
                                                                 {"leaf", llvm::Attribute::NoCallback},
+                                                                {"cold", llvm::Attribute::Cold},
                                                                 {"const", llvm::Attribute::ReadNone}}));
     DYNAMIC_SECTION("__attribute__((" << name << "))")
     {

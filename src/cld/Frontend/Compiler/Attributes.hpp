@@ -116,11 +116,16 @@ struct AllocSizeAttribute
     constexpr static std::size_t count = 2;
 };
 
+struct ColdAttribute
+{
+    constexpr static std::size_t count = 0;
+};
+
 using FunctionAttribute =
     std::variant<AlignedAttribute, DeprecatedAttribute, UsedAttribute, NoinlineAttribute, AlwaysInlineAttribute,
                  GnuInlineAttribute, ArtificialAttribute, DllImportAttribute, NothrowAttribute, ConstAttribute,
                  NonnullAttribute, NoreturnAttribute, WeakAttribute, LeafAttribute, PureAttribute,
-                 WarnUnusedResultAttribute, AllocSizeAttribute>;
+                 WarnUnusedResultAttribute, AllocSizeAttribute, ColdAttribute>;
 
 using TypeAttribute = std::variant<AlignedAttribute, DeprecatedAttribute>;
 

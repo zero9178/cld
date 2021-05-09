@@ -5889,7 +5889,7 @@ TEST_CASE("Semantics __attribute__((dllimport))", "[semantics]")
 
 TEMPLATE_TEST_CASE("Semantics __attribute__((T)) markers", "[semantics][template]", NoinlineAttribute,
                    AlwaysInlineAttribute, ArtificialAttribute, NothrowAttribute, ConstAttribute, NoreturnAttribute,
-                   LeafAttribute, PureAttribute)
+                   LeafAttribute, PureAttribute,ColdAttribute)
 {
     std::string name = []
     {
@@ -5924,6 +5924,10 @@ TEMPLATE_TEST_CASE("Semantics __attribute__((T)) markers", "[semantics][template
         if constexpr (std::is_same_v<TestType, PureAttribute>)
         {
             return "pure";
+        }
+        if constexpr (std::is_same_v<TestType, ColdAttribute>)
+        {
+            return "cold";
         }
         CLD_UNREACHABLE;
     }();
