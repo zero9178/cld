@@ -33,16 +33,6 @@ public:
 
 } // namespace
 
-static_assert(std::is_trivially_copyable_v<cld::IntrVarValue<TrivBase>>);
-static_assert(std::is_nothrow_copy_constructible_v<cld::IntrVarValue<TrivBase>>);
-static_assert(std::is_trivially_copy_assignable_v<cld::IntrVarValue<TrivBase>>);
-static_assert(std::is_nothrow_copy_assignable_v<cld::IntrVarValue<TrivBase>>);
-static_assert(std::is_trivially_move_constructible_v<cld::IntrVarValue<TrivBase>>);
-static_assert(std::is_nothrow_move_constructible_v<cld::IntrVarValue<TrivBase>>);
-static_assert(std::is_trivially_move_assignable_v<cld::IntrVarValue<TrivBase>>);
-static_assert(std::is_nothrow_move_assignable_v<cld::IntrVarValue<TrivBase>>);
-static_assert(std::is_trivially_destructible_v<cld::IntrVarValue<TrivBase>>);
-
 namespace
 {
 class Base
@@ -102,6 +92,15 @@ public:
 
 TEST_CASE("IntrVarValue non trivial", "[IVV]")
 {
+    STATIC_REQUIRE(std::is_trivially_copyable_v<cld::IntrVarValue<TrivBase>>);
+    STATIC_REQUIRE(std::is_nothrow_copy_constructible_v<cld::IntrVarValue<TrivBase>>);
+    STATIC_REQUIRE(std::is_trivially_copy_assignable_v<cld::IntrVarValue<TrivBase>>);
+    STATIC_REQUIRE(std::is_nothrow_copy_assignable_v<cld::IntrVarValue<TrivBase>>);
+    STATIC_REQUIRE(std::is_trivially_move_constructible_v<cld::IntrVarValue<TrivBase>>);
+    STATIC_REQUIRE(std::is_nothrow_move_constructible_v<cld::IntrVarValue<TrivBase>>);
+    STATIC_REQUIRE(std::is_trivially_move_assignable_v<cld::IntrVarValue<TrivBase>>);
+    STATIC_REQUIRE(std::is_nothrow_move_assignable_v<cld::IntrVarValue<TrivBase>>);
+    STATIC_REQUIRE(std::is_trivially_destructible_v<cld::IntrVarValue<TrivBase>>);
     SECTION("Simple usage")
     {
         cld::IntrVarValue value = Derived1(5, 3.0);
