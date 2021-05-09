@@ -724,13 +724,6 @@ cld::CGLLVM::Value cld::CGLLVM::CodeGenerator::visit(const Semantics::VariableDe
         return nullptr;
     }
 
-    llvm::Function::LinkageTypes linkageType = llvm::GlobalValue::ExternalLinkage;
-    switch (declaration.getLinkage())
-    {
-        case Semantics::Linkage::Internal: linkageType = llvm::GlobalValue::InternalLinkage; break;
-        case Semantics::Linkage::External: linkageType = llvm::GlobalValue::ExternalLinkage; break;
-        case Semantics::Linkage::None: break;
-    }
     auto* type = visit(declaration.getType());
     // Place all allocas up top except variably modified types
     llvm::AllocaInst* var = nullptr;
