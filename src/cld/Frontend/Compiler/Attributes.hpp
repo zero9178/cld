@@ -121,11 +121,16 @@ struct ColdAttribute
     constexpr static std::size_t count = 0;
 };
 
+struct HotAttribute
+{
+    constexpr static std::size_t count = 0;
+};
+
 using FunctionAttribute =
     std::variant<AlignedAttribute, DeprecatedAttribute, UsedAttribute, NoinlineAttribute, AlwaysInlineAttribute,
                  GnuInlineAttribute, ArtificialAttribute, DllImportAttribute, NothrowAttribute, ConstAttribute,
                  NonnullAttribute, NoreturnAttribute, WeakAttribute, LeafAttribute, PureAttribute,
-                 WarnUnusedResultAttribute, AllocSizeAttribute, ColdAttribute>;
+                 WarnUnusedResultAttribute, AllocSizeAttribute, ColdAttribute, HotAttribute>;
 
 using TypeAttribute = std::variant<AlignedAttribute, DeprecatedAttribute>;
 

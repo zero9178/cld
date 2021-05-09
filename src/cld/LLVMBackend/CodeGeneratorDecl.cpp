@@ -580,6 +580,10 @@ llvm::Function* cld::CGLLVM::CodeGenerator::generateFunctionDecl(const T& decDef
     {
         function->addFnAttr(llvm::Attribute::Cold);
     }
+    if (decDef.template hasAttribute<Semantics::HotAttribute>())
+    {
+        function->addFnAttr(llvm::Attribute::Hot);
+    }
     return function;
 }
 

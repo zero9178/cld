@@ -470,6 +470,7 @@ void cld::Semantics::SemanticAnalysis::createAttributes()
     gnuSpelling("cleanup", &SemanticAnalysis::parseAttribute<CleanupAttribute>);
     gnuSpelling("alloc_size", &SemanticAnalysis::parseAttribute<AllocSizeAttribute>);
     gnuSpelling("cold", &SemanticAnalysis::parseAttribute<ColdAttribute>);
+    gnuSpelling("hot", &SemanticAnalysis::parseAttribute<HotAttribute>);
     if (getLanguageOptions().triple.getPlatform() == Platform::Windows)
     {
         gnuSpelling("dllimport", &SemanticAnalysis::parseAttribute<DllImportAttribute>);
