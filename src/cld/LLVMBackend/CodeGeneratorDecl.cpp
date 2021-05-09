@@ -566,6 +566,16 @@ llvm::Function* cld::CGLLVM::CodeGenerator::generateFunctionDecl(const T& decDef
     {
         function->addFnAttr(llvm::Attribute::AlwaysInline);
     }
+    if (auto* allocSize = decDef.template getAttributeIf<Semantics::AllocSizeAttribute>())
+    {
+        llvm::Optional<unsigned> second;
+        if (allocSize->sizeTwo)
+        {
+            second = *allocSize->sizeTwo - 1;
+        }
+        function->addFnAttr(
+            llvm::Attribute::getWithAllocSizeArgs(function->getContext(), allocSize->sizeOne - 1, second));
+    }
     return function;
 }
 

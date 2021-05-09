@@ -6769,3 +6769,38 @@ TEST_CASE("LLVM codegen __attribute__((cleanup))", "[LLVM]")
         }
     }
 }
+
+TEST_CASE("LLVM codegen __attribute__((alloc_size))", "[LLVM]")
+{
+    llvm::LLVMContext context;
+    llvm::Module module("", context);
+    SECTION("One arg")
+    {
+        auto program = generateProgramWithOptions("int* __attribute__((alloc_size(1))) foo(int,int);", x64linux);
+        cld::CGLLVM::generateLLVM(module, program, emitAllDecls);
+        CAPTURE(module);
+        REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
+        auto* global = module.getFunction("foo");
+        REQUIRE(global);
+        REQUIRE(global->hasFnAttribute(llvm::Attribute::AllocSize));
+        auto allocSize = global->getFnAttribute(llvm::Attribute::AllocSize);
+        auto [first, second] = allocSize.getAllocSizeArgs();
+        CHECK(first == 0);
+        CHECK_FALSE(second);
+    }
+    SECTION("Two arg")
+    {
+        auto program = generateProgramWithOptions("int* __attribute__((alloc_size(1,2))) foo(int,int);", x64linux);
+        cld::CGLLVM::generateLLVM(module, program, emitAllDecls);
+        CAPTURE(module);
+        REQUIRE_FALSE(llvm::verifyModule(module, &llvm::errs()));
+        auto* global = module.getFunction("foo");
+        REQUIRE(global);
+        REQUIRE(global->hasFnAttribute(llvm::Attribute::AllocSize));
+        auto allocSize = global->getFnAttribute(llvm::Attribute::AllocSize);
+        auto [first, second] = allocSize.getAllocSizeArgs();
+        CHECK(first == 0);
+        REQUIRE(second);
+        CHECK(*second == 1);
+    }
+}
